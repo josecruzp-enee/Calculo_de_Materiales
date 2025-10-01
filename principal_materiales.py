@@ -26,11 +26,12 @@ from modulo.conectores_mt import (
     aplicar_reemplazos_conectores
 )
 from modulo.pdf_utils import (
-    crear_pdf_materiales,
-    crear_pdf_estructuras,
-    crear_pdf_materiales_por_punto,
-    crear_pdf_completo,
+    generar_pdf_materiales,
+    generar_pdf_estructuras,
+    generar_pdf_materiales_por_punto,
+    generar_pdf_completo,
 )
+
 from modulo.excel_utils import exportar_excel
 
 # =================== RUTAS ===================
@@ -159,5 +160,6 @@ crear_pdf_completo(
 )
 
 print("✅ Proceso finalizado: Excel + PDFs generados")
+
 
 
