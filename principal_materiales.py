@@ -13,7 +13,7 @@ import pandas as pd
 from collections import Counter
 
 # === Importar módulos propios ===
-from modulos.entradas import (
+from modulo.entradas import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
     extraer_estructuras_proyectadas,
@@ -21,17 +21,17 @@ from modulos.entradas import (
     cargar_adicionales,
     cargar_materiales
 )
-from modulos.conectores_mt import (
+from modulo.conectores_mt import (
     cargar_conectores_mt,
     aplicar_reemplazos_conectores
 )
-from modulos.pdf_utils import (
+from modulo.pdf_utils import (
     crear_pdf_materiales,
     crear_pdf_estructuras,
     crear_pdf_materiales_por_punto,
     crear_pdf_completo,
 )
-from modulos.excel_utils import exportar_excel
+from modulo.excel_utils import exportar_excel
 
 # =================== RUTAS ===================
 BASE_DIR = os.path.dirname(__file__)
@@ -159,4 +159,5 @@ crear_pdf_completo(
 )
 
 print("✅ Proceso finalizado: Excel + PDFs generados")
+
 
