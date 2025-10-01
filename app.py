@@ -29,17 +29,38 @@ archivo_excel = st.file_uploader("📂 Sube el archivo Excel de estructuras", ty
 
 if archivo_excel:
     if archivo_excel.name.endswith(".xlsx"):
-        df = pd.read_excel(archivo_excel)
+        # Cargar el Excel completo
+        xls = pd.ExcelFile(archivo_excel)
+        hojas = xls.sheet_names
+
+        # --- Hoja 1: Datos del proyecto ---
+        if "datos_proyecto" in hojas:
+            df_proyecto = pd.read_excel(archivo_excel, sheet_name="datos_proyecto").iloc[:, :2]
+            st.subheader("📑 Datos del Proyecto")
+            st.dataframe(df_proyecto, use_container_width=True)
+
+            # Guardar en sesión como diccionario
+            st.session_state["datos_proyecto"] = dict(zip(df_proyecto.iloc[:,0], df_proyecto.iloc[:,1]))
+        else:
+            st.warning("⚠️ No se encontró la hoja 'datos_proyecto' en el archivo.")
+
+        # --- Hoja 2: Estructuras ---
+        if "estructuras" in hojas:
+            df = pd.read_excel(archivo_excel, sheet_name="estructuras")
+        else:
+            st.error("❌ No se encontró la hoja 'estructuras' en el archivo.")
+            st.stop()
     else:
         df = pd.read_csv(archivo_excel)
 
-    # Validar columnas
+    # Validar columnas mínimas en estructuras
     if not all(col in df.columns for col in columnas):
-        st.error(f"❌ El archivo debe contener las columnas: {', '.join(columnas)}")
+        st.error(f"❌ La hoja 'estructuras' debe contener las columnas: {', '.join(columnas)}")
         st.stop()
 
     st.success("✅ Archivo cargado correctamente")
     st.session_state["df_puntos"] = df.copy()
+
 else:
     st.info("ℹ️ No subiste archivo, puedes crear/editar la tabla directamente aquí abajo")
     if "df_puntos" not in st.session_state:
@@ -48,6 +69,7 @@ else:
     if st.button("🧹 Limpiar tabla"):
         st.session_state["df_puntos"] = pd.DataFrame(columns=columnas)
         st.rerun()
+
 
 # --- Siempre trabajar con la sesión ---
 df = st.data_editor(
@@ -140,6 +162,7 @@ st.download_button(
     "Informe_Completo.pdf",
     "application/pdf"
 )
+
 
 
 
