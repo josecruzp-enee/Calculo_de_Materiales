@@ -10,6 +10,35 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from datetime import datetime
 import os
+from io import BytesIO
+
+def generar_pdf_materiales(df_mat, nombre_proy):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elems = []
+
+    elems.append(Paragraph(f"<b>Resumen de Materiales - Proyecto: {nombre_proy}</b>", styles["Title"]))
+    elems.append(Spacer(1, 12))
+
+    data = [["Material", "Unidad", "Cantidad"]]
+    for _, row in df_mat.iterrows():
+        data.append([
+            Paragraph(str(row["Materiales"]).capitalize(), styleN),
+            str(row["Unidad"]),
+            str(round(row["Cantidad"], 2))
+        ])
+
+    tabla = Table(data, colWidths=[250, 100, 100])
+    tabla.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
+    ]))
+    elems.append(tabla)
+
+    doc.build(elems)
+    buffer.seek(0)
+    return buffer
 
 # ======== ESTILOS COMUNES ========
 styles = getSampleStyleSheet()
@@ -255,3 +284,4 @@ def crear_pdf_completo(df_mat, df_estructuras, df_por_punto, ruta, datos_proyect
 
     doc.build(story)
     print(f"✅ Informe completo generado en: {ruta}")
+
