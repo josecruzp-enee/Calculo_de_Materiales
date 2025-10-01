@@ -14,7 +14,7 @@ y devolver los resúmenes listos para generar reportes.
 
 import pandas as pd
 from collections import Counter
-from modulos.entradas import (
+from modulo.entradas import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
     extraer_estructuras_proyectadas,
@@ -22,7 +22,7 @@ from modulos.entradas import (
     cargar_adicionales,
     cargar_materiales
 )
-from modulos.conectores_mt import (
+from modulo.conectores_mt import (
     cargar_conectores_mt,
     aplicar_reemplazos_conectores
 )
@@ -121,3 +121,4 @@ def procesar_materiales(archivo_estructuras, archivo_materiales):
     )
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
