@@ -1,0 +1,11 @@
+pandas
+numpy
+matplotlib
+sympy
+streamlit
+colorama
+reportlab
+openpyxl
+Pillow
+networkx
+
