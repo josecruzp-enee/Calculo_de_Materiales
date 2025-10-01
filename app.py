@@ -17,9 +17,9 @@ from modulo.pdf_utils import (
     generar_pdf_completo
 )
 
-st.set_page_config(page_title="Gestión de Estructuras", layout="wide")
+st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
 
-st.title("⚡ Gestión de Estructuras por Punto")
+st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
 # Columnas base de la tabla
 columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
@@ -140,5 +140,6 @@ st.download_button(
     "Informe_Completo.pdf",
     "application/pdf"
 )
+
 
 
