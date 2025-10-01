@@ -14,11 +14,11 @@ import tempfile, os
 from openpyxl.utils import get_column_letter
 
 # === Importar módulos propios ===
-from modulos.entradas import (
+from modulo.entradas import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
 )
-from modulos.pdf_utils import (
+from modulo.pdf_utils import (
     generar_pdf_materiales,
     generar_pdf_estructuras,
     generar_pdf_materiales_por_punto,
@@ -154,3 +154,4 @@ if archivo_excel:
         )
     except Exception as e:
         st.error(f"⚠️ Error al procesar materiales: {e}")
+
