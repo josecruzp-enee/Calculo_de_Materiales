@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 Aplicación Streamlit para:
-1. Subir Excel del proyecto y estructuras
-2. Procesar materiales con reglas de reemplazo
-3. Exportar resúmenes en Excel y PDF
+1. Subir Excel del proyecto (estructuras_lista.xlsx)
+2. Subir base de datos de materiales (Estructura_datos.xlsx)
+3. Procesar materiales con reglas de reemplazo
+4. Exportar resúmenes en Excel y PDF
 """
 
 import streamlit as st
@@ -14,11 +15,11 @@ import tempfile, os
 from openpyxl.utils import get_column_letter
 
 # === Importar módulos propios ===
-from modulo.entradas import (
+from modulos.entradas import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
 )
-from modulo.pdf_utils import (
+from modulos.pdf_utils import (
     generar_pdf_materiales,
     generar_pdf_estructuras,
     generar_pdf_materiales_por_punto,
@@ -34,19 +35,27 @@ st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 # Columnas base
 columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
 
-# ================== SUBIR ARCHIVO ==================
-archivo_excel = st.file_uploader("📂 Sube el archivo Excel de estructuras", type=["xlsx"])
+# ================== SUBIR ARCHIVOS ==================
+st.subheader("📂 Sube los archivos necesarios")
 
-if archivo_excel:
-    # Guardar archivo temporal
+archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
+archivo_materiales = st.file_uploader("📌 Base de datos de materiales (Estructura_datos.xlsx)", type=["xlsx"])
+
+if archivo_estructuras and archivo_materiales:
+    # Guardar archivos temporales
     temp_dir = tempfile.mkdtemp()
-    ruta_temp = os.path.join(temp_dir, archivo_excel.name)
-    with open(ruta_temp, "wb") as f:
-        f.write(archivo_excel.getbuffer())
+
+    ruta_estructuras = os.path.join(temp_dir, archivo_estructuras.name)
+    with open(ruta_estructuras, "wb") as f:
+        f.write(archivo_estructuras.getbuffer())
+
+    ruta_materiales = os.path.join(temp_dir, archivo_materiales.name)
+    with open(ruta_materiales, "wb") as f:
+        f.write(archivo_materiales.getbuffer())
 
     # === Leer datos del proyecto ===
     try:
-        datos_proyecto = cargar_datos_proyecto(ruta_temp)
+        datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
         st.subheader("📑 Datos del Proyecto")
         st.json(datos_proyecto)
     except Exception as e:
@@ -55,7 +64,7 @@ if archivo_excel:
 
     # === Leer estructuras proyectadas ===
     try:
-        df = cargar_estructuras_proyectadas(ruta_temp)
+        df = cargar_estructuras_proyectadas(ruta_estructuras)
         st.success("✅ Hoja 'estructuras' leída correctamente")
     except Exception as e:
         st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
@@ -64,61 +73,52 @@ if archivo_excel:
     # Guardar en sesión
     st.session_state["df_puntos"] = df.copy()
 
-else:
-    st.info("ℹ️ No subiste archivo, puedes crear/editar la tabla directamente aquí abajo")
-    if "df_puntos" not in st.session_state:
-        st.session_state["df_puntos"] = pd.DataFrame(columns=columnas)
+    # ================== EDITOR DE TABLA ==================
+    df = st.data_editor(
+        st.session_state.get("df_puntos", pd.DataFrame(columns=columnas)),
+        num_rows="dynamic",
+        use_container_width=True,
+    )
+    st.session_state["df_puntos"] = df
 
+    # Vista previa
+    st.subheader("📑 Vista previa de la tabla")
+    st.dataframe(df, use_container_width=True)
 
-# ================== EDITOR DE TABLA ==================
-df = st.data_editor(
-    st.session_state.get("df_puntos", pd.DataFrame(columns=columnas)),
-    num_rows="dynamic",
-    use_container_width=True,
-)
-st.session_state["df_puntos"] = df
+    # ================== EXPORTAR TABLA ==================
+    st.subheader("📥 Exportar tabla")
 
-# Vista previa
-st.subheader("📑 Vista previa de la tabla")
-st.dataframe(df, use_container_width=True)
+    # Exportar a CSV
+    st.download_button(
+        "⬇️ Descargar CSV",
+        df.to_csv(index=False).encode("utf-8"),
+        "estructuras_lista.csv",
+        "text/csv"
+    )
 
+    # Exportar a Excel
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Estructuras")
+        ws = writer.sheets["Estructuras"]
+        for col_idx, col in enumerate(df.columns, 1):
+            max_length = max(df[col].astype(str).map(len).max(), len(col)) + 2
+            ws.column_dimensions[get_column_letter(col_idx)].width = max_length
 
-# ================== EXPORTAR TABLA ==================
-st.subheader("📥 Exportar tabla")
+    st.download_button(
+        "⬇️ Descargar Excel",
+        output.getvalue(),
+        "estructuras_lista.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
-# Exportar a CSV
-st.download_button(
-    "⬇️ Descargar CSV",
-    df.to_csv(index=False).encode("utf-8"),
-    "estructuras_lista.csv",
-    "text/csv"
-)
+    # ================== GENERAR PDFs ==================
+    st.subheader("📑 Exportar a PDF")
 
-# Exportar a Excel
-output = BytesIO()
-with pd.ExcelWriter(output, engine="openpyxl") as writer:
-    df.to_excel(writer, index=False, sheet_name="Estructuras")
-    ws = writer.sheets["Estructuras"]
-    for col_idx, col in enumerate(df.columns, 1):
-        max_length = max(df[col].astype(str).map(len).max(), len(col)) + 2
-        ws.column_dimensions[get_column_letter(col_idx)].width = max_length
-
-st.download_button(
-    "⬇️ Descargar Excel",
-    output.getvalue(),
-    "estructuras_lista.xlsx",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-
-
-# ================== GENERAR PDFs ==================
-st.subheader("📑 Exportar a PDF")
-
-if archivo_excel:
     try:
-        # Procesar materiales usando la misma lógica del script principal
+        # Procesar materiales usando la lógica del script principal
         df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
-            ruta_temp, "Estructura_datos.xlsx"  # Excel subido + base de datos
+            ruta_estructuras, ruta_materiales
         )
 
         # PDF Materiales
@@ -154,4 +154,7 @@ if archivo_excel:
         )
     except Exception as e:
         st.error(f"⚠️ Error al procesar materiales: {e}")
+
+else:
+    st.warning("⚠️ Debes subir ambos archivos: estructuras y base de datos de materiales.")
 
