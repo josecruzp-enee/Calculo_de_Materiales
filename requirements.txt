@@ -8,4 +8,5 @@ reportlab
 openpyxl
 Pillow
 networkx
+PyPDF2
 
