@@ -10,7 +10,7 @@ from io import BytesIO
 from openpyxl.utils import get_column_letter
 
 # Importar funciones PDF
-from modulos.pdf_utils import (
+from modulo.pdf_utils import (
     generar_pdf_materiales,
     generar_pdf_estructuras,
     generar_pdf_materiales_por_punto,
@@ -140,4 +140,5 @@ st.download_button(
     "Informe_Completo.pdf",
     "application/pdf"
 )
+
 
