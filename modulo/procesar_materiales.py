@@ -26,6 +26,7 @@ from modulo.entradas import (
 )
 from modulo.conectores_mt import cargar_conectores_mt, aplicar_reemplazos_conectores
 
+
 def limpiar_codigo(codigo):
     if pd.isna(codigo) or str(codigo).strip() == "":
         return None, None
@@ -40,10 +41,12 @@ def limpiar_codigo(codigo):
         return base, tipo
     return codigo, "P"
 
+
 def expandir_lista_codigos(cadena):
     if not cadena:
         return []
     return [parte.strip() for parte in str(cadena).split(",") if parte.strip()]
+
 
 def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estructuras_df=None):
     # --- Datos de proyecto ---
@@ -98,8 +101,15 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
             if "Materiales" not in df.columns or tension not in df.columns:
                 log(f"⚠️ Hoja '{estructura}' no tiene columna 'Materiales' o '{tension}'")
                 continue
+
             unidad_col = df.columns[df.columns.get_loc("Materiales") + 1]
             df_filtrado = df[df[tension] > 0][["Materiales", unidad_col, tension]].copy()
+
+            # === DEBUG DE MATERIALES LEÍDOS ===
+            log(f"   📝 Materiales brutos de '{estructura}' con tensión={tension}:")
+            for _, fila in df_filtrado.iterrows():
+                log(f"      - {fila['Materiales']} | {fila[unidad_col]} | {fila[tension]}")
+
             df_filtrado["Materiales"] = aplicar_reemplazos_conectores(df_filtrado["Materiales"].tolist(), calibre_primario, tabla_conectores_mt)
             df_filtrado["Unidad"] = df_filtrado[unidad_col]
             df_filtrado["Cantidad"] = df_filtrado[tension] * cant
@@ -133,6 +143,12 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
                         df = cargar_materiales(archivo_materiales, codigo, header=fila_tension)
                         unidad_col = df.columns[df.columns.get_loc("Materiales") + 1]
                         dfp = df[df[tension] > 0][["Materiales", unidad_col, tension]].copy()
+
+                        # === DEBUG DE MATERIALES POR PUNTO ===
+                        log(f"   📝 Materiales brutos de '{codigo}' en punto '{punto}':")
+                        for _, fila in dfp.iterrows():
+                            log(f"      - {fila['Materiales']} | {fila[unidad_col]} | {fila[tension]}")
+
                         dfp["Unidad"] = dfp[unidad_col]
                         dfp["Cantidad"] = dfp[tension]
                         dfp["Punto"] = punto
@@ -146,3 +162,4 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     log(f"📊 Resumen final: {df_resumen.shape[0]} materiales, {df_estructuras_resumen.shape[0]} estructuras, {df_resumen_por_punto.shape[0]} filas por punto")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
