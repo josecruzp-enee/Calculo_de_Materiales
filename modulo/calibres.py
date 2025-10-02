@@ -52,18 +52,17 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
     def combo_personalizado(etiqueta, lista_opciones, valor_actual):
         opciones = lista_opciones + ["Otro (personalizado)"]
 
-        # Determinar si el valor_actual está en la lista
+        # Determinar índice inicial según valor actual
         if valor_actual in lista_opciones:
-            index = opciones.index(valor_actual)
-            mostrar_advertencia = False
+            index = lista_opciones.index(valor_actual)
         else:
-            index = len(opciones) - 1  # Seleccionar "Otro (personalizado)"
-            mostrar_advertencia = bool(valor_actual.strip())
+            index = len(opciones) - 1  # "Otro (personalizado)"
 
         seleccion = st.selectbox(f"{etiqueta}", options=opciones, index=index)
 
         if seleccion == "Otro (personalizado)":
-            if mostrar_advertencia:
+            # Mostrar advertencia solo si el valor original no estaba en la lista
+            if valor_actual not in lista_opciones and valor_actual.strip():
                 st.warning(f"⚠️ El valor '{valor_actual}' no coincide con la lista para {etiqueta}. Puedes editarlo o seleccionar uno válido.")
             personalizado = st.text_input(f"Ingrese {etiqueta} personalizado", value=valor_actual)
             return personalizado.strip()
@@ -96,5 +95,3 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
             datos_proyecto.get("calibre_retenidas", "")
         )
     }
-
-
