@@ -166,7 +166,7 @@ def main():
         st.session_state["datos_proyecto"] = {}
 
     st.subheader("Carga de estructuras proyectadas")
-    modo_carga = st.selectbox(
+    modo_carga = st.radio(
         "Selecciona modo de carga:",
         ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"]
     )
@@ -278,3 +278,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
