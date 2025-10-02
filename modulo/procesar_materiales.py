@@ -1,3 +1,59 @@
+# -*- coding: utf-8 -*-
+"""
+procesar_materiales_debug.py
+Versión con debug completo para Streamlit y consola
+"""
+
+import os
+import pandas as pd
+from collections import Counter
+
+# === Para mostrar debug en Streamlit si está disponible ===
+try:
+    import streamlit as st
+    log = st.write
+except ImportError:
+    log = print
+
+# 🔒 Fallback absoluto: si otro módulo llama sin log definido
+try:
+    log
+except NameError:
+    log = print
+
+# === Módulos propios ===
+from modulo.entradas import (
+    cargar_datos_proyecto,
+    cargar_estructuras_proyectadas,
+    extraer_estructuras_proyectadas,
+    cargar_indice,
+    cargar_adicionales,
+    cargar_materiales,
+)
+from modulo.conectores_mt import cargar_conectores_mt, aplicar_reemplazos_conectores
+
+
+def limpiar_codigo(codigo):
+    if pd.isna(codigo) or str(codigo).strip() == "":
+        return None, None
+    codigo = str(codigo).strip()
+    if "–" in codigo:
+        codigo = codigo.split("–")[0].strip()
+    elif " - " in codigo:
+        codigo = codigo.split(" - ")[0].strip()
+    if codigo.endswith(")") and "(" in codigo:
+        base = codigo[:codigo.rfind("(")].strip()
+        tipo = codigo[codigo.rfind("(") + 1 : codigo.rfind(")")].strip().upper()
+        return base, tipo
+    return codigo, "P"
+
+
+def expandir_lista_codigos(cadena):
+    if not cadena:
+        return []
+    return [parte.strip() for parte in str(cadena).split(",") if parte.strip()]
+
+
 def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estructuras_df=None):
     # --- Datos de proyecto ---
     if archivo_estructuras:
@@ -14,11 +70,8 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     log("📌 Datos del proyecto:", datos_proyecto)
 
     nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
-    tension = str(
-        datos_proyecto.get("nivel_de_tension")
-        or datos_proyecto.get("tension", "")
-    ).replace(",", ".").replace("kV", "").strip()
-    calibre_primario = datos_proyecto.get("calibre_primario", "")
+    tension = str(datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension", "")).replace(",", ".").replace("kV", "").strip()
+    calibre_primario = datos_proyecto.get("calibre_primario", "1/0 ASCR")
 
     # --- Validar que se definieron tensión y calibre ---
     if not tension or not calibre_primario:
@@ -63,9 +116,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
             fila_tension = next(i for i, row in df_temp.iterrows() if any(str(tension) in str(cell) for cell in row))
             df = cargar_materiales(archivo_materiales, estructura, header=fila_tension)
 
-            # Convertir columnas a string para evitar choque 13.8 (float) vs "13.8" (str)
             df.columns = df.columns.map(str).str.strip()
-
             if "Materiales" not in df.columns or str(tension) not in df.columns:
                 log(f"⚠️ Hoja '{estructura}' no tiene columna 'Materiales' o '{tension}'")
                 continue
