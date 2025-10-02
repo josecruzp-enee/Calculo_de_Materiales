@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 """
 procesar_materiales.py
-Procesa estructuras y materiales para generar resúmenes listos para reportes.
-Solo calcula materiales de estructuras proyectadas (P).
+Módulo único para:
+1. Leer datos de proyecto y estructuras
+2. Procesar materiales con reglas de reemplazo
+3. Generar Excel maestro con varias hojas
+4. Generar PDFs individuales y un informe completo
 """
 
+import os, sys
 import pandas as pd
 from collections import Counter
+
+# === Importar módulos propios ===
 from modulo.entradas import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
@@ -19,6 +25,13 @@ from modulo.conectores_mt import (
     cargar_conectores_mt,
     aplicar_reemplazos_conectores
 )
+from modulo.pdf_utils import (
+    generar_pdf_materiales,
+    generar_pdf_estructuras,
+    generar_pdf_materiales_por_punto,
+    generar_pdf_completo,
+)
+from modulo.excel_utils import exportar_excel
 
 
 # ==================== FUNCIONES AUXILIARES ====================
@@ -46,11 +59,6 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     """
     Procesa los archivos Excel de estructuras y materiales, o un DataFrame de estructuras,
     y devuelve los DataFrames de resúmenes listos para exportar.
-
-    Parámetros:
-    - archivo_estructuras: ruta al archivo Excel de estructuras (opcional si estructuras_df se pasa)
-    - archivo_materiales: ruta al archivo Excel con base de datos de materiales (requerido)
-    - estructuras_df: DataFrame con estructuras proyectadas (opcional)
 
     Retorna:
     - df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
@@ -166,3 +174,35 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
         df_resumen_por_punto = pd.DataFrame(columns=["Punto", "Materiales", "Unidad", "Cantidad"])
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
+
+# ==================== EJECUCIÓN DIRECTA (CONSOLA) ====================
+
+if __name__ == "__main__":
+    BASE_DIR = os.path.dirname(__file__)
+    archivo_estructuras = os.path.join(BASE_DIR, "estructura_lista.xlsx")
+    archivo_materiales = os.path.join(BASE_DIR, "Estructura_datos.xlsx")
+
+    if not os.path.exists(archivo_estructuras):
+        print("❌ No se encontró estructura_lista.xlsx")
+        sys.exit()
+
+    df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
+        archivo_estructuras=archivo_estructuras,
+        archivo_materiales=archivo_materiales
+    )
+
+    # Exportar Excel
+    ruta_excel = os.path.join(BASE_DIR, "Resumen_Materiales_y_Estructuras.xlsx")
+    exportar_excel(df_estructuras_resumen, df_resumen, None, df_resumen_por_punto, ruta_excel)
+
+    # Exportar PDFs
+    ruta_pdf_base = os.path.join(BASE_DIR, "PDFs")
+    os.makedirs(ruta_pdf_base, exist_ok=True)
+
+    generar_pdf_materiales(df_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto"), datos_proyecto)
+    generar_pdf_estructuras(df_estructuras_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto"))
+    generar_pdf_materiales_por_punto(df_resumen_por_punto, datos_proyecto.get("nombre_proyecto", "Proyecto"))
+    generar_pdf_completo(df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto)
+
+    print("✅ Proceso finalizado: Excel + PDFs generados")
