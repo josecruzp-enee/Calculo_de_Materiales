@@ -26,7 +26,7 @@ def seleccionar_nivel_tension(datos_proyecto, opciones_tension=None):
     Muestra un selectbox para seleccionar el nivel de tensión.
     """
     if opciones_tension is None:
-        opciones_tension = ["13.8", "34.5", "69", "115"]  # ajustar según la red
+        opciones_tension = ["13.8", "34.5"]  # ajustar según la red
 
     valor_actual = datos_proyecto.get("nivel_de_tension", "")
     index = opciones_tension.index(valor_actual) if valor_actual in opciones_tension else 0
