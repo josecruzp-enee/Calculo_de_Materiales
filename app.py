@@ -3,7 +3,7 @@
 """
 Aplicación Streamlit para:
 1. Subir Excel del proyecto (estructuras_lista.xlsx)
-2. Subir base de datos de materiales (Estructura_datos.xlsx)
+2. Usar base de datos de materiales interna (Estructura_datos.xlsx)
 3. Procesar materiales con reglas de reemplazo
 4. Exportar resúmenes en Excel y PDF
 """
@@ -11,7 +11,8 @@ Aplicación Streamlit para:
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-import tempfile, os
+import tempfile
+import os
 from openpyxl.utils import get_column_letter
 
 # === Importar módulos propios ===
@@ -25,65 +26,29 @@ from modulo.pdf_utils import (
     generar_pdf_materiales_por_punto,
     generar_pdf_completo,
 )
-
 from modulo.procesar_materiales import procesar_materiales
-
-
 
 # ================== CONFIG STREAMLIT ==================
 st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
 st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
-# Columnas base
+# Columnas base para DataFrame
 columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
 
-# ================== SUBIR ARCHIVOS ==================
-st.subheader("📂 Sube los archivos necesarios")
+# ================== SUBIR ARCHIVO ESTRUCTURAS ==================
+st.subheader("📂 Sube el archivo de estructuras")
 
-import os
-
-# Archivo materiales ya dentro del proyecto
+# Archivo de materiales ya dentro del proyecto
 ruta_materiales = os.path.join("modulo", "Estructura_datos.xlsx")
 
 archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
 
 if archivo_estructuras:
     # Guardar archivo de estructuras temporalmente
-    import tempfile
-    import shutil
-
     temp_dir = tempfile.mkdtemp()
     ruta_estructuras = os.path.join(temp_dir, archivo_estructuras.name)
     with open(ruta_estructuras, "wb") as f:
         f.write(archivo_estructuras.getbuffer())
-
-    # Procesar usando ruta_materiales ya local
-    try:
-        datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
-        # Mostrar datos...
-    except Exception as e:
-        st.error(f"No se pudo leer la hoja 'datos_proyecto': {e}")
-
-    # Luego continua con el procesamiento usando ruta_estructuras y ruta_materiales
-    try:
-        df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
-            ruta_estructuras, ruta_materiales
-        )
-        # Generar botones descarga PDF, etc.
-    except Exception as e:
-        st.error(f"Error al procesar materiales: {e}")
-
-else:
-    st.warning("⚠️ Debes subir el archivo de estructuras.")
-
-
-    ruta_estructuras = os.path.join(temp_dir, archivo_estructuras.name)
-    with open(ruta_estructuras, "wb") as f:
-        f.write(archivo_estructuras.getbuffer())
-
-    ruta_materiales = os.path.join(temp_dir, archivo_materiales.name)
-    with open(ruta_materiales, "wb") as f:
-        f.write(archivo_materiales.getbuffer())
 
     # === Leer datos del proyecto ===
     try:
@@ -102,7 +67,7 @@ else:
         st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
         st.stop()
 
-    # Guardar en sesión
+    # Guardar en sesión para mantener el estado
     st.session_state["df_puntos"] = df.copy()
 
     # ================== EDITOR DE TABLA ==================
@@ -128,7 +93,7 @@ else:
         "text/csv"
     )
 
-    # Exportar a Excel
+    # Exportar a Excel con ajuste de ancho de columnas
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Estructuras")
@@ -148,12 +113,10 @@ else:
     st.subheader("📑 Exportar a PDF")
 
     try:
-        # Procesar materiales usando la lógica del script principal
         df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
             ruta_estructuras, ruta_materiales
         )
 
-        # PDF Materiales
         st.download_button(
             "📄 Descargar PDF de Materiales",
             generar_pdf_materiales(df_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto"), datos_proyecto),
@@ -161,7 +124,6 @@ else:
             "application/pdf"
         )
 
-        # PDF Estructuras
         st.download_button(
             "📄 Descargar PDF de Estructuras",
             generar_pdf_estructuras(df_estructuras_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto")),
@@ -169,7 +131,6 @@ else:
             "application/pdf"
         )
 
-        # PDF Materiales por punto
         st.download_button(
             "📄 Descargar PDF Materiales por Punto",
             generar_pdf_materiales_por_punto(df_resumen_por_punto, datos_proyecto.get("nombre_proyecto", "Proyecto")),
@@ -177,7 +138,6 @@ else:
             "application/pdf"
         )
 
-        # PDF Completo
         st.download_button(
             "📄 Descargar Informe Completo (PDF)",
             generar_pdf_completo(df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto),
@@ -188,8 +148,7 @@ else:
         st.error(f"⚠️ Error al procesar materiales: {e}")
 
 else:
-    st.warning("⚠️ Debes subir ambos archivos: estructuras y base de datos de materiales.")
-
+    st.warning("⚠️ Debes subir el archivo de estructuras.")
 
 
 
