@@ -8,26 +8,27 @@ RUTA_EXCEL = os.path.join(os.path.dirname(__file__), "Estructura_datos.xlsx")
 def cargar_opciones():
     """Lee la hoja 'indice' y organiza por Clasificación (código + descripción)."""
     df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
-
-    # 🔹 limpiar nombres de columnas (quita espacios extras)
     df.columns = df.columns.str.strip()
 
-    # 🔹 validar columnas
-    columnas_esperadas = ["Clasificación", "Código de Estructura", "Descripción"]
-    for col in columnas_esperadas:
-        if col not in df.columns:
-            st.error(f"⚠️ No se encontró la columna '{col}'. Columnas disponibles: {list(df.columns)}")
-            st.stop()
-
     opciones = {}
+
+    # estructuras (primaria, secundaria, etc.)
     for clasificacion in df["Clasificación"].unique():
+        if clasificacion.startswith("Poste"):  # 👈 ignoramos postes aquí
+            continue
         subset = df[df["Clasificación"] == clasificacion]
         codigos = [
             (f"{row['Código de Estructura']} – {row['Descripción']}", row["Código de Estructura"])
             for _, row in subset.iterrows()
         ]
         opciones[clasificacion] = codigos
+
+    # postes: juntamos todas las clasificaciones que contengan "Poste"
+    df_postes = df[df["Clasificación"].str.contains("Poste", case=False, na=False)]
+    opciones["Poste"] = df_postes["Código de Estructura"].dropna().tolist()
+
     return opciones
+
 
 
 def crear_desplegables(opciones):
@@ -35,10 +36,13 @@ def crear_desplegables(opciones):
     seleccion = {}
     seleccion["Punto"] = st.number_input("Selecciona Punto:", min_value=1, step=1)
 
+    # 🔹 Poste directo desde Excel
     seleccion["Poste"] = st.selectbox(
         "Selecciona Poste:",
         opciones.get("Poste", [])
     )
+
+    # 🔹 Estructuras normales
     seleccion["Primario"] = st.selectbox(
         "Selecciona Primario:",
         opciones.get("Primaria", []),
@@ -70,3 +74,5 @@ def crear_desplegables(opciones):
     )[1] if opciones.get("Transformador") else ""
 
     return seleccion
+
+
