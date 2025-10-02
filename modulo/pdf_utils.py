@@ -2,85 +2,6 @@
 
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
-)
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from datetime import datetime
-from io import BytesIO
-import os
-import re
-
-# ======== ESTILOS COMUNES ========
-styles = getSampleStyleSheet()
-styleN = ParagraphStyle(name="Normal9", parent=styles["Normal"], fontSize=9, leading=11)
-styleH = styles["Heading1"]
-
-# === Fondo para todas las páginas ===
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # raíz del proyecto
-
-def fondo_pagina(canvas, doc):
-    """Coloca la imagen como fondo en toda la página"""
-    canvas.saveState()
-    fondo = os.path.join(BASE_DIR, "modulos", "Imagen Encabezado.jpg")
-    ancho, alto = letter
-    if os.path.exists(fondo):
-        canvas.drawImage(fondo, 0, 0, width=ancho, height=alto, mask="auto")
-    canvas.restoreState()
-
-# === Formateo de materiales ===
-def formatear_material(nombre):
-    texto = str(nombre).strip().title()  # Mayúscula en cada palabra
-    texto = re.sub(r"\bN[º°]?\s*(\d+)", r"N°\1", texto, flags=re.IGNORECASE)  # N°
-    texto = re.sub(r"\bn(\d+)", r"N°\1", texto, flags=re.IGNORECASE)          # n6 → N°6
-    texto = texto.replace(" X ", " x ")                                       # medidas
-    return texto
-
-# === Hoja de información del proyecto ===
-def hoja_info_proyecto(datos_proyecto):
-    styles = getSampleStyleSheet()
-    styleH = styles["Heading1"]
-    
-    elems = []
-    elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
-    elems.append(Spacer(1, 12))
-
-    data = [
-        ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
-        ["Código / Expediente:", datos_proyecto.get("codigo_proyecto", "")],
-        ["Nivel de Tensión (kV):", datos_proyecto.get("nivel_de_tension", "")],
-        ["Calibre Primario:", datos_proyecto.get("calibre_primario", "")],
-        ["Calibre Secundario:", datos_proyecto.get("calibre_secundario", "")],
-        ["Calibre Neutro:", datos_proyecto.get("calibre_neutro", "")],
-        ["Calibre Piloto:", datos_proyecto.get("calibre_piloto", "")],
-        ["Calibre Cable de Retenidas:", datos_proyecto.get("calibre_retenidas", "")],
-        ["Fecha de Informe:", datetime.today().strftime("%d/%m/%Y")],
-        ["Responsable / Diseñador:", datos_proyecto.get("responsable", "N/A")],
-        ["Empresa / Área:", datos_proyecto.get("empresa", "N/A")],
-    ]
-
-    table = Table(data, colWidths=[180, 300])
-    table.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (0,-1), colors.lightgrey),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
-    ]))
-
-    elems.append(table)
-    elems.append(Spacer(1, 24))
-    elems.append(PageBreak())
-    return elems
-
-
-# ======== PDF GENERADORES ========
-
-# modulos/pdf_utils.py
-
-from reportlab.platypus import (
-    BaseDocTemplate, PageTemplate, Frame,
     Paragraph, Spacer, Table, TableStyle, PageBreak
 )
 from reportlab.lib import colors
@@ -97,24 +18,26 @@ styles = getSampleStyleSheet()
 styleN = ParagraphStyle(name="Normal9", parent=styles["Normal"], fontSize=9, leading=11)
 styleH = styles["Heading1"]
 
-# === Fondo para todas las páginas ===
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # raíz del proyecto
 
+# === Fondo para todas las páginas ===
 def fondo_pagina(canvas, doc):
-    """Coloca la imagen como fondo en toda la página"""
-    canvas.saveState()
-    fondo = os.path.join(BASE_DIR, "modulos", "Imagen Encabezado.jpg")
-    ancho, alto = letter
-    if os.path.exists(fondo):
-        canvas.drawImage(fondo, 0, 0, width=ancho, height=alto, mask="auto")
-    canvas.restoreState()
+    try:
+        canvas.saveState()
+        fondo = os.path.join(BASE_DIR, "modulos", "Imagen Encabezado.jpg")
+        ancho, alto = letter
+        if os.path.exists(fondo):
+            canvas.drawImage(fondo, 0, 0, width=ancho, height=alto, mask="auto")
+        canvas.restoreState()
+    except Exception as e:
+        print(f"⚠️ Error aplicando fondo: {e}")
 
 # === Formateo de materiales ===
 def formatear_material(nombre):
-    texto = str(nombre).strip().title()  # Mayúscula en cada palabra
-    texto = re.sub(r"\bN[º°]?\s*(\d+)", r"N°\1", texto, flags=re.IGNORECASE)  # N°6
-    texto = re.sub(r"\bn(\d+)", r"N°\1", texto, flags=re.IGNORECASE)          # n6 → N°6
-    texto = texto.replace(" X ", " x ")                                       # medidas
+    texto = str(nombre).strip().title()
+    texto = re.sub(r"\bN[º°]?\s*(\d+)", r"N°\1", texto, flags=re.IGNORECASE)
+    texto = re.sub(r"\bn(\d+)", r"N°\1", texto, flags=re.IGNORECASE)  # n6 → N°6
+    texto = texto.replace(" X ", " x ")
     return texto
 
 # === Hoja de información del proyecto ===
@@ -149,6 +72,16 @@ def hoja_info_proyecto(datos_proyecto):
     elems.append(Spacer(1, 24))
     elems.append(PageBreak())
     return elems
+
+# ======== FUNCIONES AUXILIARES ========
+def ordenar_puntos(lista):
+    """Ordena puntos de forma segura, numéricamente si aplica."""
+    def clave(x):
+        try:
+            return int(re.search(r'\d+', str(x)).group())
+        except:
+            return float("inf")  # Los que no tienen número al final
+    return sorted(lista, key=clave)
 
 
 # ======== PDF GENERADORES ========
@@ -359,4 +292,5 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
