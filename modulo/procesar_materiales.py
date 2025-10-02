@@ -95,24 +95,51 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
             log(f"🔍 Cargando hoja '{estructura}' (cantidad={cant})")
             df_temp = cargar_materiales(archivo_materiales, estructura, header=None)
             log(f"   ❇️ Primeras 3 filas de '{estructura}':\n{df_temp.head(3)}")
+
+            # Detectar fila del encabezado
             fila_tension = next(i for i, row in df_temp.iterrows() if any(str(tension) in str(cell) for cell in row))
             df = cargar_materiales(archivo_materiales, estructura, header=fila_tension)
-            log(f"   ✅ Columnas detectadas: {list(df.columns)}")
-            if "Materiales" not in df.columns or tension not in df.columns:
-                log(f"⚠️ Hoja '{estructura}' no tiene columna 'Materiales' o '{tension}'")
+
+            # --- Normalizar columnas ---
+            df.columns = (df.columns.astype(str)
+                          .str.strip()
+                          .str.replace(r"\s+", " ", regex=True)
+                          .str.upper())
+            renombres = {}
+            for col in df.columns:
+                if "MAT" in col:
+                    renombres[col] = "MATERIALES"
+                elif "UNI" in col:
+                    renombres[col] = "UNIDAD"
+                elif "COD" in col:
+                    renombres[col] = "COD_ENEE"
+                elif "34" in col:
+                    renombres[col] = "CANT_34_5"
+                elif "13" in col:
+                    renombres[col] = "CANT_13_8"
+            df = df.rename(columns=renombres)
+
+            log(f"   ✅ Columnas detectadas (normalizadas): {list(df.columns)}")
+
+            if "MATERIALES" not in df.columns or str(tension) not in df.columns:
+                log(f"⚠️ Hoja '{estructura}' no tiene columna 'MATERIALES' o '{tension}'")
                 continue
 
-            unidad_col = df.columns[df.columns.get_loc("Materiales") + 1]
-            df_filtrado = df[df[tension] > 0][["Materiales", unidad_col, tension]].copy()
+            # --- Filtrar y preparar materiales ---
+            df_filtrado = df[df[str(tension)] > 0][["MATERIALES", "UNIDAD", str(tension)]].copy()
 
-            # === DEBUG DE MATERIALES LEÍDOS ===
             log(f"   📝 Materiales brutos de '{estructura}' con tensión={tension}:")
             for _, fila in df_filtrado.iterrows():
-                log(f"      - {fila['Materiales']} | {fila[unidad_col]} | {fila[tension]}")
+                log(f"      - {fila['MATERIALES']} | {fila['UNIDAD']} | {fila[str(tension)]}")
 
-            df_filtrado["Materiales"] = aplicar_reemplazos_conectores(df_filtrado["Materiales"].tolist(), calibre_primario, tabla_conectores_mt)
-            df_filtrado["Unidad"] = df_filtrado[unidad_col]
-            df_filtrado["Cantidad"] = df_filtrado[tension] * cant
+            df_filtrado["Materiales"] = aplicar_reemplazos_conectores(
+                df_filtrado["MATERIALES"].tolist(),
+                calibre_primario,
+                tabla_conectores_mt
+            )
+            df_filtrado["Unidad"] = df_filtrado["UNIDAD"]
+            df_filtrado["Cantidad"] = df_filtrado[str(tension)] * cant
+
             df_total = pd.concat([df_total, df_filtrado[["Materiales", "Unidad", "Cantidad"]]])
             log(f"   ✅ Materiales agregados para '{estructura}': {len(df_filtrado)} filas")
         except Exception as e:
@@ -141,25 +168,39 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
                         df_temp = cargar_materiales(archivo_materiales, codigo, header=None)
                         fila_tension = next(i for i, row in df_temp.iterrows() if any(str(tension) in str(cell) for cell in row))
                         df = cargar_materiales(archivo_materiales, codigo, header=fila_tension)
-                        unidad_col = df.columns[df.columns.get_loc("Materiales") + 1]
-                        dfp = df[df[tension] > 0][["Materiales", unidad_col, tension]].copy()
 
-                        # === DEBUG DE MATERIALES POR PUNTO ===
+                        df.columns = (df.columns.astype(str)
+                                      .str.strip()
+                                      .str.replace(r"\s+", " ", regex=True)
+                                      .str.upper())
+                        df = df.rename(columns=renombres)
+
+                        if "MATERIALES" not in df.columns or str(tension) not in df.columns:
+                            continue
+
+                        dfp = df[df[str(tension)] > 0][["MATERIALES", "UNIDAD", str(tension)]].copy()
+
                         log(f"   📝 Materiales brutos de '{codigo}' en punto '{punto}':")
                         for _, fila in dfp.iterrows():
-                            log(f"      - {fila['Materiales']} | {fila[unidad_col]} | {fila[tension]}")
+                            log(f"      - {fila['MATERIALES']} | {fila['UNIDAD']} | {fila[str(tension)]}")
 
-                        dfp["Unidad"] = dfp[unidad_col]
-                        dfp["Cantidad"] = dfp[tension]
+                        dfp["Unidad"] = dfp["UNIDAD"]
+                        dfp["Cantidad"] = dfp[str(tension)]
                         dfp["Punto"] = punto
                         resumen_punto.append(dfp[["Punto", "Materiales", "Unidad", "Cantidad"]])
                         log(f"   ✅ Materiales por punto agregados para '{codigo}': {len(dfp)} filas")
                     except Exception as e:
                         log(f"❌ Error al procesar hoja '{codigo}' en punto '{punto}': {e}")
 
-    df_resumen_por_punto = pd.concat(resumen_punto, ignore_index=True).groupby(["Punto","Materiales","Unidad"], as_index=False)["Cantidad"].sum() if resumen_punto else pd.DataFrame(columns=["Punto","Materiales","Unidad","Cantidad"])
+    df_resumen_por_punto = (
+        pd.concat(resumen_punto, ignore_index=True)
+          .groupby(["Punto","Materiales","Unidad"], as_index=False)["Cantidad"].sum()
+        if resumen_punto else
+        pd.DataFrame(columns=["Punto","Materiales","Unidad","Cantidad"])
+    )
 
     log(f"📊 Resumen final: {df_resumen.shape[0]} materiales, {df_estructuras_resumen.shape[0]} estructuras, {df_resumen_por_punto.shape[0]} filas por punto")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
 
