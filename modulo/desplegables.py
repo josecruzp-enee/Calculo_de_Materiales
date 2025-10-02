@@ -1,7 +1,7 @@
 # modulo/desplegables.py
-import streamlit as st
-import pandas as pd
 import os
+import pandas as pd
+import streamlit as st
 
 RUTA_EXCEL = os.path.join(os.path.dirname(__file__), "Estructura_datos.xlsx")
 
@@ -9,12 +9,23 @@ def cargar_opciones():
     """Lee la hoja 'indice' y organiza por Clasificación (código + descripción)."""
     df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
 
+    # 🔹 limpiar nombres de columnas (quita espacios extras)
+    df.columns = df.columns.str.strip()
+
+    # 🔹 validar columnas
+    columnas_esperadas = ["Clasificación", "Código de Estructura", "Descripción"]
+    for col in columnas_esperadas:
+        if col not in df.columns:
+            st.error(f"⚠️ No se encontró la columna '{col}'. Columnas disponibles: {list(df.columns)}")
+            st.stop()
+
     opciones = {}
     for clasificacion in df["Clasificación"].unique():
         subset = df[df["Clasificación"] == clasificacion]
-        # lista de tuplas: (etiqueta para mostrar, código real)
-        codigos = [(f"{row['Código de Estructura']} – {row['Descripción']}", row["Código de Estructura"])
-                   for _, row in subset.iterrows()]
+        codigos = [
+            (f"{row['Código de Estructura']} – {row['Descripción']}", row["Código de Estructura"])
+            for _, row in subset.iterrows()
+        ]
         opciones[clasificacion] = codigos
     return opciones
 
@@ -24,13 +35,10 @@ def crear_desplegables(opciones):
     seleccion = {}
     seleccion["Punto"] = st.number_input("Selecciona Punto:", min_value=1, step=1)
 
-    # usamos format_func para mostrar etiqueta pero guardar solo el código
     seleccion["Poste"] = st.selectbox(
         "Selecciona Poste:",
-        opciones.get("Poste", []),
-        format_func=lambda x: x[0] if isinstance(x, tuple) else x
-    )[1] if opciones.get("Poste") else ""
-
+        opciones.get("Poste", [])
+    )
     seleccion["Primario"] = st.selectbox(
         "Selecciona Primario:",
         opciones.get("Primaria", []),
@@ -62,5 +70,3 @@ def crear_desplegables(opciones):
     )[1] if opciones.get("Transformador") else ""
 
     return seleccion
-
-
