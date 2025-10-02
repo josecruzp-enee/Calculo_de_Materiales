@@ -45,10 +45,10 @@ def formulario_datos_proyecto(datos_proyecto=None):
         codigo_proyecto = st.text_input("Código / Expediente", value=datos_proyecto.get("codigo_proyecto", "") if datos_proyecto else "")
         nivel_tension = st.text_input("Nivel de Tensión (kV)", value=datos_proyecto.get("nivel_de_tension", "") if datos_proyecto else "")
         calibre_primario = st.text_input("Calibre del Conductor de Media Tensión", value=datos_proyecto.get("calibre_primario", "") if datos_proyecto else "")
-        calibre_secundario = st.text_input("Calibre del Conductor Secundario", value=datos_proyecto.get("calibre_secundario", "") if datos_proyecto else "")
-        calibre_neutro = st.text_input("Calibre del Neutro", value=datos_proyecto.get("calibre_neutro", "") if datos_proyecto else "")
-        calibre_piloto = st.text_input("Calibre del Piloto", value=datos_proyecto.get("calibre_piloto", "") if datos_proyecto else "")
-        calibre_retenidas = st.text_input("Calibre del Cable de Retenidas", value=datos_proyecto.get("calibre_retenidas", "") if datos_proyecto else "")
+        calibre_secundario = st.text_input("Calibre del Conductor de Baja Tensión", value=datos_proyecto.get("calibre_secundario", "") if datos_proyecto else "")
+        calibre_neutro = st.text_input("Calibre del Condcutor Neutro", value=datos_proyecto.get("calibre_neutro", "") if datos_proyecto else "")
+        calibre_piloto = st.text_input("Calibre del Conductor de Hilo Piloto", value=datos_proyecto.get("calibre_piloto", "") if datos_proyecto else "")
+        calibre_retenidas = st.text_input("Calibre del Cable de Retenida", value=datos_proyecto.get("calibre_retenidas", "") if datos_proyecto else "")
         responsable = st.text_input("Responsable / Diseñador", value=datos_proyecto.get("responsable", "") if datos_proyecto else "")
         empresa = st.text_input("Empresa / Área", value=datos_proyecto.get("empresa", "") if datos_proyecto else "")
 
@@ -197,3 +197,4 @@ if archivo_estructuras:
 
 else:
     st.warning("⚠️ Debes subir el archivo de estructuras.")
+
