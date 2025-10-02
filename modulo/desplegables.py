@@ -1,4 +1,3 @@
-# modulo/desplegables.py
 # -*- coding: utf-8 -*-
 import os
 import pandas as pd
@@ -22,16 +21,18 @@ def cargar_opciones():
         subset = df[df[clas_col] == clasificacion]
 
         if str(clasificacion).lower() == "poste":
-            # Para postes solo usamos código
+            # Para postes solo usamos el código
             codigos = subset[cod_col].dropna().tolist()
+            etiquetas = {c: c for c in codigos}
         else:
-            # Para las demás clasificaciones: código + descripción
-            codigos = [
-                (f"{row[cod_col]} – {row[desc_col]}", row[cod_col])
+            # Para las demás: usamos el código como valor y mostramos código + descripción
+            codigos = subset[cod_col].dropna().tolist()
+            etiquetas = {
+                row[cod_col]: f"{row[cod_col]} – {row[desc_col]}"
                 for _, row in subset.iterrows()
                 if pd.notna(row[cod_col])
-            ]
-        opciones[clasificacion] = codigos
+            }
+        opciones[clasificacion] = {"valores": codigos, "etiquetas": etiquetas}
 
     return opciones
 
@@ -41,47 +42,31 @@ def crear_desplegables(opciones):
     seleccion = {}
     seleccion["Punto"] = st.number_input("Selecciona Punto:", min_value=1, step=1)
 
+    def selectbox_con_etiquetas(label, datos):
+        if not datos:
+            return None
+        return st.selectbox(
+            label,
+            options=datos["valores"],
+            format_func=lambda x: datos["etiquetas"].get(x, x)
+        )
+
     # Poste
-    seleccion["Poste"] = st.selectbox("Selecciona Poste:", opciones.get("Poste", []))
+    seleccion["Poste"] = selectbox_con_etiquetas("Selecciona Poste:", opciones.get("Poste"))
 
     # Primario
-    seleccion["Primario"] = st.selectbox(
-        "Selecciona Primario:",
-        opciones.get("Primaria", []),
-        format_func=lambda x: x[0] if isinstance(x, tuple) else x
-    )
+    seleccion["Primario"] = selectbox_con_etiquetas("Selecciona Primario:", opciones.get("Primaria"))
 
     # Secundario
-    seleccion["Secundario"] = st.selectbox(
-        "Selecciona Secundario:",
-        opciones.get("Secundaria", []),
-        format_func=lambda x: x[0] if isinstance(x, tuple) else x
-    )
+    seleccion["Secundario"] = selectbox_con_etiquetas("Selecciona Secundario:", opciones.get("Secundaria"))
 
     # Retenida
-    seleccion["Retenida"] = st.selectbox(
-        "Selecciona Retenida:",
-        opciones.get("Retenida", []),
-        format_func=lambda x: x[0] if isinstance(x, tuple) else x
-    )
+    seleccion["Retenida"] = selectbox_con_etiquetas("Selecciona Retenida:", opciones.get("Retenida"))
 
     # Aterrizaje
-    seleccion["Aterrizaje"] = st.selectbox(
-        "Selecciona Aterrizaje:",
-        opciones.get("Aterrizaje", []),
-        format_func=lambda x: x[0] if isinstance(x, tuple) else x
-    )
+    seleccion["Aterrizaje"] = selectbox_con_etiquetas("Selecciona Aterrizaje:", opciones.get("Aterrizaje"))
 
     # Transformador
-    seleccion["Transformador"] = st.selectbox(
-        "Selecciona Transformador:",
-        opciones.get("Transformador", []),
-        format_func=lambda x: x[0] if isinstance(x, tuple) else x
-    )
-
-    # devolvemos solo el código (no la descripción)
-    for k, v in seleccion.items():
-        if isinstance(v, tuple):
-            seleccion[k] = v[1]
+    seleccion["Transformador"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformador"))
 
     return seleccion
