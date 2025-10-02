@@ -17,16 +17,20 @@ def main():
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
     # 1️⃣ Modo de carga
-    modo_carga = st.radio("Selecciona modo de carga:", ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"])
-
-    # 2️⃣ Nivel de tensión
-    niveles_tension = ["13.8", "34.5", "69", "115"]
-    valor_actual = st.session_state["datos_proyecto"].get("nivel_de_tension", "34.5")
-    st.session_state["datos_proyecto"]["nivel_de_tension"] = st.selectbox(
-        "Nivel de Tensión (kV)",
-        niveles_tension,
-        index=niveles_tension.index(valor_actual) if valor_actual in niveles_tension else 0
+    modo_carga = st.radio(
+        "Selecciona modo de carga:",
+        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"]
     )
+
+    # Inicializamos datos_proyecto si no existe
+    if "datos_proyecto" not in st.session_state:
+        st.session_state["datos_proyecto"] = {}
+
+    # 2️⃣ Nivel de tensión (lista desplegable)
+    tensiones_disponibles = ["13.8", "34.5", "46"]  # Ejemplo, puedes ampliar
+    valor_actual = st.session_state["datos_proyecto"].get("nivel_de_tension", "34.5")
+    nivel_tension = st.selectbox("Nivel de Tensión (kV)", tensiones_disponibles, index=tensiones_disponibles.index(valor_actual) if valor_actual in tensiones_disponibles else 0)
+    st.session_state["datos_proyecto"]["nivel_de_tension"] = nivel_tension
 
     # 3️⃣ Calibres
     calibres = cargar_calibres_desde_excel()
@@ -67,9 +71,6 @@ def main():
     if not df.empty:
         st.dataframe(df, use_container_width=True)
         generar_pdfs(modo_carga, ruta_estructuras, df)
-
-if __name__ == "__main__":
-    main()
 
 
 
