@@ -136,13 +136,8 @@ if archivo_estructuras:
         st.warning(f"⚠️ No se pudo leer datos del proyecto: {e}")
         datos_proyecto = {}
 
-    # Mostrar el formulario para editar los datos del proyecto
-    datos_proyecto = formulario_datos_proyecto(datos_proyecto)
-
-    # Mostrar datos actuales en JSON (puedes cambiar a tabla o PDF si prefieres)
-    mostrar_info_proyecto(datos_proyecto)
-
-
+    formulario_datos_proyecto()
+    mostrar_datos_formateados()
 
     
     # === Leer estructuras proyectadas ===
@@ -236,6 +231,7 @@ if archivo_estructuras:
 
 else:
     st.warning("⚠️ Debes subir el archivo de estructuras.")
+
 
 
 
