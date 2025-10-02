@@ -28,7 +28,7 @@ from modulo.pdf_utils import (
 )
 from modulo.procesar_materiales import procesar_materiales
 import modulo.calibres as calibres_module
-
+from modulo.calibre import cargar_calibres_desde_excel, seleccionar_calibres_formulario
 
 # ================== CONFIG STREAMLIT ==================
 st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
@@ -39,6 +39,7 @@ columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje"
 
 
 # === Función para formulario edición de datos del proyecto ===
+
 def formulario_datos_proyecto():
     st.subheader("📝 Datos del Proyecto (Formulario)")
 
@@ -56,15 +57,16 @@ def formulario_datos_proyecto():
         "empresa": "",
     })
 
+    # Cargar calibres predeterminados desde archivo o usar valores por defecto
+    calibres = cargar_calibres_desde_excel()
+
     with st.form("form_datos_proyecto", clear_on_submit=False):
         nombre_proyecto = st.text_input("Nombre del Proyecto", value=datos.get("nombre_proyecto", ""))
         codigo_proyecto = st.text_input("Código / Expediente", value=datos.get("codigo_proyecto", ""))
         nivel_tension = st.text_input("Nivel de Tensión (kV)", value=datos.get("nivel_de_tension", ""))
         
-        # Cargar calibres desde archivo o defecto
-        calibres = calibres_module.cargar_calibres_desde_excel()
-        # Mostrar formulario calibres y obtener selección
-        calibres_seleccionados = calibres_module.seleccionar_calibres_formulario(datos, calibres)
+        # Aquí usamos la función para seleccionar calibres
+        calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
 
         responsable = st.text_input("Responsable / Diseñador", value=datos.get("responsable", ""))
         empresa = st.text_input("Empresa / Área", value=datos.get("empresa", ""))
@@ -77,15 +79,12 @@ def formulario_datos_proyecto():
                 "nombre_proyecto": nombre_proyecto,
                 "codigo_proyecto": codigo_proyecto,
                 "nivel_de_tension": nivel_tension,
-                "calibre_primario": calibres_seleccionados["calibre_primario"],
-                "calibre_secundario": calibres_seleccionados["calibre_secundario"],
-                "calibre_neutro": calibres_seleccionados["calibre_neutro"],
-                "calibre_piloto": calibres_seleccionados["calibre_piloto"],
-                "calibre_retenidas": calibres_seleccionados["calibre_retenidas"],
+                **calibres_seleccionados,  # Desempaquetamos el dict de calibres
                 "responsable": responsable,
                 "empresa": empresa,
             }
             st.success("✅ Datos del proyecto actualizados")
+
 
 if "datos_proyecto" not in st.session_state:
     st.session_state["datos_proyecto"] = {}
@@ -232,3 +231,4 @@ if archivo_estructuras:
 
 else:
     st.warning("⚠️ Debes subir el archivo de estructuras.")
+
