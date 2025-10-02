@@ -59,7 +59,7 @@ def procesar_materiales(
     archivo_materiales=None,
     estructuras_df=None,
     datos_proyecto=None
-):
+)
     # --- Validar entrada ---
     if archivo_estructuras:
         datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
@@ -214,4 +214,5 @@ def procesar_materiales(
     log(f"📊 Resumen final: {df_resumen.shape[0]} materiales, {df_estructuras_resumen.shape[0]} estructuras, {df_resumen_por_punto.shape[0]} filas por punto")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
 
