@@ -29,36 +29,109 @@ from modulo.pdf_utils import (
 from modulo.procesar_materiales import procesar_materiales
 
 
+# ================== CONFIG STREAMLIT ==================
+st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
+st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
+
 # Columnas base para DataFrame
-COLUMNAS = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
+columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
 
-# Archivo de materiales ya dentro del proyecto
-RUTA_MATERIALES = os.path.join("modulo", "Estructura_datos.xlsx")
+# === Función para formulario edición de datos del proyecto ===
+def formulario_datos_proyecto(datos_proyecto=None):
+    st.subheader("📝 Datos del Proyecto (Formulario)")
 
+    with st.form("form_datos_proyecto", clear_on_submit=False):
+        nombre_proyecto = st.text_input("Nombre del Proyecto", value=datos_proyecto.get("nombre_proyecto", "") if datos_proyecto else "")
+        codigo_proyecto = st.text_input("Código / Expediente", value=datos_proyecto.get("codigo_proyecto", "") if datos_proyecto else "")
+        nivel_tension = st.text_input("Nivel de Tensión (kV)", value=datos_proyecto.get("nivel_de_tension", "") if datos_proyecto else "")
+        calibre_primario = st.text_input("Calibre del Conductor de Media Tensión", value=datos_proyecto.get("calibre_primario", "") if datos_proyecto else "")
+        calibre_secundario = st.text_input("Calibre del Conductor Secundario", value=datos_proyecto.get("calibre_secundario", "") if datos_proyecto else "")
+        calibre_neutro = st.text_input("Calibre del Neutro", value=datos_proyecto.get("calibre_neutro", "") if datos_proyecto else "")
+        calibre_piloto = st.text_input("Calibre del Piloto", value=datos_proyecto.get("calibre_piloto", "") if datos_proyecto else "")
+        calibre_retenidas = st.text_input("Calibre del Cable de Retenidas", value=datos_proyecto.get("calibre_retenidas", "") if datos_proyecto else "")
+        responsable = st.text_input("Responsable / Diseñador", value=datos_proyecto.get("responsable", "") if datos_proyecto else "")
+        empresa = st.text_input("Empresa / Área", value=datos_proyecto.get("empresa", "") if datos_proyecto else "")
 
+        submitted = st.form_submit_button("Guardar datos del proyecto")
+
+        if submitted:
+            datos_nuevos = {
+                "nombre_proyecto": nombre_proyecto,
+                "codigo_proyecto": codigo_proyecto,
+                "nivel_de_tension": nivel_tension,
+                "calibre_primario": calibre_primario,
+                "calibre_secundario": calibre_secundario,
+                "calibre_neutro": calibre_neutro,
+                "calibre_piloto": calibre_piloto,
+                "calibre_retenidas": calibre_retenidas,
+                "responsable": responsable,
+                "empresa": empresa,
+            }
+            st.success("✅ Datos del proyecto actualizados")
+            return datos_nuevos
+
+    # Si no se envió el formulario, devolver los datos que entraron (o vacíos)
+    return datos_proyecto or {}
+
+# === Función para mostrar datos en JSON ===
 def mostrar_info_proyecto(datos_proyecto):
-    st.subheader("📑 Información del Proyecto")
-    st.markdown(f"**Nombre del Proyecto:** {datos_proyecto.get('nombre_proyecto', '')}")
-    st.markdown(f"**Código / Expediente:** {datos_proyecto.get('codigo_proyecto', '')}")
-    st.markdown(f"**Nivel de Tensión (KV):** {datos_proyecto.get('nivel_de_tension', '')}")
-    st.markdown(f"**Calibre del Conductor de Media Tensión:** {datos_proyecto.get('calibre_primario', '')}")
-    st.markdown(f"**Calibre del Conductor Baja Tensión:** {datos_proyecto.get('calibre_secundario', '')}")
-    st.markdown(f"**Calibre del Conductor de Neutro:** {datos_proyecto.get('calibre_neutro', '')}")
-    st.markdown(f"**Calibre del Conductor Hilo Piloto:** {datos_proyecto.get('calibre_piloto', '')}")
-    st.markdown(f"**Calibre del Cable de Retenida:** {datos_proyecto.get('calibre_retenidas', '')}")
-    st.markdown(f"**Responsable / Diseñador:** {datos_proyecto.get('responsable', 'N/A')}")
-    st.markdown(f"**Empresa / Área:** {datos_proyecto.get('empresa', 'N/A')}")
+    st.subheader("📑 Datos del Proyecto Actualizados")
+    st.json(datos_proyecto)
 
-
+# === Función para guardar archivo temporal ===
 def guardar_archivo_temporal(archivo_subido):
     temp_dir = tempfile.mkdtemp()
-    ruta_temporal = os.path.join(temp_dir, archivo_subido.name)
-    with open(ruta_temporal, "wb") as f:
+    ruta_temp = os.path.join(temp_dir, archivo_subido.name)
+    with open(ruta_temp, "wb") as f:
         f.write(archivo_subido.getbuffer())
-    return ruta_temporal
+    return ruta_temp
 
 
-def exportar_tabla(df):
+# ================== FLUJO PRINCIPAL ==================
+archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
+
+if archivo_estructuras:
+    ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
+
+    # Cargar datos del proyecto desde el archivo Excel
+    try:
+        datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
+    except Exception as e:
+        st.warning(f"⚠️ No se pudo leer datos del proyecto: {e}")
+        datos_proyecto = {}
+
+    # Mostrar el formulario para editar los datos del proyecto
+    datos_proyecto = formulario_datos_proyecto(datos_proyecto)
+
+    # Mostrar datos actuales en JSON (puedes cambiar a tabla o PDF si prefieres)
+    mostrar_info_proyecto(datos_proyecto)
+
+    # === Leer estructuras proyectadas ===
+    try:
+        df = cargar_estructuras_proyectadas(ruta_estructuras)
+        st.success("✅ Hoja 'estructuras' leída correctamente")
+    except Exception as e:
+        st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
+        st.stop()
+
+    # Guardar en sesión para mantener el estado
+    st.session_state["df_puntos"] = df.copy()
+
+    # ================== EDITOR DE TABLA ==================
+    df = st.data_editor(
+        st.session_state.get("df_puntos", pd.DataFrame(columns=columnas)),
+        num_rows="dynamic",
+        use_container_width=True,
+    )
+    st.session_state["df_puntos"] = df
+
+    # Vista previa
+    st.subheader("📑 Vista previa de la tabla")
+    st.dataframe(df, use_container_width=True)
+
+    # ================== EXPORTAR TABLA ==================
+    st.subheader("📥 Exportar tabla")
+
     # Exportar a CSV
     st.download_button(
         "⬇️ Descargar CSV",
@@ -83,11 +156,15 @@ def exportar_tabla(df):
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-
-def mostrar_exportar_pdfs(df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto):
+    # ================== GENERAR PDFs ==================
     st.subheader("📑 Exportar a PDF")
 
     try:
+        # Aquí usas los datos_proyecto actualizados (desde formulario o archivo)
+        df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
+            ruta_estructuras, os.path.join("modulo", "Estructura_datos.xlsx")
+        )
+
         st.download_button(
             "📄 Descargar PDF de Materiales",
             generar_pdf_materiales(df_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto"), datos_proyecto),
@@ -118,65 +195,5 @@ def mostrar_exportar_pdfs(df_resumen, df_estructuras_resumen, df_resumen_por_pun
     except Exception as e:
         st.error(f"⚠️ Error al procesar materiales: {e}")
 
-
-def main():
-    st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
-    st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
-
-    st.subheader("📂 Sube el archivo de estructuras")
-    archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
-
-    if archivo_estructuras:
-        ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
-
-        # === Leer datos del proyecto ===
-        try:
-            datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
-            mostrar_info_proyecto(datos_proyecto)
-        except Exception as e:
-            st.error(f"❌ No se pudo leer la hoja 'datos_proyecto': {e}")
-            datos_proyecto = {}
-
-        # === Leer estructuras proyectadas ===
-        try:
-            df = cargar_estructuras_proyectadas(ruta_estructuras)
-            st.success("✅ Hoja 'estructuras' leída correctamente")
-        except Exception as e:
-            st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
-            st.stop()
-
-        # Guardar en sesión para mantener el estado
-        st.session_state["df_puntos"] = df.copy()
-
-        # ================== EDITOR DE TABLA ==================
-        df = st.data_editor(
-            st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS)),
-            num_rows="dynamic",
-            use_container_width=True,
-        )
-        st.session_state["df_puntos"] = df
-
-        # Vista previa
-        st.subheader("📑 Vista previa de la tabla")
-        st.dataframe(df, use_container_width=True)
-
-        # ================== EXPORTAR TABLA ==================
-        st.subheader("📥 Exportar tabla")
-        exportar_tabla(df)
-
-        # ================== GENERAR PDFs ==================
-        try:
-            df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
-                ruta_estructuras, RUTA_MATERIALES
-            )
-            mostrar_exportar_pdfs(df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto)
-        except Exception as e:
-            st.error(f"⚠️ Error al procesar materiales: {e}")
-
-    else:
-        st.warning("⚠️ Debes subir el archivo de estructuras.")
-
-
-if __name__ == "__main__":
-    main()
-
+else:
+    st.warning("⚠️ Debes subir el archivo de estructuras.")
