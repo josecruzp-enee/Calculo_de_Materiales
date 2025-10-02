@@ -203,7 +203,7 @@ if not df.empty:
     # ================== GENERAR PDFs ==================
     st.subheader("📑 Exportar a PDF")
 
-   def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo/Estructura_datos.xlsx"):
+def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo/Estructura_datos.xlsx"):
     """
     Genera y muestra los botones para descargar los PDFs de resumen de materiales,
     estructuras, materiales por punto e informe completo.
@@ -256,3 +256,4 @@ if not df.empty:
 
     except Exception as e:
         st.error(f"⚠️ Error al procesar materiales: {e}")
+
