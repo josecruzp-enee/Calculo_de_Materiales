@@ -27,6 +27,7 @@ from modulo.pdf_utils import (
     generar_pdf_completo,
 )
 from modulo.procesar_materiales import procesar_materiales
+import modulo.calibres as calibres_module
 
 
 # ================== CONFIG STREAMLIT ==================
@@ -35,6 +36,7 @@ st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
 # Columnas base para DataFrame
 columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
+
 
 # === Función para formulario edición de datos del proyecto ===
 def formulario_datos_proyecto():
@@ -58,33 +60,37 @@ def formulario_datos_proyecto():
         nombre_proyecto = st.text_input("Nombre del Proyecto", value=datos.get("nombre_proyecto", ""))
         codigo_proyecto = st.text_input("Código / Expediente", value=datos.get("codigo_proyecto", ""))
         nivel_tension = st.text_input("Nivel de Tensión (kV)", value=datos.get("nivel_de_tension", ""))
-        calibre_primario = st.text_input("Calibre del Conductor de Media Tensión", value=datos.get("calibre_primario", ""))
-        calibre_secundario = st.text_input("Calibre del Conductor de Baja Tensión", value=datos.get("calibre_secundario", ""))
-        calibre_neutro = st.text_input("Calibre del Conductor Neutro", value=datos.get("calibre_neutro", ""))
-        calibre_piloto = st.text_input("Calibre del Conductor de Hilo Piloto", value=datos.get("calibre_piloto", ""))
-        calibre_retenidas = st.text_input("Calibre del Cable de Retenida", value=datos.get("calibre_retenidas", ""))
+        
+        # Cargar calibres desde archivo o defecto
+        calibres = calibres_module.cargar_calibres_desde_excel()
+        # Mostrar formulario calibres y obtener selección
+        calibres_seleccionados = calibres_module.seleccionar_calibres_formulario(datos, calibres)
+
         responsable = st.text_input("Responsable / Diseñador", value=datos.get("responsable", ""))
         empresa = st.text_input("Empresa / Área", value=datos.get("empresa", ""))
 
         submitted = st.form_submit_button("Guardar datos del proyecto")
 
         if submitted:
+            # Actualizar session_state con los datos nuevos, incluyendo calibres
             st.session_state["datos_proyecto"] = {
                 "nombre_proyecto": nombre_proyecto,
                 "codigo_proyecto": codigo_proyecto,
                 "nivel_de_tension": nivel_tension,
-                "calibre_primario": calibre_primario,
-                "calibre_secundario": calibre_secundario,
-                "calibre_neutro": calibre_neutro,
-                "calibre_piloto": calibre_piloto,
-                "calibre_retenidas": calibre_retenidas,
+                "calibre_primario": calibres_seleccionados["calibre_primario"],
+                "calibre_secundario": calibres_seleccionados["calibre_secundario"],
+                "calibre_neutro": calibres_seleccionados["calibre_neutro"],
+                "calibre_piloto": calibres_seleccionados["calibre_piloto"],
+                "calibre_retenidas": calibres_seleccionados["calibre_retenidas"],
                 "responsable": responsable,
                 "empresa": empresa,
             }
             st.success("✅ Datos del proyecto actualizados")
 
+if "datos_proyecto" not in st.session_state:
+    st.session_state["datos_proyecto"] = {}
 
-# === Función para mostrar datos formateados ===
+# Función para mostrar datos formateados
 def mostrar_datos_formateados():
     datos = st.session_state.get("datos_proyecto")
     if datos:
@@ -105,7 +111,7 @@ def mostrar_datos_formateados():
             st.markdown(f"**{label}:** {datos.get(key, '')}")
 
 
-# === Función para guardar archivo temporal ===
+# Función para guardar archivo temporal
 def guardar_archivo_temporal(archivo_subido):
     temp_dir = tempfile.mkdtemp()
     ruta_temp = os.path.join(temp_dir, archivo_subido.name)
@@ -127,15 +133,15 @@ if archivo_estructuras:
         st.warning(f"⚠️ No se pudo leer datos del proyecto: {e}")
         datos_proyecto = {}
 
-    # Guardar en session_state si aún no existe
-    if "datos_proyecto" not in st.session_state and datos_proyecto:
+    # 👉 Actualizar session_state con los datos del Excel si no hay datos manuales aún
+    if "datos_proyecto" not in st.session_state or not st.session_state["datos_proyecto"]:
         st.session_state["datos_proyecto"] = datos_proyecto
 
-    # Formulario editable
+    # Mostrar formulario editable
     formulario_datos_proyecto()
     mostrar_datos_formateados()
 
-    # === Leer estructuras proyectadas ===
+    # Leer estructuras proyectadas
     try:
         df = cargar_estructuras_proyectadas(ruta_estructuras)
         st.success("✅ Hoja 'estructuras' leída correctamente")
@@ -143,10 +149,10 @@ if archivo_estructuras:
         st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
         st.stop()
 
-    # Guardar en sesión
+    # Guardar en sesión para mantener el estado
     st.session_state["df_puntos"] = df.copy()
 
-    # === Editor de tabla ===
+    # ================== EDITOR DE TABLA ==================
     df = st.data_editor(
         st.session_state.get("df_puntos", pd.DataFrame(columns=columnas)),
         num_rows="dynamic",
@@ -158,9 +164,10 @@ if archivo_estructuras:
     st.subheader("📑 Vista previa de la tabla")
     st.dataframe(df, use_container_width=True)
 
-    # === Exportar tabla ===
+    # ================== EXPORTAR TABLA ==================
     st.subheader("📥 Exportar tabla")
 
+    # Exportar a CSV
     st.download_button(
         "⬇️ Descargar CSV",
         df.to_csv(index=False).encode("utf-8"),
@@ -168,6 +175,7 @@ if archivo_estructuras:
         "text/csv"
     )
 
+    # Exportar a Excel con ajuste de ancho de columnas
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Estructuras")
@@ -183,13 +191,13 @@ if archivo_estructuras:
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    # === Generar PDFs ===
+    # ================== GENERAR PDFs ==================
     st.subheader("📑 Exportar a PDF")
 
     try:
+        # Usar datos_proyecto actualizados (desde formulario o archivo)
         df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
-            ruta_estructuras,
-            os.path.join("modulo", "Estructura_datos.xlsx")
+            ruta_estructuras, os.path.join("modulo", "Estructura_datos.xlsx")
         )
 
         st.download_button(
