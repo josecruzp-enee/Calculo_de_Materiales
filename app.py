@@ -6,7 +6,7 @@ from io import BytesIO
 from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
 from modulo.procesar_materiales import procesar_materiales
-from modulo.generar_pdf import generar_pdfs
+from modulo.generar_pdfs import generar_pdfs
 from modulo.calibres import cargar_calibres_desde_excel, seleccionar_calibres_formulario
 from modulo.entradas import cargar_estructuras_proyectadas
 
@@ -69,5 +69,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
