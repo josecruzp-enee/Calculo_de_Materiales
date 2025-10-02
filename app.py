@@ -25,7 +25,8 @@ from modulo.pdf_utils import (
     generar_pdf_materiales_por_punto,
     generar_pdf_completo,
 )
-from principal_materiales import procesar_materiales
+from modulo.principal_materiales import procesar_materiales
+
 
 
 # ================== CONFIG STREAMLIT ==================
@@ -157,5 +158,6 @@ if archivo_estructuras and archivo_materiales:
 
 else:
     st.warning("⚠️ Debes subir ambos archivos: estructuras y base de datos de materiales.")
+
 
 
