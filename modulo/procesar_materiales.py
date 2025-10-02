@@ -10,6 +10,13 @@ from modulo.materiales_validacion import validar_datos_proyecto
 from modulo.materiales_estructuras import extraer_conteo_estructuras, calcular_materiales_estructura
 from modulo.materiales_puntos import calcular_materiales_por_punto
 
+# === Debug (asegura que log siempre esté definido) ===
+try:
+    import streamlit as st
+    log = st.write
+except ImportError:
+    log = print
+
 
 def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estructuras_df=None, datos_proyecto=None):
     if archivo_estructuras:
@@ -44,7 +51,12 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
         df_adicionales = cargar_adicionales(archivo_estructuras)
         df_total = pd.concat([df_total, df_adicionales], ignore_index=True)
 
-    df_resumen = df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum() if not df_total.empty else pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+    df_resumen = (
+        df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+        if not df_total.empty
+        else pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+    )
+
     df_indice["Cantidad"] = df_indice["NombreEstructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
     df_resumen_por_punto = calcular_materiales_por_punto(archivo_materiales, estructuras_por_punto, tension)
