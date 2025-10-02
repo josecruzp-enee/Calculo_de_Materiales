@@ -40,12 +40,12 @@ def mostrar_info_proyecto(datos_proyecto):
     st.subheader("📑 Información del Proyecto")
     st.markdown(f"**Nombre del Proyecto:** {datos_proyecto.get('nombre_proyecto', '')}")
     st.markdown(f"**Código / Expediente:** {datos_proyecto.get('codigo_proyecto', '')}")
-    st.markdown(f"**Nivel de Tensión (kV):** {datos_proyecto.get('nivel_de_tension', '')}")
+    st.markdown(f"**Nivel de Tensión (KV):** {datos_proyecto.get('nivel_de_tension', '')}")
     st.markdown(f"**Calibre del Conductor de Media Tensión:** {datos_proyecto.get('calibre_primario', '')}")
-    st.markdown(f"**Calibre del Conductor Secundario:** {datos_proyecto.get('calibre_secundario', '')}")
-    st.markdown(f"**Calibre del Neutro:** {datos_proyecto.get('calibre_neutro', '')}")
-    st.markdown(f"**Calibre del Piloto:** {datos_proyecto.get('calibre_piloto', '')}")
-    st.markdown(f"**Calibre del Cable de Retenidas:** {datos_proyecto.get('calibre_retenidas', '')}")
+    st.markdown(f"**Calibre del Conductor Baja Tensión:** {datos_proyecto.get('calibre_secundario', '')}")
+    st.markdown(f"**Calibre del Conductor de Neutro:** {datos_proyecto.get('calibre_neutro', '')}")
+    st.markdown(f"**Calibre del Conductor Hilo Piloto:** {datos_proyecto.get('calibre_piloto', '')}")
+    st.markdown(f"**Calibre del Cable de Retenida:** {datos_proyecto.get('calibre_retenidas', '')}")
     st.markdown(f"**Responsable / Diseñador:** {datos_proyecto.get('responsable', 'N/A')}")
     st.markdown(f"**Empresa / Área:** {datos_proyecto.get('empresa', 'N/A')}")
 
@@ -179,3 +179,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
