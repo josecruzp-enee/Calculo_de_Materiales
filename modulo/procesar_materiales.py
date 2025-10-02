@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
 """
 procesar_materiales.py
-Módulo para:
-1. Leer datos de proyecto y estructuras
-2. Procesar materiales con reglas de reemplazo
-3. Generar resúmenes (materiales, estructuras, por punto)
-4. Exportar Excel y PDF
-Funciona desde app.py o en modo consola.
+Versión con mensajes de depuración visibles en Streamlit
 """
 
 import os
 import sys
 import pandas as pd
 from collections import Counter
+
+# === Para mostrar debug en Streamlit si está disponible ===
+try:
+    import streamlit as st
+    log = st.write
+except ImportError:
+    log = print  # fallback a consola si no hay Streamlit
 
 # === Módulos propios ===
 from modulo.entradas import (
@@ -41,24 +43,16 @@ from modulo.excel_utils import exportar_excel
 # =====================================================
 
 def limpiar_codigo(codigo):
-    """
-    Devuelve solo el código base y el tipo de estructura.
-    - Si el string trae 'CODIGO – Descripción', devuelve solo CODIGO.
-    - Si termina en (X), X es el tipo (ej: (P), (E), (R)).
-    - Si no tiene sufijo, se asume tipo = P (proyectada).
-    """
     if pd.isna(codigo) or str(codigo).strip() == "":
         return None, None
 
     codigo = str(codigo).strip()
 
-    # cortar si viene con "–" (guion largo) o "-" con descripción
     if "–" in codigo:
         codigo = codigo.split("–")[0].strip()
     elif " - " in codigo:
         codigo = codigo.split(" - ")[0].strip()
 
-    # manejar sufijos tipo (P), (E), etc.
     if codigo.endswith(")") and "(" in codigo:
         base = codigo[:codigo.rfind("(")].strip()
         tipo = codigo[codigo.rfind("(") + 1 : codigo.rfind(")")].strip().upper()
@@ -67,12 +61,7 @@ def limpiar_codigo(codigo):
     return codigo, "P"
 
 
-
 def expandir_lista_codigos(cadena):
-    """
-    Maneja entradas con varias estructuras separadas por coma.
-    Ej: "A-I-1, A-I-2" → ["A-I-1", "A-I-2"]
-    """
     if not cadena:
         return []
     return [parte.strip() for parte in str(cadena).split(",") if parte.strip()]
@@ -83,13 +72,6 @@ def expandir_lista_codigos(cadena):
 # =====================================================
 
 def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estructuras_df=None):
-    """
-    Procesa estructuras y materiales y devuelve resúmenes.
-    Retorna:
-    - df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
-    """
-
-    # === 1. Datos del proyecto ===
     if archivo_estructuras is not None:
         datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
         df_estructuras = cargar_estructuras_proyectadas(archivo_estructuras)
@@ -106,7 +88,6 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     if tension:
         tension = str(tension).replace(",", ".").replace("kV", "").strip()
 
-    # === 2. Extraer estructuras proyectadas ===
     estructuras_proyectadas, estructuras_por_punto = extraer_estructuras_proyectadas(df_estructuras)
 
     estructuras_limpias = []
@@ -118,15 +99,15 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
 
     conteo = Counter(estructuras_limpias)
 
-    # === 3. Índice y conectores ===
+    log(f"📊 Conteo de estructuras proyectadas: {conteo}")
+
     df_indice = cargar_indice(archivo_materiales)
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
 
-    # === 4. Procesar materiales ===
     df_total = pd.DataFrame()
     for estructura, cant in conteo.items():
         try:
-            print(f"🔍 Intentando cargar estructura: '{estructura}' (cantidad={cant})")
+            log(f"🔍 Intentando cargar estructura '{estructura}' (cantidad={cant})")
             df_temp = cargar_materiales(archivo_materiales, estructura, header=None)
             fila_tension = next(
                 i for i, row in df_temp.iterrows() if any(str(tension) in str(cell) for cell in row)
@@ -135,6 +116,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
 
             df.columns = df.columns.map(lambda x: str(x).strip())
             if "Materiales" not in df.columns or tension not in df.columns:
+                log(f"⚠️ Estructura {estructura} no tiene columna 'Materiales' o '{tension}'")
                 continue
 
             unidad_col = df.columns[df.columns.get_loc("Materiales") + 1]
@@ -147,14 +129,12 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
             df_filtrado["Cantidad"] = df_filtrado[tension] * cant
             df_total = pd.concat([df_total, df_filtrado[["Materiales", "Unidad", "Cantidad"]]])
         except Exception as e:
-            print(f"⚠️ Error en estructura {estructura}: {e}")
+            log(f"❌ Error en estructura {estructura}: {e}")
 
-    # === 5. Materiales adicionales ===
     if archivo_estructuras is not None:
         df_adicionales = cargar_adicionales(archivo_estructuras)
         df_total = pd.concat([df_total, df_adicionales[["Materiales", "Unidad", "Cantidad"]]])
 
-    # === 6. Resúmenes ===
     df_resumen = (
         df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
         if not df_total.empty
@@ -163,9 +143,9 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     df_indice["Cantidad"] = df_indice["NombreEstructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
 
-    # === 7. Resumen por punto ===
     resumen_punto = []
     for punto, estructuras in estructuras_por_punto.items():
+        log(f"📌 Procesando punto {punto} con estructuras {estructuras}")
         for est in estructuras:
             for parte in expandir_lista_codigos(est):
                 codigo, tipo = limpiar_codigo(parte)
@@ -185,7 +165,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
                         dfp["Punto"] = punto
                         resumen_punto.append(dfp[["Punto", "Materiales", "Unidad", "Cantidad"]])
                     except Exception as e:
-                        print(f"⚠️ Error en estructura {codigo}: {e}")
+                        log(f"❌ Error en estructura {codigo}: {e}")
 
     df_resumen_por_punto = (
         pd.concat(resumen_punto, ignore_index=True)
@@ -194,43 +174,3 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     )
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
-
-
-# =====================================================
-# Ejecución directa en consola
-# =====================================================
-
-def main():
-    BASE_DIR = os.path.dirname(__file__)
-    archivo_estructuras = os.path.join(BASE_DIR, "estructura_lista.xlsx")
-    archivo_materiales = os.path.join(BASE_DIR, "Estructura_datos.xlsx")
-
-    if not os.path.exists(archivo_estructuras):
-        print("❌ No se encontró estructura_lista.xlsx")
-        sys.exit()
-
-    df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
-        archivo_estructuras=archivo_estructuras,
-        archivo_materiales=archivo_materiales
-    )
-
-    # Exportar Excel
-    ruta_excel = os.path.join(BASE_DIR, "Resumen_Materiales_y_Estructuras.xlsx")
-    exportar_excel(df_estructuras_resumen, df_resumen, None, df_resumen_por_punto, ruta_excel)
-
-    # Exportar PDFs
-    ruta_pdf_base = os.path.join(BASE_DIR, "PDFs")
-    os.makedirs(ruta_pdf_base, exist_ok=True)
-
-    generar_pdf_materiales(df_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto"), datos_proyecto)
-    generar_pdf_estructuras(df_estructuras_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto"))
-    generar_pdf_materiales_por_punto(df_resumen_por_punto, datos_proyecto.get("nombre_proyecto", "Proyecto"))
-    generar_pdf_completo(df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto)
-
-    print("✅ Proceso finalizado: Excel + PDFs generados")
-
-
-if __name__ == "__main__":
-    main()
-
-
