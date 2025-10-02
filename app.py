@@ -125,10 +125,12 @@ def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo
         archivo_estructuras = None if modo_carga in ["Pegar tabla", "Listas desplegables"] else ruta_estructuras
 
         df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
-            archivo_estructuras,
-            ruta_datos_materiales,
-            estructuras_df=df
+            archivo_estructuras=archivo_estructuras,
+            archivo_materiales=ruta_datos_materiales,
+            estructuras_df=df,
+            datos_proyecto=st.session_state.get("datos_proyecto", {})
         )
+
 
         nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto") if datos_proyecto else "Proyecto"
 
@@ -317,3 +319,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
