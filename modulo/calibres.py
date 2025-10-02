@@ -50,18 +50,51 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
     st.subheader("📝 Selección de Calibres (predeterminados o personalizados)")
 
     def combo_personalizado(etiqueta, lista_opciones, valor_actual):
-        opcion = st.selectbox(
-            f"{etiqueta} (seleccione de lista)",
-            options=[""] + lista_opciones,
-            index=(lista_opciones.index(valor_actual) + 1) if valor_actual in lista_opciones else 0
-        )
-        personalizado = st.text_input(f"O ingrese calibre personalizado para {etiqueta}", value="" if opcion else valor_actual)
-        return personalizado.strip() if personalizado.strip() else opcion
+        opciones = lista_opciones + ["Otro (personalizado)"]
+
+        # Determinar si el valor_actual está en la lista
+        if valor_actual in lista_opciones:
+            index = opciones.index(valor_actual)
+            mostrar_advertencia = False
+        else:
+            index = len(opciones) - 1  # Seleccionar "Otro (personalizado)"
+            mostrar_advertencia = bool(valor_actual.strip())
+
+        seleccion = st.selectbox(f"{etiqueta}", options=opciones, index=index)
+
+        if seleccion == "Otro (personalizado)":
+            if mostrar_advertencia:
+                st.warning(f"⚠️ El valor '{valor_actual}' no coincide con la lista para {etiqueta}. Puedes editarlo o seleccionar uno válido.")
+            personalizado = st.text_input(f"Ingrese {etiqueta} personalizado", value=valor_actual)
+            return personalizado.strip()
+        else:
+            return seleccion
 
     return {
-        "calibre_primario": combo_personalizado("Calibre del Conductor de Media Tensión", calibres["primario"], datos_proyecto.get("calibre_primario", "")),
-        "calibre_secundario": combo_personalizado("Calibre del Conductor de Baja Tensión", calibres["secundario"], datos_proyecto.get("calibre_secundario", "")),
-        "calibre_neutro": st.text_input("Calibre del Conductor Neutro", value=datos_proyecto.get("calibre_neutro", "")),
-        "calibre_piloto": combo_personalizado("Calibre del Conductor de Hilo Piloto", calibres["piloto"], datos_proyecto.get("calibre_piloto", "")),
-        "calibre_retenidas": combo_personalizado("Calibre del Cable de Retenida", calibres["retenidas"], datos_proyecto.get("calibre_retenidas", ""))
+        "calibre_primario": combo_personalizado(
+            "Calibre del Conductor de Media Tensión",
+            calibres["primario"],
+            datos_proyecto.get("calibre_primario", "")
+        ),
+        "calibre_secundario": combo_personalizado(
+            "Calibre del Conductor de Baja Tensión",
+            calibres["secundario"],
+            datos_proyecto.get("calibre_secundario", "")
+        ),
+        "calibre_neutro": st.text_input(
+            "Calibre del Conductor Neutro",
+            value=datos_proyecto.get("calibre_neutro", "")
+        ),
+        "calibre_piloto": combo_personalizado(
+            "Calibre del Conductor de Hilo Piloto",
+            calibres["piloto"],
+            datos_proyecto.get("calibre_piloto", "")
+        ),
+        "calibre_retenidas": combo_personalizado(
+            "Calibre del Cable de Retenida",
+            calibres["retenidas"],
+            datos_proyecto.get("calibre_retenidas", "")
+        )
     }
+
+
