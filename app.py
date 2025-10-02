@@ -236,23 +236,56 @@ def main():
 
         df = st.session_state["df_puntos"]
 
-        st.subheader("📑 Vista previa de la tabla")
-        st.dataframe(df, use_container_width=True)
-
         formulario_datos_proyecto()
         mostrar_datos_formateados()
 
-    # --- CONTINUA IGUAL EN LOS 3 MODOS ---
+    # --- VISTA ORIGINAL Y PRELIMINAR ---
     if not df.empty:
         st.session_state["df_puntos"] = df.copy()
 
+        # Vista original
+        st.subheader("📑 Vista original (con sufijos)")
+        st.dataframe(st.session_state["df_puntos"], use_container_width=True)
+
+        # Vista preliminar (solo proyectadas, limpio)
+        def limpiar_codigo(codigo):
+            if pd.isna(codigo) or str(codigo).strip() == "":
+                return None, None
+            codigo = str(codigo).strip()
+            if codigo.endswith(")") and "(" in codigo:
+                base = codigo[:codigo.rfind("(")].strip()
+                tipo = codigo[codigo.rfind("(")+1:codigo.rfind(")")].strip().upper()
+                return base, tipo
+            return codigo, "P"
+
+        df_filtrado = []
+        for _, row in st.session_state["df_puntos"].iterrows():
+            fila = row.copy()
+            for col in ["Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]:
+                codigo, tipo = limpiar_codigo(fila[col])
+                if tipo == "P":
+                    fila[col] = codigo
+                else:
+                    fila[col] = None
+            df_filtrado.append(fila)
+
+        df_preliminar = pd.DataFrame(df_filtrado).dropna(how="all", subset=COLUMNAS_BASE)
+
+        st.subheader("📑 Vista preliminar (solo proyectadas, limpio)")
+        st.dataframe(df_preliminar, use_container_width=True)
+
+        # Guardamos preliminar para exportación y PDF
+        st.session_state["df_puntos"] = df_preliminar
+
+        # Editor dinámico
         df = st.data_editor(
-            st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE)),
+            st.session_state["df_puntos"],
             num_rows="dynamic",
             use_container_width=True,
         )
         st.session_state["df_puntos"] = df
 
+        # --- Exportación ---
         st.subheader("📥 Exportar tabla")
 
         st.download_button(
@@ -278,7 +311,6 @@ def main():
         )
 
         st.subheader("📑 Exportar a PDF")
-
         ruta_para_pdfs = ruta_estructuras if modo_carga == "Desde archivo Excel" else None
         generar_pdfs(modo_carga, ruta_para_pdfs, df)
 
