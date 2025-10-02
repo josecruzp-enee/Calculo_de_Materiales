@@ -62,13 +62,12 @@ def procesar_materiales(
 ):
     # --- Validar entrada ---
     if archivo_estructuras:
-        datos_proyecto_arch = cargar_datos_proyecto(archivo_estructuras)
+        datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
         df_estructuras = cargar_estructuras_proyectadas(archivo_estructuras)
-        log(f"✅ Cargado archivo_estructuras: {archivo_estructuras}")
     elif estructuras_df is not None:
-        datos_proyecto_arch = {}
+        if datos_proyecto is None:
+            datos_proyecto = {}
         df_estructuras = estructuras_df.copy()
-        log("✅ Usando estructuras_df directamente")
     else:
         raise ValueError("Debe proporcionar archivo_estructuras o estructuras_df")
 
@@ -215,3 +214,4 @@ def procesar_materiales(
     log(f"📊 Resumen final: {df_resumen.shape[0]} materiales, {df_estructuras_resumen.shape[0]} estructuras, {df_resumen_por_punto.shape[0]} filas por punto")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
