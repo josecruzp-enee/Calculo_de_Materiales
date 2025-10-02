@@ -27,8 +27,9 @@ from modulo.pdf_utils import (
     generar_pdf_completo,
 )
 from modulo.procesar_materiales import procesar_materiales
-import modulo.calibres as calibres_module
-from modulo.calibre import cargar_calibres_desde_excel, seleccionar_calibres_formulario
+from modulo.calibres import cargar_calibres_desde_excel, seleccionar_calibres_formulario
+
+
 
 # ================== CONFIG STREAMLIT ==================
 st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
@@ -231,4 +232,5 @@ if archivo_estructuras:
 
 else:
     st.warning("⚠️ Debes subir el archivo de estructuras.")
+
 
