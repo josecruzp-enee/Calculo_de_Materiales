@@ -117,6 +117,11 @@ def pegar_texto_a_df(texto, columnas):
 
 def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo/Estructura_datos.xlsx"):
     try:
+        # Normalizar columnas mínimas
+        for col in COLUMNAS_BASE:
+            if col not in df.columns:
+                df[col] = None
+
         archivo_estructuras = None if modo_carga in ["Pegar tabla", "Listas desplegables"] else ruta_estructuras
 
         df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
@@ -127,33 +132,25 @@ def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo
 
         nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto") if datos_proyecto else "Proyecto"
 
-        st.download_button(
-            "📄 Descargar PDF de Materiales",
+        st.download_button("📄 Descargar PDF de Materiales",
             generar_pdf_materiales(df_resumen, nombre_proyecto, datos_proyecto),
-            "Resumen_Materiales.pdf",
-            "application/pdf"
+            "Resumen_Materiales.pdf", "application/pdf"
         )
-        st.download_button(
-            "📄 Descargar PDF de Estructuras",
+        st.download_button("📄 Descargar PDF de Estructuras",
             generar_pdf_estructuras(df_estructuras_resumen, nombre_proyecto),
-            "Resumen_Estructuras.pdf",
-            "application/pdf"
+            "Resumen_Estructuras.pdf", "application/pdf"
         )
-        st.download_button(
-            "📄 Descargar PDF Materiales por Punto",
+        st.download_button("📄 Descargar PDF Materiales por Punto",
             generar_pdf_materiales_por_punto(df_resumen_por_punto, nombre_proyecto),
-            "Materiales_por_Punto.pdf",
-            "application/pdf"
+            "Materiales_por_Punto.pdf", "application/pdf"
         )
-        st.download_button(
-            "📄 Descargar Informe Completo (PDF)",
+        st.download_button("📄 Descargar Informe Completo (PDF)",
             generar_pdf_completo(df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto),
-            "Informe_Completo.pdf",
-            "application/pdf"
+            "Informe_Completo.pdf", "application/pdf"
         )
 
     except Exception as e:
-        st.error(f"⚠️ Error al procesar materiales: {e}")
+        st.error(f"⚠️ Error al procesar materiales para PDF: {e}")
 
 
 # ================= MAIN APP =================
@@ -221,11 +218,21 @@ def main():
         seleccion = crear_desplegables(opciones)
 
         if st.button("Agregar fila"):
-            st.session_state["df_puntos"] = pd.concat(
-                [st.session_state["df_puntos"], pd.DataFrame([seleccion])],
-                ignore_index=True
-            )
-            st.success("✅ Fila agregada")
+            nuevo = pd.DataFrame([seleccion])
+
+            if not st.session_state["df_puntos"].empty and seleccion["Punto"] in st.session_state["df_puntos"]["Punto"].values:
+                idx = st.session_state["df_puntos"].index[
+                    st.session_state["df_puntos"]["Punto"] == seleccion["Punto"]
+                ][0]
+                for col in COLUMNAS_BASE:
+                    if seleccion[col]:
+                        st.session_state["df_puntos"].at[idx, col] = seleccion[col]
+                st.success(f"🔄 Punto {seleccion['Punto']} actualizado")
+            else:
+                st.session_state["df_puntos"] = pd.concat(
+                    [st.session_state["df_puntos"], nuevo], ignore_index=True
+                )
+                st.success("✅ Fila agregada")
 
         df = st.session_state["df_puntos"]
 
@@ -278,4 +285,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
