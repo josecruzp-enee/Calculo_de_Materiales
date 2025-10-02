@@ -1,3 +1,54 @@
+# -*- coding: utf-8 -*-
+"""
+procesar_materiales.py
+Versión modularizada para Streamlit y consola
+"""
+
+import pandas as pd
+from collections import Counter
+
+# === Debug ===
+try:
+    import streamlit as st
+    log = st.write
+except ImportError:
+    log = print
+
+# === Módulos propios ===
+from modulo.entradas import (
+    cargar_datos_proyecto,
+    cargar_estructuras_proyectadas,
+    extraer_estructuras_proyectadas,
+    cargar_indice,
+    cargar_adicionales,
+    cargar_materiales,
+)
+from modulo.conectores_mt import (
+    cargar_conectores_mt,
+    aplicar_reemplazos_conectores
+)
+
+# =====================================================
+# Funciones auxiliares
+# =====================================================
+
+def limpiar_codigo(codigo):
+    if pd.isna(codigo) or str(codigo).strip() == "":
+        return None, None
+    codigo = str(codigo).strip()
+    if codigo.endswith(")") and "(" in codigo:
+        base = codigo[:codigo.rfind("(")].strip()
+        tipo = codigo[codigo.rfind("(")+1:codigo.rfind(")")].strip().upper()
+        return base, tipo
+    return codigo, "P"
+
+
+def expandir_lista_codigos(cadena):
+    if not cadena:
+        return []
+    return [parte.strip() for parte in str(cadena).split(",") if parte.strip()]
+
+
 def validar_datos_proyecto(datos_proyecto):
     """Verifica que al menos tensión y calibre MT estén definidos."""
     tension = str(datos_proyecto.get("nivel_de_tension", "")).strip()
@@ -97,6 +148,9 @@ def calcular_materiales_por_punto(archivo_materiales, estructuras_por_punto, ten
         pd.DataFrame(columns=["Punto","Materiales","Unidad","Cantidad"])
     )
 
+# =====================================================
+# Función principal
+# =====================================================
 
 def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estructuras_df=None, datos_proyecto=None):
     """Función principal que orquesta el cálculo de materiales."""
