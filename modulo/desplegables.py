@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 
-RUTA_EXCEL = "Estructura_datos.xlsx"
+RUTA_EXCEL = os.path.join(os.path.dirname(__file__), "Estructura_datos.xlsx")
 
 def cargar_opciones():
     """Lee la hoja 'indice' y organiza por Clasificación (código + descripción)."""
@@ -61,3 +61,4 @@ def crear_desplegables(opciones):
     )[1] if opciones.get("Transformador") else ""
 
     return seleccion
+
