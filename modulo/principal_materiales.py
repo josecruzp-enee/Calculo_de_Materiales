@@ -35,8 +35,7 @@ from modulo.excel_utils import exportar_excel
 
 # =================== RUTAS ===================
 BASE_DIR = os.path.dirname(__file__)
-archivo_materiales = os.path.join(BASE_DIR, "Estructura_datos.xlsx")
-archivo_estructuras = os.path.join(BASE_DIR, "estructuras_lista.xlsx")
+archivo_materiales = os.path.join(BASE_DIR, "modulo", "Estructura_datos.xlsx")
 ruta_excel = os.path.join(BASE_DIR, "Resumen_Materiales_y_Estructuras.xlsx")
 ruta_pdf_base = os.path.join(BASE_DIR, "PDFs")
 
@@ -159,5 +158,6 @@ crear_pdf_completo(
 )
 
 print("✅ Proceso finalizado: Excel + PDFs generados")
+
 
 
