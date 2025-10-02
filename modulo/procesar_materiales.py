@@ -55,8 +55,18 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
         df_estructuras = cargar_estructuras_proyectadas(archivo_estructuras)
         log(f"✅ Cargado archivo_estructuras: {archivo_estructuras}")
     elif estructuras_df is not None:
-        datos_proyecto = {}
-        df_estructuras = estructuras_df.copy()
+        # ⚡ FIX: no borrar datos_proyecto cuando viene de lista desplegable
+        if isinstance(estructuras_df, tuple) and len(estructuras_df) == 2:
+            # Caso: estructuras_df viene como (df, datos_proyecto)
+            df_estructuras, datos_proyecto = estructuras_df
+        else:
+            # Caso antiguo: solo dataframe → asigna defaults
+            df_estructuras = estructuras_df.copy()
+            datos_proyecto = {
+                "nombre_proyecto": "Proyecto",
+                "nivel_de_tension": "13.8",   # default
+                "calibre_primario": "1/0 ASCR"
+            }
         log("✅ Usando estructuras_df directamente")
     else:
         raise ValueError("Debe proporcionar archivo_estructuras o estructuras_df")
@@ -64,7 +74,8 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     log("📌 Datos del proyecto:", datos_proyecto)
 
     nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
-    tension = str(datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension", "")).replace(",", ".").replace("kV", "").strip()
+    tension = str(datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension", ""))\
+        .replace(",", ".").replace("kV", "").strip()
     calibre_primario = datos_proyecto.get("calibre_primario", "1/0 ASCR")
 
     # --- Extraer estructuras ---
@@ -152,7 +163,11 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
         log(f"📌 Materiales adicionales agregados: {df_adicionales.shape[0]} filas")
 
     # --- Resumen general ---
-    df_resumen = df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum() if not df_total.empty else pd.DataFrame(columns=["Materiales","Unidad","Cantidad"])
+    df_resumen = (
+        df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+        if not df_total.empty else
+        pd.DataFrame(columns=["Materiales","Unidad","Cantidad"])
+    )
     df_indice["Cantidad"] = df_indice["NombreEstructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
 
@@ -202,5 +217,3 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     log(f"📊 Resumen final: {df_resumen.shape[0]} materiales, {df_estructuras_resumen.shape[0]} estructuras, {df_resumen_por_punto.shape[0]} filas por punto")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
-
-
