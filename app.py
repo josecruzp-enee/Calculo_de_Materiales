@@ -20,11 +20,12 @@ def main():
     modo_carga = st.radio("Selecciona modo de carga:", ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"])
 
     # 2️⃣ Nivel de tensión
-    if "datos_proyecto" not in st.session_state:
-        st.session_state["datos_proyecto"] = {}
-    st.session_state["datos_proyecto"]["nivel_de_tension"] = st.text_input(
+    niveles_tension = ["13.8", "34.5", "69", "115"]
+    valor_actual = st.session_state["datos_proyecto"].get("nivel_de_tension", "34.5")
+    st.session_state["datos_proyecto"]["nivel_de_tension"] = st.selectbox(
         "Nivel de Tensión (kV)",
-        value=st.session_state["datos_proyecto"].get("nivel_de_tension", "")
+        niveles_tension,
+        index=niveles_tension.index(valor_actual) if valor_actual in niveles_tension else 0
     )
 
     # 3️⃣ Calibres
@@ -69,6 +70,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
