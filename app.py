@@ -30,7 +30,6 @@ from modulo.procesar_materiales import procesar_materiales
 from modulo.calibres import cargar_calibres_desde_excel, seleccionar_calibres_formulario
 
 
-
 # ================== CONFIG STREAMLIT ==================
 st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
 st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
@@ -38,13 +37,10 @@ st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 # Columnas base para DataFrame
 columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
 
-
-# === Función para formulario edición de datos del proyecto ===
-
+# Función para formulario edición de datos del proyecto
 def formulario_datos_proyecto():
     st.subheader("📝 Datos del Proyecto (Formulario)")
 
-    # Obtener datos actuales de session_state o valores vacíos
     datos = st.session_state.get("datos_proyecto", {
         "nombre_proyecto": "",
         "codigo_proyecto": "",
@@ -58,7 +54,6 @@ def formulario_datos_proyecto():
         "empresa": "",
     })
 
-    # Cargar calibres predeterminados desde archivo o usar valores por defecto
     calibres = cargar_calibres_desde_excel()
 
     with st.form("form_datos_proyecto", clear_on_submit=False):
@@ -66,7 +61,6 @@ def formulario_datos_proyecto():
         codigo_proyecto = st.text_input("Código / Expediente", value=datos.get("codigo_proyecto", ""))
         nivel_tension = st.text_input("Nivel de Tensión (kV)", value=datos.get("nivel_de_tension", ""))
         
-        # Aquí usamos la función para seleccionar calibres
         calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
 
         responsable = st.text_input("Responsable / Diseñador", value=datos.get("responsable", ""))
@@ -75,22 +69,19 @@ def formulario_datos_proyecto():
         submitted = st.form_submit_button("Guardar datos del proyecto")
 
         if submitted:
-            # Actualizar session_state con los datos nuevos, incluyendo calibres
             st.session_state["datos_proyecto"] = {
                 "nombre_proyecto": nombre_proyecto,
                 "codigo_proyecto": codigo_proyecto,
                 "nivel_de_tension": nivel_tension,
-                **calibres_seleccionados,  # Desempaquetamos el dict de calibres
+                **calibres_seleccionados,
                 "responsable": responsable,
                 "empresa": empresa,
             }
             st.success("✅ Datos del proyecto actualizados")
 
-
 if "datos_proyecto" not in st.session_state:
     st.session_state["datos_proyecto"] = {}
 
-# Función para mostrar datos formateados
 def mostrar_datos_formateados():
     datos = st.session_state.get("datos_proyecto")
     if datos:
@@ -110,8 +101,6 @@ def mostrar_datos_formateados():
         for key, label in etiquetas_mostrar.items():
             st.markdown(f"**{label}:** {datos.get(key, '')}")
 
-
-# Función para guardar archivo temporal
 def guardar_archivo_temporal(archivo_subido):
     temp_dir = tempfile.mkdtemp()
     ruta_temp = os.path.join(temp_dir, archivo_subido.name)
@@ -119,40 +108,62 @@ def guardar_archivo_temporal(archivo_subido):
         f.write(archivo_subido.getbuffer())
     return ruta_temp
 
+# Función para convertir texto pegado en DataFrame
+def pegar_texto_a_df(texto, columnas):
+    try:
+        # Quitar espacios extra y saltos de línea innecesarios
+        df = pd.read_csv(BytesIO(texto.encode()), sep=None, engine='python')
+        # Filtrar solo columnas necesarias (por si hay más)
+        df = df[[col for col in columnas if col in df.columns]]
+        return df
+    except Exception as e:
+        st.error(f"Error al convertir texto pegado a tabla: {e}")
+        return pd.DataFrame(columns=columnas)
 
 # ================== FLUJO PRINCIPAL ==================
-archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
+st.subheader("Carga de estructuras proyectadas")
 
-if archivo_estructuras:
-    ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
+modo_carga = st.radio("Selecciona modo de carga:", ["Desde archivo Excel", "Pegar tabla"])
 
-    # Cargar datos del proyecto desde el archivo Excel
-    try:
-        datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
-    except Exception as e:
-        st.warning(f"⚠️ No se pudo leer datos del proyecto: {e}")
-        datos_proyecto = {}
+df = pd.DataFrame(columns=columnas)  # DataFrame inicial vacío
 
-    # 👉 Actualizar session_state con los datos del Excel si no hay datos manuales aún
-    if "datos_proyecto" not in st.session_state or not st.session_state["datos_proyecto"]:
-        st.session_state["datos_proyecto"] = datos_proyecto
+if modo_carga == "Desde archivo Excel":
+    archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
+    if archivo_estructuras:
+        ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
+        try:
+            datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
+        except Exception as e:
+            st.warning(f"⚠️ No se pudo leer datos del proyecto: {e}")
+            datos_proyecto = {}
 
-    # Mostrar formulario editable
+        if "datos_proyecto" not in st.session_state or not st.session_state["datos_proyecto"]:
+            st.session_state["datos_proyecto"] = datos_proyecto
+
+        formulario_datos_proyecto()
+        mostrar_datos_formateados()
+
+        try:
+            df = cargar_estructuras_proyectadas(ruta_estructuras)
+            st.success("✅ Hoja 'estructuras' leída correctamente")
+        except Exception as e:
+            st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
+            st.stop()
+
+elif modo_carga == "Pegar tabla":
+    st.info("Pega la tabla con columnas: Punto, Poste, Primario, Secundario, Retenida, Aterrizaje, Transformador")
+    texto_pegado = st.text_area("Pega aquí tu tabla (CSV o tabulado)", height=200)
+    if texto_pegado:
+        df = pegar_texto_a_df(texto_pegado, columnas)
+        st.success(f"✅ Tabla cargada con {len(df)} filas")
     formulario_datos_proyecto()
     mostrar_datos_formateados()
 
-    # Leer estructuras proyectadas
-    try:
-        df = cargar_estructuras_proyectadas(ruta_estructuras)
-        st.success("✅ Hoja 'estructuras' leída correctamente")
-    except Exception as e:
-        st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
-        st.stop()
-
+if not df.empty:
     # Guardar en sesión para mantener el estado
     st.session_state["df_puntos"] = df.copy()
 
-    # ================== EDITOR DE TABLA ==================
+    # Editor editable
     df = st.data_editor(
         st.session_state.get("df_puntos", pd.DataFrame(columns=columnas)),
         num_rows="dynamic",
@@ -160,14 +171,13 @@ if archivo_estructuras:
     )
     st.session_state["df_puntos"] = df
 
-    # Vista previa
+    # Vista previa limpia
     st.subheader("📑 Vista previa de la tabla")
     st.dataframe(df, use_container_width=True)
 
     # ================== EXPORTAR TABLA ==================
     st.subheader("📥 Exportar tabla")
 
-    # Exportar a CSV
     st.download_button(
         "⬇️ Descargar CSV",
         df.to_csv(index=False).encode("utf-8"),
@@ -175,7 +185,6 @@ if archivo_estructuras:
         "text/csv"
     )
 
-    # Exportar a Excel con ajuste de ancho de columnas
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Estructuras")
@@ -195,9 +204,10 @@ if archivo_estructuras:
     st.subheader("📑 Exportar a PDF")
 
     try:
-        # Usar datos_proyecto actualizados (desde formulario o archivo)
         df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
-            ruta_estructuras, os.path.join("modulo", "Estructura_datos.xlsx")
+            None if modo_carga == "Pegar tabla" else ruta_estructuras,
+            os.path.join("modulo", "Estructura_datos.xlsx"),
+            estructuras_df=df  # PASAMOS el DF pegado o modificado
         )
 
         st.download_button(
@@ -231,6 +241,4 @@ if archivo_estructuras:
         st.error(f"⚠️ Error al procesar materiales: {e}")
 
 else:
-    st.warning("⚠️ Debes subir el archivo de estructuras.")
-
-
+    st.warning("⚠️ No hay datos para mostrar. Sube un archivo o pega una tabla.")
