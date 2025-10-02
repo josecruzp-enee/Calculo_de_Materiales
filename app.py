@@ -6,6 +6,7 @@ Aplicación Streamlit para:
 2. Usar base de datos de materiales interna (Estructura_datos.xlsx)
 3. Procesar materiales con reglas de reemplazo
 4. Exportar resúmenes en Excel y PDF
+5. Construir estructuras desde listas desplegables (índice)
 """
 
 import streamlit as st
@@ -31,6 +32,8 @@ from modulo.calibres import cargar_calibres_desde_excel, seleccionar_calibres_fo
 
 COLUMNAS_BASE = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
 
+
+# ================= FUNCIONES AUXILIARES =================
 
 def formulario_datos_proyecto():
     st.subheader("📝 Datos del Proyecto (Formulario)")
@@ -114,7 +117,7 @@ def pegar_texto_a_df(texto, columnas):
 
 def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo/Estructura_datos.xlsx"):
     try:
-        archivo_estructuras = None if modo_carga == "Pegar tabla" else ruta_estructuras
+        archivo_estructuras = None if modo_carga in ["Pegar tabla", "Listas desplegables"] else ruta_estructuras
 
         df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
             archivo_estructuras,
@@ -153,6 +156,8 @@ def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo
         st.error(f"⚠️ Error al procesar materiales: {e}")
 
 
+# ================= MAIN APP =================
+
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
@@ -161,11 +166,15 @@ def main():
         st.session_state["datos_proyecto"] = {}
 
     st.subheader("Carga de estructuras proyectadas")
-    modo_carga = st.radio("Selecciona modo de carga:", ["Desde archivo Excel", "Pegar tabla"])
+    modo_carga = st.selectbox(
+        "Selecciona modo de carga:",
+        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"]
+    )
 
     df = pd.DataFrame(columns=COLUMNAS_BASE)
     ruta_estructuras = None
 
+    # --- MODO 1: Excel ---
     if modo_carga == "Desde archivo Excel":
         archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
         if archivo_estructuras:
@@ -189,6 +198,7 @@ def main():
                 st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
                 st.stop()
 
+    # --- MODO 2: Pegar tabla ---
     elif modo_carga == "Pegar tabla":
         st.info("Pega la tabla con columnas: Punto, Poste, Primario, Secundario, Retenida, Aterrizaje, Transformador")
         texto_pegado = st.text_area("Pega aquí tu tabla (CSV o tabulado)", height=200)
@@ -198,6 +208,34 @@ def main():
         formulario_datos_proyecto()
         mostrar_datos_formateados()
 
+    # --- MODO 3: Listas desplegables ---
+    elif modo_carga == "Listas desplegables":
+        from modulo.desplegables import cargar_opciones, crear_desplegables
+
+        opciones = cargar_opciones()
+
+        if "df_puntos" not in st.session_state:
+            st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
+
+        st.subheader("➕ Agregar punto con desplegables")
+        seleccion = crear_desplegables(opciones)
+
+        if st.button("Agregar fila"):
+            st.session_state["df_puntos"] = pd.concat(
+                [st.session_state["df_puntos"], pd.DataFrame([seleccion])],
+                ignore_index=True
+            )
+            st.success("✅ Fila agregada")
+
+        df = st.session_state["df_puntos"]
+
+        st.subheader("📑 Vista previa de la tabla")
+        st.dataframe(df, use_container_width=True)
+
+        formulario_datos_proyecto()
+        mostrar_datos_formateados()
+
+    # --- CONTINUA IGUAL EN LOS 3 MODOS ---
     if not df.empty:
         st.session_state["df_puntos"] = df.copy()
 
@@ -207,9 +245,6 @@ def main():
             use_container_width=True,
         )
         st.session_state["df_puntos"] = df
-
-        st.subheader("📑 Vista previa de la tabla")
-        st.dataframe(df, use_container_width=True)
 
         st.subheader("📥 Exportar tabla")
 
