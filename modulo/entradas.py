@@ -23,7 +23,7 @@ def extraer_estructuras_proyectadas(df_estructuras):
             celda = fila[col]
             if pd.notna(celda):
                 celda_str = str(celda).replace("\n", " ").replace("\r", " ").strip()
-                patrones = re.findall(r"(?:(\d+)\s*)?([A-Z0-9\-\.]+)\s*\(\s*P\s*\)", celda_str, flags=re.IGNORECASE)
+                patrones = re.findall(r"(?:(\d+)\s*)?([A-Z0-9\-\.]+)(?:\s*\(\s*P\s*\))?", celda_str, flags=re.IGNORECASE)
                 for cantidad_str, nombre in patrones:
                     cantidad = int(cantidad_str) if cantidad_str else 1
                     estructuras_en_fila.extend([nombre]*cantidad)
@@ -47,3 +47,4 @@ def cargar_adicionales(archivo_estructuras):
     except:
         pass
     return pd.DataFrame(columns=['Materiales', 'Unidad', 'Cantidad'])
+
