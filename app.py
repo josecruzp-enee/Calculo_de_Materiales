@@ -38,25 +38,43 @@ columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje"
 
 # === Función para formulario edición de datos del proyecto ===
 # === Función para formulario edición de datos del proyecto ===
-def formulario_datos_proyecto(datos_proyecto=None):
+import streamlit as st
+
+# Función formulario que guarda en session_state
+def formulario_datos_proyecto():
     st.subheader("📝 Datos del Proyecto (Formulario)")
 
+    # Obtener datos actuales de session_state o valores vacíos
+    datos = st.session_state.get("datos_proyecto", {
+        "nombre_proyecto": "",
+        "codigo_proyecto": "",
+        "nivel_de_tension": "",
+        "calibre_primario": "",
+        "calibre_secundario": "",
+        "calibre_neutro": "",
+        "calibre_piloto": "",
+        "calibre_retenidas": "",
+        "responsable": "",
+        "empresa": "",
+    })
+
     with st.form("form_datos_proyecto", clear_on_submit=False):
-        nombre_proyecto = st.text_input("Nombre del Proyecto", value=datos_proyecto.get("nombre_proyecto", "") if datos_proyecto else "")
-        codigo_proyecto = st.text_input("Código / Expediente", value=datos_proyecto.get("codigo_proyecto", "") if datos_proyecto else "")
-        nivel_tension = st.text_input("Nivel de Tensión (kV)", value=datos_proyecto.get("nivel_de_tension", "") if datos_proyecto else "")
-        calibre_primario = st.text_input("Calibre del Conductor de Media Tensión", value=datos_proyecto.get("calibre_primario", "") if datos_proyecto else "")
-        calibre_secundario = st.text_input("Calibre del Conductor de Baja Tensión", value=datos_proyecto.get("calibre_secundario", "") if datos_proyecto else "")
-        calibre_neutro = st.text_input("Calibre del Condcutor Neutro", value=datos_proyecto.get("calibre_neutro", "") if datos_proyecto else "")
-        calibre_piloto = st.text_input("Calibre del Conductor de Hilo Piloto", value=datos_proyecto.get("calibre_piloto", "") if datos_proyecto else "")
-        calibre_retenidas = st.text_input("Calibre del Cable de Retenida", value=datos_proyecto.get("calibre_retenidas", "") if datos_proyecto else "")
-        responsable = st.text_input("Responsable / Diseñador", value=datos_proyecto.get("responsable", "") if datos_proyecto else "")
-        empresa = st.text_input("Empresa / Área", value=datos_proyecto.get("empresa", "") if datos_proyecto else "")
+        nombre_proyecto = st.text_input("Nombre del Proyecto", value=datos.get("nombre_proyecto", ""))
+        codigo_proyecto = st.text_input("Código / Expediente", value=datos.get("codigo_proyecto", ""))
+        nivel_tension = st.text_input("Nivel de Tensión (kV)", value=datos.get("nivel_de_tension", ""))
+        calibre_primario = st.text_input("Calibre del Conductor de Media Tensión", value=datos.get("calibre_primario", ""))
+        calibre_secundario = st.text_input("Calibre del Conductor de Baja Tensión", value=datos.get("calibre_secundario", ""))
+        calibre_neutro = st.text_input("Calibre del Condcutor Neutro", value=datos.get("calibre_neutro", ""))
+        calibre_piloto = st.text_input("Calibre del Conductor de Hilo Piloto", value=datos.get("calibre_piloto", ""))
+        calibre_retenidas = st.text_input("Calibre del Cable de Retenida", value=datos.get("calibre_retenidas", ""))
+        responsable = st.text_input("Responsable / Diseñador", value=datos.get("responsable", ""))
+        empresa = st.text_input("Empresa / Área", value=datos.get("empresa", ""))
 
         submitted = st.form_submit_button("Guardar datos del proyecto")
 
         if submitted:
-            datos_nuevos = {
+            # Actualizar session_state con los datos nuevos
+            st.session_state["datos_proyecto"] = {
                 "nombre_proyecto": nombre_proyecto,
                 "codigo_proyecto": codigo_proyecto,
                 "nivel_de_tension": nivel_tension,
@@ -68,30 +86,27 @@ def formulario_datos_proyecto(datos_proyecto=None):
                 "responsable": responsable,
                 "empresa": empresa,
             }
-
-            st.subheader("📑 Datos del Proyecto Actualizados")
-            # Mostrarlo en formato limpio con markdown
-            etiquetas_mostrar = {
-                "nombre_proyecto": "Nombre del Proyecto",
-                "codigo_proyecto": "Código / Expediente",
-                "nivel_de_tension": "Nivel de Tensión (kV)",
-                "calibre_primario": "Calibre del Conductor de Media Tensión",
-                "calibre_secundario": "Calibre del Conductor de Baja Tensión",
-                "calibre_neutro": "Calibre del Condcutor Neutro",
-                "calibre_piloto": "Calibre del Conductor de Hilo Piloto",
-                "calibre_retenidas": "Calibre del Cable de Retenida",
-                "responsable": "Responsable / Diseñador",
-                "empresa": "Empresa / Área",
-            }
-
-            for key, label in etiquetas_mostrar.items():
-                st.markdown(f"**{label}:** {datos_nuevos.get(key, '')}")
-
             st.success("✅ Datos del proyecto actualizados")
-            return datos_nuevos
 
-    # Si no se envió el formulario, devolver los datos que entraron (o vacíos)
-    return datos_proyecto or {}
+# Función para mostrar datos formateados
+def mostrar_datos_formateados():
+    datos = st.session_state.get("datos_proyecto")
+    if datos:
+        st.subheader("📑 Datos del Proyecto Actualizados")
+        etiquetas_mostrar = {
+            "nombre_proyecto": "Nombre del Proyecto",
+            "codigo_proyecto": "Código / Expediente",
+            "nivel_de_tension": "Nivel de Tensión (kV)",
+            "calibre_primario": "Calibre del Conductor de Media Tensión",
+            "calibre_secundario": "Calibre del Conductor de Baja Tensión",
+            "calibre_neutro": "Calibre del Condcutor Neutro",
+            "calibre_piloto": "Calibre del Conductor de Hilo Piloto",
+            "calibre_retenidas": "Calibre del Cable de Retenida",
+            "responsable": "Responsable / Diseñador",
+            "empresa": "Empresa / Área",
+        }
+        for key, label in etiquetas_mostrar.items():
+            st.markdown(f"**{label}:** {datos.get(key, '')}")
 
 
 # === Función para mostrar datos en JSON ===
@@ -127,6 +142,9 @@ if archivo_estructuras:
     # Mostrar datos actuales en JSON (puedes cambiar a tabla o PDF si prefieres)
     mostrar_info_proyecto(datos_proyecto)
 
+
+
+    
     # === Leer estructuras proyectadas ===
     try:
         df = cargar_estructuras_proyectadas(ruta_estructuras)
@@ -218,5 +236,6 @@ if archivo_estructuras:
 
 else:
     st.warning("⚠️ Debes subir el archivo de estructuras.")
+
 
 
