@@ -126,6 +126,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     df_total = pd.DataFrame()
     for estructura, cant in conteo.items():
         try:
+            print(f"🔍 Intentando cargar estructura: '{estructura}' (cantidad={cant})")
             df_temp = cargar_materiales(archivo_materiales, estructura, header=None)
             fila_tension = next(
                 i for i, row in df_temp.iterrows() if any(str(tension) in str(cell) for cell in row)
@@ -231,4 +232,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
