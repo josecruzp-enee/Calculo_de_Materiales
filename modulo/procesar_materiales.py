@@ -36,10 +36,17 @@ def limpiar_codigo(codigo):
     if pd.isna(codigo) or str(codigo).strip() == "":
         return None, None
     codigo = str(codigo).strip()
+
+    # 👉 Si es solo un número, es un punto, no una estructura
+    if codigo.isdigit():
+        return None, "PUNTO"
+
+    # Normalización de nombres con paréntesis
     if codigo.endswith(")") and "(" in codigo:
         base = codigo[:codigo.rfind("(")].strip()
         tipo = codigo[codigo.rfind("(")+1:codigo.rfind(")")].strip().upper()
         return base, tipo
+
     return codigo, "P"
 
 
@@ -209,3 +216,4 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     log(f"📊 Resumen final: {len(df_resumen)} materiales, {len(df_estructuras_resumen)} estructuras, {len(df_resumen_por_punto)} filas por punto")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
