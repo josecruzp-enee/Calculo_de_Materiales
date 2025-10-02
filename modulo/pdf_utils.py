@@ -40,6 +40,9 @@ def formatear_material(nombre):
 
 # === Hoja de información del proyecto ===
 def hoja_info_proyecto(datos_proyecto):
+    styles = getSampleStyleSheet()
+    styleH = styles["Heading1"]
+    
     elems = []
     elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
     elems.append(Spacer(1, 12))
@@ -356,3 +359,4 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
