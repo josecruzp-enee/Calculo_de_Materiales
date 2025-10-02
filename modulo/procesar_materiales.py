@@ -54,34 +54,42 @@ def expandir_lista_codigos(cadena):
     return [parte.strip() for parte in str(cadena).split(",") if parte.strip()]
 
 
-def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estructuras_df=None):
-    # --- Datos de proyecto ---
+def procesar_materiales(
+    archivo_estructuras=None,
+    archivo_materiales=None,
+    estructuras_df=None,
+    datos_proyecto=None
+):
+    # --- Validar entrada ---
     if archivo_estructuras:
-        datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
+        datos_proyecto_arch = cargar_datos_proyecto(archivo_estructuras)
         df_estructuras = cargar_estructuras_proyectadas(archivo_estructuras)
         log(f"✅ Cargado archivo_estructuras: {archivo_estructuras}")
     elif estructuras_df is not None:
-        datos_proyecto = {}
+        datos_proyecto_arch = {}
         df_estructuras = estructuras_df.copy()
         log("✅ Usando estructuras_df directamente")
     else:
         raise ValueError("Debe proporcionar archivo_estructuras o estructuras_df")
 
+    # --- Merge de datos de proyecto ---
+    if datos_proyecto is None:
+        datos_proyecto = {}
+    datos_proyecto = {**datos_proyecto_arch, **datos_proyecto}
+
     log("📌 Datos del proyecto:", datos_proyecto)
 
-    nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
-    tension = st.selectbox("Selecciona tensión:", ["", "13.8", "34.5"])
+    # --- Extraer tensión y calibres ---
+    tension = str(datos_proyecto.get("nivel_de_tension", "")).strip()
+    calibre_mt = datos_proyecto.get("calibre_mt", "")
+    calibre_bt = datos_proyecto.get("calibre_bt", "")
+    calibre_neutro = datos_proyecto.get("calibre_neutro", "")
+    calibre_piloto = datos_proyecto.get("calibre_piloto", "")
+    calibre_retenida = datos_proyecto.get("calibre_retenida", "")
 
-# Construir el diccionario de proyecto
-    datos_proyecto = {
-        "nombre_proyecto": "Proyecto",
-        "nivel_de_tension": tension,
-        "calibre_primario": calibre,
-    }
-
-    # --- Validar que se definieron tensión y calibre ---
-    if not tension or not calibre_primario:
-        log("⚠️ No se han definido tensión o calibre del conductor. Esperando datos...")
+    # --- Validar que al menos tensión y calibre de MT estén ---
+    if not tension or not calibre_mt:
+        log("⚠️ No se han definido tensión o calibre de MT. Esperando datos...")
         return (
             pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"]),
             pd.DataFrame(columns=["NombreEstructura", "Cantidad"]),
@@ -119,7 +127,10 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
             log(f"   ❇️ Primeras 3 filas de '{estructura}':\n{df_temp.head(3)}")
 
             # Detectar fila del encabezado
-            fila_tension = next(i for i, row in df_temp.iterrows() if any(str(tension) in str(cell) for cell in row))
+            fila_tension = next(
+                i for i, row in df_temp.iterrows()
+                if any(str(tension) in str(cell) for cell in row)
+            )
             df = cargar_materiales(archivo_materiales, estructura, header=fila_tension)
 
             df.columns = df.columns.map(str).str.strip()
@@ -136,7 +147,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
 
             df_filtrado["Materiales"] = aplicar_reemplazos_conectores(
                 df_filtrado["Materiales"].tolist(),
-                calibre_primario,
+                calibre_mt,
                 tabla_conectores_mt
             )
             df_filtrado["Cantidad"] = df_filtrado[str(tension)] * cant
@@ -171,7 +182,10 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
                 if codigo:
                     try:
                         df_temp = cargar_materiales(archivo_materiales, codigo, header=None)
-                        fila_tension = next(i for i, row in df_temp.iterrows() if any(str(tension) in str(cell) for cell in row))
+                        fila_tension = next(
+                            i for i, row in df_temp.iterrows()
+                            if any(str(tension) in str(cell) for cell in row)
+                        )
                         df = cargar_materiales(archivo_materiales, codigo, header=fila_tension)
 
                         df.columns = df.columns.map(str).str.strip()
@@ -201,4 +215,3 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     log(f"📊 Resumen final: {df_resumen.shape[0]} materiales, {df_estructuras_resumen.shape[0]} estructuras, {df_resumen_por_punto.shape[0]} filas por punto")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
-
