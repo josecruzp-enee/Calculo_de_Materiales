@@ -37,6 +37,7 @@ st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
 
 # === Función para formulario edición de datos del proyecto ===
+# === Función para formulario edición de datos del proyecto ===
 def formulario_datos_proyecto(datos_proyecto=None):
     st.subheader("📝 Datos del Proyecto (Formulario)")
 
@@ -67,11 +68,31 @@ def formulario_datos_proyecto(datos_proyecto=None):
                 "responsable": responsable,
                 "empresa": empresa,
             }
+
+            st.subheader("📑 Datos del Proyecto Actualizados")
+            # Mostrarlo en formato limpio con markdown
+            etiquetas_mostrar = {
+                "nombre_proyecto": "Nombre del Proyecto",
+                "codigo_proyecto": "Código / Expediente",
+                "nivel_de_tension": "Nivel de Tensión (kV)",
+                "calibre_primario": "Calibre del Conductor de Media Tensión",
+                "calibre_secundario": "Calibre del Conductor de Baja Tensión",
+                "calibre_neutro": "Calibre del Condcutor Neutro",
+                "calibre_piloto": "Calibre del Conductor de Hilo Piloto",
+                "calibre_retenidas": "Calibre del Cable de Retenida",
+                "responsable": "Responsable / Diseñador",
+                "empresa": "Empresa / Área",
+            }
+
+            for key, label in etiquetas_mostrar.items():
+                st.markdown(f"**{label}:** {datos_nuevos.get(key, '')}")
+
             st.success("✅ Datos del proyecto actualizados")
             return datos_nuevos
 
     # Si no se envió el formulario, devolver los datos que entraron (o vacíos)
     return datos_proyecto or {}
+
 
 # === Función para mostrar datos en JSON ===
 def mostrar_info_proyecto(datos_proyecto):
@@ -197,4 +218,5 @@ if archivo_estructuras:
 
 else:
     st.warning("⚠️ Debes subir el archivo de estructuras.")
+
 
