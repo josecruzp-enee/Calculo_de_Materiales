@@ -203,42 +203,56 @@ if not df.empty:
     # ================== GENERAR PDFs ==================
     st.subheader("📑 Exportar a PDF")
 
+   def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo/Estructura_datos.xlsx"):
+    """
+    Genera y muestra los botones para descargar los PDFs de resumen de materiales,
+    estructuras, materiales por punto e informe completo.
+
+    Parámetros:
+    - modo_carga: str, "Desde archivo Excel" o "Pegar tabla"
+    - ruta_estructuras: str o None, ruta del archivo Excel si modo_carga es archivo, None si pegar tabla
+    - df: pd.DataFrame, DataFrame con las estructuras (editable o pegado)
+    - ruta_datos_materiales: str, ruta al archivo de base de datos de materiales
+
+    Retorna:
+    - None
+    """
+
     try:
+        archivo_estructuras = None if modo_carga == "Pegar tabla" else ruta_estructuras
+
         df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
-            None if modo_carga == "Pegar tabla" else ruta_estructuras,
-            os.path.join("modulo", "Estructura_datos.xlsx"),
-            estructuras_df=df  # PASAMOS el DF pegado o modificado
+            archivo_estructuras,
+            ruta_datos_materiales,
+            estructuras_df=df
         )
+
+        nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto") if datos_proyecto else "Proyecto"
 
         st.download_button(
             "📄 Descargar PDF de Materiales",
-            generar_pdf_materiales(df_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto"), datos_proyecto),
+            generar_pdf_materiales(df_resumen, nombre_proyecto, datos_proyecto),
             "Resumen_Materiales.pdf",
             "application/pdf"
         )
-
         st.download_button(
             "📄 Descargar PDF de Estructuras",
-            generar_pdf_estructuras(df_estructuras_resumen, datos_proyecto.get("nombre_proyecto", "Proyecto")),
+            generar_pdf_estructuras(df_estructuras_resumen, nombre_proyecto),
             "Resumen_Estructuras.pdf",
             "application/pdf"
         )
-
         st.download_button(
             "📄 Descargar PDF Materiales por Punto",
-            generar_pdf_materiales_por_punto(df_resumen_por_punto, datos_proyecto.get("nombre_proyecto", "Proyecto")),
+            generar_pdf_materiales_por_punto(df_resumen_por_punto, nombre_proyecto),
             "Materiales_por_Punto.pdf",
             "application/pdf"
         )
-
         st.download_button(
             "📄 Descargar Informe Completo (PDF)",
             generar_pdf_completo(df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto),
             "Informe_Completo.pdf",
             "application/pdf"
         )
+
     except Exception as e:
         st.error(f"⚠️ Error al procesar materiales: {e}")
-
-else:
-    st.warning("⚠️ No hay datos para mostrar. Sube un archivo o pega una tabla.")
