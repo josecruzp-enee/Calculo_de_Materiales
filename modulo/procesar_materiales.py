@@ -70,8 +70,14 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     log("📌 Datos del proyecto:", datos_proyecto)
 
     nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
-    tension = str(datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension", "")).replace(",", ".").replace("kV", "").strip()
-    calibre_primario = datos_proyecto.get("calibre_primario", "1/0 ASCR")
+    tension = st.selectbox("Selecciona tensión:", ["", "13.8", "34.5"])
+
+# Construir el diccionario de proyecto
+    datos_proyecto = {
+        "nombre_proyecto": "Proyecto",
+        "nivel_de_tension": tension,
+        "calibre_primario": calibre,
+    }
 
     # --- Validar que se definieron tensión y calibre ---
     if not tension or not calibre_primario:
@@ -195,3 +201,4 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     log(f"📊 Resumen final: {df_resumen.shape[0]} materiales, {df_estructuras_resumen.shape[0]} estructuras, {df_resumen_por_punto.shape[0]} filas por punto")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
