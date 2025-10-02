@@ -42,19 +42,30 @@ from modulo.excel_utils import exportar_excel
 
 def limpiar_codigo(codigo):
     """
-    Limpia un código de estructura y devuelve (base, tipo).
-    - Si termina en (X) → tipo = X (ej. (P), (E), (R)).
-    - Si no tiene sufijo → tipo = P.
+    Devuelve solo el código base y el tipo de estructura.
+    - Si el string trae 'CODIGO – Descripción', devuelve solo CODIGO.
+    - Si termina en (X), X es el tipo (ej: (P), (E), (R)).
+    - Si no tiene sufijo, se asume tipo = P (proyectada).
     """
     if pd.isna(codigo) or str(codigo).strip() == "":
         return None, None
 
     codigo = str(codigo).strip()
+
+    # cortar si viene con "–" (guion largo) o "-" con descripción
+    if "–" in codigo:
+        codigo = codigo.split("–")[0].strip()
+    elif " - " in codigo:
+        codigo = codigo.split(" - ")[0].strip()
+
+    # manejar sufijos tipo (P), (E), etc.
     if codigo.endswith(")") and "(" in codigo:
         base = codigo[:codigo.rfind("(")].strip()
-        tipo = codigo[codigo.rfind("(") + 1: codigo.rfind(")")].strip().upper()
+        tipo = codigo[codigo.rfind("(") + 1 : codigo.rfind(")")].strip().upper()
         return base, tipo
+
     return codigo, "P"
+
 
 
 def expandir_lista_codigos(cadena):
@@ -220,3 +231,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
