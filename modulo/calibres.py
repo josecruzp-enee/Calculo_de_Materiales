@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Oct  2 08:13:47 2025
-
-@author: José Nikol Cruz
-"""
-
 import pandas as pd
 import os
 import streamlit as st
@@ -14,11 +7,9 @@ def cargar_calibres_desde_excel(ruta_archivo=None):
     Intenta leer calibres desde un archivo Excel.
     Si no existe o falla, devuelve una lista por defecto.
     """
-    # Definimos ruta por defecto en modulo
     if ruta_archivo is None:
         ruta_archivo = os.path.join(os.path.dirname(__file__), "calibres.xlsx")
 
-    # Valores por defecto si no hay archivo
     calibres_defecto = {
         "primario": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM", "477 MCM", "556.5 MCM"],
         "secundario": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP", "266.8 WP"],
@@ -35,7 +26,6 @@ def cargar_calibres_desde_excel(ruta_archivo=None):
         print(f"Error leyendo calibres.xlsx: {e}")
         return calibres_defecto
     
-    # Extraer listas eliminando NaN y convirtiendo a string
     calibres = {
         "primario": df.get("Conductores Primario", pd.Series()).dropna().astype(str).tolist() or calibres_defecto["primario"],
         "secundario": df.get("Conductores Secundarios", pd.Series()).dropna().astype(str).tolist() or calibres_defecto["secundario"],
@@ -51,13 +41,6 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
     Permite elegir de lista o escribir valor personalizado.
     Devuelve diccionario con valores seleccionados.
     """
-
-    # Para permitir valores personalizados en selectbox, necesitamos Streamlit >=1.25.
-    # Si no, usar text_input o un combo selectbox + text_input para personalizado.
-
-    # Aquí asumo selectbox con opción personalizada no disponible, 
-    # así que se hace combo selectbox + text_input para cada calibre:
-
     st.subheader("📝 Selección de Calibres (Predeterminados o personalizados)")
 
     def combo_personalizado(etiqueta, lista_opciones, valor_actual):
@@ -66,9 +49,11 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
             options=[""] + lista_opciones,
             index=(lista_opciones.index(valor_actual) + 1) if valor_actual in lista_opciones else 0
         )
+        # Si no se selecciona nada en selectbox, se mantiene valor_actual (texto libre)
         if opcion == "":
             opcion = valor_actual  # Mantener valor previo o vacío
         personalizado = st.text_input(f"O ingrese calibre personalizado para {etiqueta}", value="" if opcion else valor_actual)
+        # Si el usuario escribió algo en texto, priorizarlo sobre el selectbox
         return personalizado.strip() if personalizado.strip() else opcion
 
     calibre_primario = combo_personalizado(
