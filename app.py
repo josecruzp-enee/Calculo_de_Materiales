@@ -1,17 +1,3 @@
-# app.py
-import streamlit as st
-import pandas as pd
-from io import BytesIO
-
-from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
-from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
-from modulo.procesar_materiales import procesar_materiales
-from modulo.generar_pdfs import generar_pdfs
-from modulo.calibres import cargar_calibres_desde_excel, seleccionar_calibres_formulario
-from modulo.entradas import cargar_estructuras_proyectadas
-
-COLUMNAS_BASE = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
-
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
@@ -71,7 +57,3 @@ def main():
     if not df.empty:
         st.dataframe(df, use_container_width=True)
         generar_pdfs(modo_carga, ruta_estructuras, df)
-
-
-
-
