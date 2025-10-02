@@ -40,12 +40,42 @@ columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje"
 # ================== SUBIR ARCHIVOS ==================
 st.subheader("📂 Sube los archivos necesarios")
 
-archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
-archivo_materiales = st.file_uploader("📌 Base de datos de materiales (Estructura_datos.xlsx)", type=["xlsx"])
+import os
 
-if archivo_estructuras and archivo_materiales:
-    # Guardar archivos temporales
+# Archivo materiales ya dentro del proyecto
+ruta_materiales = os.path.join("modulo", "Estructura_datos.xlsx")
+
+archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
+
+if archivo_estructuras:
+    # Guardar archivo de estructuras temporalmente
+    import tempfile
+    import shutil
+
     temp_dir = tempfile.mkdtemp()
+    ruta_estructuras = os.path.join(temp_dir, archivo_estructuras.name)
+    with open(ruta_estructuras, "wb") as f:
+        f.write(archivo_estructuras.getbuffer())
+
+    # Procesar usando ruta_materiales ya local
+    try:
+        datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
+        # Mostrar datos...
+    except Exception as e:
+        st.error(f"No se pudo leer la hoja 'datos_proyecto': {e}")
+
+    # Luego continua con el procesamiento usando ruta_estructuras y ruta_materiales
+    try:
+        df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
+            ruta_estructuras, ruta_materiales
+        )
+        # Generar botones descarga PDF, etc.
+    except Exception as e:
+        st.error(f"Error al procesar materiales: {e}")
+
+else:
+    st.warning("⚠️ Debes subir el archivo de estructuras.")
+
 
     ruta_estructuras = os.path.join(temp_dir, archivo_estructuras.name)
     with open(ruta_estructuras, "wb") as f:
@@ -159,6 +189,7 @@ if archivo_estructuras and archivo_materiales:
 
 else:
     st.warning("⚠️ Debes subir ambos archivos: estructuras y base de datos de materiales.")
+
 
 
 
