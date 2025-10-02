@@ -15,7 +15,6 @@ import tempfile
 import os
 from openpyxl.utils import get_column_letter
 
-# === Importar módulos propios ===
 from modulo.entradas import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
@@ -30,14 +29,9 @@ from modulo.procesar_materiales import procesar_materiales
 from modulo.calibres import cargar_calibres_desde_excel, seleccionar_calibres_formulario
 
 
-# ================== CONFIG STREAMLIT ==================
-st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
-st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
+COLUMNAS_BASE = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
 
-# Columnas base para DataFrame
-columnas = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
 
-# Función para formulario edición de datos del proyecto
 def formulario_datos_proyecto():
     st.subheader("📝 Datos del Proyecto (Formulario)")
 
@@ -79,8 +73,6 @@ def formulario_datos_proyecto():
             }
             st.success("✅ Datos del proyecto actualizados")
 
-if "datos_proyecto" not in st.session_state:
-    st.session_state["datos_proyecto"] = {}
 
 def mostrar_datos_formateados():
     datos = st.session_state.get("datos_proyecto")
@@ -101,6 +93,7 @@ def mostrar_datos_formateados():
         for key, label in etiquetas_mostrar.items():
             st.markdown(f"**{label}:** {datos.get(key, '')}")
 
+
 def guardar_archivo_temporal(archivo_subido):
     temp_dir = tempfile.mkdtemp()
     ruta_temp = os.path.join(temp_dir, archivo_subido.name)
@@ -108,116 +101,18 @@ def guardar_archivo_temporal(archivo_subido):
         f.write(archivo_subido.getbuffer())
     return ruta_temp
 
-# Función para convertir texto pegado en DataFrame
+
 def pegar_texto_a_df(texto, columnas):
     try:
-        # Quitar espacios extra y saltos de línea innecesarios
         df = pd.read_csv(BytesIO(texto.encode()), sep=None, engine='python')
-        # Filtrar solo columnas necesarias (por si hay más)
         df = df[[col for col in columnas if col in df.columns]]
         return df
     except Exception as e:
         st.error(f"Error al convertir texto pegado a tabla: {e}")
         return pd.DataFrame(columns=columnas)
 
-# ================== FLUJO PRINCIPAL ==================
-st.subheader("Carga de estructuras proyectadas")
-
-modo_carga = st.radio("Selecciona modo de carga:", ["Desde archivo Excel", "Pegar tabla"])
-
-df = pd.DataFrame(columns=columnas)  # DataFrame inicial vacío
-
-if modo_carga == "Desde archivo Excel":
-    archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
-    if archivo_estructuras:
-        ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
-        try:
-            datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
-        except Exception as e:
-            st.warning(f"⚠️ No se pudo leer datos del proyecto: {e}")
-            datos_proyecto = {}
-
-        if "datos_proyecto" not in st.session_state or not st.session_state["datos_proyecto"]:
-            st.session_state["datos_proyecto"] = datos_proyecto
-
-        formulario_datos_proyecto()
-        mostrar_datos_formateados()
-
-        try:
-            df = cargar_estructuras_proyectadas(ruta_estructuras)
-            st.success("✅ Hoja 'estructuras' leída correctamente")
-        except Exception as e:
-            st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
-            st.stop()
-
-elif modo_carga == "Pegar tabla":
-    st.info("Pega la tabla con columnas: Punto, Poste, Primario, Secundario, Retenida, Aterrizaje, Transformador")
-    texto_pegado = st.text_area("Pega aquí tu tabla (CSV o tabulado)", height=200)
-    if texto_pegado:
-        df = pegar_texto_a_df(texto_pegado, columnas)
-        st.success(f"✅ Tabla cargada con {len(df)} filas")
-    formulario_datos_proyecto()
-    mostrar_datos_formateados()
-
-if not df.empty:
-    # Guardar en sesión para mantener el estado
-    st.session_state["df_puntos"] = df.copy()
-
-    # Editor editable
-    df = st.data_editor(
-        st.session_state.get("df_puntos", pd.DataFrame(columns=columnas)),
-        num_rows="dynamic",
-        use_container_width=True,
-    )
-    st.session_state["df_puntos"] = df
-
-    # Vista previa limpia
-    st.subheader("📑 Vista previa de la tabla")
-    st.dataframe(df, use_container_width=True)
-
-    # ================== EXPORTAR TABLA ==================
-    st.subheader("📥 Exportar tabla")
-
-    st.download_button(
-        "⬇️ Descargar CSV",
-        df.to_csv(index=False).encode("utf-8"),
-        "estructuras_lista.csv",
-        "text/csv"
-    )
-
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Estructuras")
-        ws = writer.sheets["Estructuras"]
-        for col_idx, col in enumerate(df.columns, 1):
-            max_length = max(df[col].astype(str).map(len).max(), len(col)) + 2
-            ws.column_dimensions[get_column_letter(col_idx)].width = max_length
-
-    st.download_button(
-        "⬇️ Descargar Excel",
-        output.getvalue(),
-        "estructuras_lista.xlsx",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # ================== GENERAR PDFs ==================
-    st.subheader("📑 Exportar a PDF")
 
 def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo/Estructura_datos.xlsx"):
-    """
-    Genera y muestra los botones para descargar los PDFs de resumen de materiales,
-    estructuras, materiales por punto e informe completo.
-
-    Parámetros:
-    - modo_carga: str, "Desde archivo Excel" o "Pegar tabla"
-    - ruta_estructuras: str o None, ruta del archivo Excel si modo_carga es archivo, None si pegar tabla
-    - df: pd.DataFrame, DataFrame con las estructuras (editable o pegado)
-    - ruta_datos_materiales: str, ruta al archivo de base de datos de materiales
-
-    Retorna:
-    - None
-    """
-
     try:
         archivo_estructuras = None if modo_carga == "Pegar tabla" else ruta_estructuras
 
@@ -257,3 +152,94 @@ def generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales="modulo
     except Exception as e:
         st.error(f"⚠️ Error al procesar materiales: {e}")
 
+
+def main():
+    st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
+    st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
+
+    if "datos_proyecto" not in st.session_state:
+        st.session_state["datos_proyecto"] = {}
+
+    st.subheader("Carga de estructuras proyectadas")
+    modo_carga = st.radio("Selecciona modo de carga:", ["Desde archivo Excel", "Pegar tabla"])
+
+    df = pd.DataFrame(columns=COLUMNAS_BASE)
+    ruta_estructuras = None
+
+    if modo_carga == "Desde archivo Excel":
+        archivo_estructuras = st.file_uploader("📌 Archivo de estructuras (estructuras_lista.xlsx)", type=["xlsx"])
+        if archivo_estructuras:
+            ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
+            try:
+                datos_proyecto = cargar_datos_proyecto(ruta_estructuras)
+            except Exception as e:
+                st.warning(f"⚠️ No se pudo leer datos del proyecto: {e}")
+                datos_proyecto = {}
+
+            if not st.session_state["datos_proyecto"]:
+                st.session_state["datos_proyecto"] = datos_proyecto
+
+            formulario_datos_proyecto()
+            mostrar_datos_formateados()
+
+            try:
+                df = cargar_estructuras_proyectadas(ruta_estructuras)
+                st.success("✅ Hoja 'estructuras' leída correctamente")
+            except Exception as e:
+                st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
+                st.stop()
+
+    elif modo_carga == "Pegar tabla":
+        st.info("Pega la tabla con columnas: Punto, Poste, Primario, Secundario, Retenida, Aterrizaje, Transformador")
+        texto_pegado = st.text_area("Pega aquí tu tabla (CSV o tabulado)", height=200)
+        if texto_pegado:
+            df = pegar_texto_a_df(texto_pegado, COLUMNAS_BASE)
+            st.success(f"✅ Tabla cargada con {len(df)} filas")
+        formulario_datos_proyecto()
+        mostrar_datos_formateados()
+
+    if not df.empty:
+        st.session_state["df_puntos"] = df.copy()
+
+        df = st.data_editor(
+            st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE)),
+            num_rows="dynamic",
+            use_container_width=True,
+        )
+        st.session_state["df_puntos"] = df
+
+        st.subheader("📑 Vista previa de la tabla")
+        st.dataframe(df, use_container_width=True)
+
+        st.subheader("📥 Exportar tabla")
+
+        st.download_button(
+            "⬇️ Descargar CSV",
+            df.to_csv(index=False).encode("utf-8"),
+            "estructuras_lista.csv",
+            "text/csv"
+        )
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Estructuras")
+            ws = writer.sheets["Estructuras"]
+            for col_idx, col in enumerate(df.columns, 1):
+                max_length = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                ws.column_dimensions[get_column_letter(col_idx)].width = max_length
+
+        st.download_button(
+            "⬇️ Descargar Excel",
+            output.getvalue(),
+            "estructuras_lista.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        st.subheader("📑 Exportar a PDF")
+
+        ruta_para_pdfs = ruta_estructuras if modo_carga == "Desde archivo Excel" else None
+        generar_pdfs(modo_carga, ruta_para_pdfs, df)
+
+
+if __name__ == "__main__":
+    main()
