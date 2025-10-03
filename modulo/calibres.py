@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+"""
+Gestión de calibres de conductores para proyecto.
+Autor: José Nikol Cruz
+"""
+import os
+import pandas as pd
+import streamlit as st
+
+
+
 def seleccionar_calibres_formulario(datos_proyecto, calibres):
     """
     Formulario interactivo para seleccionar solo calibres comerciales.
@@ -39,3 +50,4 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
         "calibre_piloto": calibre_piloto,
         "calibre_retenidas": calibre_retenidas
     }
+
