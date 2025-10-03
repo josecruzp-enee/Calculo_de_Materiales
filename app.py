@@ -23,6 +23,15 @@ COLUMNAS_BASE = [
     "Retenidas", "Conexiones a tierra", "Transformadores"
 ]
 
+def ordenar_puntos(df):
+    """
+    Ordena el DataFrame por número de punto (Punto 1, Punto 2, ...).
+    """
+    if not df.empty and "Punto" in df.columns:
+        df["_num"] = df["Punto"].str.extract(r'(\d+)').astype(float)
+        df = df.sort_values("_num").drop(columns="_num").reset_index(drop=True)
+    return df
+
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
@@ -107,18 +116,9 @@ def main():
 
             # Guardar Punto
             if st.button("💾 Guardar Punto"):
-                # eliminar versiones anteriores del mismo punto
-                df_actual = df_actual[df_actual["Punto"] != punto]
-                # agregar nuevo registro
+                df_actual = df_actual[df_actual["Punto"] != punto]  # elimina versiones anteriores
                 df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
-
-                # 👇 ordenar por número de punto
-                df_actual = df_actual.sort_values(
-                    by="Punto",
-                    key=lambda col: col.str.extract(r'(\d+)').astype(int)
-                ).reset_index(drop=True)
-
-                st.session_state["df_puntos"] = df_actual
+                st.session_state["df_puntos"] = ordenar_puntos(df_actual)  # 👈 ordenar después de guardar
                 st.success(f"✅ {punto} guardado correctamente")
                 st.session_state.pop("punto_en_edicion")  # salir de edición
 
@@ -132,7 +132,6 @@ def main():
 
         if st.button("✅ Finalizar Cálculo"):
             try:
-                # Aquí puedes invocar tu lógica de procesamiento real
                 st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
             except Exception as e:
                 st.error(f"❌ Error al finalizar cálculo: {e}")
@@ -149,7 +148,7 @@ def main():
     # ========================
     if not df.empty:
         st.subheader("📑 Vista de estructuras / materiales")
-        # 👇 mostramos sin índice
+        # 👇 Ocultar índice
         st.dataframe(df.reset_index(drop=True), use_container_width=True)
 
         col1, col2 = st.columns(2)
@@ -162,7 +161,8 @@ def main():
         with col2:
             punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
             if st.button("Borrar Punto"):
-                st.session_state["df_puntos"] = df[df["Punto"] != punto_borrar].reset_index(drop=True)
+                df_filtrado = df[df["Punto"] != punto_borrar]
+                st.session_state["df_puntos"] = ordenar_puntos(df_filtrado)
                 st.success(f"✅ Se eliminó {punto_borrar}")
                 st.rerun()
 
