@@ -130,7 +130,10 @@ def main():
             if st.button("🧹 Limpiar todos los listados"):
                 st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
                 st.session_state.pop("ultimo_punto_creado", None)  # limpiar selección automática
+                df = st.session_state["df_puntos"]  # 👈 forzar que df quede vacío
                 st.success("✅ Se limpiaron todas las estructuras/materiales")
+                st.experimental_rerun()  # 👈 refrescar la app
+
 
         with col2:
             if "Punto" in df.columns and not df.empty:
@@ -149,3 +152,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
