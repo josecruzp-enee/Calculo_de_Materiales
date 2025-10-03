@@ -19,7 +19,7 @@ from modulo.procesar_materiales import procesar_materiales
 from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
 
-COLUMNAS_BASE = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
+COLUMNAS_BASE = ["Punto", "Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
 
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
@@ -85,3 +85,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
