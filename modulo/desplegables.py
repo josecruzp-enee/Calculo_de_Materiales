@@ -34,13 +34,12 @@ def crear_desplegables(opciones):
     def selectbox_con_etiquetas(label, datos, key):
         if not datos:
             return None
-
-        opciones_lista = ["Seleccionar estructura"] + datos["valores"]
-
+        lista = ["Seleccionar estructura"] + datos["valores"]
+        seleccion_actual = st.session_state.get(key, "Seleccionar estructura")
         return st.selectbox(
             label,
-            options=opciones_lista,
-            index=0 if key not in st.session_state else opciones_lista.index(st.session_state[key]),
+            options=lista,
+            index=lista.index(seleccion_actual) if seleccion_actual in lista else 0,
             format_func=lambda x: datos["etiquetas"].get(x, x) if x in datos["valores"] else x,
             key=key
         )
@@ -53,4 +52,5 @@ def crear_desplegables(opciones):
     seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformadores"), "sel_transformador")
 
     return seleccion
+
 
