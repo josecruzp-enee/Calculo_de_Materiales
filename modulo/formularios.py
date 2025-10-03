@@ -45,7 +45,7 @@ def formulario_datos_proyecto():
     datos = st.session_state.get("datos_proyecto", obtener_datos_proyecto_defecto())
 
     # ---------------- SECCIÓN 1: INFO GENERAL ----------------
-    st.markdown("### 📌 Información General")
+   
     nombre = st.text_input("Nombre del Proyecto", value=datos.get("nombre_proyecto", ""))
     codigo = st.text_input("Código / Expediente", value=datos.get("codigo_proyecto", ""))
     responsable = st.text_input("Responsable / Diseñador", value=datos.get("responsable", ""))
