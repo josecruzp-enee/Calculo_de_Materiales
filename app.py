@@ -18,10 +18,12 @@ COLUMNAS_BASE = [
 # Helpers
 # ========================
 def resetear_desplegables():
-    """Resetea todos los selectbox de estructuras a 'Seleccionar estructura'."""
+    """Elimina los keys de los selectbox para que se reinicien."""
     for key in ["sel_poste", "sel_primario", "sel_secundario",
                 "sel_retenidas", "sel_tierra", "sel_transformador"]:
-        st.session_state[key] = "Seleccionar estructura"
+        if key in st.session_state:
+            del st.session_state[key]
+
 
 # ========================
 # Datos del proyecto
@@ -175,3 +177,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
