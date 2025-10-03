@@ -19,6 +19,7 @@ from modulo.procesar_materiales import procesar_materiales
 from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
 
+# 👇 columnas base ajustadas a tu Excel
 COLUMNAS_BASE = ["Punto", "Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
 
 def main():
@@ -62,16 +63,38 @@ def main():
     elif modo_carga == "Listas desplegables":
         from modulo.desplegables import cargar_opciones, crear_desplegables
         opciones = cargar_opciones()
+
+        # 1️⃣ Detectar puntos ya creados
+        df_actual = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
+        puntos_existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
+        opciones_puntos = ["Nuevo Punto"] + [str(p) for p in puntos_existentes]
+
+        # 2️⃣ El usuario elige a qué punto quiere asignar materiales
+        punto_elegido = st.selectbox("📍 Selecciona el Punto:", opciones_puntos)
+
+        # 3️⃣ Desplegables de estructuras/materiales
         seleccion = crear_desplegables(opciones)
 
-        if st.button("Agregar Punto"):
-            num_punto = len(st.session_state.get("df_puntos", [])) + 1
-            seleccion["Punto"] = f"Punto {num_punto}"  # aquí numeramos automáticamente
-            st.session_state["df_puntos"] = pd.concat(
-                [st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE)),
-                 pd.DataFrame([seleccion])],
-                ignore_index=True
+        # 4️⃣ Decidir si es nuevo o edición
+        if punto_elegido == "Nuevo Punto":
+            nuevo_num = len(puntos_existentes) + 1
+            seleccion["Punto"] = f"Punto {nuevo_num}"
+        else:
+            seleccion["Punto"] = punto_elegido
+
+        # 5️⃣ Botón para guardar
+        if st.button("Agregar / Editar Punto"):
+            df_combinado = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
+
+            # Consolidar materiales si existen
+            if "Material" in df_combinado.columns and "Cantidad" in df_combinado.columns:
+                df_combinado = (
+                    df_combinado.groupby(["Punto", "Material", "Unidad"], as_index=False)["Cantidad"]
+                    .sum()
                 )
+
+            st.session_state["df_puntos"] = df_combinado
+
         df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
 
     # 4️⃣ Vista preliminar de datos
@@ -85,4 +108,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
