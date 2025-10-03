@@ -56,12 +56,11 @@ def crear_desplegables(opciones):
     seleccion["Primario"] = selectbox_con_etiquetas("Selecciona Primario:", opciones.get("Primaria"))
     # Secundario
     seleccion["Secundario"] = selectbox_con_etiquetas("Selecciona Secundario:", opciones.get("Secundaria"))
-    # Retenida
-    seleccion["Retenidas"] = selectbox_con_etiquetas("Selecciona Retenida:", opciones.get("Retenida"))
-    # Aterrizaje
-    seleccion["Conexiones a tierra"] = selectbox_con_etiquetas("Selecciona Aterrizaje:", opciones.get("Aterrizaje"))
-    # Transformador
-    seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformador"))
+    # Retenida (clave = "Retenida", aunque el label diga "Selecciona Retenida")
+    seleccion["Retenidas"] = selectbox_con_etiquetas("Selecciona Retenida:", opciones.get("Retenida") or opciones.get("Retenidas"))
+    # Aterrizaje (clave = "Aterrizaje")
+    seleccion["Conexiones a tierra"] = selectbox_con_etiquetas("Selecciona Aterrizaje:", opciones.get("Aterrizaje") or opciones.get("Conexiones a tierra"))
+    # Transformador (clave = "Transformador")
+    seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformador") or opciones.get("Transformadores"))
 
     return seleccion
-
