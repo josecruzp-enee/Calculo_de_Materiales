@@ -35,26 +35,29 @@ def seleccionar_nivel_tension(datos_proyecto, opciones_tension=None):
 
 def formulario_datos_proyecto():
     """
-    Formulario completo para capturar datos del proyecto.
-    Incluye: nombre, código, nivel de tensión, calibres y responsable/empresa.
+    Formulario dividido en dos secciones:
+    1. Información general del proyecto
+    2. Selección de calibres de conductores
     """
     st.subheader("📝 Datos del Proyecto")
 
     # Cargar datos previos o por defecto
     datos = st.session_state.get("datos_proyecto", obtener_datos_proyecto_defecto())
 
-    # Nivel de tensión
-    nivel_tension = seleccionar_nivel_tension(datos)
-
-    # Selección de calibres
-    calibres = cargar_calibres_desde_excel()
-    calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
-
-    # Campos de texto
+    # ---------------- SECCIÓN 1: INFO GENERAL ----------------
+    st.markdown("### 📌 Información General")
     nombre = st.text_input("Nombre del Proyecto", value=datos.get("nombre_proyecto", ""))
     codigo = st.text_input("Código / Expediente", value=datos.get("codigo_proyecto", ""))
     responsable = st.text_input("Responsable / Diseñador", value=datos.get("responsable", ""))
     empresa = st.text_input("Empresa / Área", value=datos.get("empresa", ""))
+    nivel_tension = seleccionar_nivel_tension(datos)
+
+    st.divider()
+
+    # ---------------- SECCIÓN 2: CALIBRES ----------------
+    st.markdown("### 🧵 Selección de Calibres (solo comerciales)")
+    calibres = cargar_calibres_desde_excel()
+    calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
 
     # Guardar todo en session_state
     st.session_state["datos_proyecto"] = {
@@ -72,5 +75,18 @@ def mostrar_datos_formateados():
     """
     datos = st.session_state.get("datos_proyecto", {})
     st.subheader("📑 Datos del Proyecto Actualizados")
-    for k, v in datos.items():
-        st.markdown(f"**{k}:** {v}")
+
+    # Mostrar info general primero
+    st.markdown("**📌 Información General**")
+    st.markdown(f"- **Nombre del Proyecto:** {datos.get('nombre_proyecto','')}")
+    st.markdown(f"- **Código / Expediente:** {datos.get('codigo_proyecto','')}")
+    st.markdown(f"- **Nivel de Tensión (kV):** {datos.get('nivel_de_tension','')}")
+    st.markdown(f"- **Responsable / Diseñador:** {datos.get('responsable','')}")
+    st.markdown(f"- **Empresa / Área:** {datos.get('empresa','')}")
+
+    st.markdown("**🧵 Calibres Seleccionados**")
+    st.markdown(f"- **Conductor Primario:** {datos.get('calibre_primario','')}")
+    st.markdown(f"- **Conductor Secundario:** {datos.get('calibre_secundario','')}")
+    st.markdown(f"- **Neutro:** {datos.get('calibre_neutro','')}")
+    st.markdown(f"- **Hilo Piloto:** {datos.get('calibre_piloto','')}")
+    st.markdown(f"- **Cable de Retenida:** {datos.get('calibre_retenidas','')}")
