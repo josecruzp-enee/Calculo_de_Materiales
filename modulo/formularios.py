@@ -55,7 +55,7 @@ def formulario_datos_proyecto():
     st.divider()
 
     # ---------------- SECCIÓN 2: CALIBRES ----------------
-    st.markdown("2. ### 🧵 Selección de Calibres")
+    st.markdown(" ### 2. 🧵 Selección de Calibres")
     calibres = cargar_calibres_desde_excel()
     calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
 
