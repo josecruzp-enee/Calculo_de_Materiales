@@ -107,16 +107,26 @@ def main():
 
             # Guardar Punto
             if st.button("💾 Guardar Punto"):
-                df_actual = df_actual[df_actual["Punto"] != punto]  # elimina versiones anteriores
+                # 👉 Eliminar versiones anteriores del mismo punto
+                df_actual = df_actual[df_actual["Punto"] != punto]
+
+                # 👉 Agregar el nuevo punto
                 df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
 
-                # Ordenar puntos por número
+                # 👉 Ordenar puntos por número
                 df_actual["orden"] = df_actual["Punto"].str.extract(r'(\d+)').astype(int)
                 df_actual = df_actual.sort_values("orden").drop(columns="orden")
                 st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
 
-                st.success(f"✅ {punto} guardado correctamente")
-                st.session_state.pop("punto_en_edicion")  # salir de edición
+    st.success(f"✅ {punto} guardado correctamente")
+
+    # 👉 Resetear desplegables a "Seleccionar estructura"
+    for key in ["sel_poste", "sel_primario", "sel_secundario", "sel_retenidas", "sel_tierra", "sel_transformador"]:
+        st.session_state[key] = "Seleccionar estructura"
+
+    # 👉 Salir de edición
+    st.session_state.pop("punto_en_edicion")
+
 
         df = st.session_state["df_puntos"]
 
@@ -159,4 +169,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
