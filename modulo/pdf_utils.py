@@ -156,48 +156,62 @@ def generar_pdf_estructuras(df_estructuras, nombre_proy):
     return buffer
 
 def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_punto=None, df_indice=None):
-    """
-    Genera PDF con los materiales agrupados por punto, sumando cantidades si el mismo material se repite.
-    """
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
+
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
     template = PageTemplate(id="con_fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
-    elems = []
 
+    elems = []
     elems.append(Paragraph(f"<b>Materiales por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]))
     elems.append(Spacer(1, 12))
 
+    # Obtener los puntos únicos definidos
     puntos = sorted(df_por_punto["Punto"].unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()))
 
     for p in puntos:
         elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading2"]))
 
-        # Agrupar materiales repetidos
-        df_p = df_por_punto[df_por_punto["Punto"] == p]
-        df_agrupado = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+        # Mostrar código y descripción de estructuras si existe
+        if estructuras_por_punto and df_indice is not None and p in estructuras_por_punto:
+            for cod in estructuras_por_punto[p]:
+                desc = ""
+                if cod in df_indice["NombreEstructura"].values:
+                    desc = df_indice.loc[df_indice["NombreEstructura"] == cod, "Descripcion"].values[0]
+                elems.append(Paragraph(f"{cod}", styleN))
+                elems.append(Paragraph(f"{desc}", styleN))
+            elems.append(Spacer(1, 6))
 
+        # Agrupar materiales por Material + Unidad y sumar cantidades
+        df_agrupado = df_por_punto[df_por_punto["Punto"] == p].groupby(
+            ["Materiales", "Unidad"], as_index=False
+        ).sum(numeric_only=True)
+
+        # Construir tabla
+        data = [["Material", "Unidad", "Cantidad"]]
         for _, row in df_agrupado.iterrows():
-            data = [["Material", "Unidad", "Cantidad"]]
-            data.append([Paragraph(formatear_material(row["Materiales"]), styleN),
-                         row["Unidad"],
-                         round(row["Cantidad"],2)])
-            tabla = Table(data, colWidths=[4*inch, 1*inch, 1*inch])
-            tabla.setStyle(TableStyle([
-                ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-                ("BACKGROUND", (0,0), (-1,0), colors.darkgreen),
-                ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-                ("ALIGN", (1,1), (-1,-1), "CENTER"),
-                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("FONTSIZE", (0,0), (-1,-1), 9),
-            ]))
-            elems.append(tabla)
-            elems.append(Spacer(1, 0.2*inch))
+            data.append([
+                Paragraph(formatear_material(row["Materiales"]), styleN),
+                str(row["Unidad"]),
+                str(round(row["Cantidad"], 2))
+            ])
+
+        tabla = Table(data, colWidths=[4*inch, 1*inch, 1*inch])
+        tabla.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.darkgreen),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+            ("FONTSIZE", (0,0), (-1,-1), 9),
+            ("ALIGN", (1,1), (-1,-1), "CENTER"),
+        ]))
+        elems.append(tabla)
+        elems.append(Spacer(1, 0.3 * inch))
 
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     """
@@ -291,3 +305,4 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
