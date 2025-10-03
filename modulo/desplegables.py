@@ -27,9 +27,13 @@ def cargar_opciones():
 
     return opciones
 
-def crear_desplegables(opciones):
-    """Crea selectbox para cada tipo de estructura."""
-    seleccion = {}
+def resetear_desplegables():
+    """Resetea todos los selectbox de estructuras a 'Seleccionar estructura'."""
+    for key in ["sel_poste", "sel_primario", "sel_secundario",
+                "sel_retenidas", "sel_tierra", "sel_transformador"]:
+        if key in st.session_state:
+            st.session_state[key] = "Seleccionar estructura"
+
 
     def selectbox_con_etiquetas(label, datos, key):
         if not datos:
@@ -50,6 +54,7 @@ def crear_desplegables(opciones):
 
 
     return seleccion
+
 
 
 
