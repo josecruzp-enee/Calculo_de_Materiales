@@ -41,23 +41,27 @@ def crear_desplegables(opciones):
     seleccion = {}
 
     for campo, lista in opciones.items():
-        # Asegurar que siempre sea lista
-        lista = lista if isinstance(lista, list) else []
+        # Convertir siempre a lista
+        if lista is None:
+            lista = []
+        elif not isinstance(lista, list):
+            lista = list(lista)
 
-        # Insertamos opción vacía al inicio
-        lista_opciones = ["Seleccionar estructura"] + lista  
+        # Insertar opción inicial
+        lista_opciones = ["Seleccionar estructura"] + lista
 
         seleccion[campo] = st.selectbox(
-            f"Selecciona {campo}:", 
+            f"Selecciona {campo}:",
             lista_opciones,
-            index=0  # por defecto queda en "Seleccionar estructura"
+            index=0
         )
 
-        # Guardamos como None si no se selecciona nada
+        # Guardamos como None si no se elige nada
         if seleccion[campo] == "Seleccionar estructura":
-            seleccion[campo] = None  
+            seleccion[campo] = None
 
     return seleccion
+
 
 
 
@@ -75,5 +79,6 @@ def crear_desplegables(opciones):
     seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformador") or opciones.get("Transformadores"))
 
     return seleccion
+
 
 
