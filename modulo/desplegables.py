@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import streamlit as st
 
+
 # Ruta al Excel
 RUTA_EXCEL = os.path.join(os.path.dirname(__file__), "Estructura_datos.xlsx")
 
@@ -37,28 +38,55 @@ def cargar_opciones():
     return opciones
 
 
+
+
 def crear_desplegables(opciones):
+    """
+    Crea los selectbox para estructuras agrupadas:
+    - Primarias: Tramo MT y Estructuras Especiales (DT, H, TM, Especial)
+    - Secundarias: Secundarias y Neutro
+    """
     seleccion = {}
 
-    for campo, lista in opciones.items():
-        # Convertir siempre a lista
-        if lista is None:
-            lista = []
-        elif not isinstance(lista, list):
-            lista = list(lista)
+    def selectbox_etiquetas(label, datos):
+        if not datos:
+            return None
+        # Armamos lista con "Seleccionar estructura" al inicio
+        lista = datos.get("valores", [])
+        etiquetas = datos.get("etiquetas", {})
 
-        # Insertar opción inicial
         lista_opciones = ["Seleccionar estructura"] + lista
-
-        seleccion[campo] = st.selectbox(
-            f"Selecciona {campo}:",
-            lista_opciones,
+        return st.selectbox(
+            label,
+            options=lista_opciones,
+            format_func=lambda x: etiquetas.get(x, x) if x != "Seleccionar estructura" else x,
             index=0
         )
 
-        # Guardamos como None si no se elige nada
-        if seleccion[campo] == "Seleccionar estructura":
-            seleccion[campo] = None
+    # -----------------------
+    # ⚡ PRIMARIAS
+    # -----------------------
+    st.markdown("#### ⚡ Estructuras Primarias")
+
+    seleccion["Primario"] = selectbox_etiquetas("Selecciona Tramo MT:", opciones.get("Primaria"))
+    seleccion["Especiales"] = selectbox_etiquetas("Selecciona Estructura Especial (DT, H, TM, Especial):", opciones.get("Especiales"))
+
+    # -----------------------
+    # 🔌 SECUNDARIAS
+    # -----------------------
+    st.markdown("#### 🔌 Estructuras Secundarias")
+
+    seleccion["Secundario"] = selectbox_etiquetas("Selecciona Secundaria:", opciones.get("Secundaria"))
+    seleccion["Neutro"] = selectbox_etiquetas("Selecciona Neutro:", opciones.get("Neutro"))
+
+    # -----------------------
+    # Otros (retenida, tierra, transf.)
+    # -----------------------
+    st.markdown("#### 📦 Otros Elementos")
+
+    seleccion["Retenidas"] = selectbox_etiquetas("Selecciona Retenida:", opciones.get("Retenida"))
+    seleccion["Conexiones a tierra"] = selectbox_etiquetas("Selecciona Aterrizaje:", opciones.get("Aterrizaje"))
+    seleccion["Transformadores"] = selectbox_etiquetas("Selecciona Transformador:", opciones.get("Transformador"))
 
     return seleccion
 
@@ -79,6 +107,7 @@ def crear_desplegables(opciones):
     seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformador") or opciones.get("Transformadores"))
 
     return seleccion
+
 
 
 
