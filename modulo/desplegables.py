@@ -41,15 +41,16 @@ def crear_desplegables(opciones):
             key=key   # 👈 clave única para session_state
         )
 
-seleccion["Poste"] = selectbox_con_etiquetas("Selecciona Poste:", opciones.get("Poste"), key="sel_poste")
-seleccion["Primario"] = selectbox_con_etiquetas("Selecciona Primario:", opciones.get("Primaria"), key="sel_primario")
-seleccion["Secundario"] = selectbox_con_etiquetas("Selecciona Secundario:", opciones.get("Secundaria"), key="sel_secundario")
-seleccion["Retenidas"] = selectbox_con_etiquetas("Selecciona Retenida:", opciones.get("Retenidas"), key="sel_retenidas")
-seleccion["Conexiones a tierra"] = selectbox_con_etiquetas("Selecciona Aterrizaje:", opciones.get("Conexiones a tierra"), key="sel_tierra")
-seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformadores"), key="sel_transformador")
+    seleccion["Poste"] = selectbox_con_etiquetas("Selecciona Poste:", opciones.get("Poste"), key="sel_poste")
+    seleccion["Primario"] = selectbox_con_etiquetas("Selecciona Primario:", opciones.get("Primaria"), key="sel_primario")
+    seleccion["Secundario"] = selectbox_con_etiquetas("Selecciona Secundario:", opciones.get("Secundaria"), key="sel_secundario")
+    seleccion["Retenidas"] = selectbox_con_etiquetas("Selecciona Retenida:", opciones.get("Retenidas"), key="sel_retenidas")
+    seleccion["Conexiones a tierra"] = selectbox_con_etiquetas("Selecciona Aterrizaje:", opciones.get("Conexiones a tierra"), key="sel_tierra")
+    seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformadores"), key="sel_transformador")
 
 
     return seleccion
+
 
 
 
