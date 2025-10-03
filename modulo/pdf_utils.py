@@ -156,6 +156,9 @@ def generar_pdf_estructuras(df_estructuras, nombre_proy):
     return buffer
 
 def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_punto=None, df_indice=None):
+    """
+    Genera un PDF de materiales por punto, sumando cantidades si un punto se repite.
+    """
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -167,7 +170,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_
     elems.append(Paragraph(f"<b>Materiales por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]))
     elems.append(Spacer(1, 12))
 
-    # Obtener los puntos únicos definidos
+    # Obtener los puntos únicos
     puntos = sorted(df_por_punto["Punto"].unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()))
 
     for p in puntos:
@@ -183,7 +186,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_
                 elems.append(Paragraph(f"{desc}", styleN))
             elems.append(Spacer(1, 6))
 
-        # Agrupar materiales por Material + Unidad y sumar cantidades
+        # --- AGRUPAR MATERIALES POR PUNTO ---
         df_agrupado = df_por_punto[df_por_punto["Punto"] == p].groupby(
             ["Materiales", "Unidad"], as_index=False
         ).sum(numeric_only=True)
@@ -305,4 +308,5 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
