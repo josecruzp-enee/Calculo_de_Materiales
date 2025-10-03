@@ -112,6 +112,8 @@ def main():
         df = st.session_state["df_puntos"]
 
     # 4️⃣ Vista preliminar de datos + opciones de limpieza
+    df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
+
     if not df.empty:
         st.subheader("📑 Vista de estructuras / materiales")
         st.dataframe(df, use_container_width=True)
@@ -141,3 +143,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
