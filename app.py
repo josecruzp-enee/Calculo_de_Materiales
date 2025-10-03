@@ -81,9 +81,25 @@ def main():
 
     # 5️⃣ Exportación
     if not df.empty:
-        generar_pdfs(modo_carga, ruta_estructuras, df)
+        # Agrupar para sumar materiales repetidos por Punto
+        df_agrupado = (
+            df.groupby(["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"], as_index=False)
+              .first()  # mantiene la primera definición de cada estructura
+        )
+
+    # Ahora agrupamos materiales por Punto, Unidad y Material
+    if "Material" in df.columns:
+        df_export = (
+            df.groupby(["Punto", "Material", "Unidad"], as_index=False)["Cantidad"]
+              .sum()
+        )
+    else:
+        df_export = df_agrupado
+
+    generar_pdfs(modo_carga, ruta_estructuras, df_export)
 
 if __name__ == "__main__":
     main()
+
 
 
