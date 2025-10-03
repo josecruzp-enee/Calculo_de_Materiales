@@ -38,17 +38,24 @@ def cargar_opciones():
 
 
 def crear_desplegables(opciones):
-    """Crea los selectbox para cada columna y devuelve selección solo con códigos."""
     seleccion = {}
 
-    def selectbox_con_etiquetas(label, datos):
-        if not datos:
-            return None
-        return st.selectbox(
-            label,
-            options=datos["valores"],
-            format_func=lambda x: datos["etiquetas"].get(x, x)
+    for campo, lista in opciones.items():
+        # Insertamos una opción vacía al inicio
+        lista_opciones = ["Seleccionar estructura"] + lista  
+
+        seleccion[campo] = st.selectbox(
+            f"Selecciona {campo}:", 
+            lista_opciones,
+            index=0  # por defecto queda en "Seleccionar estructura"
         )
+
+        # Si está en "Seleccionar estructura", lo guardamos como None
+        if seleccion[campo] == "Seleccionar estructura":
+            seleccion[campo] = None  
+
+    return seleccion
+
 
     # Poste
     seleccion["Poste"] = selectbox_con_etiquetas("Selecciona Poste:", opciones.get("Poste"))
@@ -64,3 +71,4 @@ def crear_desplegables(opciones):
     seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformador") or opciones.get("Transformadores"))
 
     return seleccion
+
