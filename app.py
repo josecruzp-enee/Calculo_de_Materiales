@@ -132,7 +132,7 @@ def main():
                 st.session_state.pop("ultimo_punto_creado", None)  # limpiar selección automática
                 df = st.session_state["df_puntos"]  # 👈 forzar que df quede vacío
                 st.success("✅ Se limpiaron todas las estructuras/materiales")
-                st.experimental_rerun()  # 👈 refrescar la app
+                st.rerun()
 
 
         with col2:
@@ -152,4 +152,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
