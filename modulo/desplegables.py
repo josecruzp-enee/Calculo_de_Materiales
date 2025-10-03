@@ -40,7 +40,6 @@ def cargar_opciones():
 def crear_desplegables(opciones):
     """Crea los selectbox para cada columna y devuelve selección solo con códigos."""
     seleccion = {}
-    seleccion["Punto"] = st.number_input("Selecciona Punto:", min_value=1, step=1)
 
     def selectbox_con_etiquetas(label, datos):
         if not datos:
@@ -53,19 +52,14 @@ def crear_desplegables(opciones):
 
     # Poste
     seleccion["Poste"] = selectbox_con_etiquetas("Selecciona Poste:", opciones.get("Poste"))
-
     # Primario
     seleccion["Primario"] = selectbox_con_etiquetas("Selecciona Primario:", opciones.get("Primaria"))
-
     # Secundario
     seleccion["Secundario"] = selectbox_con_etiquetas("Selecciona Secundario:", opciones.get("Secundaria"))
-
     # Retenida
     seleccion["Retenida"] = selectbox_con_etiquetas("Selecciona Retenida:", opciones.get("Retenida"))
-
     # Aterrizaje
     seleccion["Aterrizaje"] = selectbox_con_etiquetas("Selecciona Aterrizaje:", opciones.get("Aterrizaje"))
-
     # Transformador
     seleccion["Transformador"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformador"))
 
