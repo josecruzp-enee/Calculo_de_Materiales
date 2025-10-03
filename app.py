@@ -11,9 +11,11 @@ Aplicación Streamlit para:
 
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 
 from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
+from modulo.procesar_materiales import procesar_materiales
 from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
 
@@ -33,17 +35,13 @@ def main():
     # Inicialización de session_state
     if "datos_proyecto" not in st.session_state:
         st.session_state["datos_proyecto"] = {}
-    if "df_puntos" not in st.session_state:
-        st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
-    if "punto_activo" not in st.session_state:
-        st.session_state["punto_activo"] = None
 
     # 2️⃣ Formulario de datos del proyecto
     formulario_datos_proyecto()
     mostrar_datos_formateados()
 
     # 3️⃣ Cargar estructuras
-    df = st.session_state["df_puntos"]
+    df = pd.DataFrame(columns=COLUMNAS_BASE)
     ruta_estructuras = None
 
     if modo_carga == "Desde archivo Excel":
@@ -61,7 +59,6 @@ def main():
         if texto_pegado:
             df = pegar_texto_a_df(texto_pegado, COLUMNAS_BASE)
             st.success(f"✅ Tabla cargada con {len(df)} filas")
-            st.session_state["df_puntos"] = df
 
     elif modo_carga == "Listas desplegables":
         from modulo.desplegables import cargar_opciones, crear_desplegables
@@ -70,50 +67,59 @@ def main():
         # --------- Sección 4: Estructuras del Proyecto ---------
         st.subheader("4. 🏗️ Estructuras del Proyecto")
 
-        df_actual = st.session_state["df_puntos"]
+        # 1️⃣ Detectar puntos ya creados
+        df_actual = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
         puntos_existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
 
-        # Crear nuevo punto
+        # 2️⃣ Mostrar puntos existentes
+        punto_elegido = None
+        if puntos_existentes:
+            # si hay un último punto creado, lo seleccionamos por defecto
+            index_default = (
+                puntos_existentes.index(st.session_state["ultimo_punto_creado"])
+                if "ultimo_punto_creado" in st.session_state and st.session_state["ultimo_punto_creado"] in puntos_existentes
+                else 0
+            )
+            punto_elegido = st.selectbox("📍 Selecciona un Punto existente:", puntos_existentes, index=index_default)
+
+        # 3️⃣ Botón para crear nuevo punto
         if st.button("➕ Crear nuevo Punto"):
             nuevo_num = len(puntos_existentes) + 1
-            st.session_state["punto_activo"] = f"Punto {nuevo_num}"
+            punto_elegido = f"Punto {nuevo_num}"
 
-            df_nuevo = pd.DataFrame([{"Punto": st.session_state["punto_activo"],
+            df_nuevo = pd.DataFrame([{"Punto": punto_elegido,
                                       "Poste": None, "Primario": None, "Secundario": None,
                                       "Retenidas": None, "Conexiones a tierra": None,
                                       "Transformadores": None}])
             df_actual = pd.concat([df_actual, df_nuevo], ignore_index=True)
             st.session_state["df_puntos"] = df_actual
-            st.success(f"✅ Se creó {st.session_state['punto_activo']} y está listo para editar")
 
-        # Selección de punto
-        if puntos_existentes:
-            st.session_state["punto_activo"] = st.selectbox(
-                "📍 Selecciona un Punto existente:",
-                puntos_existentes,
-                index=puntos_existentes.index(st.session_state["punto_activo"]) if st.session_state["punto_activo"] in puntos_existentes else 0
-            )
+            # Guardamos el último creado en session_state para seleccionarlo automáticamente
+            st.session_state["ultimo_punto_creado"] = punto_elegido
+            st.success(f"✅ Se creó {punto_elegido} y está listo para editar")
 
-        # Edición del punto activo
-        if st.session_state["punto_activo"]:
-            punto_elegido = st.session_state["punto_activo"]
+        # 4️⃣ Si hay un punto seleccionado → desplegables de estructuras
+        if punto_elegido:
             st.markdown(f"### ✏️ Editando {punto_elegido}")
-
             seleccion = crear_desplegables(opciones)
             seleccion["Punto"] = punto_elegido
 
-            if st.button("💾 Guardar cambios en el Punto seleccionado"):
-                df_nuevo = pd.DataFrame([seleccion])
-                df_actual = df_actual[df_actual["Punto"] != punto_elegido]
-                df_actual = pd.concat([df_actual, df_nuevo], ignore_index=True)
-                st.session_state["df_puntos"] = df_actual
-                st.success(f"✅ Se actualizaron los datos de {punto_elegido}")
+            if st.button("➕ Agregar materiales al Punto seleccionado"):
+                df_combinado = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
 
-        df = st.session_state["df_puntos"]
+                # Consolidar si tiene Materiales y Cantidad
+                if "Material" in df_combinado.columns and "Cantidad" in df_combinado.columns:
+                    df_combinado = (
+                        df_combinado.groupby(["Punto", "Material", "Unidad"], as_index=False)["Cantidad"]
+                        .sum()
+                    )
 
-    # 4️⃣ Vista preliminar de datos + opciones de limpieza
-    df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
+                st.session_state["df_puntos"] = df_combinado
+                st.success(f"✅ Se actualizaron materiales en {punto_elegido}")
 
+        df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
+
+    # 4️⃣ Vista preliminar de datos + botones de limpieza
     if not df.empty:
         st.subheader("📑 Vista de estructuras / materiales")
         st.dataframe(df, use_container_width=True)
@@ -123,18 +129,18 @@ def main():
         with col1:
             if st.button("🧹 Limpiar todos los listados"):
                 st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
-                st.session_state["punto_activo"] = None
+                st.session_state.pop("ultimo_punto_creado", None)  # limpiar selección automática
                 st.success("✅ Se limpiaron todas las estructuras/materiales")
 
         with col2:
             if "Punto" in df.columns and not df.empty:
-                st.markdown("### ❌ Borrar Punto")
-                punto_borrar = st.selectbox("Selecciona el Punto a borrar", df["Punto"].unique())
-                if st.button("🗑️ Borrar Punto seleccionado"):
+                punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
+                if st.button("Borrar Punto seleccionado"):
                     df_filtrado = df[df["Punto"] != punto_borrar]
                     st.session_state["df_puntos"] = df_filtrado
-                    if st.session_state["punto_activo"] == punto_borrar:
-                        st.session_state["punto_activo"] = None
+                    # si borraste el último, lo sacamos también del estado
+                    if st.session_state.get("ultimo_punto_creado") == punto_borrar:
+                        st.session_state.pop("ultimo_punto_creado")
                     st.success(f"✅ Se eliminó {punto_borrar}")
 
     # 5️⃣ Exportación
@@ -143,4 +149,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
