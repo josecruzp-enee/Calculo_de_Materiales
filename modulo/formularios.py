@@ -30,7 +30,7 @@ def seleccionar_nivel_tension(datos_proyecto, opciones_tension=None):
 
     valor_actual = datos_proyecto.get("nivel_de_tension", "")
     index = opciones_tension.index(valor_actual) if valor_actual in opciones_tension else 0
-    nivel_tension = st.selectbox("Nivel de Tensión (kV)", opciones_tension, index=index)
+    nivel_tension = st.selectbox("Nivel de Tensión (KV)", opciones_tension, index=index)
     return nivel_tension
 
 def formulario_datos_proyecto():
