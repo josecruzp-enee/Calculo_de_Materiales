@@ -19,6 +19,7 @@ def cargar_calibres_desde_excel(ruta_archivo=None):
     calibres_defecto = {
         "primario": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM", "477 MCM", "556.5 MCM"],
         "secundario": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP", "266.8 WP"],
+        "neutro": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM"],
         "piloto": ["2 WP"],
         "retenidas": ["1/4 Acerado", "5/8 Acerado", "3/4 Acerado"]
     }
@@ -62,7 +63,12 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
         calibres["secundario"],
         datos_proyecto.get("calibre_secundario", "")
     )
-    calibre_neutro = calibre_primario  # neutro igual que primario
+    calibre_neutro = combo_comercial(
+        "Calibre del Conductor de neutro",
+        calibres["neutro"],
+        datos_proyecto.get("calibre_neutro", "")
+    )
+    
     calibre_piloto = combo_comercial(
         "Calibre del Conductor de Hilo Piloto",
         calibres["piloto"],
@@ -81,3 +87,4 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
         "calibre_piloto": calibre_piloto,
         "calibre_retenidas": calibre_retenidas
     }
+
