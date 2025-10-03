@@ -64,48 +64,51 @@ def main():
         from modulo.desplegables import cargar_opciones, crear_desplegables
         opciones = cargar_opciones()
 
-        # 1️⃣ Detectar puntos ya creados
-        df_actual = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
-        puntos_existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
+        # --------- Sección 4: Estructuras del Proyecto ---------
+        with st.expander("4. 🏗️ Estructuras del Proyecto", expanded=True):
 
-        # 2️⃣ Mostrar puntos existentes
-        punto_elegido = None
-        if puntos_existentes:
-            punto_elegido = st.selectbox("📍 Selecciona un Punto existente:", puntos_existentes)
+            # 1️⃣ Detectar puntos ya creados
+            df_actual = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
+            puntos_existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
 
-        # 3️⃣ Botón para crear nuevo punto
-        if st.button("➕ Crear nuevo Punto"):
-            nuevo_num = len(puntos_existentes) + 1
-            punto_elegido = f"Punto {nuevo_num}"
+            # 2️⃣ Mostrar puntos existentes
+            punto_elegido = None
+            if puntos_existentes:
+                punto_elegido = st.selectbox("📍 Selecciona un Punto existente:", puntos_existentes)
 
-            df_nuevo = pd.DataFrame([{"Punto": punto_elegido,
-                                      "Poste": None, "Primario": None, "Secundario": None,
-                                      "Retenidas": None, "Conexiones a tierra": None,
-                                      "Transformadores": None}])
-            df_actual = pd.concat([df_actual, df_nuevo], ignore_index=True)
-            st.session_state["df_puntos"] = df_actual
-            st.success(f"✅ Se creó {punto_elegido}")
+            # 3️⃣ Botón para crear nuevo punto
+            if st.button("➕ Crear nuevo Punto"):
+                nuevo_num = len(puntos_existentes) + 1
+                punto_elegido = f"Punto {nuevo_num}"
 
-        # 4️⃣ Si hay un punto seleccionado → desplegables de estructuras
-        if punto_elegido:
-            st.markdown(f"### ✏️ Editando {punto_elegido}")
-            seleccion = crear_desplegables(opciones)
-            seleccion["Punto"] = punto_elegido
+                df_nuevo = pd.DataFrame([{"Punto": punto_elegido,
+                                          "Poste": None, "Primario": None, "Secundario": None,
+                                          "Retenidas": None, "Conexiones a tierra": None,
+                                          "Transformadores": None}])
+                df_actual = pd.concat([df_actual, df_nuevo], ignore_index=True)
+                st.session_state["df_puntos"] = df_actual
+                st.success(f"✅ Se creó {punto_elegido}")
 
-            if st.button("➕ Agregar materiales al Punto seleccionado"):
-                df_combinado = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
+            # 4️⃣ Si hay un punto seleccionado → desplegables de estructuras
+            if punto_elegido:
+                st.markdown(f"### ✏️ Editando {punto_elegido}")
+                seleccion = crear_desplegables(opciones)
+                seleccion["Punto"] = punto_elegido
 
-                # Consolidar si tiene Materiales y Cantidad
-                if "Material" in df_combinado.columns and "Cantidad" in df_combinado.columns:
-                    df_combinado = (
-                        df_combinado.groupby(["Punto", "Material", "Unidad"], as_index=False)["Cantidad"]
-                        .sum()
-                    )
+                if st.button("➕ Agregar materiales al Punto seleccionado"):
+                    df_combinado = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
 
-                st.session_state["df_puntos"] = df_combinado
-                st.success(f"✅ Se actualizaron materiales en {punto_elegido}")
+                    # Consolidar si tiene Materiales y Cantidad
+                    if "Material" in df_combinado.columns and "Cantidad" in df_combinado.columns:
+                        df_combinado = (
+                            df_combinado.groupby(["Punto", "Material", "Unidad"], as_index=False)["Cantidad"]
+                            .sum()
+                        )
 
-        df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
+                    st.session_state["df_puntos"] = df_combinado
+                    st.success(f"✅ Se actualizaron materiales en {punto_elegido}")
+
+            df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
 
     # 4️⃣ Vista preliminar de datos
     if not df.empty:
