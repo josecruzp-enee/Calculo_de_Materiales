@@ -71,22 +71,27 @@ def formulario_datos_proyecto():
 
 def mostrar_datos_formateados():
     """
-    Muestra los datos del proyecto formateados en Streamlit.
+    Muestra los datos del proyecto formateados en Streamlit en dos columnas.
     """
     datos = st.session_state.get("datos_proyecto", {})
     st.subheader("📑 Datos del Proyecto Actualizados")
 
-    # Mostrar info general primero
-    st.markdown("**📌 Información General**")
-    st.markdown(f"- **Nombre del Proyecto:** {datos.get('nombre_proyecto','')}")
-    st.markdown(f"- **Código / Expediente:** {datos.get('codigo_proyecto','')}")
-    st.markdown(f"- **Nivel de Tensión (kV):** {datos.get('nivel_de_tension','')}")
-    st.markdown(f"- **Responsable / Diseñador:** {datos.get('responsable','')}")
-    st.markdown(f"- **Empresa / Área:** {datos.get('empresa','')}")
+    col1, col2 = st.columns(2)
 
-    st.markdown("**🧵 Calibres Seleccionados**")
-    st.markdown(f"- **Conductor Primario:** {datos.get('calibre_primario','')}")
-    st.markdown(f"- **Conductor Secundario:** {datos.get('calibre_secundario','')}")
-    st.markdown(f"- **Neutro:** {datos.get('calibre_neutro','')}")
-    st.markdown(f"- **Hilo Piloto:** {datos.get('calibre_piloto','')}")
-    st.markdown(f"- **Cable de Retenida:** {datos.get('calibre_retenidas','')}")
+    # -------- Columna izquierda: info general --------
+    with col1:
+        st.markdown("**📌 Información General**")
+        st.markdown(f"- **Nombre del Proyecto:** {datos.get('nombre_proyecto','')}")
+        st.markdown(f"- **Código / Expediente:** {datos.get('codigo_proyecto','')}")
+        st.markdown(f"- **Nivel de Tensión (kV):** {datos.get('nivel_de_tension','')}")
+        st.markdown(f"- **Responsable / Diseñador:** {datos.get('responsable','')}")
+        st.markdown(f"- **Empresa / Área:** {datos.get('empresa','')}")
+
+    # -------- Columna derecha: calibres --------
+    with col2:
+        st.markdown("**🧵 Calibres Seleccionados**")
+        st.markdown(f"- **Conductor Primario:** {datos.get('calibre_primario','')}")
+        st.markdown(f"- **Conductor Secundario:** {datos.get('calibre_secundario','')}")
+        st.markdown(f"- **Neutro:** {datos.get('calibre_neutro','')}")
+        st.markdown(f"- **Hilo Piloto:** {datos.get('calibre_piloto','')}")
+        st.markdown(f"- **Cable de Retenida:** {datos.get('calibre_retenidas','')}")
