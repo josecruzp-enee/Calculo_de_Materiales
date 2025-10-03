@@ -18,7 +18,7 @@ COLUMNAS_BASE = [
 # Helpers
 # ========================
 def resetear_desplegables():
-    """Elimina los keys de los selectbox para que se reinicien."""
+    """Borra valores de selectbox para que vuelvan a 'Seleccionar estructura'."""
     for key in ["sel_poste", "sel_primario", "sel_secundario",
                 "sel_retenidas", "sel_tierra", "sel_transformador"]:
         if key in st.session_state:
@@ -110,8 +110,11 @@ def listas_desplegables():
             st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
 
             st.success(f"✅ {punto} guardado correctamente")
-            resetear_desplegables()
-            st.session_state.pop("punto_en_edicion")
+
+        # 🔄 Resetear selectbox y salir de edición
+        resetear_desplegables()
+        st.session_state.pop("punto_en_edicion")
+        st.rerun()
 
     df = st.session_state["df_puntos"]
 
@@ -177,4 +180,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
