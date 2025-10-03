@@ -35,7 +35,7 @@ def main():
         ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"]
     )
 
-    # Inicialización de session_state
+    # Inicialización
     if "datos_proyecto" not in st.session_state:
         st.session_state["datos_proyecto"] = {}
     if "df_puntos" not in st.session_state:
@@ -88,7 +88,7 @@ def main():
             st.session_state["punto_en_edicion"] = f"Punto {nuevo_num}"
             st.success(f"✏️ {st.session_state['punto_en_edicion']} creado y listo para editar")
 
-        # Seleccionar un punto existente para editar
+        # Seleccionar un punto existente
         if puntos_existentes:
             seleccionado = st.selectbox(
                 "📍 Selecciona un Punto existente:",
@@ -98,7 +98,7 @@ def main():
             if st.button("✏️ Editar Punto seleccionado"):
                 st.session_state["punto_en_edicion"] = seleccionado
 
-        # Si hay un punto en edición → mostrar desplegables
+        # Si hay punto en edición
         if "punto_en_edicion" in st.session_state:
             punto = st.session_state["punto_en_edicion"]
             st.markdown(f"### ✏️ Editando {punto}")
@@ -110,7 +110,7 @@ def main():
                 df_actual = df_actual[df_actual["Punto"] != punto]  # elimina versiones anteriores
                 df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
 
-                # Ordenar por número de punto
+                # Ordenar puntos por número
                 df_actual["orden"] = df_actual["Punto"].str.extract(r'(\d+)').astype(int)
                 df_actual = df_actual.sort_values("orden").drop(columns="orden")
                 st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
@@ -122,7 +122,7 @@ def main():
 
         # 👇 Vista previa dentro de la sección 4
         if not df.empty:
-            st.subheader("📑 Vista de estructuras / materiales")
+            st.markdown("#### 📑 Vista de estructuras / materiales")
             st.dataframe(df, use_container_width=True, hide_index=True)
 
             col1, col2 = st.columns(2)
@@ -131,13 +131,12 @@ def main():
                     st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
                     st.session_state.pop("punto_en_edicion", None)
                     st.success("✅ Se limpiaron todas las estructuras/materiales")
-                    st.rerun()
+
             with col2:
                 punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
                 if st.button("Borrar Punto"):
                     st.session_state["df_puntos"] = df[df["Punto"] != punto_borrar].reset_index(drop=True)
                     st.success(f"✅ Se eliminó {punto_borrar}")
-                    st.rerun()
 
     # ========================
     # 5️⃣ Finalizar Cálculo
@@ -156,3 +155,8 @@ def main():
     if not df.empty:
         st.subheader("6. 📂 Exportación de Reportes")
         generar_pdfs(modo_carga, ruta_estructuras, df)
+
+
+if __name__ == "__main__":
+    main()
+
