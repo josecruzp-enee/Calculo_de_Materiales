@@ -47,7 +47,7 @@ def main():
     formulario_datos_proyecto()
 
     # ========================
-    # 3️⃣ Resumen del proyecto
+    # 3️⃣ Mostrar resumen del proyecto
     # ========================
     mostrar_datos_formateados()
 
@@ -107,8 +107,17 @@ def main():
 
             # Guardar Punto
             if st.button("💾 Guardar Punto"):
-                df_actual = df_actual[df_actual["Punto"] != punto]  # elimina versiones anteriores
+                # eliminar versiones anteriores del mismo punto
+                df_actual = df_actual[df_actual["Punto"] != punto]
+                # agregar nuevo registro
                 df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
+
+                # 👇 ordenar por número de punto
+                df_actual = df_actual.sort_values(
+                    by="Punto",
+                    key=lambda col: col.str.extract(r'(\d+)').astype(int)
+                ).reset_index(drop=True)
+
                 st.session_state["df_puntos"] = df_actual
                 st.success(f"✅ {punto} guardado correctamente")
                 st.session_state.pop("punto_en_edicion")  # salir de edición
@@ -116,11 +125,32 @@ def main():
         df = st.session_state["df_puntos"]
 
     # ========================
-    # 5️⃣ Vista previa + limpieza
+    # 5️⃣ Finalizar Cálculo
     # ========================
     if not df.empty:
-        st.subheader("5. 📑 Vista de estructuras / materiales")
-        st.dataframe(df, use_container_width=True)
+        st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
+
+        if st.button("✅ Finalizar Cálculo"):
+            try:
+                # Aquí puedes invocar tu lógica de procesamiento real
+                st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
+            except Exception as e:
+                st.error(f"❌ Error al finalizar cálculo: {e}")
+
+    # ========================
+    # 6️⃣ Exportación
+    # ========================
+    if not df.empty:
+        st.subheader("6. 📂 Exportación de Reportes")
+        generar_pdfs(modo_carga, ruta_estructuras, df)
+
+    # ========================
+    # Vista previa + limpieza
+    # ========================
+    if not df.empty:
+        st.subheader("📑 Vista de estructuras / materiales")
+        # 👇 mostramos sin índice
+        st.dataframe(df.reset_index(drop=True), use_container_width=True)
 
         col1, col2 = st.columns(2)
         with col1:
@@ -132,31 +162,9 @@ def main():
         with col2:
             punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
             if st.button("Borrar Punto"):
-                st.session_state["df_puntos"] = df[df["Punto"] != punto_borrar]
+                st.session_state["df_puntos"] = df[df["Punto"] != punto_borrar].reset_index(drop=True)
                 st.success(f"✅ Se eliminó {punto_borrar}")
                 st.rerun()
-
-    # ========================
-    # 6️⃣ Finalizar Cálculo
-    # ========================
-    if not df.empty:
-        st.subheader("6. 🏁 Finalizar Cálculo del Proyecto")
-
-        if st.button("✅ Finalizar Cálculo"):
-            try:
-                # Aquí iría tu lógica de procesamiento real (ej: procesar_materiales)
-                st.session_state["calculo_finalizado"] = True
-                st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
-            except Exception as e:
-                st.error(f"❌ Error al finalizar cálculo: {e}")
-
-    # ========================
-    # 7️⃣ Exportación
-    # ========================
-    if not df.empty and st.session_state.get("calculo_finalizado", False):
-        st.subheader("7. 📂 Exportación de Reportes")
-        generar_pdfs(modo_carga, ruta_estructuras, df)
-
 
 if __name__ == "__main__":
     main()
