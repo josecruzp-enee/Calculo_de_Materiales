@@ -1,173 +1,50 @@
-# app.py
-# -*- coding: utf-8 -*-
-"""
-Aplicación Streamlit para:
-1. Subir Excel del proyecto (estructuras_lista.xlsx)
-2. Usar base de datos de materiales interna (Estructura_datos.xlsx)
-3. Procesar materiales con reglas de reemplazo
-4. Exportar resúmenes en Excel y PDF
-5. Construir estructuras desde listas desplegables (índice)
-"""
-
-import streamlit as st
+# modulo/desplegables.py
+import os
 import pandas as pd
+import streamlit as st
 
-from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
-from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
-from modulo.generar_pdfs import generar_pdfs
-from modulo.entradas import cargar_estructuras_proyectadas
+# Ruta al Excel
+RUTA_EXCEL = os.path.join(os.path.dirname(__file__), "Estructura_datos.xlsx")
 
-# 👇 columnas base ajustadas a tu Excel
-COLUMNAS_BASE = [
-    "Punto", "Poste", "Primario", "Secundario",
-    "Retenidas", "Conexiones a tierra", "Transformadores"
-]
+def cargar_opciones():
+    """Lee la hoja 'indice' y organiza opciones por Clasificación."""
+    df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
+    df.columns = df.columns.str.strip()
 
-# Función para ordenar puntos correctamente
-def ordenar_puntos(df):
-    try:
-        df = df.copy()
-        df["orden"] = df["Punto"].str.extract(r"(\d+)").astype(int)
-        df = df.sort_values("orden").drop(columns="orden")
-        return df.reset_index(drop=True)
-    except Exception:
-        return df.reset_index(drop=True)
+    clas_col = "Clasificación" if "Clasificación" in df.columns else "Clasificacion"
+    cod_col  = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
+    desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
 
-def main():
-    st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
-    st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
+    opciones = {}
+    for clasificacion in df[clas_col].dropna().unique():
+        subset = df[df[clas_col] == clasificacion]
+        codigos = subset[cod_col].dropna().tolist()
+        etiquetas = {
+            row[cod_col]: f"{row[cod_col]} – {row[desc_col]}"
+            for _, row in subset.iterrows() if pd.notna(row[cod_col])
+        }
+        opciones[clasificacion] = {"valores": codigos, "etiquetas": etiquetas}
 
-    # ========================
-    # 1️⃣ Modo de carga
-    # ========================
-    modo_carga = st.radio(
-        "Selecciona modo de carga:",
-        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"]
-    )
+    return opciones
 
-    # Inicialización de session_state
-    if "datos_proyecto" not in st.session_state:
-        st.session_state["datos_proyecto"] = {}
-    if "df_puntos" not in st.session_state:
-        st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
+def crear_desplegables(opciones):
+    """Crea selectbox para cada tipo de estructura."""
+    seleccion = {}
 
-    # ========================
-    # 2️⃣ Datos del proyecto
-    # ========================
-    formulario_datos_proyecto()
+    def selectbox_con_etiquetas(label, datos):
+        if not datos:
+            return None
+        return st.selectbox(
+            label,
+            options=["Seleccionar estructura"] + datos["valores"],
+            format_func=lambda x: datos["etiquetas"].get(x, x) if x in datos["valores"] else x
+        )
 
-    # ========================
-    # 3️⃣ Mostrar resumen del proyecto
-    # ========================
-    mostrar_datos_formateados()
+    seleccion["Poste"] = selectbox_con_etiquetas("Selecciona Poste:", opciones.get("Poste"))
+    seleccion["Primario"] = selectbox_con_etiquetas("Selecciona Primario:", opciones.get("Primaria"))
+    seleccion["Secundario"] = selectbox_con_etiquetas("Selecciona Secundario:", opciones.get("Secundaria"))
+    seleccion["Retenidas"] = selectbox_con_etiquetas("Selecciona Retenida:", opciones.get("Retenida"))
+    seleccion["Conexiones a tierra"] = selectbox_con_etiquetas("Selecciona Aterrizaje:", opciones.get("Aterrizaje"))
+    seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformador"))
 
-    # ========================
-    # 4️⃣ Entrada de estructuras
-    # ========================
-    df = pd.DataFrame(columns=COLUMNAS_BASE)
-    ruta_estructuras = None
-
-    if modo_carga == "Desde archivo Excel":
-        archivo_estructuras = st.file_uploader("Archivo de estructuras", type=["xlsx"])
-        if archivo_estructuras:
-            ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
-            try:
-                df = cargar_estructuras_proyectadas(ruta_estructuras)
-                st.success("✅ Hoja 'estructuras' leída correctamente")
-            except Exception as e:
-                st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
-
-    elif modo_carga == "Pegar tabla":
-        texto_pegado = st.text_area("Pega aquí tu tabla CSV/tabulado", height=200)
-        if texto_pegado:
-            df = pegar_texto_a_df(texto_pegado, COLUMNAS_BASE)
-            st.success(f"✅ Tabla cargada con {len(df)} filas")
-
-    elif modo_carga == "Listas desplegables":
-        from modulo.desplegables import cargar_opciones, crear_desplegables
-        opciones = cargar_opciones()
-
-        st.subheader("4. 🏗️ Estructuras del Proyecto")
-
-        df_actual = st.session_state["df_puntos"]
-        puntos_existentes = df_actual["Punto"].unique().tolist()
-
-        # Crear nuevo punto
-        if st.button("🆕 Crear nuevo Punto"):
-            nuevo_num = len(puntos_existentes) + 1
-            st.session_state["punto_en_edicion"] = f"Punto {nuevo_num}"
-            st.success(f"✏️ {st.session_state['punto_en_edicion']} creado y listo para editar")
-
-        # Seleccionar un punto existente para editar
-        if puntos_existentes:
-            seleccionado = st.selectbox(
-                "📍 Selecciona un Punto existente:",
-                puntos_existentes,
-                index=0
-            )
-            if st.button("✏️ Editar Punto seleccionado"):
-                st.session_state["punto_en_edicion"] = seleccionado
-
-        # Si hay un punto en edición → mostrar desplegables
-        if "punto_en_edicion" in st.session_state:
-            punto = st.session_state["punto_en_edicion"]
-            st.markdown(f"### ✏️ Editando {punto}")
-            seleccion = crear_desplegables(opciones)
-            seleccion["Punto"] = punto
-
-            # Guardar Punto
-            if st.button("💾 Guardar Punto"):
-                df_actual = df_actual[df_actual["Punto"] != punto]  # elimina versiones anteriores
-                df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
-                st.session_state["df_puntos"] = ordenar_puntos(df_actual)
-                st.success(f"✅ {punto} guardado correctamente")
-                st.session_state.pop("punto_en_edicion")  # salir de edición
-
-        df = st.session_state["df_puntos"]
-
-        # 👇 Vista previa integrada dentro de la sección 4
-        if not df.empty:
-            st.markdown("#### 4.2 📑 Vista previa de estructuras / materiales")
-            st.dataframe(df.reset_index(drop=True), use_container_width=True)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🧹 Limpiar todo"):
-                    st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
-                    st.session_state.pop("punto_en_edicion", None)
-                    st.success("✅ Se limpiaron todas las estructuras/materiales")
-                    st.rerun()
-            with col2:
-                punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
-                if st.button("Borrar Punto"):
-                    df_filtrado = df[df["Punto"] != punto_borrar]
-                    st.session_state["df_puntos"] = ordenar_puntos(df_filtrado)
-                    st.success(f"✅ Se eliminó {punto_borrar}")
-                    st.rerun()
-
-    # ========================
-    # 5️⃣ Finalizar Cálculo
-    # ========================
-    if not df.empty:
-        st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
-
-        if st.button("✅ Finalizar Cálculo"):
-            try:
-                # Aquí puedes invocar tu lógica de procesamiento
-                st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
-            except Exception as e:
-                st.error(f"❌ Error al finalizar cálculo: {e}")
-
-    # ========================
-    # 6️⃣ Exportación
-    # ========================
-    if not df.empty:
-        st.subheader("6. 📂 Exportación de Reportes")
-        generar_pdfs(modo_carga, ruta_estructuras, df)
-
-
-if __name__ == "__main__":
-    main()
-
-
-
+    return seleccion
