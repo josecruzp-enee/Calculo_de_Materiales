@@ -66,12 +66,12 @@ def main():
 
         if st.button("Agregar Punto"):
             num_punto = len(st.session_state.get("df_puntos", [])) + 1
-            seleccion["Punto"] = f"Punto {num_punto}"  # numeración automática
+            seleccion["Punto"] = f"Punto {num_punto}"  # aquí numeramos automáticamente
             st.session_state["df_puntos"] = pd.concat(
                 [st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE)),
                  pd.DataFrame([seleccion])],
                 ignore_index=True
-            )
+                )
         df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
 
     # 4️⃣ Vista preliminar de datos
@@ -79,30 +79,9 @@ def main():
         st.subheader("📑 Vista de estructuras")
         st.dataframe(df, use_container_width=True)
 
-        # 5️⃣ Exportación
-        # Agrupar estructuras repetidas
-        df_agrupado = (
-            df.groupby(
-                ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"],
-                as_index=False
-            )
-            .first()
-        )
-
-        # Agrupar materiales por Punto si existen esas columnas
-        if "Material" in df.columns and "Cantidad" in df.columns:
-            df_export = (
-                df.groupby(["Punto", "Material", "Unidad"], as_index=False)["Cantidad"]
-                  .sum()
-            )
-        else:
-            df_export = df_agrupado
-
-        # Generar PDFs
-        if not df_export.empty:
-            generar_pdfs(modo_carga, ruta_estructuras, df_export)
-        else:
-            st.warning("⚠️ No hay estructuras/materiales para exportar.")
+    # 5️⃣ Exportación
+    if not df.empty:
+        generar_pdfs(modo_carga, ruta_estructuras, df)
 
 if __name__ == "__main__":
     main()
