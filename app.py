@@ -66,7 +66,7 @@ def main():
 
         if st.button("Agregar Punto"):
             num_punto = len(st.session_state.get("df_puntos", [])) + 1
-            seleccion["Punto"] = f"Punto {num_punto}"  # le pones el nombre explícito
+            seleccion["Punto"] = f"Punto {num_punto}"  # aquí numeramos automáticamente
             st.session_state["df_puntos"] = pd.concat(
                 [st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE)),
                  pd.DataFrame([seleccion])],
@@ -85,4 +85,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
