@@ -39,7 +39,7 @@ def formulario_datos_proyecto():
     1. Información general del proyecto
     2. Selección de calibres de conductores
     """
-    st.subheader("📝 Datos del Proyecto")
+    st.subheader("1. 📝 Datos del Proyecto")
 
     # Cargar datos previos o por defecto
     datos = st.session_state.get("datos_proyecto", obtener_datos_proyecto_defecto())
@@ -55,7 +55,7 @@ def formulario_datos_proyecto():
     st.divider()
 
     # ---------------- SECCIÓN 2: CALIBRES ----------------
-    st.markdown("### 🧵 Selección de Calibres")
+    st.markdown("2. ### 🧵 Selección de Calibres")
     calibres = cargar_calibres_desde_excel()
     calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
 
