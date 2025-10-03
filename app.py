@@ -1,14 +1,5 @@
 # app.py
 # -*- coding: utf-8 -*-
-"""
-Aplicación Streamlit para:
-1. Subir Excel del proyecto (estructuras_lista.xlsx)
-2. Usar base de datos de materiales interna (Estructura_datos.xlsx)
-3. Procesar materiales con reglas de reemplazo
-4. Exportar resúmenes en Excel y PDF
-5. Construir estructuras desde listas desplegables (índice)
-"""
-
 import streamlit as st
 import pandas as pd
 
@@ -23,22 +14,14 @@ COLUMNAS_BASE = [
     "Retenidas", "Conexiones a tierra", "Transformadores"
 ]
 
-# app.py
-# -*- coding: utf-8 -*-
-import streamlit as st
-import pandas as pd
-
-from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
-from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
-from modulo.generar_pdfs import generar_pdfs
-from modulo.entradas import cargar_estructuras_proyectadas
-
-# 👇 columnas base ajustadas a tu Excel
-COLUMNAS_BASE = [
-    "Punto", "Poste", "Primario", "Secundario",
-    "Retenidas", "Conexiones a tierra", "Transformadores"
-]
-
+# ========================
+# Helpers
+# ========================
+def resetear_desplegables():
+    """Resetea todos los selectbox de estructuras a 'Seleccionar estructura'."""
+    for key in ["sel_poste", "sel_primario", "sel_secundario",
+                "sel_retenidas", "sel_tierra", "sel_transformador"]:
+        st.session_state[key] = "Seleccionar estructura"
 
 # ========================
 # Datos del proyecto
@@ -46,7 +29,6 @@ COLUMNAS_BASE = [
 def seccion_datos_proyecto():
     formulario_datos_proyecto()
     mostrar_datos_formateados()
-
 
 # ========================
 # Entrada de estructuras
@@ -66,7 +48,6 @@ def seccion_entrada_estructuras(modo_carga):
 
     return df, ruta_estructuras
 
-
 def cargar_desde_excel():
     archivo_estructuras = st.file_uploader("Archivo de estructuras", type=["xlsx"])
     if archivo_estructuras:
@@ -79,7 +60,6 @@ def cargar_desde_excel():
             st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
     return pd.DataFrame(columns=COLUMNAS_BASE), None
 
-
 def pegar_tabla():
     texto_pegado = st.text_area("Pega aquí tu tabla CSV/tabulado", height=200)
     if texto_pegado:
@@ -87,7 +67,6 @@ def pegar_tabla():
         st.success(f"✅ Tabla cargada con {len(df)} filas")
         return df
     return pd.DataFrame(columns=COLUMNAS_BASE)
-
 
 def listas_desplegables():
     from modulo.desplegables import cargar_opciones, crear_desplegables
@@ -103,12 +82,14 @@ def listas_desplegables():
         nuevo_num = len(puntos_existentes) + 1
         st.session_state["punto_en_edicion"] = f"Punto {nuevo_num}"
         st.success(f"✏️ {st.session_state['punto_en_edicion']} creado y listo para editar")
+        resetear_desplegables()
 
     # Seleccionar un punto existente
     if puntos_existentes:
         seleccionado = st.selectbox("📍 Selecciona un Punto existente:", puntos_existentes, index=0)
         if st.button("✏️ Editar Punto seleccionado"):
             st.session_state["punto_en_edicion"] = seleccionado
+            resetear_desplegables()
 
     # Si hay punto en edición
     if "punto_en_edicion" in st.session_state:
@@ -127,6 +108,7 @@ def listas_desplegables():
             st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
 
             st.success(f"✅ {punto} guardado correctamente")
+            resetear_desplegables()
             st.session_state.pop("punto_en_edicion")
 
     df = st.session_state["df_puntos"]
@@ -141,6 +123,7 @@ def listas_desplegables():
             if st.button("🧹 Limpiar todo"):
                 st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
                 st.session_state.pop("punto_en_edicion", None)
+                resetear_desplegables()
                 st.success("✅ Se limpiaron todas las estructuras/materiales")
         with col2:
             punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
@@ -149,7 +132,6 @@ def listas_desplegables():
                 st.success(f"✅ Se eliminó {punto_borrar}")
 
     return df
-
 
 # ========================
 # Finalizar cálculo
@@ -163,7 +145,6 @@ def seccion_finalizar_calculo(df):
             except Exception as e:
                 st.error(f"❌ Error al finalizar cálculo: {e}")
 
-
 # ========================
 # Exportación
 # ========================
@@ -171,7 +152,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras):
     if not df.empty:
         st.subheader("6. 📂 Exportación de Reportes")
         generar_pdfs(modo_carga, ruta_estructuras, df)
-
 
 # ========================
 # MAIN
@@ -195,4 +175,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
