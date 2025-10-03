@@ -23,14 +23,15 @@ COLUMNAS_BASE = [
     "Retenidas", "Conexiones a tierra", "Transformadores"
 ]
 
+# Función para ordenar puntos correctamente
 def ordenar_puntos(df):
-    """
-    Ordena el DataFrame por número de punto (Punto 1, Punto 2, ...).
-    """
-    if not df.empty and "Punto" in df.columns:
-        df["_num"] = df["Punto"].str.extract(r'(\d+)').astype(float)
-        df = df.sort_values("_num").drop(columns="_num").reset_index(drop=True)
-    return df
+    try:
+        df = df.copy()
+        df["orden"] = df["Punto"].str.extract(r"(\d+)").astype(int)
+        df = df.sort_values("orden").drop(columns="orden")
+        return df.reset_index(drop=True)
+    except Exception:
+        return df.reset_index(drop=True)
 
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
@@ -118,11 +119,31 @@ def main():
             if st.button("💾 Guardar Punto"):
                 df_actual = df_actual[df_actual["Punto"] != punto]  # elimina versiones anteriores
                 df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
-                st.session_state["df_puntos"] = ordenar_puntos(df_actual)  # 👈 ordenar después de guardar
+                st.session_state["df_puntos"] = ordenar_puntos(df_actual)
                 st.success(f"✅ {punto} guardado correctamente")
                 st.session_state.pop("punto_en_edicion")  # salir de edición
 
         df = st.session_state["df_puntos"]
+
+        # 👇 Vista previa integrada dentro de la sección 4
+        if not df.empty:
+            st.markdown("#### 4.2 📑 Vista previa de estructuras / materiales")
+            st.dataframe(df.reset_index(drop=True), use_container_width=True)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🧹 Limpiar todo"):
+                    st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
+                    st.session_state.pop("punto_en_edicion", None)
+                    st.success("✅ Se limpiaron todas las estructuras/materiales")
+                    st.rerun()
+            with col2:
+                punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
+                if st.button("Borrar Punto"):
+                    df_filtrado = df[df["Punto"] != punto_borrar]
+                    st.session_state["df_puntos"] = ordenar_puntos(df_filtrado)
+                    st.success(f"✅ Se eliminó {punto_borrar}")
+                    st.rerun()
 
     # ========================
     # 5️⃣ Finalizar Cálculo
@@ -132,6 +153,7 @@ def main():
 
         if st.button("✅ Finalizar Cálculo"):
             try:
+                # Aquí puedes invocar tu lógica de procesamiento
                 st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
             except Exception as e:
                 st.error(f"❌ Error al finalizar cálculo: {e}")
@@ -143,28 +165,6 @@ def main():
         st.subheader("6. 📂 Exportación de Reportes")
         generar_pdfs(modo_carga, ruta_estructuras, df)
 
-    # ========================
-    # Vista previa + limpieza
-    # ========================
-    if not df.empty:
-        st.subheader("📑 Vista de estructuras / materiales")
-        # 👇 Ocultar índice
-        st.dataframe(df.reset_index(drop=True), use_container_width=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🧹 Limpiar todo"):
-                st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
-                st.session_state.pop("punto_en_edicion", None)
-                st.success("✅ Se limpiaron todas las estructuras/materiales")
-                st.rerun()
-        with col2:
-            punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
-            if st.button("Borrar Punto"):
-                df_filtrado = df[df["Punto"] != punto_borrar]
-                st.session_state["df_puntos"] = ordenar_puntos(df_filtrado)
-                st.success(f"✅ Se eliminó {punto_borrar}")
-                st.rerun()
 
 if __name__ == "__main__":
     main()
