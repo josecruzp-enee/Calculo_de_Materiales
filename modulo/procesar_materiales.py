@@ -61,7 +61,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
     df_resumen_por_punto = calcular_materiales_por_punto(archivo_materiales, estructuras_por_punto, tension)
 
-    # 🔍 DEBUG: mostrar conteo y primeras filas
+    '''# 🔍 DEBUG: mostrar conteo y primeras filas
     log(f"🔎 df_total: {len(df_total)} filas")
     if not df_total.empty:
         log(df_total.head())
@@ -76,6 +76,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
 
     log(f"🔎 df_resumen_por_punto: {len(df_resumen_por_punto)} filas")
     if not df_resumen_por_punto.empty:
-        log(df_resumen_por_punto.head())
+        log(df_resumen_por_punto.head())'''
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
