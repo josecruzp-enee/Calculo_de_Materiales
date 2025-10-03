@@ -110,10 +110,25 @@ def main():
 
         df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
 
-    # 4️⃣ Vista preliminar de datos
+    # 4️⃣ Vista preliminar de datos + botones de limpieza
     if not df.empty:
         st.subheader("📑 Vista de estructuras / materiales")
         st.dataframe(df, use_container_width=True)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("🧹 Limpiar todos los listados"):
+                st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
+                st.success("✅ Se limpiaron todas las estructuras/materiales")
+
+        with col2:
+            if "Punto" in df.columns:
+                punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
+                if st.button("Borrar Punto seleccionado"):
+                    df_filtrado = df[df["Punto"] != punto_borrar]
+                    st.session_state["df_puntos"] = df_filtrado
+                    st.success(f"✅ Se eliminó {punto_borrar}")
 
     # 5️⃣ Exportación
     if not df.empty:
