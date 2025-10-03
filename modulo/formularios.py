@@ -74,7 +74,7 @@ def mostrar_datos_formateados():
     Muestra los datos del proyecto formateados en Streamlit en dos columnas.
     """
     datos = st.session_state.get("datos_proyecto", {})
-    st.subheader("📑 Datos del Proyecto Actualizados")
+    st.subheader("3. 📑 Datos del Proyecto Actualizados")
 
     col1, col2 = st.columns(2)
 
