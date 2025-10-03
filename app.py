@@ -84,6 +84,7 @@ def listas_desplegables():
         nuevo_num = len(puntos_existentes) + 1
         st.session_state["punto_en_edicion"] = f"Punto {nuevo_num}"
         st.success(f"✏️ {st.session_state['punto_en_edicion']} creado y listo para editar")
+        # 🔹 Solo reseteo desplegables, NO borro punto_en_edicion
         resetear_desplegables()
 
     # Seleccionar un punto existente
@@ -111,10 +112,10 @@ def listas_desplegables():
 
             st.success(f"✅ {punto} guardado correctamente")
 
-        # 🔄 Resetear selectbox y salir de edición
-        resetear_desplegables()
-        st.session_state.pop("punto_en_edicion")
-        st.rerun()
+            # 🔹 Ahora sí reseteo y cierro edición
+            resetear_desplegables()
+            st.session_state.pop("punto_en_edicion")
+            st.rerun()
 
     df = st.session_state["df_puntos"]
 
@@ -180,5 +181,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
