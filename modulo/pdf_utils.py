@@ -122,7 +122,11 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     buffer.seek(0)
     return buffer
 
-def generar_pdf_estructuras(df_estructuras, nombre_proy):
+def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
+    """
+    Genera un PDF con el resumen total de estructuras (sumadas),
+    sin separar por puntos.
+    """
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -134,16 +138,53 @@ def generar_pdf_estructuras(df_estructuras, nombre_proy):
     elems.append(Paragraph(f"<b>Resumen de Estructuras - Proyecto: {nombre_proy}</b>", styles["Title"]))
     elems.append(Spacer(1, 12))
 
-    # Construir tabla con cabecera
+    data = [["Estructura", "Descripción", "Cantidad"]]
+    for _, row in df_estructuras.iterrows():
+        data.append([
+            str(row["NombreEstructura"]),
+            str(row["Descripcion"]).capitalize(),
+            str(row["Cantidad"])
+        ])
+
+    tabla = Table(data, colWidths=[1.5*inch, 4*inch, 1*inch])
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+    ]))
+    elems.append(tabla)
+
+    doc.build(elems)
+    buffer.seek(0)
+    return buffer
+
+
+def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
+    """
+    Genera un PDF de estructuras agrupadas por Punto.
+    Cada punto aparece como fila centrada y debajo sus estructuras.
+    """
+    buffer = BytesIO()
+    doc = BaseDocTemplate(buffer, pagesize=letter)
+
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
+    template = PageTemplate(id="con_fondo", frames=[frame], onPage=fondo_pagina)
+    doc.addPageTemplates([template])
+
+    elems = []
+    elems.append(Paragraph(f"<b>Estructuras por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]))
+    elems.append(Spacer(1, 12))
+
     data = [["Estructura", "Descripción", "Cantidad"]]
 
     # Recorremos por punto
-    puntos = df_estructuras["Punto"].unique()
+    puntos = df_por_punto["Punto"].unique()
     for p in puntos:
         # Fila de título del punto
         data.append([f"Punto {p}", "", ""])
-        # Estructuras asociadas a este punto
-        df_p = df_estructuras[df_estructuras["Punto"] == p]
+        # Filas de estructuras
+        df_p = df_por_punto[df_por_p["Punto"] == p]
         for _, row in df_p.iterrows():
             data.append([
                 str(row["NombreEstructura"]),
@@ -153,7 +194,7 @@ def generar_pdf_estructuras(df_estructuras, nombre_proy):
 
     tabla = Table(data, colWidths=[1.5*inch, 4*inch, 1*inch])
 
-    # Estilos base
+    # Estilos
     estilos = [
         ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
         ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
@@ -172,8 +213,7 @@ def generar_pdf_estructuras(df_estructuras, nombre_proy):
             ("ALIGN", (0,row_idx), (-1,row_idx), "CENTER"),
             ("FONTNAME", (0,row_idx), (-1,row_idx), "Helvetica-Bold")
         ]
-        # avanzar filas: 1 (fila de punto) + estructuras de ese punto
-        row_idx += 1 + len(df_estructuras[df_estructuras["Punto"] == p])
+        row_idx += 1 + len(df_por_punto[df_por_punto["Punto"] == p])
 
     tabla.setStyle(TableStyle(estilos))
     elems.append(tabla)
@@ -181,7 +221,6 @@ def generar_pdf_estructuras(df_estructuras, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
-
 
 def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_punto=None, df_indice=None):
     """
@@ -338,6 +377,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
