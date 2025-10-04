@@ -25,7 +25,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # raíz del proyecto
 def fondo_pagina(canvas, doc):
     try:
         canvas.saveState()
-        fondo = os.path.join(BASE_DIR, "modulos", "Imagen Encabezado.jpg")
+        fondo = os.path.join(BASE_DIR, "modulo", "Imagen Encabezado.jpg"))
         ancho, alto = letter
         if os.path.exists(fondo):
             canvas.drawImage(fondo, 0, 0, width=ancho, height=alto, mask="auto")
@@ -340,5 +340,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
