@@ -25,7 +25,9 @@ def procesar_materiales(
     datos_proyecto=None
 ):
     if archivo_estructuras:
-        datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
+        # ✅ Solo cargar datos del archivo si no fueron proporcionados desde la interfaz
+        if not datos_proyecto:
+            datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
         df_estructuras = cargar_estructuras_proyectadas(archivo_estructuras)
     elif estructuras_df is not None:
         datos_proyecto = datos_proyecto or {}
@@ -130,5 +132,6 @@ def procesar_materiales(
         df_resumen_por_punto,
         datos_proyecto
     )
+
 
 
