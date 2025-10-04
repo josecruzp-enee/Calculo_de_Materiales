@@ -302,11 +302,17 @@ def main():
     # ======================
     seccion_datos_proyecto()
 
-   
-
-
+    # ======================
     # 2️⃣ Configuración y Calibres de Conductores
-    seccion_cables()
+    # ======================
+    cables_registrados = seccion_cables()
+
+    # Guardar en los datos del proyecto
+    if cables_registrados:
+        if "datos_proyecto" not in st.session_state:
+            st.session_state["datos_proyecto"] = {}
+
+        st.session_state["datos_proyecto"]["cables_proyecto"] = cables_registrados
 
     # ======================
     # 4️⃣ Carga de estructuras
@@ -327,6 +333,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
