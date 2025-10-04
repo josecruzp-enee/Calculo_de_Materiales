@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+import os
 
 from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
@@ -14,6 +15,11 @@ COLUMNAS_BASE = [
     "Punto", "Poste", "Primario", "Secundario",
     "Retenidas", "Conexiones a tierra", "Transformadores"
 ]
+
+# 📌 Ruta fija al Excel base de materiales
+BASE_DIR = os.path.dirname(__file__)
+RUTA_DATOS_MATERIALES = os.path.join(BASE_DIR, "estructura_datos.xlsx")
+
 
 # ========================
 # Helpers
@@ -33,6 +39,7 @@ def seccion_datos_proyecto():
     formulario_datos_proyecto()
     mostrar_datos_formateados()
 
+
 # ========================
 # Entrada de estructuras
 # ========================
@@ -51,6 +58,7 @@ def seccion_entrada_estructuras(modo_carga):
 
     return df, ruta_estructuras
 
+
 def cargar_desde_excel():
     archivo_estructuras = st.file_uploader("Archivo de estructuras", type=["xlsx"])
     if archivo_estructuras:
@@ -63,6 +71,7 @@ def cargar_desde_excel():
             st.error(f"❌ No se pudo leer la hoja 'estructuras': {e}")
     return pd.DataFrame(columns=COLUMNAS_BASE), None
 
+
 def pegar_tabla():
     texto_pegado = st.text_area("Pega aquí tu tabla CSV/tabulado", height=200)
     if texto_pegado:
@@ -70,6 +79,7 @@ def pegar_tabla():
         st.success(f"✅ Tabla cargada con {len(df)} filas")
         return df
     return pd.DataFrame(columns=COLUMNAS_BASE)
+
 
 def listas_desplegables():
     from modulo.desplegables import cargar_opciones, crear_desplegables
@@ -153,6 +163,7 @@ def listas_desplegables():
 
     return df
 
+
 # ========================
 # Finalizar cálculo
 # ========================
@@ -186,6 +197,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"], "Materiales_Por_Punto.pdf", "application/pdf")
             st.download_button("📄 Descargar Informe Completo", pdfs["completo"], "Informe_Completo.pdf", "application/pdf")
 
+
 # ========================
 # MAIN
 # ========================
@@ -203,15 +215,8 @@ def main():
     seccion_datos_proyecto()
     df, ruta_estructuras = seccion_entrada_estructuras(modo_carga)
     seccion_finalizar_calculo(df)
-    seccion_exportacion(df, modo_carga, ruta_estructuras)
+    seccion_exportacion(df, modo_carga, ruta_estructuras, RUTA_DATOS_MATERIALES)
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
