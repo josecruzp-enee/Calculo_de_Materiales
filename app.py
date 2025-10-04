@@ -291,10 +291,7 @@ def main():
     # ======================
     seccion_datos_proyecto()
 
-    # ======================
-    # 2️⃣ Selección de calibres
-    # ======================
-    calibres_seleccionados = seleccionar_calibres_formulario(st.session_state["datos_proyecto"])
+   
 
 
     # ======================
@@ -321,6 +318,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
