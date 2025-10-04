@@ -235,6 +235,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
 
 # === PDF completo consolidado ===
 def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_mat_por_punto, datos_proyecto):
+    from modulo.configuracion_cables import tabla_cables_pdf
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
@@ -260,4 +261,5 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
