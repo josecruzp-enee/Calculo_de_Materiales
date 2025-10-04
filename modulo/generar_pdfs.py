@@ -49,8 +49,7 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
             df_resumen,
             df_estructuras_resumen,
             df_resumen_por_punto,
-            datos_proyecto,
-            df_adicionales=df_adicionales  # 👈 nuevo parámetro
+            datos_proyecto
         ),
     }
 
