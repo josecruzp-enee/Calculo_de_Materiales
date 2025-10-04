@@ -184,7 +184,7 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
         # Fila de título del punto
         data.append([f"Punto {p}", "", ""])
         # Filas de estructuras
-        df_p = df_por_punto[df_por_p["Punto"] == p]
+        df_p = df_por_punto[df_por_punto["Punto"] == p]
         for _, row in df_p.iterrows():
             data.append([
                 str(row["NombreEstructura"]),
@@ -418,3 +418,4 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
