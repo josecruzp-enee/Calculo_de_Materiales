@@ -138,7 +138,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     data = [["Estructura", "Descripción", "Cantidad"]]
     for _, row in df_estructuras.iterrows():
         data.append([
-            str(row.get("NombreEstructura", row.get("CodigoEstructura", ""))),
+            str(row.get("codigodeestructura", "")),
             str(row.get("Descripcion", "")).capitalize(),
             str(row.get("Cantidad", ""))
         ])
@@ -176,7 +176,7 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         for _, row in df_p.iterrows():
             data.append([
-                str(row.get("NombreEstructura", row.get("CodigoEstructura", ""))),
+                str(row.get("codigodeestructura", "")),
                 str(row.get("Descripcion", "")).capitalize(),
                 str(row.get("Cantidad", ""))
             ])
@@ -255,7 +255,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         for _, row in df_p.iterrows():
             data_est_p.append([
-                str(row.get("NombreEstructura", row.get("CodigoEstructura", ""))),
+                str(row.get("codigodeestructura", "")),
                 str(row.get("Descripcion", "")).capitalize(),
                 str(row.get("Cantidad", ""))
             ])
@@ -289,7 +289,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     data_est = [["Estructura", "Descripción", "Cantidad"]]
     for _, row in df_estructuras.iterrows():
         data_est.append([
-            str(row.get("NombreEstructura", row.get("CodigoEstructura", ""))),
+            str(row.get("codigodeestructura", "")),
             str(row.get("Descripcion", "")).capitalize(),
             str(row.get("Cantidad", ""))
         ])
@@ -386,6 +386,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
