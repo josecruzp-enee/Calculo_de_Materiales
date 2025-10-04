@@ -197,14 +197,19 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
     elems.append(Spacer(1, 12))
 
     data = [["Estructura", "Descripción", "Cantidad"]]
+
+    # Asegurar que existen columnas esperadas, si no, usar Materiales
+    col_codigo = "codigodeestructura" if "codigodeestructura" in df_por_punto.columns else "Materiales"
+    col_desc   = "Descripcion" if "Descripcion" in df_por_punto.columns else "Materiales"
+
     puntos = df_por_punto["Punto"].unique()
     for p in puntos:
         data.append([f"Punto {p}", "", ""])
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         for _, row in df_p.iterrows():
             data.append([
-                str(row.get("codigodeestructura", "")),
-                str(row.get("Descripcion", "")).capitalize(),
+                str(row.get(col_codigo, "")),
+                str(row.get(col_desc, "")).capitalize(),
                 str(row.get("Cantidad", ""))
             ])
 
@@ -233,6 +238,7 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
     """
@@ -452,6 +458,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
