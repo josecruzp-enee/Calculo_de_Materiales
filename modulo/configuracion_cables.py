@@ -23,7 +23,7 @@ from reportlab.lib.units import inch
 # =====================================================
 def seccion_cables():
     """Permite ingresar la configuración de cables del proyecto en Streamlit."""
-    st.markdown("2.### ⚡ Configuración y Calibres de Conductores")
+    st.markdown("### 2. ⚡ Configuración y Calibres de Conductores")
 
     # Campos en una sola fila
     col1, col2, col3, col4 = st.columns([1.5, 1, 1.2, 1.2])
