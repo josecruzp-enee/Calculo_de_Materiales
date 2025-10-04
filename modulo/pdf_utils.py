@@ -286,11 +286,12 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_
 
 def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     """
-    Genera el informe completo en PDF:
-    - Portada con información del proyecto
-    - Resumen de materiales
-    - Resumen de estructuras
-    - Materiales por punto (agrupados)
+    Genera el informe completo en PDF en este orden:
+    1. Portada con información del proyecto
+    2. Resumen de materiales (global)
+    3. Estructuras por punto
+    4. Resumen de estructuras (global)
+    5. Materiales por punto
     """
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
@@ -302,83 +303,118 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     # 1️⃣ Portada
     elems += hoja_info_proyecto(datos_proyecto)
 
-    # 2️⃣ Resumen de materiales (agrupados)
+    # 2️⃣ Resumen de materiales (global)
     elems.append(Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"]))
-    elems.append(Spacer(1,12))
+    elems.append(Spacer(1, 12))
 
-    df_agrupado_mat = df_mat.groupby(["Materiales","Unidad"], as_index=False)["Cantidad"].sum()
-    data_mat = [["Material","Unidad","Cantidad"]]
+    df_agrupado_mat = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+    data_mat = [["Material", "Unidad", "Cantidad"]]
     for _, row in df_agrupado_mat.iterrows():
         data_mat.append([Paragraph(formatear_material(row["Materiales"]), styleN),
                          row["Unidad"],
-                         round(row["Cantidad"],2)])
-    tabla_mat = Table(data_mat, colWidths=[250,100,100])
+                         round(row["Cantidad"], 2)])
+    tabla_mat = Table(data_mat, colWidths=[250, 100, 100])
     tabla_mat.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1),0.5,colors.black),
-        ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
-        ("ALIGN",(1,1),(-1,-1),"CENTER"),
-        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-        ("FONTSIZE",(0,0),(-1,-1),8),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("ALIGN", (1,1), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
     ]))
     elems.append(tabla_mat)
     elems.append(PageBreak())
 
-    # 3️⃣ Resumen de estructuras
-    elems.append(Paragraph("<b>Resumen de Estructuras</b>", styles["Heading2"]))
-    elems.append(Spacer(1,12))
+    # 3️⃣ Estructuras por punto
+    elems.append(Paragraph("<b>Estructuras por Punto</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 12))
 
-    data_est = [["Estructura","Descripción","Cantidad"]]
+    data_est_p = [["Estructura", "Descripción", "Cantidad"]]
+    puntos = df_por_punto["Punto"].unique()
+    for p in puntos:
+        data_est_p.append([f"Punto {p}", "", ""])
+        df_p = df_por_punto[df_por_punto["Punto"] == p]
+        for _, row in df_p.iterrows():
+            data_est_p.append([
+                str(row["NombreEstructura"]),
+                str(row["Descripcion"]).capitalize(),
+                str(row["Cantidad"])
+            ])
+
+    tabla_est_p = Table(data_est_p, colWidths=[150, 300, 100])
+
+    estilos = [
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("ALIGN", (2,1), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
+    ]
+    row_idx = 1
+    for p in puntos:
+        estilos += [
+            ("SPAN", (0,row_idx), (-1,row_idx)),
+            ("BACKGROUND", (0,row_idx), (-1,row_idx), colors.lightblue),
+            ("ALIGN", (0,row_idx), (-1,row_idx), "CENTER"),
+            ("FONTNAME", (0,row_idx), (-1,row_idx), "Helvetica-Bold")
+        ]
+        row_idx += 1 + len(df_por_punto[df_por_punto["Punto"] == p])
+
+    tabla_est_p.setStyle(TableStyle(estilos))
+    elems.append(tabla_est_p)
+    elems.append(PageBreak())
+
+    # 4️⃣ Resumen de estructuras (global)
+    elems.append(Paragraph("<b>Resumen de Estructuras</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 12))
+
+    data_est = [["Estructura", "Descripción", "Cantidad"]]
     for _, row in df_estructuras.iterrows():
         data_est.append([
             str(row["NombreEstructura"]),
             str(row["Descripcion"]).capitalize(),
             str(row["Cantidad"])
         ])
-    tabla_est = Table(data_est, colWidths=[150,300,100])
+    tabla_est = Table(data_est, colWidths=[150, 300, 100])
     tabla_est.setStyle(TableStyle([
-        ("GRID",(0,0),(-1,-1),0.5,colors.black),
-        ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
-        ("ALIGN",(2,1),(-1,-1),"CENTER"),
-        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-        ("FONTSIZE",(0,0),(-1,-1),8),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("ALIGN", (2,1), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("FONTSIZE", (0,0), (-1,-1), 8),
     ]))
     elems.append(tabla_est)
     elems.append(PageBreak())
 
-    # 4️⃣ Materiales por punto (agrupados)
+    # 5️⃣ Materiales por punto
     elems.append(Paragraph("<b>Materiales por Punto</b>", styles["Heading2"]))
-    elems.append(Spacer(1,12))
+    elems.append(Spacer(1, 12))
 
     puntos = sorted(df_por_punto["Punto"].unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()))
     for p in puntos:
         punto_num = str(p).replace("Punto", "").strip()
         elems.append(Paragraph(f"<b>Punto {punto_num}</b>", styles["Heading2"]))
 
-        df_p = df_por_punto[df_por_punto["Punto"]==p]
-        df_agrupado = df_p.groupby(["Materiales","Unidad"], as_index=False)["Cantidad"].sum()
+        df_p = df_por_punto[df_por_punto["Punto"] == p]
+        df_agrupado = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
-        data_punto = [["Material","Unidad","Cantidad"]]
+        data_punto = [["Material", "Unidad", "Cantidad"]]
         for _, row in df_agrupado.iterrows():
             data_punto.append([Paragraph(formatear_material(row["Materiales"]), styleN),
                                row["Unidad"],
-                               round(row["Cantidad"],2)])
-        tabla_punto = Table(data_punto, colWidths=[4*inch,1*inch,1*inch])
+                               round(row["Cantidad"], 2)])
+        tabla_punto = Table(data_punto, colWidths=[4*inch, 1*inch, 1*inch])
         tabla_punto.setStyle(TableStyle([
-            ("GRID",(0,0),(-1,-1),0.5,colors.black),
-            ("BACKGROUND",(0,0),(-1,0),colors.darkgreen),
-            ("TEXTCOLOR",(0,0),(-1,0),colors.whitesmoke),
-            ("ALIGN",(1,1),(-1,-1),"CENTER"),
-            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-            ("FONTSIZE",(0,0),(-1,-1),9),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+            ("BACKGROUND", (0,0), (-1,0), colors.darkgreen),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+            ("ALIGN", (1,1), (-1,-1), "CENTER"),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("FONTSIZE", (0,0), (-1,-1), 9),
         ]))
         elems.append(tabla_punto)
-        elems.append(Spacer(1,0.2*inch))
+        elems.append(Spacer(1, 0.2*inch))
 
+    # 🏁 Construcción final
     doc.build(elems)
     buffer.seek(0)
     return buffer
-
-
-
-
-
