@@ -1,4 +1,4 @@
-# modulo/pdf_descarga.py
+# modulo/generar_pdfs.py
 import streamlit as st
 from modulo.procesar_materiales import procesar_materiales
 from modulo.pdf_utils import (
