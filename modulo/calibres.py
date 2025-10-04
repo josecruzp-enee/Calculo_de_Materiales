@@ -1,9 +1,26 @@
-import pandas as pd
-import os
+# -*- coding: utf-8 -*-
+"""
+Gestión de calibres de conductores para proyecto (versión simplificada).
+Autor: José Nikol Cruz
+"""
+
 import streamlit as st
 
-def seleccionar_calibres_formulario(datos_proyecto, calibres):
-    """Formulario interactivo para seleccionar calibres comerciales."""
+def seleccionar_calibres_formulario(datos_proyecto=None):
+    """
+    Formulario interactivo para seleccionar calibres de conductores.
+    Usa catálogos fijos dentro del código.
+    """
+    calibres = {
+        "primario": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM", "477 MCM", "556.5 MCM"],
+        "secundario": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP", "266.8 WP"],
+        "neutro": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM"],
+        "piloto": ["2 WP"],
+        "retenidas": ["1/4 Acerado", "5/8 Acerado", "3/4 Acerado"]
+    }
+
+    if datos_proyecto is None:
+        datos_proyecto = {}
 
     def combo_comercial(etiqueta, lista_opciones, valor_actual="", clave=None):
         index = lista_opciones.index(valor_actual) if valor_actual in lista_opciones else 0
@@ -47,4 +64,3 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
         "calibre_piloto": calibre_piloto,
         "calibre_retenidas": calibre_retenidas
     }
-
