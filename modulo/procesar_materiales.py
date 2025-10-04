@@ -60,6 +60,15 @@ def procesar_materiales(
     # 4️⃣ Conectores
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
 
+    log("🧩 DEBUG ANTES DE CALCULAR MATERIALES:")
+    log(f"🧱 Total estructuras detectadas: {len(conteo)}")
+    for e, c in conteo.items():
+        log(f"  - {e}: {c} unidades")
+
+    if archivo_materiales:
+        excel_temp = pd.ExcelFile(archivo_materiales)
+        log(f"📄 Hojas disponibles en Estructura_datos.xlsx: {excel_temp.sheet_names}")
+
     # 5️⃣ Materiales por estructura
     df_total = pd.concat(
         [
@@ -121,4 +130,5 @@ def procesar_materiales(
         df_resumen_por_punto,
         datos_proyecto
     )
+
 
