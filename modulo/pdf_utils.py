@@ -18,6 +18,7 @@ from io import BytesIO
 import os
 import re
 import pandas as pd
+from reportlab.lib import colors
 
 # --- Importación de tabla de cables ---
 from modulo.configuracion_cables import tabla_cables_pdf
@@ -437,6 +438,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
