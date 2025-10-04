@@ -10,25 +10,35 @@ from reportlab.lib.units import inch
 # 1️⃣ SECCIÓN STREAMLIT: CONFIGURACIÓN DE CABLES
 # =====================================================
 def seccion_cables():
-    """Formulario para ingresar configuración y calibres de conductores."""
-    st.subheader("⚡ Configuración y Calibres de Conductores")
+    """Permite ingresar la configuración de cables del proyecto en Streamlit."""
+    st.markdown("### ⚡ Configuración y Calibres de Conductores")
 
-    tipo = st.selectbox("🔌 Tipo de circuito", ["Primario", "Secundario"], key="tipo_circuito_cables")
-    config = st.selectbox("⚙️ Configuración", ["1F", "2F", "3F"], key="configuracion_cables")
-    calibre = st.selectbox("📏 Calibre", ["1/0 ASCR", "2/0 ASCR", "4/0 ASCR", "336 MCM"], key="calibre_cables")
-    fases = st.number_input("🔢 Cantidad de fases", min_value=1, max_value=3, step=1, key="fases_cables")
-    longitud = st.number_input("📐 Longitud del tramo (m)", min_value=0.0, step=10.0, key="longitud_cables")
+    # Distribuir los campos en una sola fila
+    col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 0.8, 1.2])
 
-    # Calcular total de cable según fases
+    with col1:
+        tipo = st.selectbox("🔌 Tipo", ["Primario", "Secundario"], key="tipo_circuito")
+    with col2:
+        configuracion = st.selectbox("⚙️ Config.", ["1F", "2F", "3F"], key="configuracion_cable")
+    with col3:
+        calibre = st.selectbox("📏 Calibre", ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "4/0 ASCR", "336 MCM"], key="calibre_primario_cable")
+    with col4:
+        fases = st.number_input("🔢 Fases", min_value=1, max_value=3, step=1, key="fases_cable")
+    with col5:
+        longitud = st.number_input("📐 Longitud (m)", min_value=0.0, step=10.0, key="longitud_cable")
+
     total_cable = longitud * fases
 
+    # Inicializar lista si no existe
     if "cables_proyecto" not in st.session_state:
         st.session_state.cables_proyecto = []
 
-    if st.button("➕ Agregar tramo", key="btn_agregar_cable"):
+    # Botón centrado
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("➕ Agregar tramo"):
         st.session_state.cables_proyecto.append({
             "Tipo": tipo,
-            "Configuración": config,
+            "Configuración": configuracion,
             "Calibre": calibre,
             "Fases": fases,
             "Longitud (m)": longitud,
@@ -36,15 +46,14 @@ def seccion_cables():
         })
         st.success("✅ Tramo agregado correctamente.")
 
+    # Mostrar tabla con totales
     if st.session_state.cables_proyecto:
         df = pd.DataFrame(st.session_state.cables_proyecto)
         st.dataframe(df, use_container_width=True)
-
         total = df["Total Cable (m)"].sum()
-        st.markdown(f"**🧮 Total Global de Cable: {total:.2f} m**")
+        st.markdown(f"**🧮 Total Global de Cable:** {total:.2f} m")
 
     return st.session_state.get("cables_proyecto", [])
-
 
 # =====================================================
 # 2️⃣ FUNCIÓN PARA PDF
