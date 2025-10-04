@@ -271,13 +271,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     elems.append(tabla)
     elems.append(PageBreak())
 
-    # === Materiales adicionales ===
-    elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
-
-    # === Tabla de cables ===
-    from modulo.configuracion_cables import tabla_cables_pdf
-    elems.extend(tabla_cables_pdf(datos_proyecto))
-
     # === Resumen de estructuras global ===
     if not df_estructuras.empty:
         elems.append(PageBreak())
@@ -348,8 +341,15 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
             ]))
             elems.append(tabla_m)
             elems.append(Spacer(1, 0.2*inch))
+    
+    # === Materiales adicionales ===
+    elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
 
+    # === Tabla de cables ===
+    from modulo.configuracion_cables import tabla_cables_pdf
+    elems.extend(tabla_cables_pdf(datos_proyecto))
     # === Construcción final del PDF ===
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
