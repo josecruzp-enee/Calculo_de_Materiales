@@ -88,7 +88,7 @@ def listas_desplegables():
     from modulo.desplegables import cargar_opciones, crear_desplegables
     opciones = cargar_opciones()
 
-    st.subheader("4. 🏗️ Estructuras del Proyecto")
+    st.subheader("3. 🏗️ Estructuras del Proyecto")
 
     df_actual = st.session_state["df_puntos"]
     puntos_existentes = df_actual["Punto"].unique().tolist()
@@ -170,7 +170,7 @@ def listas_desplegables():
 # Adicionar materiales manualmente
 # ========================
 def seccion_adicionar_material():
-    st.subheader("5. 🧰 Adicionar Material")
+    st.subheader("4. 🧰 Adicionar Material")
     st.markdown("Agrega materiales adicionales al proyecto que no estén asociados a estructuras específicas.")
 
     if "materiales_extra" not in st.session_state:
@@ -333,6 +333,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
