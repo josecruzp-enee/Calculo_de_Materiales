@@ -51,7 +51,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
          for e, c in conteo.items()],
         ignore_index=True
     )
-log(f"📋 Columnas en df_indice: {df_indice.columns.tolist()}")
+    log(f"📋 Columnas en df_indice: {df_indice.columns.tolist()}")
     if archivo_estructuras:
         df_adicionales = cargar_adicionales(archivo_estructuras)
         df_total = pd.concat([df_total, df_adicionales], ignore_index=True)
@@ -84,6 +84,7 @@ log(f"📋 Columnas en df_indice: {df_indice.columns.tolist()}")
         log(df_resumen_por_punto.head())'''
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
 
 
 
