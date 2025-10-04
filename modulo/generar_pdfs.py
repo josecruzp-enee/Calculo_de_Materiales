@@ -28,6 +28,17 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
 
     nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
 
+    # ✅ Incorporar materiales adicionales si existen
+    adicionales = st.session_state.get("materiales_extra", [])
+    if adicionales:
+        df_adicionales = pd.DataFrame(adicionales)
+        # sumarlos al resumen general
+        df_resumen = pd.concat([df_resumen, df_adicionales], ignore_index=True)
+        df_resumen = df_resumen.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+    else:
+        df_adicionales = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+
+    # ✅ Pasar los adicionales al PDF completo
     pdfs = {
         "materiales": generar_pdf_materiales(df_resumen, nombre_proyecto, datos_proyecto),
         "estructuras_global": generar_pdf_estructuras_global(df_estructuras_resumen, nombre_proyecto),
@@ -37,7 +48,8 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
             df_resumen,
             df_estructuras_resumen,
             df_resumen_por_punto,
-            datos_proyecto
+            datos_proyecto,
+            df_adicionales=df_adicionales  # 👈 nuevo parámetro
         ),
     }
 
