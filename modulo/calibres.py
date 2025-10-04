@@ -1,3 +1,7 @@
+import pandas as pd
+import os
+import streamlit as st
+
 def seleccionar_calibres_formulario(datos_proyecto, calibres):
     """Formulario interactivo para seleccionar calibres comerciales."""
 
@@ -43,3 +47,4 @@ def seleccionar_calibres_formulario(datos_proyecto, calibres):
         "calibre_piloto": calibre_piloto,
         "calibre_retenidas": calibre_retenidas
     }
+
