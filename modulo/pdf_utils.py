@@ -13,6 +13,8 @@ from io import BytesIO
 import os
 import re
 import pandas as pd
+from modulo.configuracion_cables import tabla_cables_pdf  # asegúrate que esté importado
+
 # ====== LOG UNIVERSAL ======
 try:
     import streamlit as st
@@ -322,6 +324,51 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
     elems.append(Spacer(1, 0.2 * inch))
     return elems
 
+from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import inch
+
+def tabla_cables_pdf(datos_proyecto):
+    """Crea la tabla de cables para incluir en el PDF."""
+    if "cables_proyecto" not in datos_proyecto:
+        return []
+
+    cables = datos_proyecto["cables_proyecto"]
+    if not cables:
+        return []
+
+    estilo_titulo = ParagraphStyle(name="TituloTabla", fontSize=12, leading=14, spaceAfter=6, textColor=colors.HexColor("#003366"))
+    estilo_celda = ParagraphStyle(name="Celda", fontSize=9, leading=11)
+
+    elementos = []
+    elementos.append(Spacer(1, 0.2 * inch))
+    elementos.append(Paragraph("⚡ Configuración y Calibres de Conductores", estilo_titulo))
+
+    data = [["Tipo", "Configuración", "Calibre", "Fases", "Longitud (m)", "Total Cable (m)"]]
+    for c in cables:
+        data.append([
+            c["Tipo"], c["Configuración"], c["Calibre"],
+            str(c["Fases"]), f"{c['Longitud (m)']:.2f}", f"{c['Total Cable (m)']:.2f}"
+        ])
+
+    tabla = Table(data, repeatRows=1)
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("ALIGN", (3, 0), (-1, -1), "CENTER"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+    ]))
+
+    elementos.append(tabla)
+
+    total_global = sum(c["Total Cable (m)"] for c in cables)
+    elementos.append(Spacer(1, 0.1 * inch))
+    elementos.append(Paragraph(f"<b>Total Global de Cable:</b> {total_global:,.2f} m", estilo_celda))
+
+    return elementos
 
 
 def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_materiales_por_punto, datos_proyecto):
@@ -463,6 +510,9 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     # 6️⃣ Materiales adicionales (si existen)
     elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
 
+    # 7️⃣ Configuración y Calibres de Conductores (si existen)
+    elems.extend(tabla_cables_pdf(datos_proyecto))
+
     doc.build(elems)
     buffer.seek(0)
     return buffer
@@ -513,6 +563,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
