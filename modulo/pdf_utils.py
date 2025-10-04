@@ -149,6 +149,10 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     buffer.seek(0)
     return buffer
 
+    log("🔎 --- DEBUG MATCH ESTRUCTURAS ---")
+    log("df_indice columnas: " + str(df_indice.columns.tolist()))
+    log("Ejemplo df_indice codigodeestructura: " + str(df_indice["codigodeestructura"].head().tolist()))
+    log("Conteo estructuras: " + str(list(conteo.keys())[:10]))
 
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     """Genera el PDF con el resumen global de estructuras (sin separar por punto)."""
@@ -444,6 +448,13 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
         elems.append(tabla_punto)
         elems.append(Spacer(1, 0.2*inch))
 
+
+    # 🔎 DEBUG antes de armar resúmenes
+    log("🔎 --- DEBUG MATCH ESTRUCTURAS ---")
+    log("df_indice columnas: " + str(df_indice.columns.tolist()))
+    log("Ejemplo df_indice codigodeestructura: " + str(df_indice['codigodeestructura'].head().tolist()))
+    log("Conteo estructuras: " + str(list(conteo.keys())[:10]))
+
     # 6️⃣ Materiales adicionales (si existen)
     elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
 
@@ -497,6 +508,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
