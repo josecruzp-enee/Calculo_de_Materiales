@@ -84,7 +84,6 @@ def listas_desplegables():
         nuevo_num = len(puntos_existentes) + 1
         st.session_state["punto_en_edicion"] = f"Punto {nuevo_num}"
         st.success(f"✏️ {st.session_state['punto_en_edicion']} creado y listo para editar")
-        # 🔹 Solo reseteo desplegables, NO borro punto_en_edicion
         resetear_desplegables()
 
     # Seleccionar un punto existente
@@ -102,7 +101,23 @@ def listas_desplegables():
         seleccion["Punto"] = punto
 
         if st.button("💾 Guardar Punto"):
-            df_actual = df_actual[df_actual["Punto"] != punto]
+            if punto in df_actual["Punto"].values:
+                # Ya existe → combinar estructuras nuevas con las anteriores
+                fila_existente = df_actual[df_actual["Punto"] == punto].iloc[0].to_dict()
+                for col in ["Poste", "Primario", "Secundario",
+                            "Retenidas", "Conexiones a tierra", "Transformadores"]:
+                    anterior = str(fila_existente.get(col, "")).strip()
+                    nuevo = str(seleccion.get(col, "")).strip()
+                    if anterior and nuevo and anterior != nuevo:
+                        seleccion[col] = anterior + " + " + nuevo
+                    elif anterior and not nuevo:
+                        seleccion[col] = anterior
+                    # si no había nada antes, se queda lo nuevo
+
+                # Eliminar fila vieja
+                df_actual = df_actual[df_actual["Punto"] != punto]
+
+            # Agregar fila actualizada
             df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
 
             # 👉 Ordenar puntos
@@ -110,9 +125,7 @@ def listas_desplegables():
             df_actual = df_actual.sort_values("orden").drop(columns="orden")
             st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
 
-            st.success(f"✅ {punto} guardado correctamente")
-
-            # 🔹 Ahora sí reseteo y cierro edición
+            st.success(f"✅ {punto} actualizado correctamente")
             resetear_desplegables()
             st.session_state.pop("punto_en_edicion")
             st.rerun()
@@ -184,6 +197,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
