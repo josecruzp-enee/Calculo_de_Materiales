@@ -304,8 +304,7 @@ def main():
     # ======================
     # 3️⃣ Configuración de red (1F, 2F, 3F)
     # ======================
-    configuracion = seleccionar_configuracion_red()
-    st.session_state["datos_proyecto"].update(configuracion)
+    seccion_cables()
 
     # ======================
     # 4️⃣ Carga de estructuras
@@ -326,6 +325,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
