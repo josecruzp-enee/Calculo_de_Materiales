@@ -7,7 +7,7 @@ from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
 from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
-from modulo.pdf_descarga import generar_pdfs
+
 
 # 👇 columnas base ajustadas a tu Excel
 COLUMNAS_BASE = [
@@ -208,6 +208,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
