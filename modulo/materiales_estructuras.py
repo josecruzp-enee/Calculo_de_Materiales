@@ -42,33 +42,46 @@ def calcular_materiales_estructura(archivo_materiales, estructura, cant, tension
     Carga los materiales asociados a una estructura desde el archivo de datos.
     """
     try:
+        # --- leer hoja sin encabezado ---
         df_temp = cargar_materiales(archivo_materiales, estructura, header=None)
 
-        # Encontrar fila donde se ubica el nivel de tensión
-        fila_tension = next(
-            i for i, row in df_temp.iterrows()
-            if any(str(tension) in str(cell) for cell in row)
-        )
+        # --- buscar fila donde aparezca la palabra "Material" ---
+        fila_encabezado = None
+        for i, row in df_temp.iterrows():
+            if row.astype(str).str.contains("Material", case=False, na=False).any():
+                fila_encabezado = i
+                break
 
-        df = cargar_materiales(archivo_materiales, estructura, header=fila_tension)
-        df.columns = df.columns.map(str).str.strip()
-
-        if "Materiales" not in df.columns or str(tension) not in df.columns:
+        if fila_encabezado is None:
             return pd.DataFrame()
 
-        # Filtrar materiales con cantidad positiva
-        df_filtrado = df[df[str(tension)] > 0][["Materiales", "Unidad", str(tension)]].copy()
+        # --- volver a leer usando esa fila como encabezado ---
+        df = cargar_materiales(archivo_materiales, estructura, header=fila_encabezado)
+        df.columns = df.columns.map(str).str.strip()
 
-        # Aplicar reemplazos de conectores según calibre MT
+        # --- verificar columnas necesarias ---
+        if "Materiales" not in df.columns:
+            return pd.DataFrame()
+
+        # Buscar columna de tensión más parecida
+        col_tension = next((c for c in df.columns if str(tension) in c), None)
+        if not col_tension:
+            return pd.DataFrame()
+
+        # --- filtrar materiales válidos ---
+        df_filtrado = df[df[col_tension] > 0][["Materiales", "Unidad", col_tension]].copy()
+
+        # --- aplicar reemplazos de conectores ---
         df_filtrado["Materiales"] = aplicar_reemplazos_conectores(
             df_filtrado["Materiales"].tolist(),
             calibre_mt,
             tabla_conectores_mt
         )
 
-        # Calcular cantidades finales
-        df_filtrado["Cantidad"] = df_filtrado[str(tension)] * cant
+        # --- calcular cantidades finales ---
+        df_filtrado["Cantidad"] = df_filtrado[col_tension] * cant
         return df_filtrado[["Materiales", "Unidad", "Cantidad"]]
 
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ Error leyendo hoja {estructura}: {e}")
         return pd.DataFrame()
