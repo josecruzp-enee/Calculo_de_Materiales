@@ -276,7 +276,7 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
     return elems
 
 
-def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
+def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_materiales_por_punto, datos_proyecto):
     """Informe completo (portada, materiales, estructuras, materiales por punto, y adicionales)."""
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
@@ -458,6 +458,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
