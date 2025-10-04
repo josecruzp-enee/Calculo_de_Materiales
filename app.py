@@ -176,43 +176,57 @@ def seccion_adicionar_material():
 
     # 🔹 Cargar catálogo de materiales desde la hoja "Materiales"
     catalogo_df = cargar_catalogo_materiales(RUTA_DATOS_MATERIALES)
-    materiales = catalogo_df["Descripcion"].tolist() if not catalogo_df.empty else []
-    unidades_unicas = sorted(catalogo_df["Unidad"].dropna().unique().tolist()) if "Unidad" in catalogo_df.columns else []
+
+    if catalogo_df.empty:
+        st.warning("⚠️ No se pudo cargar el catálogo de materiales.")
+        return
+
+    # 🔹 Crear etiqueta "Material – Unidad"
+    catalogo_df["Etiqueta"] = catalogo_df.apply(
+        lambda x: f"{x['Descripcion']} – {x['Unidad']}" if pd.notna(x["Unidad"]) else x["Descripcion"],
+        axis=1
+    )
+    opciones_materiales = catalogo_df["Etiqueta"].tolist()
 
     with st.form("form_adicionar_material"):
-        col1, col2, col3 = st.columns([2, 1, 1])
+        col1, col2 = st.columns([3, 1])
 
-        # --- Descripción del material ---
+        # --- Seleccionar material (con unidad concatenada) ---
         with col1:
-            material = st.selectbox("🔧 Selecciona el Material", options=[""] + materiales, index=0)
+            etiqueta_sel = st.selectbox(
+                "🔧 Selecciona el Material",
+                options=[""] + opciones_materiales,
+                index=0,
+                placeholder="Ejemplo: BOMBILLO PARA LÁMPARA – C/U"
+            )
 
-        # --- Unidad autocompletada o seleccionable ---
-        unidad_auto = ""
-        if material and material in catalogo_df["Descripcion"].values:
-            unidad_auto = catalogo_df.loc[catalogo_df["Descripcion"] == material, "Unidad"].values[0]
-
+        # --- Cantidad (entera) ---
         with col2:
-            # si se encontró unidad, la muestra primero en la lista
-            opciones_unidad = [unidad_auto] + [u for u in unidades_unicas if u != unidad_auto]
-            unidad = st.selectbox("📏 Unidad", options=opciones_unidad, index=0)
-
-        # --- Cantidad ---
-        with col3:
-            cantidad = st.number_input("🔢 Cantidad", min_value=0.0, step=0.1)
+            cantidad = st.number_input("🔢 Cantidad", min_value=1, step=1, value=1)
 
         agregar = st.form_submit_button("➕ Agregar Material")
 
-    if agregar and material:
+    if agregar and etiqueta_sel:
+        # Separar descripción y unidad
+        partes = etiqueta_sel.split(" – ")
+        material = partes[0].strip()
+        unidad = partes[1].strip() if len(partes) > 1 else ""
+
+        # Guardar en session_state
         st.session_state["materiales_extra"].append({
-            "Materiales": material.strip(),
-            "Unidad": unidad.strip(),
-            "Cantidad": cantidad
+            "Materiales": material,
+            "Unidad": unidad,
+            "Cantidad": int(cantidad)
         })
         st.success(f"✅ Material agregado: {material} ({cantidad} {unidad})")
 
+    # --- Mostrar materiales adicionales agregados ---
     if st.session_state["materiales_extra"]:
         st.markdown("### 📋 Materiales adicionales añadidos")
-        st.dataframe(pd.DataFrame(st.session_state["materiales_extra"]), use_container_width=True)
+        st.dataframe(
+            pd.DataFrame(st.session_state["materiales_extra"]),
+            width="stretch"  # reemplaza use_container_width
+        )
 
 
 # ========================
@@ -272,6 +286,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
