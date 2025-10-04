@@ -8,6 +8,7 @@ from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
 from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
+from modulo.entradas import cargar_catalogo_materiales
 
 
 # 👇 columnas base ajustadas a tu Excel
@@ -166,8 +167,6 @@ def listas_desplegables():
 # ========================
 # Adicionar materiales manualmente
 # ========================
-from modulo.entradas import cargar_catalogo_materiales
-
 def seccion_adicionar_material():
     st.subheader("5. 🧰 Adicionar Material")
     st.markdown("Agrega materiales adicionales al proyecto que no estén asociados a estructuras específicas.")
@@ -175,23 +174,29 @@ def seccion_adicionar_material():
     if "materiales_extra" not in st.session_state:
         st.session_state["materiales_extra"] = []
 
-    # Cargar catálogo
+    # 🔹 Cargar catálogo de materiales desde la hoja "Materiales"
     catalogo_df = cargar_catalogo_materiales(RUTA_DATOS_MATERIALES)
-    opciones = catalogo_df["Descripcion"].tolist() if not catalogo_df.empty else []
+    materiales = catalogo_df["Descripcion"].tolist() if not catalogo_df.empty else []
+    unidades_unicas = sorted(catalogo_df["Unidad"].dropna().unique().tolist()) if "Unidad" in catalogo_df.columns else []
 
     with st.form("form_adicionar_material"):
         col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            material = st.selectbox("🔧 Selecciona el Material", options=[""] + opciones, index=0)
 
-        # Buscar unidad asociada al material
+        # --- Descripción del material ---
+        with col1:
+            material = st.selectbox("🔧 Selecciona el Material", options=[""] + materiales, index=0)
+
+        # --- Unidad autocompletada o seleccionable ---
         unidad_auto = ""
         if material and material in catalogo_df["Descripcion"].values:
             unidad_auto = catalogo_df.loc[catalogo_df["Descripcion"] == material, "Unidad"].values[0]
 
         with col2:
-            unidad = st.text_input("📏 Unidad", value=unidad_auto)
+            # si se encontró unidad, la muestra primero en la lista
+            opciones_unidad = [unidad_auto] + [u for u in unidades_unicas if u != unidad_auto]
+            unidad = st.selectbox("📏 Unidad", options=opciones_unidad, index=0)
 
+        # --- Cantidad ---
         with col3:
             cantidad = st.number_input("🔢 Cantidad", min_value=0.0, step=0.1)
 
@@ -267,6 +272,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
