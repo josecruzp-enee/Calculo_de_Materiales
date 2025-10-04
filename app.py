@@ -147,17 +147,20 @@ def seccion_finalizar_calculo(df):
         st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
         if st.button("✅ Finalizar Cálculo"):
             try:
+                st.session_state["calculo_finalizado"] = True
                 st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
             except Exception as e:
                 st.error(f"❌ Error al finalizar cálculo: {e}")
+
 
 # ========================
 # Exportación
 # ========================
 def seccion_exportacion(df, modo_carga, ruta_estructuras):
-    if not df.empty:
+    if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
-        generar_pdfs(modo_carga, ruta_estructuras, df)
+        if st.button("📥 Generar Reportes PDF"):
+            generar_pdfs(modo_carga, ruta_estructuras, df)
 
 # ========================
 # MAIN
@@ -181,6 +184,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
