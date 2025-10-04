@@ -187,9 +187,9 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         for _, row in df_p.iterrows():
             data.append([
-                str(row["NombreEstructura"]),
-                str(row["Descripcion"]).capitalize(),
-                str(row["Cantidad"])
+                str(row.get("NombreEstructura", row.get("Estructura", ""))),
+                str(row.get("Descripcion", "")).capitalize(),
+                str(row.get("Cantidad", ""))
             ])
 
     tabla = Table(data, colWidths=[1.5*inch, 4*inch, 1*inch])
@@ -221,6 +221,7 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_punto=None, df_indice=None):
     """
@@ -418,4 +419,5 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
