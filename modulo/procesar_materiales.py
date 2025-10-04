@@ -35,20 +35,27 @@ def procesar_materiales(
 
     # 1️⃣ Validar
     tension, calibre_mt = validar_datos_proyecto(datos_proyecto)
-    print(">>> Tensión:", tension, "Calibre MT:", calibre_mt)
+    log(f">>> Tensión: {tension} Calibre MT: {calibre_mt}")
 
     # 2️⃣ Conteo estructuras
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
-    print(">>> Conteo estructuras:", conteo)
-    print(">>> Estructuras por punto:", estructuras_por_punto)
+    log(f">>> Conteo estructuras: {conteo}")
+    log(f">>> Estructuras por punto: {estructuras_por_punto}")
 
     # 3️⃣ Cargar índice
     df_indice = cargar_indice(archivo_materiales)
-    print(">>> Columnas originales índice:", df_indice.columns.tolist())
+    log(">>> Columnas originales índice: " + str(df_indice.columns.tolist()))
 
     df_indice.columns = df_indice.columns.str.strip().str.lower()
-    print(">>> Columnas normalizadas índice:", df_indice.columns.tolist())
-    print(">>> Primeras filas índice:\n", df_indice.head(10))
+
+    # Renombrar columnas clave
+    if "código de estructura" in df_indice.columns:
+        df_indice.rename(columns={"código de estructura": "codigodeestructura"}, inplace=True)
+    if "descripcion" in df_indice.columns:
+        df_indice.rename(columns={"descripcion": "Descripcion"}, inplace=True)
+
+    log(">>> Columnas normalizadas índice: " + str(df_indice.columns.tolist()))
+    log(">>> Primeras filas índice:\n" + str(df_indice.head(10)))
 
     # 4️⃣ Conectores
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
@@ -63,7 +70,7 @@ def procesar_materiales(
         ],
         ignore_index=True
     )
-    print(">>> df_total (materiales por estructura):\n", df_total.head(10))
+    log(">>> df_total (materiales por estructura):\n" + str(df_total.head(10)))
 
     # 6️⃣ Resumen global materiales
     df_resumen = (
@@ -71,41 +78,41 @@ def procesar_materiales(
         if not df_total.empty
         else pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
     )
-    print(">>> df_resumen (materiales):\n", df_resumen.head(10))
+    log(">>> df_resumen (materiales):\n" + str(df_resumen.head(10)))
 
     # 7️⃣ Resumen de estructuras globales
     if "codigodeestructura" not in df_indice.columns:
         df_indice["codigodeestructura"] = None
 
     # Normalizar claves
-    df_indice["codigodeestructura"] = df_indice["codigodeestructura"].str.strip().str.upper()
-    conteo = {k.strip().upper(): v for k,v in conteo.items()}
+    df_indice["codigodeestructura"] = df_indice["codigodeestructura"].astype(str).str.strip().str.upper()
+    conteo = {str(k).strip().upper(): v for k, v in conteo.items()}
 
     df_indice["Cantidad"] = df_indice["codigodeestructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
-    print(">>> df_estructuras_resumen:\n", df_estructuras_resumen.head(10))
+    log(">>> df_estructuras_resumen:\n" + str(df_estructuras_resumen.head(10)))
 
     # 8️⃣ Estructuras por punto
     lista_por_punto = []
     for punto, estructuras in estructuras_por_punto.items():
         for est in estructuras:
-            est_norm = est.strip().upper()
+            est_norm = str(est).strip().upper()
             lista_por_punto.append({
                 "Punto": punto,
                 "codigodeestructura": est_norm,
                 "Descripcion": df_indice.loc[
-                    df_indice["codigodeestructura"] == est_norm, "descripcion"
+                    df_indice["codigodeestructura"] == est_norm, "Descripcion"
                 ].values[0] if est_norm in df_indice["codigodeestructura"].values else "NO ENCONTRADA",
                 "Cantidad": 1
             })
     df_estructuras_por_punto = pd.DataFrame(lista_por_punto)
-    print(">>> df_estructuras_por_punto:\n", df_estructuras_por_punto.head(10))
+    log(">>> df_estructuras_por_punto:\n" + str(df_estructuras_por_punto.head(10)))
 
     # 9️⃣ Materiales por punto
     df_resumen_por_punto = calcular_materiales_por_punto(
         archivo_materiales, estructuras_por_punto, tension
     )
-    print(">>> df_resumen_por_punto:\n", df_resumen_por_punto.head(10))
+    log(">>> df_resumen_por_punto:\n" + str(df_resumen_por_punto.head(10)))
 
     return (
         df_resumen,
@@ -114,3 +121,4 @@ def procesar_materiales(
         df_resumen_por_punto,
         datos_proyecto
     )
+
