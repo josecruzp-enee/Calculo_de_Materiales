@@ -244,6 +244,18 @@ def seccion_finalizar_calculo(df):
             except Exception as e:
                 st.error(f"❌ Error al finalizar cálculo: {e}")
 
+def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
+    if not df.empty and st.session_state.get("calculo_finalizado", False):
+        st.subheader("6. 📂 Exportación de Reportes")
+
+        # 🧩 Guardar cables dentro de datos_proyecto antes de exportar
+        if "cables_proyecto" in st.session_state:
+            st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
+
+        if st.button("📥 Generar Reportes PDF"):
+            st.session_state["pdfs_generados"] = generar_pdfs(
+                modo_carga, ruta_estructuras, df, ruta_datos_materiales
+            )
 
 # ========================
 # Exportación
@@ -315,6 +327,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
