@@ -134,26 +134,54 @@ def generar_pdf_estructuras(df_estructuras, nombre_proy):
     elems.append(Paragraph(f"<b>Resumen de Estructuras - Proyecto: {nombre_proy}</b>", styles["Title"]))
     elems.append(Spacer(1, 12))
 
+    # Construir tabla con cabecera
     data = [["Estructura", "Descripción", "Cantidad"]]
-    for _, row in df_estructuras.iterrows():
-        data.append([
-            str(row["NombreEstructura"]),
-            str(row["Descripcion"]).capitalize(),
-            str(row["Cantidad"])
-        ])
+
+    # Recorremos por punto
+    puntos = df_estructuras["Punto"].unique()
+    for p in puntos:
+        # Fila de título del punto
+        data.append([f"Punto {p}", "", ""])
+        # Estructuras asociadas a este punto
+        df_p = df_estructuras[df_estructuras["Punto"] == p]
+        for _, row in df_p.iterrows():
+            data.append([
+                str(row["NombreEstructura"]),
+                str(row["Descripcion"]).capitalize(),
+                str(row["Cantidad"])
+            ])
 
     tabla = Table(data, colWidths=[1.5*inch, 4*inch, 1*inch])
-    tabla.setStyle(TableStyle([
+
+    # Estilos base
+    estilos = [
         ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
         ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
         ("GRID", (0,0), (-1,-1), 0.5, colors.black),
         ("FONTSIZE", (0,0), (-1,-1), 9),
-    ]))
+        ("ALIGN", (0,0), (-1,0), "CENTER"),
+    ]
+
+    # 🔹 Estilos especiales para filas de "Punto N"
+    row_idx = 1
+    for p in puntos:
+        estilos += [
+            ("SPAN", (0,row_idx), (-1,row_idx)),  # fusionar toda la fila
+            ("BACKGROUND", (0,row_idx), (-1,row_idx), colors.lightblue),
+            ("TEXTCOLOR", (0,row_idx), (-1,row_idx), colors.black),
+            ("ALIGN", (0,row_idx), (-1,row_idx), "CENTER"),
+            ("FONTNAME", (0,row_idx), (-1,row_idx), "Helvetica-Bold")
+        ]
+        # avanzar filas: 1 (fila de punto) + estructuras de ese punto
+        row_idx += 1 + len(df_estructuras[df_estructuras["Punto"] == p])
+
+    tabla.setStyle(TableStyle(estilos))
     elems.append(tabla)
 
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_punto=None, df_indice=None):
     """
@@ -310,6 +338,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
