@@ -49,37 +49,7 @@ def formatear_material(nombre):
     return texto
 
 # === Hoja de información del proyecto ===
-def hoja_info_proyecto(datos_proyecto):
-    elems = []
-    elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
-    elems.append(Spacer(1, 12))
-
-    data = [
-        ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
-        ["Código / Expediente:", datos_proyecto.get("codigo_proyecto", "")],
-        ["Nivel de Tensión (kV):", datos_proyecto.get("nivel_de_tension", "")],
-        ["Calibre Primario:", datos_proyecto.get("calibre_primario", "")],
-        ["Calibre Secundario:", datos_proyecto.get("calibre_secundario", "")],
-        ["Calibre Neutro:", datos_proyecto.get("calibre_neutro", "")],
-        ["Calibre Piloto:", datos_proyecto.get("calibre_piloto", "")],
-        ["Calibre Cable de Retenidas:", datos_proyecto.get("calibre_retenidas", "")],
-        ["Fecha de Informe:", datetime.today().strftime("%d/%m/%Y")],
-        ["Responsable / Diseñador:", datos_proyecto.get("responsable", "N/A")],
-        ["Empresa / Área:", datos_proyecto.get("empresa", "N/A")],
-    ]
-
-    table = Table(data, colWidths=[180, 300])
-    table.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (0,-1), colors.lightgrey),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
-    ]))
-
-    elems.append(table)
-    elems.append(Spacer(1, 24))
-    elems.append(PageBreak())
-    return elems
+v
 
 # === Generar PDF de materiales globales ===
 def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
@@ -369,5 +339,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
