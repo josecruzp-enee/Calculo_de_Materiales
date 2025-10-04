@@ -65,11 +65,10 @@ def procesar_materiales(
     # ============================
     # 4. Cargar índice y normalizar columna clave
     # ============================
-    df_indice = cargar_indice(archivo_materiales)
     if "Código de Estructura" in df_indice.columns:
-        df_indice = df_indice.rename(columns={"Código de Estructura": "CodigoEstructura"})
+        df_indice = df_indice.rename(columns={"Código de Estructura": "NombreEstructura"})
     elif "Codigo de Estructura" in df_indice.columns:
-        df_indice = df_indice.rename(columns={"Codigo de Estructura": "CodigoEstructura"})
+        df_indice = df_indice.rename(columns={"Codigo de Estructura": "NombreEstructura"})
 
     # ============================
     # 5. Cargar conectores
@@ -106,7 +105,7 @@ def procesar_materiales(
     # ============================
     # 8. Resumen de estructuras
     # ============================
-    df_indice["Cantidad"] = df_indice["CodigoEstructura"].map(conteo).fillna(0).astype(int)
+    df_indice["Cantidad"] = df_indice["NombreEstructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
 
     # ============================
@@ -126,3 +125,4 @@ def procesar_materiales(
     log(f"📊 Resumen por punto: {len(df_resumen_por_punto)} filas")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
