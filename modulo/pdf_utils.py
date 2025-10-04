@@ -151,9 +151,11 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 
 
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
-    """PDF resumen total de estructuras (sin separar por punto)."""
+    """Genera el PDF con el resumen global de estructuras (sin separar por punto)."""
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
+
+    # --- Plantilla con fondo ---
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
     template = PageTemplate(id="con_fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
@@ -162,6 +164,14 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     elems.append(Paragraph(f"<b>Resumen de Estructuras - Proyecto: {nombre_proy}</b>", styles["Title"]))
     elems.append(Spacer(1, 12))
 
+    # --- Validar DataFrame ---
+    if df_estructuras is None or df_estructuras.empty:
+        elems.append(Paragraph("No hay estructuras para mostrar.", styleN))
+        doc.build(elems)
+        buffer.seek(0)
+        return buffer
+
+    # --- Crear tabla ---
     data = [["Estructura", "Descripción", "Cantidad"]]
     for _, row in df_estructuras.iterrows():
         data.append([
@@ -175,19 +185,26 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
         ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
         ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("ALIGN", (0,0), (-1,0), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
         ("FONTSIZE", (0,0), (-1,-1), 9),
     ]))
+
     elems.append(tabla)
 
+    # --- Generar documento ---
     doc.build(elems)
     buffer.seek(0)
     return buffer
 
 
+
 def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
-    """PDF de estructuras agrupadas por punto."""
+    """PDF de estructuras agrupadas por punto (ordenadas y formateadas)."""
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
+
+    # === Configurar plantilla con fondo ===
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
     template = PageTemplate(id="con_fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
@@ -196,48 +213,63 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
     elems.append(Paragraph(f"<b>Estructuras por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]))
     elems.append(Spacer(1, 12))
 
+    # === Encabezado de tabla ===
     data = [["Estructura", "Descripción", "Cantidad"]]
 
-    # Asegurar que existen columnas esperadas, si no, usar Materiales
+    # Detectar columnas reales
     col_codigo = "codigodeestructura" if "codigodeestructura" in df_por_punto.columns else "Materiales"
-    col_desc   = "Descripcion" if "Descripcion" in df_por_punto.columns else "Materiales"
+    col_desc = "Descripcion" if "Descripcion" in df_por_punto.columns else "Materiales"
 
-    puntos = df_por_punto["Punto"].unique()
+    # Ordenar los puntos numéricamente
+    puntos = sorted(
+        df_por_punto["Punto"].unique(),
+        key=lambda x: int(re.search(r'\d+', str(x)).group()) if re.search(r'\d+', str(x)) else 0
+    )
+
+    # === Agregar datos por punto ===
     for p in puntos:
-        data.append([f"Punto {p}", "", ""])
+        data.append([f"Punto {p}", "", ""])  # Fila separadora de punto
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         for _, row in df_p.iterrows():
             data.append([
                 str(row.get(col_codigo, "")),
                 str(row.get(col_desc, "")).capitalize(),
-                str(row.get("Cantidad", ""))
+                f"{row.get('Cantidad', 0):.0f}"
             ])
 
-    tabla = Table(data, colWidths=[1.5*inch, 4*inch, 1*inch])
+    # === Crear tabla ===
+    tabla = Table(data, colWidths=[1.5 * inch, 4 * inch, 1 * inch])
+
     estilos = [
-        ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("FONTSIZE", (0,0), (-1,-1), 9),
-        ("ALIGN", (0,0), (-1,0), "CENTER"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (2, 1), (2, -1), "CENTER"),  # Centra cantidades
     ]
 
+    # === Dar formato a las filas de título de punto ===
     row_idx = 1
     for p in puntos:
         estilos += [
-            ("SPAN", (0,row_idx), (-1,row_idx)),
-            ("BACKGROUND", (0,row_idx), (-1,row_idx), colors.lightblue),
-            ("TEXTCOLOR", (0,row_idx), (-1,row_idx), colors.black),
-            ("ALIGN", (0,row_idx), (-1,row_idx), "CENTER"),
-            ("FONTNAME", (0,row_idx), (-1,row_idx), "Helvetica-Bold")
+            ("SPAN", (0, row_idx), (-1, row_idx)),
+            ("BACKGROUND", (0, row_idx), (-1, row_idx), colors.lightblue),
+            ("TEXTCOLOR", (0, row_idx), (-1, row_idx), colors.black),
+            ("ALIGN", (0, row_idx), (-1, row_idx), "CENTER"),
+            ("FONTNAME", (0, row_idx), (-1, row_idx), "Helvetica-Bold")
         ]
+        # Saltar la fila del punto + cantidad de estructuras
         row_idx += 1 + len(df_por_punto[df_por_punto["Punto"] == p])
 
     tabla.setStyle(TableStyle(estilos))
     elems.append(tabla)
+
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
@@ -247,28 +279,36 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
     """
     df_extra = datos_proyecto.get("materiales_extra")
     if df_extra is None or df_extra.empty:
-        return elems  # no hay nada que agregar
+        return elems  # No hay materiales adicionales
 
+    # --- Separador visual ---
     elems.append(PageBreak())
     elems.append(Paragraph("<b>Materiales Adicionales</b>", styles["Heading2"]))
     elems.append(Spacer(1, 12))
 
+    # --- Construir tabla ---
     data_extra = [["Material", "Unidad", "Cantidad"]]
+    df_extra = df_extra.copy()
+
     for _, row in df_extra.iterrows():
+        material = str(row.get("Materiales", "")).strip().title()
+        unidad = str(row.get("Unidad", "")).strip()
+        cantidad = round(float(row.get("Cantidad", 0)), 2)
+
         data_extra.append([
-            Paragraph(str(row["Materiales"]), styleN),
-            str(row["Unidad"]),
-            f"{round(row['Cantidad'], 2):.2f}"
+            Paragraph(material, styleN),
+            unidad,
+            f"{cantidad:.2f}"
         ])
 
-    tabla_extra = Table(data_extra, colWidths=[4*inch, 1*inch, 1*inch])
+    tabla_extra = Table(data_extra, colWidths=[4 * inch, 1 * inch, 1 * inch])
     tabla_extra.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (-1,0), colors.orange),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-        ("ALIGN", (1,1), (-1,-1), "CENTER"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.darkorange),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
     ]))
 
     elems.append(tabla_extra)
@@ -276,8 +316,9 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
     return elems
 
 
+
 def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_materiales_por_punto, datos_proyecto):
-    """Informe completo (portada, materiales, estructuras, materiales por punto, y adicionales)."""
+    """Informe completo (portada, materiales, estructuras, materiales por punto y adicionales)."""
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
@@ -288,7 +329,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     # 1️⃣ Portada
     elems += hoja_info_proyecto(datos_proyecto)
 
-    # 2️⃣ Materiales globales
+    # 2️⃣ Resumen de materiales globales
     elems.append(Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"]))
     elems.append(Spacer(1, 12))
 
@@ -297,8 +338,8 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     for _, row in df_agrupado_mat.iterrows():
         data_mat.append([
             Paragraph(formatear_material(row["Materiales"]), styleN),
-            row["Unidad"],
-            round(row["Cantidad"], 2)
+            str(row["Unidad"]),
+            f"{round(row['Cantidad'], 2):.2f}"
         ])
 
     tabla_mat = Table(data_mat, colWidths=[250, 100, 100])
@@ -317,10 +358,10 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     elems.append(Spacer(1, 12))
 
     data_est_p = [["Estructura", "Descripción", "Cantidad"]]
-    puntos = df_por_punto["Punto"].unique()
-    for p in puntos:
+    puntos_est = df_estructuras_por_punto["Punto"].unique()
+    for p in puntos_est:
         data_est_p.append([f"Punto {p}", "", ""])
-        df_p = df_por_punto[df_por_punto["Punto"] == p]
+        df_p = df_estructuras_por_punto[df_estructuras_por_punto["Punto"] == p]
         for _, row in df_p.iterrows():
             data_est_p.append([
                 str(row.get("codigodeestructura", "")),
@@ -337,14 +378,14 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
         ("FONTSIZE", (0,0), (-1,-1), 8),
     ]
     row_idx = 1
-    for p in puntos:
+    for p in puntos_est:
         estilos += [
             ("SPAN", (0,row_idx), (-1,row_idx)),
             ("BACKGROUND", (0,row_idx), (-1,row_idx), colors.lightblue),
             ("ALIGN", (0,row_idx), (-1,row_idx), "CENTER"),
             ("FONTNAME", (0,row_idx), (-1,row_idx), "Helvetica-Bold")
         ]
-        row_idx += 1 + len(df_por_punto[df_por_punto["Punto"] == p])
+        row_idx += 1 + len(df_estructuras_por_punto[df_estructuras_por_punto["Punto"] == p])
 
     tabla_est_p.setStyle(TableStyle(estilos))
     elems.append(tabla_est_p)
@@ -377,12 +418,10 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     elems.append(Paragraph("<b>Materiales por Punto</b>", styles["Heading2"]))
     elems.append(Spacer(1, 12))
 
-    puntos = sorted(df_por_punto["Punto"].unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()))
-    for p in puntos:
-        punto_num = str(p).replace("Punto", "").strip()
-        elems.append(Paragraph(f"<b>Punto {punto_num}</b>", styles["Heading2"]))
-
-        df_p = df_por_punto[df_por_punto["Punto"] == p]
+    puntos_mat = sorted(df_materiales_por_punto["Punto"].unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()))
+    for p in puntos_mat:
+        elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading2"]))
+        df_p = df_materiales_por_punto[df_materiales_por_punto["Punto"] == p]
         df_agrupado = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
         data_punto = [["Material", "Unidad", "Cantidad"]]
@@ -390,7 +429,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
             data_punto.append([
                 Paragraph(formatear_material(row["Materiales"]), styleN),
                 row["Unidad"],
-                round(row["Cantidad"], 2)
+                f"{round(row['Cantidad'], 2):.2f}"
             ])
 
         tabla_punto = Table(data_punto, colWidths=[4*inch, 1*inch, 1*inch])
@@ -405,7 +444,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
         elems.append(tabla_punto)
         elems.append(Spacer(1, 0.2*inch))
 
-    # 6️⃣ Materiales adicionales
+    # 6️⃣ Materiales adicionales (si existen)
     elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
 
     doc.build(elems)
@@ -458,6 +497,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
