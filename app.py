@@ -9,7 +9,9 @@ from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formatea
 from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
 from modulo.entradas import cargar_catalogo_materiales
-from modulo.configuracion_cables import seccion_cables
+from modulo.calibres import cargar_calibres_desde_excel, seleccionar_calibres_formulario
+from modulo.configuracion_cables import seleccionar_configuracion_red
+
 
 
 # 👇 columnas base ajustadas a tu Excel
@@ -324,6 +326,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
