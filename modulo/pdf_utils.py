@@ -238,7 +238,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     """
     Genera un PDF completo consolidado con:
     - Hoja de información del proyecto
-    - Resumen de materiales global
+    - Resumen de materiales global (incluye cables)
     - Materiales adicionales
     - Tabla de cables
     - Resumen de estructuras global
@@ -258,10 +258,26 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
 
     # === Resumen global de materiales ===
     elems.append(Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"]))
+
     df_agr = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum() if not df_mat.empty else pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+
+    # === Agregar los cables del proyecto al resumen de materiales ===
+    if "cables_proyecto" in datos_proyecto and datos_proyecto["cables_proyecto"]:
+        for cable in datos_proyecto["cables_proyecto"]:
+            tipo = cable.get("Tipo", "")
+            calibre = cable.get("Calibre", "")
+            longitud = cable.get("Total Cable (m)", cable.get("Longitud (m)", 0))
+            if longitud and calibre:
+                descripcion = f"Cable {tipo} {calibre}"
+                df_agr.loc[len(df_agr)] = [descripcion, "m", float(longitud)]
+
+    # === Tabla de resumen de materiales ===
     data = [["Material", "Unidad", "Cantidad"]]
     for _, r in df_agr.iterrows():
-        data.append([Paragraph(formatear_material(r["Materiales"]), styleN), r["Unidad"], f"{r['Cantidad']:.2f}"])
+        data.append([Paragraph(formatear_material(r["Materiales"]), styleN),
+                     r["Unidad"],
+                     f"{r['Cantidad']:.2f}"])
+
     tabla = Table(data, colWidths=[4*inch, 1*inch, 1*inch])
     tabla.setStyle(TableStyle([
         ("GRID", (0,0), (-1,-1), 0.5, colors.black),
@@ -270,6 +286,13 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     ]))
     elems.append(tabla)
     elems.append(PageBreak())
+
+    # === Materiales adicionales ===
+    elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
+
+    # === Tabla de cables ===
+    from modulo.configuracion_cables import tabla_cables_pdf
+    elems.extend(tabla_cables_pdf(datos_proyecto))
 
     # === Resumen de estructuras global ===
     if not df_estructuras.empty:
@@ -341,15 +364,10 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
             ]))
             elems.append(tabla_m)
             elems.append(Spacer(1, 0.2*inch))
-    
-    # === Materiales adicionales ===
-    elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
 
-    # === Tabla de cables ===
-    from modulo.configuracion_cables import tabla_cables_pdf
-    elems.extend(tabla_cables_pdf(datos_proyecto))
     # === Construcción final del PDF ===
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
