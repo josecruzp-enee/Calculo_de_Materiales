@@ -63,9 +63,9 @@ def seccion_cables():
             "Configuración": configuracion,
             "Calibre": calibre,
             "Fases": fases,
-            "Longitud": longitud,
+            "Longitud (m)": longitud,
             "Unidad": "m",
-            "Total Cable": total
+            "Total Cable (m)": total
         })
         st.success(f"✅ {tipo} {configuracion} agregado ({total:.2f} m de cable total)")
 
@@ -77,9 +77,13 @@ def seccion_cables():
 
         # === Totales agrupados por tipo ===
         st.markdown("#### 🔢 Totales por tipo de conductor")
-        df_totales = df.groupby("Tipo")["Total Cable"].sum().reset_index()
-        df_totales.rename(columns={"Total Cable": "Total (m)"}, inplace=True)
+        df_totales = df.groupby("Tipo")["Total Cable (m)"].sum().reset_index()
+        df_totales.rename(columns={"Total Cable (m)": "Total (m)"}, inplace=True)
         st.dataframe(df_totales, use_container_width=True, hide_index=True)
+
+        # === Cálculo total global ===
+        total_global = df["Total Cable (m)"].sum()
+        st.markdown(f"### 🧮 **Total global de cable:** {total_global:,.2f} m")
 
         # === Botones de gestión ===
         col1, col2 = st.columns(2)
@@ -91,4 +95,5 @@ def seccion_cables():
         with col2:
             if st.button("💾 Confirmar selección"):
                 st.session_state["datos_proyecto"]["cables_confirmados"] = True
-                st.success("✅ Configuración de cables confirmada para el proyecto.")
+                st.session_state["datos_proyecto"]["total_cable_metros"] = total_global
+                st.success("✅ Configuración de cables confirmada y guardada en el proyecto.")
