@@ -1,6 +1,6 @@
 # modulo/formulario.py
 import streamlit as st
-from modulo.calibres import cargar_calibres_desde_excel, seleccionar_calibres_formulario
+
 
 # ================= FUNCIONES FORMULARIO =================
 
