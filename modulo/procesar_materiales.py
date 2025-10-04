@@ -39,6 +39,11 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
 
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
     df_indice = cargar_indice(archivo_materiales)
+    # Normalizamos nombre de columna para evitar problemas con espacios/tildes
+    if "Código de Estructura" in df_indice.columns:
+        df_indice = df_indice.rename(columns={"Código de Estructura": "CodigoEstructura"})
+    elif "Codigo de Estructura" in df_indice.columns:
+        df_indice = df_indice.rename(columns={"Codigo de Estructura": "CodigoEstructura"})
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
 
     df_total = pd.concat(
@@ -57,7 +62,7 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
         else pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
     )
 
-    df_indice["Cantidad"] = df_indice["NombreEstructura"].map(conteo).fillna(0).astype(int)
+    df_indice["Cantidad"] = df_indice["CodigoEstructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
     df_resumen_por_punto = calcular_materiales_por_punto(archivo_materiales, estructuras_por_punto, tension)
 
@@ -79,4 +84,5 @@ def procesar_materiales(archivo_estructuras=None, archivo_materiales=None, estru
         log(df_resumen_por_punto.head())'''
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
+
 
