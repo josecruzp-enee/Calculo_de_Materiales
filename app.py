@@ -271,16 +271,53 @@ def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
-    modo_carga = st.radio("Selecciona modo de carga:", ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"])
+    modo_carga = st.radio(
+        "Selecciona modo de carga:",
+        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"]
+    )
 
+    # ======================
+    # Inicialización del estado
+    # ======================
     if "datos_proyecto" not in st.session_state:
         st.session_state["datos_proyecto"] = {}
     if "df_puntos" not in st.session_state:
         st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
 
+    # ======================
+    # 1️⃣ Sección de datos del proyecto
+    # ======================
     seccion_datos_proyecto()
+
+    # ======================
+    # 2️⃣ Selección de calibres
+    # ======================
+    st.header("🧵 Selección de Calibres de Conductores")
+    calibres = cargar_calibres_desde_excel()
+    calibres_seleccionados = seleccionar_calibres_formulario(
+        st.session_state["datos_proyecto"], calibres
+    )
+    st.session_state["datos_proyecto"].update(calibres_seleccionados)
+
+    # ======================
+    # 3️⃣ Configuración de red (1F, 2F, 3F)
+    # ======================
+    configuracion = seleccionar_configuracion_red()
+    st.session_state["datos_proyecto"].update(configuracion)
+
+    # ======================
+    # 4️⃣ Carga de estructuras
+    # ======================
     df, ruta_estructuras = seccion_entrada_estructuras(modo_carga)
+
+    # ======================
+    # 5️⃣ Adición manual de materiales
+    # ======================
     seccion_adicionar_material()
+
+    # ======================
+    # 6️⃣ Cálculo final y exportación
+    # ======================
     seccion_finalizar_calculo(df)
     seccion_exportacion(df, modo_carga, ruta_estructuras, RUTA_DATOS_MATERIALES)
 
