@@ -35,9 +35,42 @@ def cargar_materiales(archivo_materiales, hoja, header=None):
     return pd.read_excel(archivo_materiales, sheet_name=hoja, header=header)
 
 def cargar_indice(archivo_materiales):
-    df_indice = pd.read_excel(archivo_materiales, sheet_name='indice', usecols=[3, 4])
-    df_indice.columns = ['NombreEstructura', 'Descripcion']
-    return df_indice
+    """
+    Carga la hoja 'indice' del archivo de materiales.
+    Normaliza las columnas y devuelve un DataFrame con:
+    - codigodeestructura
+    - descripcion
+    """
+    try:
+        df_indice = pd.read_excel(archivo_materiales, sheet_name='indice')
+        df_indice.columns = df_indice.columns.str.strip().str.lower()
+
+        # Detectar y renombrar columnas clave
+        posibles_codigos = [
+            "código de estructura", "codigo de estructura",
+            "nombreestructura", "nombre estructura", "estructura"
+        ]
+        for col in posibles_codigos:
+            if col in df_indice.columns:
+                df_indice.rename(columns={col: "codigodeestructura"}, inplace=True)
+                break
+
+        posibles_desc = ["descripcion", "descripción"]
+        for col in posibles_desc:
+            if col in df_indice.columns:
+                df_indice.rename(columns={col: "descripcion"}, inplace=True)
+                break
+
+        # Mantener solo las columnas relevantes
+        columnas_validas = ["codigodeestructura", "descripcion"]
+        df_indice = df_indice[[c for c in columnas_validas if c in df_indice.columns]]
+
+        return df_indice
+
+    except Exception as e:
+        print(f"⚠️ Error al cargar índice: {e}")
+        return pd.DataFrame(columns=["codigodeestructura", "descripcion"])
+
 
 def cargar_catalogo_materiales(archivo_materiales):
     """
@@ -80,5 +113,6 @@ def cargar_adicionales(archivo_estructuras):
     except:
         pass
     return pd.DataFrame(columns=['Materiales', 'Unidad', 'Cantidad'])
+
 
 
