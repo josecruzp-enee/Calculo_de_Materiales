@@ -84,70 +84,6 @@ def ordenar_puntos(lista):
             return float("inf")
     return sorted(lista, key=clave)
 
-# ======== PDF GENERADORES ========
-
-def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto, df_adicionales=None):
-
-    buffer = BytesIO()
-    doc = BaseDocTemplate(buffer, pagesize=letter)
-
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
-    template = PageTemplate(id="con_fondo", frames=[frame], onPage=fondo_pagina)
-    doc.addPageTemplates([template])
-
-    elems = []
-    if datos_proyecto:
-        elems += hoja_info_proyecto(datos_proyecto)
-
-    elems.append(Paragraph(f"<b>Resumen de Materiales - Proyecto: {nombre_proy}</b>", styles["Title"]))
-    elems.append(Spacer(1, 12))
-
-    data = [["Material", "Unidad", "Cantidad"]]
-    for _, row in df_mat.iterrows():
-        material = Paragraph(formatear_material(row["Materiales"]), styleN)
-        unidad = str(row["Unidad"])
-        cantidad = f"{round(row['Cantidad'], 2):.2f}"
-        data.append([material, unidad, cantidad])
-
-    tabla = Table(data, colWidths=[300, 100, 80])
-    tabla.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-        ("ALIGN", (1,1), (-1,-1), "CENTER"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("FONTSIZE", (0,0), (-1,-1), 8),
-    ]))
-    elems.append(tabla)
-
-        # 6️⃣ Materiales adicionales
-    if df_adicionales is not None and not df_adicionales.empty:
-        elems.append(Paragraph("<b>Materiales Adicionales</b>", styles["Heading2"]))
-        elems.append(Spacer(1, 12))
-
-        data_ad = [["Material", "Unidad", "Cantidad"]]
-        for _, row in df_adicionales.iterrows():
-            data_ad.append([
-                Paragraph(formatear_material(row["Materiales"]), styleN),
-                str(row["Unidad"]),
-                f"{round(row['Cantidad'], 2):.2f}"
-            ])
-
-        tabla_ad = Table(data_ad, colWidths=[4*inch, 1*inch, 1*inch])
-        tabla_ad.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-            ("BACKGROUND", (0,0), (-1,0), colors.darkred),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-            ("ALIGN", (1,1), (-1,-1), "CENTER"),
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("FONTSIZE", (0,0), (-1,-1), 9),
-        ]))
-        elems.append(tabla_ad)
-        elems.append(PageBreak())
-
-    
-    doc.build(elems)
-    buffer.seek(0)
-    return buffer
 
 
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
@@ -271,7 +207,7 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
 
 
 def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
-    """Informe completo (portada, materiales, estructuras, materiales por punto)."""
+    """Informe completo (portada, materiales, estructuras, materiales por punto, y adicionales)."""
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
@@ -398,11 +334,14 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
         ]))
         elems.append(tabla_punto)
         elems.append(Spacer(1, 0.2*inch))
+
     # 6️⃣ Materiales adicionales
     elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
+
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     """Genera un PDF con materiales agrupados por punto."""
@@ -449,6 +388,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
