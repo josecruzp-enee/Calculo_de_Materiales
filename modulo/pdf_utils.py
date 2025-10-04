@@ -49,7 +49,7 @@ def formatear_material(nombre):
     return texto
 
 # === Hoja de información del proyecto ===
-v
+
 
 # === Generar PDF de materiales globales ===
 def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
@@ -224,7 +224,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     elems = []
 
     # === Hoja de información del proyecto ===
-    elems += hoja_info_proyecto(datos_proyecto)
+    elems += hoja_info_proyecto(datos_proyecto, df_estructuras, df_mat)
 
     # === Resumen global de materiales ===
     elems.append(Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"]))
@@ -339,6 +339,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
