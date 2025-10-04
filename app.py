@@ -9,7 +9,6 @@ from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formatea
 from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
 from modulo.entradas import cargar_catalogo_materiales
-from modulo.calibres import seleccionar_calibres_formulario
 from modulo.configuracion_cables import seccion_cables
 
 
@@ -294,9 +293,7 @@ def main():
    
 
 
-    # ======================
-    # 3️⃣ Configuración de red (1F, 2F, 3F)
-    # ======================
+    # 2️⃣ Configuración y Calibres de Conductores
     seccion_cables()
 
     # ======================
@@ -318,6 +315,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
