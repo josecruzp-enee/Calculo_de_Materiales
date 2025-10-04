@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pandas as pd
 from modulo.entradas import (
     cargar_datos_proyecto,
@@ -63,14 +64,18 @@ def procesar_materiales(
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
 
     # ============================
-    # 4. Cargar índice y normalizar columna clave
+    # 4. Cargar índice y normalizar nombre de columna
     # ============================
     df_indice = cargar_indice(archivo_materiales)
-    if "Código de Estructura" in df_indice.columns:
-        df_indice = df_indice.rename(columns={"Código de Estructura": "CodigoEstructura"})
-    elif "Codigo de Estructura" in df_indice.columns:
-        df_indice = df_indice.rename(columns={"Codigo de Estructura": "CodigoEstructura"})
-     
+    df_indice.columns = df_indice.columns.str.strip()
+
+    # Normaliza cualquier forma de “Código de Estructura”
+    for col in df_indice.columns:
+        col_limpio = col.lower().replace(" ", "").replace("ó", "o").replace("í", "i")
+        if col_limpio in ["codigodeestructura", "codigoestructura", "nombreestructura"]:
+            df_indice = df_indice.rename(columns={col: "CodigoEstructura"})
+            break
+
     # ============================
     # 5. Cargar conectores
     # ============================
@@ -106,6 +111,10 @@ def procesar_materiales(
     # ============================
     # 8. Resumen de estructuras
     # ============================
+    if "CodigoEstructura" not in df_indice.columns:
+        log(f"⚠️ df_indice no contiene columna esperada. Columnas disponibles: {df_indice.columns.tolist()}")
+        df_indice["CodigoEstructura"] = None
+
     df_indice["Cantidad"] = df_indice["CodigoEstructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
 
@@ -126,5 +135,4 @@ def procesar_materiales(
     log(f"📊 Resumen por punto: {len(df_resumen_por_punto)} filas")
 
     return df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto
-
 
