@@ -84,6 +84,70 @@ def ordenar_puntos(lista):
             return float("inf")
     return sorted(lista, key=clave)
 
+def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
+    """Genera un PDF con el resumen global de materiales del proyecto."""
+    buffer = BytesIO()
+    doc = BaseDocTemplate(buffer, pagesize=letter)
+
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
+    template = PageTemplate(id="con_fondo", frames=[frame], onPage=fondo_pagina)
+    doc.addPageTemplates([template])
+
+    elems = []
+    elems.append(Paragraph(f"<b>Resumen de Materiales - Proyecto: {nombre_proy}</b>", styles["Title"]))
+    elems.append(Spacer(1, 12))
+
+    # Agrupar materiales si vienen repetidos
+    df_agrupado = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
+    data = [["Material", "Unidad", "Cantidad"]]
+    for _, row in df_agrupado.iterrows():
+        data.append([
+            Paragraph(formatear_material(row["Materiales"]), styleN),
+            str(row["Unidad"]),
+            f"{round(row['Cantidad'], 2):.2f}"
+        ])
+
+    tabla = Table(data, colWidths=[4*inch, 1*inch, 1*inch])
+    tabla.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("ALIGN", (1,1), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+    ]))
+    elems.append(tabla)
+
+    # Si hay materiales adicionales, los añadimos al final
+    if datos_proyecto and "materiales_extra" in datos_proyecto:
+        df_extra = datos_proyecto["materiales_extra"]
+        if df_extra is not None and not df_extra.empty:
+            elems.append(Spacer(1, 24))
+            elems.append(Paragraph("<b>Materiales Adicionales</b>", styles["Heading2"]))
+            elems.append(Spacer(1, 12))
+
+            data_extra = [["Material", "Unidad", "Cantidad"]]
+            for _, row in df_extra.iterrows():
+                data_extra.append([
+                    Paragraph(formatear_material(row["Materiales"]), styleN),
+                    str(row["Unidad"]),
+                    f"{round(row['Cantidad'], 2):.2f}"
+                ])
+
+            tabla_extra = Table(data_extra, colWidths=[4*inch, 1*inch, 1*inch])
+            tabla_extra.setStyle(TableStyle([
+                ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+                ("BACKGROUND", (0,0), (-1,0), colors.orange),
+                ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+                ("ALIGN", (1,1), (-1,-1), "CENTER"),
+                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                ("FONTSIZE", (0,0), (-1,-1), 9),
+            ]))
+            elems.append(tabla_extra)
+
+    doc.build(elems)
+    buffer.seek(0)
+    return buffer
 
 
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
@@ -388,6 +452,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
