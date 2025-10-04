@@ -56,8 +56,18 @@ def formulario_datos_proyecto():
 
     # ---------------- SECCIÓN 2: CALIBRES ----------------
     st.markdown("### 2. 🧵 Selección de Calibres")
-    calibres = cargar_calibres_desde_excel()
-    calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
+
+    # Definición directa de calibres comerciales sin leer Excel
+    calibres = {
+        "primario": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM", "477 MCM", "556.5 MCM"],
+        "secundario": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP", "266.8 WP"],
+        "neutro": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM"],
+        "piloto": ["2 WP"],
+        "retenidas": ["1/4 Acerado", "5/8 Acerado", "3/4 Acerado"]
+    }
+
+# Llamar al formulario de selección
+calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
 
     # Guardar todo en session_state
     st.session_state["datos_proyecto"] = {
