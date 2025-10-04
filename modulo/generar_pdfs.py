@@ -3,9 +3,10 @@ import streamlit as st
 from modulo.procesar_materiales import procesar_materiales
 from modulo.pdf_utils import (
     generar_pdf_materiales,
-    generar_pdf_estructuras,
+    generar_pdf_estructuras_global,
+    generar_pdf_estructuras_por_punto,
     generar_pdf_materiales_por_punto,
-    generar_pdf_completo
+    generar_pdf_completo,
 )
 
 COLUMNAS_BASE = ["Punto", "Poste", "Primario", "Secundario", "Retenida", "Aterrizaje", "Transformador"]
