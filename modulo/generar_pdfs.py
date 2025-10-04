@@ -10,17 +10,18 @@ from modulo.pdf_utils import (
     generar_pdf_completo
 )
 
-COLUMNAS_BASE = [
-    "Punto", "Poste", "Primario", "Secundario",
-    "Retenida", "Aterrizaje", "Transformador"
-]
-
 def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
     """
-    Genera los diferentes reportes PDF a partir de los datos del proyecto.
-    Retorna un diccionario con los buffers PDF.
+    Genera todos los reportes PDF del proyecto:
+    - Materiales
+    - Estructuras globales
+    - Estructuras por punto
+    - Materiales por punto
+    - Informe completo
     """
-    df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto = procesar_materiales(
+
+    # === 1️⃣ Procesar materiales y estructuras ===
+    df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto, df_estructuras_por_punto = procesar_materiales(
         archivo_estructuras=archivo_estructuras,
         archivo_materiales=ruta_datos_materiales,
         estructuras_df=df,
@@ -29,21 +30,21 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
 
     nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
 
-    # ✅ Incorporar materiales adicionales si existen
+    # === 2️⃣ Incorporar materiales adicionales ===
     adicionales = st.session_state.get("materiales_extra", [])
     if adicionales:
         df_adicionales = pd.DataFrame(adicionales)
-        # sumarlos al resumen general
+        # Agregar a la lista general
         df_resumen = pd.concat([df_resumen, df_adicionales], ignore_index=True)
         df_resumen = df_resumen.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
     else:
         df_adicionales = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
 
-    # ✅ Pasar los adicionales al PDF completo
+    # === 3️⃣ Generar los diferentes PDF ===
     pdfs = {
         "materiales": generar_pdf_materiales(df_resumen, nombre_proyecto, datos_proyecto),
         "estructuras_global": generar_pdf_estructuras_global(df_estructuras_resumen, nombre_proyecto),
-        "estructuras_por_punto": generar_pdf_estructuras_por_punto(df_resumen_por_punto, nombre_proyecto),
+        "estructuras_por_punto": generar_pdf_estructuras_por_punto(df_estructuras_por_punto, nombre_proyecto),
         "materiales_por_punto": generar_pdf_materiales_por_punto(df_resumen_por_punto, nombre_proyecto),
         "completo": generar_pdf_completo(
             df_resumen,
@@ -54,3 +55,4 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
     }
 
     return pdfs
+
