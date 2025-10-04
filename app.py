@@ -18,7 +18,7 @@ COLUMNAS_BASE = [
 
 # 📌 Ruta fija al Excel base de materiales
 BASE_DIR = os.path.dirname(__file__)
-RUTA_DATOS_MATERIALES = os.path.join(BASE_DIR, "Estructura_datos.xlsx")
+RUTA_DATOS_MATERIALES = os.path.join(BASE_DIR, "modulo", "Estructura_datos.xlsx")
 
 
 # ========================
@@ -220,4 +220,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
