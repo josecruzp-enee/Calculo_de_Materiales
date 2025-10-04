@@ -207,6 +207,41 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
     buffer.seek(0)
     return buffer
 
+def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
+    """
+    Agrega una tabla de materiales adicionales (si existen) al PDF.
+    Retorna la lista 'elems' actualizada.
+    """
+    df_extra = datos_proyecto.get("materiales_extra")
+    if df_extra is None or df_extra.empty:
+        return elems  # no hay nada que agregar
+
+    elems.append(PageBreak())
+    elems.append(Paragraph("<b>Materiales Adicionales</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 12))
+
+    data_extra = [["Material", "Unidad", "Cantidad"]]
+    for _, row in df_extra.iterrows():
+        data_extra.append([
+            Paragraph(str(row["Materiales"]), styleN),
+            str(row["Unidad"]),
+            f"{round(row['Cantidad'], 2):.2f}"
+        ])
+
+    tabla_extra = Table(data_extra, colWidths=[4*inch, 1*inch, 1*inch])
+    tabla_extra.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.orange),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+        ("ALIGN", (1,1), (-1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+    ]))
+
+    elems.append(tabla_extra)
+    elems.append(Spacer(1, 0.2 * inch))
+    return elems
+
 
 def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     """Informe completo (portada, materiales, estructuras, materiales por punto)."""
@@ -336,7 +371,8 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
         ]))
         elems.append(tabla_punto)
         elems.append(Spacer(1, 0.2*inch))
-
+    # 6️⃣ Materiales adicionales
+    elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
     doc.build(elems)
     buffer.seek(0)
     return buffer
@@ -386,6 +422,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
