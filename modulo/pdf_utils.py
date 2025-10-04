@@ -49,6 +49,104 @@ def formatear_material(nombre):
     return texto
 
 # === Hoja de información del proyecto ===
+def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
+    elems = []
+    elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
+    elems.append(Spacer(1, 12))
+
+    # === Generar descripción técnica automática ===
+    descripcion = datos_proyecto.get("descripcion_proyecto", "").strip()
+
+    # Extraer datos generales
+    tension = datos_proyecto.get("nivel_de_tension", "")
+    cables = datos_proyecto.get("cables_proyecto", [])
+    texto_partes = []
+
+    # --- Red primaria ---
+    primarios = [c for c in cables if c.get("Tipo", "").lower() == "primario"]
+    if primarios:
+        for c in primarios:
+            long_m = c.get("Total Cable (m)", c.get("Longitud (m)", 0))
+            fase = c.get("Configuración", "")
+            calibre = c.get("Calibre", "")
+            texto_partes.append(
+                f"construcción de <b>{long_m:.0f} m</b> de red primaria <b>{fase}</b> "
+                f"con conductor <b>{calibre}</b> a <b>{tension} kV</b>"
+            )
+
+    # --- Red secundaria ---
+    secundarios = [c for c in cables if c.get("Tipo", "").lower() == "secundario"]
+    if secundarios:
+        for c in secundarios:
+            long_m = c.get("Total Cable (m)", c.get("Longitud (m)", 0))
+            fase = c.get("Configuración", "")
+            calibre = c.get("Calibre", "")
+            texto_partes.append(
+                f"construcción de <b>{long_m:.0f} m</b> de red secundaria <b>{fase}</b> "
+                f"con conductor <b>{calibre}</b>, tensión <b>120/240 V</b>"
+            )
+
+    # --- Transformadores ---
+    if df_mat is not None and not df_mat.empty:
+        transf = df_mat[df_mat["Materiales"].str.contains("Transformador", case=False, na=False)]
+        if not transf.empty:
+            total_transf = transf["Cantidad"].sum()
+            capacidades = ", ".join(sorted(set(transf["Materiales"].str.extract(r"(\d+\.?\d*)")[0].dropna().tolist())))
+            texto_partes.append(f"instalación de <b>{int(total_transf)}</b> transformador(es) de <b>{capacidades} kVA</b>")
+
+    # --- Luminarias ---
+    if df_mat is not None and not df_mat.empty:
+        lamparas = df_mat[df_mat["Materiales"].str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)]
+        if not lamparas.empty:
+            total_lamp = lamparas["Cantidad"].sum()
+            texto_partes.append(f"instalación de <b>{int(total_lamp)}</b> lámpara(s) de alumbrado público")
+
+    # --- Postes ---
+    if df_estructuras is not None and not df_estructuras.empty:
+        postes = df_estructuras[df_estructuras["codigodeestructura"].str.contains("PC", case=False, na=False)]
+        if not postes.empty:
+            total_postes = postes["Cantidad"].sum()
+            tipos = ", ".join(sorted(set(postes["codigodeestructura"].tolist())))
+            texto_partes.append(f"hincado de <b>{int(total_postes)}</b> poste(s) tipo <b>{tipos}</b>")
+
+    # --- Unir descripción automática ---
+    descripcion_auto = ""
+    if texto_partes:
+        descripcion_auto = "Construcción de " + "; ".join(texto_partes) + "."
+
+    # --- Combinar descripción escrita + automática ---
+    descripcion_total = descripcion_auto if not descripcion else descripcion + "<br/><br/>" + descripcion_auto
+
+    elems.append(Paragraph(f"<b>Descripción del Proyecto:</b> {descripcion_total}", styleN))
+    elems.append(Spacer(1, 12))
+
+    # === Tabla de información general ===
+    data = [
+        ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
+        ["Código / Expediente:", datos_proyecto.get("codigo_proyecto", "")],
+        ["Nivel de Tensión (kV):", datos_proyecto.get("nivel_de_tension", "")],
+        ["Calibre Primario:", datos_proyecto.get("calibre_primario", "")],
+        ["Calibre Secundario:", datos_proyecto.get("calibre_secundario", "")],
+        ["Calibre Neutro:", datos_proyecto.get("calibre_neutro", "")],
+        ["Calibre Piloto:", datos_proyecto.get("calibre_piloto", "")],
+        ["Calibre Cable de Retenidas:", datos_proyecto.get("calibre_retenidas", "")],
+        ["Fecha de Informe:", datetime.today().strftime("%d/%m/%Y")],
+        ["Responsable / Diseñador:", datos_proyecto.get("responsable", "N/A")],
+        ["Empresa / Área:", datos_proyecto.get("empresa", "N/A")],
+    ]
+
+    table = Table(data, colWidths=[180, 300])
+    table.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (0,-1), colors.lightgrey),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
+    ]))
+
+    elems.append(table)
+    elems.append(Spacer(1, 24))
+    elems.append(PageBreak())
+    return elems
 
 
 # === Generar PDF de materiales globales ===
@@ -339,6 +437,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
