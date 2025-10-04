@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
+import pandas as pd
 from modulo.procesar_materiales import procesar_materiales
 from modulo.pdf_utils import (
     generar_pdf_materiales,
