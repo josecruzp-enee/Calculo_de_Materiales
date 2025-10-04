@@ -7,6 +7,7 @@ from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
 from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
+from modulo.pdf_descarga import generar_pdfs
 
 # 👇 columnas base ajustadas a tu Excel
 COLUMNAS_BASE = [
@@ -169,11 +170,21 @@ def seccion_finalizar_calculo(df):
 # ========================
 # Exportación
 # ========================
-def seccion_exportacion(df, modo_carga, ruta_estructuras):
+def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
+
         if st.button("📥 Generar Reportes PDF"):
-            generar_pdfs(modo_carga, ruta_estructuras, df)
+            st.session_state["pdfs_generados"] = generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales)
+
+        if "pdfs_generados" in st.session_state:
+            pdfs = st.session_state["pdfs_generados"]
+
+            st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"], "Resumen_Materiales.pdf", "application/pdf")
+            st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"], "Resumen_Estructuras.pdf", "application/pdf")
+            st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"], "Estructuras_Por_Punto.pdf", "application/pdf")
+            st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"], "Materiales_Por_Punto.pdf", "application/pdf")
+            st.download_button("📄 Descargar Informe Completo", pdfs["completo"], "Informe_Completo.pdf", "application/pdf")
 
 # ========================
 # MAIN
@@ -197,6 +208,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
