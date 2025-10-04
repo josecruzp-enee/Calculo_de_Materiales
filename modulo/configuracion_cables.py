@@ -9,12 +9,24 @@ from reportlab.lib.units import inch
 # =====================================================
 # 1️⃣ SECCIÓN STREAMLIT: CONFIGURACIÓN DE CABLES
 # =====================================================
+# -*- coding: utf-8 -*-
+import streamlit as st
+import pandas as pd
+from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+
+
+# =====================================================
+# 1️⃣ SECCIÓN STREAMLIT PARA CONFIGURACIÓN DE CABLES
+# =====================================================
 def seccion_cables():
     """Permite ingresar la configuración de cables del proyecto en Streamlit."""
     st.markdown("### ⚡ Configuración y Calibres de Conductores")
 
-    # Distribuir los campos en una sola fila
-    col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1.2, 0.8, 1.2])
+    # Campos en una sola fila
+    col1, col2, col3, col4 = st.columns([1.5, 1, 1.2, 1.2])
 
     with col1:
         tipo = st.selectbox("🔌 Tipo", ["Primario", "Secundario"], key="tipo_circuito")
@@ -23,24 +35,23 @@ def seccion_cables():
     with col3:
         calibre = st.selectbox("📏 Calibre", ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "4/0 ASCR", "336 MCM"], key="calibre_primario_cable")
     with col4:
-        fases = st.number_input("🔢 Fases", min_value=1, max_value=3, step=1, key="fases_cable")
-    with col5:
         longitud = st.number_input("📐 Longitud (m)", min_value=0.0, step=10.0, key="longitud_cable")
 
+    # Derivar cantidad de fases según configuración
+    fases = int(configuracion.replace("F", ""))  # 1F → 1, 2F → 2, etc.
     total_cable = longitud * fases
 
     # Inicializar lista si no existe
     if "cables_proyecto" not in st.session_state:
         st.session_state.cables_proyecto = []
 
-    # Botón centrado
+    # Botón agregar tramo
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("➕ Agregar tramo"):
         st.session_state.cables_proyecto.append({
             "Tipo": tipo,
             "Configuración": configuracion,
             "Calibre": calibre,
-            "Fases": fases,
             "Longitud (m)": longitud,
             "Total Cable (m)": total_cable
         })
