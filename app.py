@@ -163,6 +163,44 @@ def listas_desplegables():
 
     return df
 
+# ========================
+# Adicionar materiales manualmente
+# ========================
+def seccion_adicionar_material():
+    st.subheader("5. 🧰 Adicionar Material")
+    st.markdown("Agrega materiales adicionales al proyecto que no estén asociados a estructuras específicas.")
+
+    # Inicializar almacenamiento en sesión
+    if "materiales_extra" not in st.session_state:
+        st.session_state["materiales_extra"] = []
+
+    # Formulario de entrada
+    with st.form("form_adicionar_material"):
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            material = st.text_input("🔧 Nombre del Material")
+        with col2:
+            unidad = st.text_input("📏 Unidad (ej. m, und, kg)")
+        with col3:
+            cantidad = st.number_input("🔢 Cantidad", min_value=0.0, step=0.1)
+        agregar = st.form_submit_button("➕ Agregar Material")
+
+    if agregar and material:
+        st.session_state["materiales_extra"].append({
+            "Material": material.strip(),
+            "Unidad": unidad.strip(),
+            "Cantidad": cantidad
+        })
+        st.success(f"✅ Material agregado: {material} ({cantidad} {unidad})")
+
+    # Mostrar tabla de materiales extra
+    if st.session_state["materiales_extra"]:
+        st.markdown("### 📋 Materiales adicionales añadidos")
+        st.dataframe(pd.DataFrame(st.session_state["materiales_extra"]), use_container_width=True)
+
+        if st.button("🗑️ Borrar todos los materiales añadidos"):
+            st.session_state["materiales_extra"] = []
+            st.success("✅ Lista de materiales adicionales vaciada.")
 
 # ========================
 # Finalizar cálculo
@@ -214,11 +252,13 @@ def main():
 
     seccion_datos_proyecto()
     df, ruta_estructuras = seccion_entrada_estructuras(modo_carga)
+    seccion_adicionar_material()
     seccion_finalizar_calculo(df)
     seccion_exportacion(df, modo_carga, ruta_estructuras, RUTA_DATOS_MATERIALES)
 
 
 if __name__ == "__main__":
     main()
+
 
 
