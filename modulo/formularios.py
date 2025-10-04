@@ -1,51 +1,47 @@
 # -*- coding: utf-8 -*-
 """
-formulario.py
-Gestión de formulario de datos del proyecto y selección de calibres
+Formulario principal del proyecto.
+Autor: José Nikol Cruz
 """
 
 import streamlit as st
+from datetime import datetime
 from modulo.calibres import seleccionar_calibres_formulario
 
 
 def formulario_datos_proyecto():
-    """Formulario para ingresar los datos generales del proyecto"""
-    st.markdown("## 1. 📋 Datos del Proyecto")
+    """Formulario para ingresar los datos generales del proyecto."""
+    st.markdown("### 1️⃣ Datos Generales del Proyecto")
 
-    datos = {
-        "nombre": st.text_input("Nombre del proyecto", ""),
-        "ubicacion": st.text_input("Ubicación", ""),
-        "tension": st.selectbox("Nivel de Tensión (kV)", ["13.8", "34.5", "4.16"]),
-        "ingeniero": st.text_input("Ingeniero responsable", ""),
-    }
+    # --- Campos básicos ---
+    nombre = st.text_input("📘 Nombre del Proyecto", value=st.session_state.get("nombre_proyecto", ""))
+    codigo = st.text_input("🔢 Código / Expediente", value=st.session_state.get("codigo_proyecto", ""))
+    empresa = st.text_input("🏢 Empresa / Área", value=st.session_state.get("empresa", "ENEE"))
+    responsable = st.text_input("👷‍♂️ Responsable / Diseñador", value=st.session_state.get("responsable", ""))
+    nivel_tension = st.selectbox("⚡ Nivel de Tensión (kV)", ["13.8", "34.5"], index=0)
 
-    # ---------------- SECCIÓN 2: CALIBRES ----------------
-    st.markdown("### 2. 🧵 Selección de Calibres")
+    # --- Sección 2: Calibres (sin Excel) ---
+    st.markdown("### 2️⃣ Selección de Calibres de Conductores")
 
-    # ⚙️ Calibres definidos internamente (sin Excel)
-    calibres = {
-        "primario": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM", "477 MCM", "556.5 MCM"],
-        "secundario": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP", "266.8 WP"],
-        "neutro": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ACSR", "266.8 MCM"],
-        "piloto": ["2 WP"],
-        "retenidas": ["1/4 Acerado", "5/8 Acerado", "3/4 Acerado"]
-    }
+    calibres_seleccionados = seleccionar_calibres_formulario(
+        st.session_state.get("datos_proyecto", {})
+    )
 
-    calibres_seleccionados = seleccionar_calibres_formulario(datos, calibres)
-
-    # Guardar todo en session_state
+    # --- Guardar datos ---
     st.session_state["datos_proyecto"] = {
-        **datos,
-        **calibres_seleccionados
+        "nombre_proyecto": nombre,
+        "codigo_proyecto": codigo,
+        "empresa": empresa,
+        "responsable": responsable,
+        "nivel_de_tension": nivel_tension,
+        **calibres_seleccionados,
+        "fecha_informe": datetime.today().strftime("%d/%m/%Y")
     }
-
-    st.success("✅ Datos del proyecto guardados correctamente.")
 
 
 def mostrar_datos_formateados():
-    """Muestra los datos cargados del proyecto en forma de tabla."""
+    """Muestra los datos ingresados de forma ordenada."""
     if "datos_proyecto" in st.session_state:
-        st.subheader("📊 Resumen de Datos del Proyecto")
+        st.markdown("### 🧾 Resumen de Datos del Proyecto")
         datos = st.session_state["datos_proyecto"]
-        for clave, valor in datos.items():
-            st.markdown(f"**{clave.capitalize()}:** {valor}")
+        st.json(datos)
