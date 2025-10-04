@@ -13,6 +13,12 @@ from io import BytesIO
 import os
 import re
 import pandas as pd
+# ====== LOG UNIVERSAL ======
+try:
+    import streamlit as st
+    log = st.write
+except ImportError:
+    log = print
 
 # ======== ESTILOS COMUNES ========
 styles = getSampleStyleSheet()
@@ -508,6 +514,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
 
