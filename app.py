@@ -294,12 +294,8 @@ def main():
     # ======================
     # 2️⃣ Selección de calibres
     # ======================
-    st.header("🧵 Selección de Calibres de Conductores")
-    calibres = cargar_calibres_desde_excel()
-    calibres_seleccionados = seleccionar_calibres_formulario(
-        st.session_state["datos_proyecto"], calibres
-    )
-    st.session_state["datos_proyecto"].update(calibres_seleccionados)
+    calibres_seleccionados = seleccionar_calibres_formulario(st.session_state["datos_proyecto"])
+
 
     # ======================
     # 3️⃣ Configuración de red (1F, 2F, 3F)
@@ -325,6 +321,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
