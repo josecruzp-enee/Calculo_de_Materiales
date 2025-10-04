@@ -39,6 +39,39 @@ def cargar_indice(archivo_materiales):
     df_indice.columns = ['NombreEstructura', 'Descripcion']
     return df_indice
 
+def cargar_catalogo_materiales(archivo_materiales):
+    """
+    Carga la hoja 'Materiales' desde el archivo base.
+    Devuelve un DataFrame con:
+    - Codigo (opcional)
+    - Descripcion
+    - Unidad
+    """
+    try:
+        df = pd.read_excel(archivo_materiales, sheet_name="Materiales")
+        # Normalizar nombres de columnas
+        df.columns = df.columns.str.strip().str.upper()
+
+        # Renombrar columnas conocidas
+        if "CÓDIGO" in df.columns:
+            df = df.rename(columns={"CÓDIGO": "Codigo"})
+        if "DESCRIPCIÓN  DE  MATERIAL" in df.columns:
+            df = df.rename(columns={"DESCRIPCIÓN  DE  MATERIAL": "Descripcion"})
+        elif "DESCRIPCIÓN DE MATERIAL" in df.columns:
+            df = df.rename(columns={"DESCRIPCIÓN DE MATERIAL": "Descripcion"})
+        elif "DESCRIPCION DE MATERIAL" in df.columns:
+            df = df.rename(columns={"DESCRIPCION DE MATERIAL": "Descripcion"})
+        if "UNIDAD" in df.columns:
+            df = df.rename(columns={"UNIDAD": "Unidad"})
+
+        # Mantener solo columnas que interesan
+        cols = [c for c in ["Codigo", "Descripcion", "Unidad"] if c in df.columns]
+        return df[cols].dropna().reset_index(drop=True)
+
+    except Exception as e:
+        print(f"⚠️ Error cargando hoja 'Materiales': {e}")
+        return pd.DataFrame(columns=["Descripcion", "Unidad"])
+
 def cargar_adicionales(archivo_estructuras):
     try:
         df_adicionales = pd.read_excel(archivo_estructuras, sheet_name='materialesadicionados')
@@ -47,4 +80,5 @@ def cargar_adicionales(archivo_estructuras):
     except:
         pass
     return pd.DataFrame(columns=['Materiales', 'Unidad', 'Cantidad'])
+
 
