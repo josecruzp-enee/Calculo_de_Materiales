@@ -174,7 +174,8 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy, estructuras_por_
     puntos = sorted(df_por_punto["Punto"].unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()))
 
     for p in puntos:
-        elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading2"]))
+        punto_num = str(p).replace("Punto", "").strip()
+        elems.append(Paragraph(f"<b>Punto {punto_num}</b>", styles["Heading2"]))
 
         # Mostrar código y descripción de estructuras si existe
         if estructuras_por_punto and df_indice is not None and p in estructuras_por_punto:
@@ -283,7 +284,8 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
 
     puntos = sorted(df_por_punto["Punto"].unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()))
     for p in puntos:
-        elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading2"]))
+        punto_num = str(p).replace("Punto", "").strip()
+        elems.append(Paragraph(f"<b>Punto {punto_num}</b>", styles["Heading2"]))
 
         df_p = df_por_punto[df_por_punto["Punto"]==p]
         df_agrupado = df_p.groupby(["Materiales","Unidad"], as_index=False)["Cantidad"].sum()
@@ -308,5 +310,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_por_punto, datos_proyecto):
     doc.build(elems)
     buffer.seek(0)
     return buffer
+
 
 
