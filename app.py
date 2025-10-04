@@ -166,41 +166,49 @@ def listas_desplegables():
 # ========================
 # Adicionar materiales manualmente
 # ========================
+from modulo.entradas import cargar_catalogo_materiales
+
 def seccion_adicionar_material():
     st.subheader("5. 🧰 Adicionar Material")
     st.markdown("Agrega materiales adicionales al proyecto que no estén asociados a estructuras específicas.")
 
-    # Inicializar almacenamiento en sesión
     if "materiales_extra" not in st.session_state:
         st.session_state["materiales_extra"] = []
 
-    # Formulario de entrada
+    # Cargar catálogo
+    catalogo_df = cargar_catalogo_materiales(RUTA_DATOS_MATERIALES)
+    opciones = catalogo_df["Descripcion"].tolist() if not catalogo_df.empty else []
+
     with st.form("form_adicionar_material"):
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
-            material = st.text_input("🔧 Nombre del Material")
+            material = st.selectbox("🔧 Selecciona el Material", options=[""] + opciones, index=0)
+
+        # Buscar unidad asociada al material
+        unidad_auto = ""
+        if material and material in catalogo_df["Descripcion"].values:
+            unidad_auto = catalogo_df.loc[catalogo_df["Descripcion"] == material, "Unidad"].values[0]
+
         with col2:
-            unidad = st.text_input("📏 Unidad (ej. m, und, kg)")
+            unidad = st.text_input("📏 Unidad", value=unidad_auto)
+
         with col3:
             cantidad = st.number_input("🔢 Cantidad", min_value=0.0, step=0.1)
+
         agregar = st.form_submit_button("➕ Agregar Material")
 
     if agregar and material:
         st.session_state["materiales_extra"].append({
-            "Material": material.strip(),
+            "Materiales": material.strip(),
             "Unidad": unidad.strip(),
             "Cantidad": cantidad
         })
         st.success(f"✅ Material agregado: {material} ({cantidad} {unidad})")
 
-    # Mostrar tabla de materiales extra
     if st.session_state["materiales_extra"]:
         st.markdown("### 📋 Materiales adicionales añadidos")
         st.dataframe(pd.DataFrame(st.session_state["materiales_extra"]), use_container_width=True)
 
-        if st.button("🗑️ Borrar todos los materiales añadidos"):
-            st.session_state["materiales_extra"] = []
-            st.success("✅ Lista de materiales adicionales vaciada.")
 
 # ========================
 # Finalizar cálculo
@@ -259,6 +267,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
