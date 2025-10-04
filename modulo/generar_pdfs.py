@@ -21,7 +21,7 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
     """
 
     # === 1️⃣ Procesar materiales y estructuras ===
-    df_resumen, df_estructuras_resumen, df_resumen_por_punto, datos_proyecto, df_estructuras_por_punto = procesar_materiales(
+    df_resumen, df_estructuras_resumen, df_estructuras_por_punto, df_resumen_por_punto, datos_proyecto = procesar_materiales(
         archivo_estructuras=archivo_estructuras,
         archivo_materiales=ruta_datos_materiales,
         estructuras_df=df,
@@ -34,7 +34,6 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
     adicionales = st.session_state.get("materiales_extra", [])
     if adicionales:
         df_adicionales = pd.DataFrame(adicionales)
-        # Agregar a la lista general
         df_resumen = pd.concat([df_resumen, df_adicionales], ignore_index=True)
         df_resumen = df_resumen.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
     else:
@@ -49,10 +48,10 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
         "completo": generar_pdf_completo(
             df_resumen,
             df_estructuras_resumen,
+            df_estructuras_por_punto,
             df_resumen_por_punto,
             datos_proyecto
         ),
     }
 
     return pdfs
-
