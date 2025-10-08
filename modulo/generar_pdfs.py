@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+import math
 from modulo.procesar_materiales import procesar_materiales
 from modulo.pdf_utils import (
     generar_pdf_materiales,
@@ -9,6 +10,21 @@ from modulo.pdf_utils import (
     generar_pdf_materiales_por_punto,
     generar_pdf_completo
 )
+
+# === Función auxiliar para formatear el nivel de tensión ===
+def formato_tension(v_ll):
+    """
+    Convierte el valor de tensión de línea a línea (kV) en un texto del tipo:
+    '19.9 L-N / 34.5 L-L kV'
+    """
+    try:
+        v_ll = float(v_ll)
+        v_ln = round(v_ll / math.sqrt(3), 1)
+        return f"{v_ln} L-N / {v_ll} L-L kV"
+    except (ValueError, TypeError):
+        # Si el dato no es numérico, lo devuelve tal cual
+        return str(v_ll)
+
 
 def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
     """
@@ -28,6 +44,10 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
         estructuras_df=df,
         datos_proyecto=st.session_state.get("datos_proyecto", {})
     )
+
+    # --- Aplicar formato especial al nivel de tensión ---
+    if "nivel_de_tension" in datos_proyecto and datos_proyecto["nivel_de_tension"]:
+        datos_proyecto["nivel_de_tension"] = formato_tension(datos_proyecto["nivel_de_tension"])
 
     nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
 
