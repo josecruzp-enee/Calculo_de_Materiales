@@ -125,13 +125,15 @@ def procesar_materiales(
     )
     log(">>> df_resumen_por_punto:\n" + str(df_resumen_por_punto.head(10)))
 
-    return (
-        df_resumen,
-        df_estructuras_resumen,
-        df_estructuras_por_punto,
-        df_resumen_por_punto,
-        datos_proyecto
-    )
+    return {
+    "materiales": pdf_materiales,
+    "estructuras_global": pdf_estructuras_global,
+    "estructuras_por_punto": pdf_estructuras_por_punto,
+    "materiales_por_punto": pdf_materiales_por_punto,
+    "completo": pdf_informe_completo,
+}
+
+
 
 
 
