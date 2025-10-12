@@ -7,6 +7,7 @@ Colores y tipografía inspirados en la línea institucional ENEE.
 
 import streamlit as st
 import os
+import base64
 
 def aplicar_estilos(usar_encabezado_rojo=False):
     """Aplica estilos globales con encabezado institucional ENEE."""
@@ -14,6 +15,13 @@ def aplicar_estilos(usar_encabezado_rojo=False):
     base_dir = os.path.dirname(__file__)
     logo_blanco = os.path.join(base_dir, "Imagen_ENEE.png")
     logo_rojo = os.path.join(base_dir, "Imagen_ENEE_Distribucion.png")
+
+    # Leer y convertir imagen a base64 (para que funcione en Streamlit Cloud)
+    def img_to_base64(ruta):
+        with open(ruta, "rb") as img:
+            return base64.b64encode(img.read()).decode()
+
+    logo_b64 = img_to_base64(logo_rojo if usar_encabezado_rojo else logo_blanco)
 
     # ======== CSS GLOBAL ========
     st.markdown(
@@ -25,7 +33,7 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             padding-bottom: 2rem !important;
             padding-left: 2rem !important;
             padding-right: 2rem !important;
-            margin-top: 110px !important; /* espacio para encabezado */
+            margin-top: 110px !important;
         }
 
         h1, h2, h3, h4, h5 {
@@ -74,7 +82,7 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             font-size: 0.9rem;
         }
 
-        /* ======== CABECERA BLANCA ======== */
+        /* ======== CABECERA ======== */
         .header {
             position: fixed;
             top: 0;
@@ -91,9 +99,8 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             transition: all 0.3s ease-in-out;
         }
 
-        .header .logo {
-            height: 55px;
-            margin-right: 10px;
+        .header img {
+            height: 60px;
         }
 
         .header .titulo h1 {
@@ -106,23 +113,6 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             font-size: 0.9rem;
             margin: 0;
             color: #444444;
-        }
-
-        /* ======== CABECERA ROJA ======== */
-        .header-red {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            background-color: #cc0000;
-            text-align: center;
-            padding: 0.3rem 0;
-            z-index: 999;
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
-        }
-
-        .header-red .logo-red {
-            height: 55px;
         }
 
         /* ======== FOOTER ======== */
@@ -141,29 +131,19 @@ def aplicar_estilos(usar_encabezado_rojo=False):
         unsafe_allow_html=True
     )
 
-    # ====== CABECERA ======
-    if usar_encabezado_rojo:
-        st.markdown(
-            f"""
-            <div class='header-red'>
-                <img src='file://{logo_rojo}' class='logo-red'>
+    # ====== ENCABEZADO ======
+    st.markdown(
+        f"""
+        <div class='header'>
+            <img src='data:image/png;base64,{logo_b64}' alt='ENEE Logo'>
+            <div class='titulo'>
+                <h1>⚡ Sistema de Cálculo de Materiales</h1>
+                <h4>Gerencia de Distribución – Empresa Nacional de Energía Eléctrica (ENEE)</h4>
             </div>
-            """,
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f"""
-            <div class='header'>
-                <img src='file://{logo_blanco}' class='logo'>
-                <div class='titulo'>
-                    <h1>⚡ Sistema de Cálculo de Materiales</h1>
-                    <h4>Gerencia de Distribución – Empresa Nacional de Energía Eléctrica (ENEE)</h4>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     # ====== FOOTER ======
     st.markdown(
