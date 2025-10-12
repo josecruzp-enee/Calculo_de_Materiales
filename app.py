@@ -126,29 +126,26 @@ def listas_desplegables():
             st.session_state["punto_en_edicion"] = seleccionado
             resetear_desplegables()
 
-    # --- Edición del punto actual ---   
+    # --- Edición del punto actual ---
     if "punto_en_edicion" in st.session_state and st.session_state["punto_en_edicion"]:
         punto = st.session_state["punto_en_edicion"]
         st.markdown(f"### ✏️ Editando {punto}")
 
-    # Mostrar los desplegables
-        seleccion = crear_desplegables(opciones)
-        seleccion["Punto"] = punto
-    else:
-        punto = None  # evita "Editando None"
-
-
-        # Mostrar los desplegables
+        # Mostrar los desplegables en fila horizontal
         seleccion = crear_desplegables(opciones)
         seleccion["Punto"] = punto
 
-        # --- Guardar Punto ---
-        if st.button("💾 Guardar Punto"):
+        # Espacio visual y separador fino
+        st.markdown("<hr style='border:0.5px solid #ddd; margin:0.7rem 0;'>", unsafe_allow_html=True)
+
+        # --- Botón Guardar Estructura del Punto ---
+        guardar = st.button("💾 Guardar Estructura del Punto", type="primary", key="btn_guardar_estructura")
+
+        if guardar:
             if punto in df_actual["Punto"].values:
                 # Ya existe → combinar estructuras nuevas con las anteriores
                 fila_existente = df_actual[df_actual["Punto"] == punto].iloc[0].to_dict()
-                for col in ["Poste", "Primario", "Secundario",
-                            "Retenidas", "Conexiones a tierra", "Transformadores"]:
+                for col in ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]:
                     anterior = str(fila_existente.get(col, "")).strip()
                     nuevo = str(seleccion.get(col, "")).strip()
                     if anterior and nuevo and anterior != nuevo:
@@ -179,6 +176,8 @@ def listas_desplegables():
                 st.rerun()
             else:
                 st.experimental_rerun()
+    else:
+        punto = None  # evita "Editando None"
 
     # --- Vista previa general ---
     df = st.session_state["df_puntos"]
@@ -387,6 +386,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
