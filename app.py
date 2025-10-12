@@ -178,15 +178,8 @@ def listas_desplegables():
     # === Rerender diferido y seguro ===
     if st.session_state.get("necesita_refrescar", False):
         st.session_state["necesita_refrescar"] = False
-        with st.spinner("🔄 Actualizando vista..."):
-            st.empty()
-        try:
-            st.experimental_rerun()
-        except RuntimeError:
-            # Si Streamlit Cloud no permite rerun dentro de evento activo,
-            # diferirlo para el siguiente ciclo
-            st.session_state["force_reload"] = True
-            st.stop()
+        st.session_state["force_reload"] = True
+        st.stop()
 
     return df
 
@@ -376,6 +369,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
