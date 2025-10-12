@@ -90,31 +90,42 @@ def listas_desplegables():
 
     st.subheader("3. 🏗️ Estructuras del Proyecto")
 
+    # 🔄 Si la app quedó marcada para reiniciar los desplegables, hacerlo ahora
+    if st.session_state.get("reiniciar_desplegables", False):
+        st.session_state["reiniciar_desplegables"] = False
+        resetear_desplegables()
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
+
     df_actual = st.session_state["df_puntos"]
     puntos_existentes = df_actual["Punto"].unique().tolist()
 
-    # Crear nuevo punto
+    # --- Crear nuevo punto ---
     if st.button("🆕 Crear nuevo Punto"):
         nuevo_num = len(puntos_existentes) + 1
         st.session_state["punto_en_edicion"] = f"Punto {nuevo_num}"
         st.success(f"✏️ {st.session_state['punto_en_edicion']} creado y listo para editar")
         resetear_desplegables()
 
-    # Seleccionar un punto existente
+    # --- Seleccionar punto existente ---
     if puntos_existentes:
         seleccionado = st.selectbox("📍 Selecciona un Punto existente:", puntos_existentes, index=0)
         if st.button("✏️ Editar Punto seleccionado"):
             st.session_state["punto_en_edicion"] = seleccionado
             resetear_desplegables()
 
-    # Si hay punto en edición
+    # --- Edición del punto actual ---
     if "punto_en_edicion" in st.session_state:
         punto = st.session_state["punto_en_edicion"]
         st.markdown(f"### ✏️ Editando {punto}")
+
+        # Mostrar los desplegables
         seleccion = crear_desplegables(opciones)
         seleccion["Punto"] = punto
 
-        # 💾 Guardar cambios
+        # --- Guardar Punto ---
         if st.button("💾 Guardar Punto"):
             if punto in df_actual["Punto"].values:
                 # Ya existe → combinar estructuras nuevas con las anteriores
@@ -134,7 +145,7 @@ def listas_desplegables():
             # Agregar fila actualizada
             df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
 
-            # 👉 Ordenar puntos numéricamente
+            # Ordenar puntos numéricamente
             df_actual["orden"] = df_actual["Punto"].str.extract(r'(\d+)').astype(int)
             df_actual = df_actual.sort_values("orden").drop(columns="orden")
             st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
@@ -144,13 +155,15 @@ def listas_desplegables():
             resetear_desplegables()
             st.session_state.pop("punto_en_edicion", None)
 
-            # 🔄 Forzar recarga para limpiar visualmente los desplegables
+            # 🔄 Marcar para recargar con desplegables vacíos
+            st.session_state["reiniciar_desplegables"] = True
+
             if hasattr(st, "rerun"):
                 st.rerun()
             else:
                 st.experimental_rerun()
 
-    # Vista previa
+    # --- Vista previa general ---
     df = st.session_state["df_puntos"]
     if not df.empty:
         st.markdown("#### 📑 Vista de estructuras / materiales")
@@ -171,6 +184,7 @@ def listas_desplegables():
                 st.success(f"✅ Se eliminó {punto_borrar}")
 
     return df
+
 
 
 
@@ -355,4 +369,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
