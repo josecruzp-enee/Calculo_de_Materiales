@@ -321,7 +321,10 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             )
 
         # 2️⃣ Expandir las listas en múltiples filas (una por estructura)
-        df_expandido = df_expandido.explode(columnas_estructuras, ignore_index=True)
+        # Expandir cada columna individualmente, evitando error de longitudes desiguales
+        for col in columnas_estructuras:
+            df_expandido = df_expandido.explode(col, ignore_index=True)
+
 
         # 3️⃣ Mostrar vista previa para depuración
         st.markdown("#### 🧪 Vista previa estructuras expandidas")
@@ -476,6 +479,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
