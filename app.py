@@ -307,11 +307,15 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
 # ========================
 # MAIN
 # ========================
+# ========================
+# MAIN
+# ========================
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
     # 🔄 Forzar recarga diferida si quedó pendiente del ciclo anterior
+    # (permite refrescar la app tras guardar, borrar o limpiar sin error en Streamlit Cloud)
     if st.session_state.get("force_reload", False):
         st.session_state["force_reload"] = False
         st.experimental_rerun()
@@ -329,6 +333,9 @@ def main():
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
 
+    # ======================
+    # Selección del modo de carga
+    # ======================
     modo_carga = st.radio(
         "Selecciona modo de carga:",
         ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"],
@@ -345,6 +352,7 @@ def main():
     # ======================
     cables_registrados = seccion_cables()
 
+    # Guardar en los datos del proyecto
     if cables_registrados:
         st.session_state["datos_proyecto"]["cables_proyecto"] = cables_registrados
         st.session_state["cables_proyecto"] = cables_registrados
@@ -368,5 +376,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
