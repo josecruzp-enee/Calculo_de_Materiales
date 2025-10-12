@@ -12,6 +12,11 @@ from modulo.entradas import cargar_catalogo_materiales
 from modulo.configuracion_cables import seccion_cables
 from modulo.estilos_app import aplicar_estilos
 
+# Aplicar estilos institucionales ENEE
+aplicar_estilos()  # encabezado blanco
+# aplicar_estilos(usar_encabezado_rojo=True)  # si querés la franja roja
+
+
 # 👇 columnas base ajustadas a tu Excel
 COLUMNAS_BASE = [
     "Punto", "Poste", "Primario", "Secundario",
@@ -394,6 +399,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
