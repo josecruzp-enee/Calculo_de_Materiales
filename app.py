@@ -294,17 +294,17 @@ def seccion_finalizar_calculo(df):
 # Exportación (única definición)
 # ========================
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
-    import re  # 👈 importante para dividir los nombres
+    import re
+    import pandas as pd
 
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
-        # 🧩 Guardar cables dentro de datos_proyecto antes de exportar
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
         # ======================================================
-        # 🔹 NUEVO BLOQUE: dividir estructuras concatenadas
+        # 🔹 NUEVO BLOQUE: dividir y expandir estructuras concatenadas
         # ======================================================
         df_expandido = df.copy()
         columnas_estructuras = [
@@ -312,32 +312,31 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             "Retenidas", "Conexiones a tierra", "Transformadores"
         ]
 
+        # 1️⃣ Dividir los valores en listas
         for col in columnas_estructuras:
             df_expandido[col] = df_expandido[col].astype(str).apply(
-                lambda x: [s.strip() for s in re.split(r'[+,]', x) if s.strip()]
+                lambda x: [s.strip() for s in re.split(r'[+,]', x) if s.strip() and s.strip().lower() != "seleccionar estructura"]
             )
+
+        # 2️⃣ Expandir las listas en múltiples filas
+        df_expandido = df_expandido.explode(columnas_estructuras, ignore_index=True)
         # ======================================================
 
         if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
-            from modulo.procesar_materiales import procesar_materiales  # asegurar importación local
+            from modulo.procesar_materiales import procesar_materiales
             try:
-                # 👉 Usamos df_expandido (con estructuras separadas)
                 resultados_pdf = procesar_materiales(
                     archivo_estructuras=ruta_estructuras,
                     archivo_materiales=ruta_datos_materiales,
                     estructuras_df=df_expandido,
                     datos_proyecto=st.session_state["datos_proyecto"]
                 )
-
                 st.session_state["pdfs_generados"] = resultados_pdf
                 st.success("✅ Reportes generados correctamente")
 
             except Exception as e:
                 st.error(f"❌ Error al generar reportes: {e}")
 
-        # ======================================================
-        # Descarga de PDF una vez generados
-        # ======================================================
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
 
@@ -351,6 +350,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                                "Materiales_Por_Punto.pdf", "application/pdf", key="dl_mat_punto")
             st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
                                "Informe_Completo.pdf", "application/pdf", key="dl_full")
+
 
 
 def main():
@@ -425,6 +425,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
