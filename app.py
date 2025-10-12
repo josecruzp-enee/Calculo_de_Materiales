@@ -125,10 +125,17 @@ def listas_desplegables():
             st.session_state["punto_en_edicion"] = seleccionado
             resetear_desplegables()
 
-    # --- Edición del punto actual ---
-    if "punto_en_edicion" in st.session_state:
+    # --- Edición del punto actual ---   
+    if "punto_en_edicion" in st.session_state and st.session_state["punto_en_edicion"]:
         punto = st.session_state["punto_en_edicion"]
         st.markdown(f"### ✏️ Editando {punto}")
+
+    # Mostrar los desplegables
+        seleccion = crear_desplegables(opciones)
+        seleccion["Punto"] = punto
+    else:
+        punto = None  # evita "Editando None"
+
 
         # Mostrar los desplegables
         seleccion = crear_desplegables(opciones)
@@ -378,6 +385,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
