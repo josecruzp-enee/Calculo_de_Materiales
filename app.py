@@ -320,11 +320,9 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                            if s.strip() and s.strip().lower() != "seleccionar estructura"]
             )
 
-        # 2️⃣ Expandir las listas en múltiples filas (una por estructura)
-        # Expandir cada columna individualmente, evitando error de longitudes desiguales
+        # 2️⃣ Expandir cada columna individualmente, evitando error de longitudes desiguales
         for col in columnas_estructuras:
             df_expandido = df_expandido.explode(col, ignore_index=True)
-
 
         # 3️⃣ Mostrar vista previa para depuración
         st.markdown("#### 🧪 Vista previa estructuras expandidas")
@@ -342,6 +340,11 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     estructuras_df=df_expandido,
                     datos_proyecto=st.session_state["datos_proyecto"]
                 )
+
+                # 🧩 DEBUG: mostrar tipo y contenido de lo que devuelve procesar_materiales
+                st.write("🧩 Tipo de retorno de procesar_materiales:", type(resultados_pdf))
+                st.write("🧾 Vista previa del retorno:", resultados_pdf)
+
                 st.session_state["pdfs_generados"] = resultados_pdf
                 st.success("✅ Reportes generados correctamente")
 
@@ -405,7 +408,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     )
             else:
                 st.error("⚠️ Los reportes no se generaron correctamente o el formato de salida no es válido.")
-
 
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
@@ -479,6 +481,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
