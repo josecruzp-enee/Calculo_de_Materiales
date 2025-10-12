@@ -28,8 +28,30 @@ def cargar_opciones():
     return opciones
 
 
+def multiselect_con_etiquetas(label, datos, key, valores_previos_str=""):
+    """Crea un multiselect que guarda y recuerda múltiples estructuras."""
+    if not datos:
+        return ""
+
+    # Separar valores previos (si existen) por “,”
+    valores_previos = []
+    if valores_previos_str:
+        valores_previos = [v.strip() for v in valores_previos_str.split(",") if v.strip() in datos["valores"]]
+
+    seleccionados = st.multiselect(
+        label,
+        options=datos["valores"],
+        default=valores_previos,
+        format_func=lambda x: datos["etiquetas"].get(x, x),
+        key=key
+    )
+
+    # Devolver como texto concatenado
+    return " , ".join(seleccionados) if seleccionados else ""
+
+
 def crear_desplegables(opciones):
-    """Crea los selectbox/multiselect para cada tipo de estructura en una sola fila."""
+    """Crea multiselects para todos los tipos de estructura en una sola fila."""
     seleccion = {}
     df_actual = st.session_state.get("df_puntos", pd.DataFrame())
     punto_actual = st.session_state.get("punto_en_edicion")
@@ -40,77 +62,55 @@ def crear_desplegables(opciones):
         fila = df_actual[df_actual["Punto"] == punto_actual].iloc[0].to_dict()
         valores_previos = {k: v for k, v in fila.items() if k != "Punto"}
 
+    # Crear una fila con 6 columnas
     col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-    # --- Poste ---
     with col1:
-        seleccion["Poste"] = st.selectbox(
+        seleccion["Poste"] = multiselect_con_etiquetas(
             "Poste",
-            ["Seleccionar estructura"] + opciones.get("Poste", {}).get("valores", []),
-            index=(["Seleccionar estructura"] + opciones.get("Poste", {}).get("valores", [])).index(
-                valores_previos.get("Poste", "Seleccionar estructura")
-            ) if valores_previos.get("Poste") in opciones.get("Poste", {}).get("valores", []) else 0,
-            key="sel_poste"
+            opciones.get("Poste"),
+            key="sel_poste",
+            valores_previos_str=valores_previos.get("Poste", "")
         )
 
-    # --- Primario (ahora multiselección) ---
     with col2:
-        valores_prev_primario = []
-        if valores_previos.get("Primario"):
-            valores_prev_primario = [v.strip() for v in valores_previos["Primario"].split("+") if v.strip()]
-        seleccion["Primario"] = st.multiselect(
+        seleccion["Primario"] = multiselect_con_etiquetas(
             "Primario",
-            options=opciones.get("Primaria", {}).get("valores", []),
-            default=valores_prev_primario,
-            format_func=lambda x: opciones.get("Primaria", {}).get("etiquetas", {}).get(x, x),
-            key="sel_primario"
+            opciones.get("Primaria"),
+            key="sel_primario",
+            valores_previos_str=valores_previos.get("Primario", "")
         )
-        # Guardar como texto concatenado
-        if isinstance(seleccion["Primario"], list):
-            seleccion["Primario"] = " + ".join(seleccion["Primario"])
 
-    # --- Secundario ---
     with col3:
-        seleccion["Secundario"] = st.selectbox(
+        seleccion["Secundario"] = multiselect_con_etiquetas(
             "Secundario",
-            ["Seleccionar estructura"] + opciones.get("Secundaria", {}).get("valores", []),
-            index=(["Seleccionar estructura"] + opciones.get("Secundaria", {}).get("valores", [])).index(
-                valores_previos.get("Secundario", "Seleccionar estructura")
-            ) if valores_previos.get("Secundario") in opciones.get("Secundaria", {}).get("valores", []) else 0,
-            key="sel_secundario"
+            opciones.get("Secundaria"),
+            key="sel_secundario",
+            valores_previos_str=valores_previos.get("Secundario", "")
         )
 
-    # --- Retenidas ---
     with col4:
-        seleccion["Retenidas"] = st.selectbox(
+        seleccion["Retenidas"] = multiselect_con_etiquetas(
             "Retenida",
-            ["Seleccionar estructura"] + opciones.get("Retenidas", {}).get("valores", []),
-            index=(["Seleccionar estructura"] + opciones.get("Retenidas", {}).get("valores", [])).index(
-                valores_previos.get("Retenidas", "Seleccionar estructura")
-            ) if valores_previos.get("Retenidas") in opciones.get("Retenidas", {}).get("valores", []) else 0,
-            key="sel_retenidas"
+            opciones.get("Retenidas"),
+            key="sel_retenidas",
+            valores_previos_str=valores_previos.get("Retenidas", "")
         )
 
-    # --- Aterrizaje ---
     with col5:
-        seleccion["Conexiones a tierra"] = st.selectbox(
+        seleccion["Conexiones a tierra"] = multiselect_con_etiquetas(
             "Aterrizaje",
-            ["Seleccionar estructura"] + opciones.get("Conexiones a tierra", {}).get("valores", []),
-            index=(["Seleccionar estructura"] + opciones.get("Conexiones a tierra", {}).get("valores", [])).index(
-                valores_previos.get("Conexiones a tierra", "Seleccionar estructura")
-            ) if valores_previos.get("Conexiones a tierra") in opciones.get("Conexiones a tierra", {}).get("valores", []) else 0,
-            key="sel_tierra"
+            opciones.get("Conexiones a tierra"),
+            key="sel_tierra",
+            valores_previos_str=valores_previos.get("Conexiones a tierra", "")
         )
 
-    # --- Transformadores ---
     with col6:
-        seleccion["Transformadores"] = st.selectbox(
+        seleccion["Transformadores"] = multiselect_con_etiquetas(
             "Transformador",
-            ["Seleccionar estructura"] + opciones.get("Transformadores", {}).get("valores", []),
-            index=(["Seleccionar estructura"] + opciones.get("Transformadores", {}).get("valores", [])).index(
-                valores_previos.get("Transformadores", "Seleccionar estructura")
-            ) if valores_previos.get("Transformadores") in opciones.get("Transformadores", {}).get("valores", []) else 0,
-            key="sel_transformador"
+            opciones.get("Transformadores"),
+            key="sel_transformador",
+            valores_previos_str=valores_previos.get("Transformadores", "")
         )
 
     return seleccion
