@@ -294,6 +294,8 @@ def seccion_finalizar_calculo(df):
 # Exportación (única definición)
 # ========================
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
+    import re  # 👈 importante para dividir los nombres
+
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
@@ -301,13 +303,44 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
-        if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
-            st.session_state["pdfs_generados"] = generar_pdfs(
-                modo_carga, ruta_estructuras, df, ruta_datos_materiales
-            )
+        # ======================================================
+        # 🔹 NUEVO BLOQUE: dividir estructuras concatenadas
+        # ======================================================
+        df_expandido = df.copy()
+        columnas_estructuras = [
+            "Poste", "Primario", "Secundario",
+            "Retenidas", "Conexiones a tierra", "Transformadores"
+        ]
 
+        for col in columnas_estructuras:
+            df_expandido[col] = df_expandido[col].astype(str).apply(
+                lambda x: [s.strip() for s in re.split(r'[+,]', x) if s.strip()]
+            )
+        # ======================================================
+
+        if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
+            from modulo.procesar_materiales import procesar_materiales  # asegurar importación local
+            try:
+                # 👉 Usamos df_expandido (con estructuras separadas)
+                resultados_pdf = procesar_materiales(
+                    archivo_estructuras=ruta_estructuras,
+                    archivo_materiales=ruta_datos_materiales,
+                    estructuras_df=df_expandido,
+                    datos_proyecto=st.session_state["datos_proyecto"]
+                )
+
+                st.session_state["pdfs_generados"] = resultados_pdf
+                st.success("✅ Reportes generados correctamente")
+
+            except Exception as e:
+                st.error(f"❌ Error al generar reportes: {e}")
+
+        # ======================================================
+        # Descarga de PDF una vez generados
+        # ======================================================
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
+
             st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"],
                                "Resumen_Materiales.pdf", "application/pdf", key="dl_mat")
             st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"],
@@ -392,6 +425,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
