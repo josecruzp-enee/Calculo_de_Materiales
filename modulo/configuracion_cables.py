@@ -20,46 +20,45 @@ def seccion_cables():
         "Secundario": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
         "Neutro": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR"],
         "Retenidas": ["1/4 Acerado", "3/8 Acerado", "5/8 Acerado"],
-        "Piloto": ["2 WP", "1/0 WP", "2/0 WP"],  # ✅ Nuevo tipo correctamente integrado
+        "Piloto": ["2 WP", "1/0 WP", "2/0 WP"],
     }
 
     # === Configuraciones disponibles ===
     configuraciones_disponibles = {
         "Primario": ["1F", "2F", "3F"],
         "Secundario": ["1F", "2F"],
-        "Neutro": ["1F"],        # ✅ corregido (ya no “Única”)
+        "Neutro": ["1F"],        # ⚡ Neutro monofásico fijo
         "Retenidas": ["Única"],
-        "Piloto": ["1F", "2F"],  # ✅ Piloto permite 120/240 V
+        "Piloto": ["1F", "2F"],  # ⚡ Piloto permite 120/240 V
     }
 
     # === Campos de entrada ===
     col1, col2, col3, col4 = st.columns([1.3, 1, 1.3, 1.2])
 
-    # --- Selección de tipo ---
     with col1:
         tipo = st.selectbox(
             "🔌 Tipo",
-            options=list(calibres_disponibles.keys()),  # asegura que Piloto aparece
+            options=list(calibres_disponibles.keys()),
             index=0,
             key="tipo_circuito"
         )
 
     # --- Configuración según tipo ---
-    if tipo == "Neutro":
-        configuracion = "1F"
-        st.text_input("⚙️ Config.", value="1F", disabled=True, key="configuracion_neutro")
-    else:
-        with col2:
+    with col2:
+        if tipo == "Neutro":
+            # 👇 Mantiene el mismo diseño pero bloquea la edición
+            configuracion = st.text_input("⚙️ Config.", value="1F", disabled=True, key="configuracion_neutro")
+        else:
             configuracion = st.selectbox("⚙️ Config.", configuraciones_disponibles[tipo], key="configuracion_cable")
 
-    # --- Selección de calibre y longitud ---
     with col3:
         calibre = st.selectbox("📏 Calibre", calibres_disponibles[tipo], key="calibre_cable")
+
     with col4:
         longitud = st.number_input("📐 Longitud (m)", min_value=0.0, step=10.0, key="longitud_cable")
 
-    # Derivar fases según configuración
-    fases = 1 if configuracion == "Única" else int(configuracion.replace("F", ""))
+    # Derivar fases según configuración (1F, 2F, 3F)
+    fases = 1 if configuracion == "Única" else int(str(configuracion).replace("F", ""))
     total_cable = longitud * fases
 
     # Inicializar lista
@@ -86,8 +85,6 @@ def seccion_cables():
         st.markdown(f"**🧮 Total Global de Cable:** {total:.2f} m")
 
     return st.session_state.get("cables_proyecto", [])
-
-
 
 def tabla_cables_pdf(datos_proyecto):
     """Genera tabla de configuración y calibres de cables para insertar en el PDF."""
