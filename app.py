@@ -10,6 +10,7 @@ from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
 from modulo.entradas import cargar_catalogo_materiales
 from modulo.configuracion_cables import seccion_cables
+from modulo.estilos_app import aplicar_estilos
 
 # 👇 columnas base ajustadas a tu Excel
 COLUMNAS_BASE = [
@@ -316,6 +317,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
 
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
+    aplicar_estilos()
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
     # 🔄 Forzar recarga diferida si quedó pendiente del ciclo anterior
@@ -385,6 +387,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
