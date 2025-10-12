@@ -19,33 +19,41 @@ def seccion_cables():
         "Primario": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR", "266.8 MCM", "336 MCM"],
         "Secundario": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
         "Neutro": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR"],
-        "Retenidas": ["1/4 Acerado", "3/8 Acerado", "5/8 Acerado"]
+        "Retenidas": ["1/4 Acerado", "3/8 Acerado", "5/8 Acerado"],
+        # ⚡ Nuevo tipo Piloto (para alumbrado público, 120V o 240V)
+        "Piloto": ["2 WP", "1/0 WP", "2/0 WP"]
     }
 
+    # === Configuraciones disponibles ===
     configuraciones_disponibles = {
         "Primario": ["1F", "2F", "3F"],
         "Secundario": ["1F", "2F"],
-        "Neutro": ["Única"],
-        "Retenidas": ["Única"]
+        "Neutro": ["1F"],       # ⚡ Neutro monofásico fijo
+        "Retenidas": ["Única"],
+        "Piloto": ["1F", "2F"]  # ⚡ Piloto puede ser 1F (120 V) o 2F (240 V)
     }
 
-    # === Campos en una fila ===
+    # === Campos de entrada ===
     col1, col2, col3, col4 = st.columns([1.3, 1, 1.3, 1.2])
 
     with col1:
         tipo = st.selectbox("🔌 Tipo", list(calibres_disponibles.keys()), key="tipo_circuito")
-    with col2:
-        configuracion = st.selectbox("⚙️ Config.", configuraciones_disponibles[tipo], key="configuracion_cable")
+
+    # 👇 Ajuste automático según tipo
+    if tipo == "Neutro":
+        configuracion = "1F"
+        st.text_input("⚙️ Config.", value="1F", disabled=True, key="configuracion_neutro")
+    else:
+        with col2:
+            configuracion = st.selectbox("⚙️ Config.", configuraciones_disponibles[tipo], key="configuracion_cable")
+
     with col3:
         calibre = st.selectbox("📏 Calibre", calibres_disponibles[tipo], key="calibre_cable")
     with col4:
         longitud = st.number_input("📐 Longitud (m)", min_value=0.0, step=10.0, key="longitud_cable")
 
-    # Derivar fases según configuración (solo aplica si no es "Única")
-    if configuracion == "Única":
-        fases = 1
-    else:
-        fases = int(configuracion.replace("F", ""))
+    # Derivar fases según configuración (1F, 2F, 3F)
+    fases = 1 if configuracion == "Única" else int(configuracion.replace("F", ""))
 
     total_cable = longitud * fases
 
