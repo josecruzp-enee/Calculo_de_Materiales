@@ -5,13 +5,14 @@ import streamlit as st
 # Ruta al Excel
 RUTA_EXCEL = os.path.join(os.path.dirname(__file__), "Estructura_datos.xlsx")
 
+
 def cargar_opciones():
     """Lee la hoja 'indice' y organiza opciones por Clasificación."""
     df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
     df.columns = df.columns.str.strip()
 
     clas_col = "Clasificación" if "Clasificación" in df.columns else "Clasificacion"
-    cod_col  = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
+    cod_col = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
     desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
 
     opciones = {}
@@ -28,17 +29,24 @@ def cargar_opciones():
 
 
 def crear_desplegables(opciones):
-    """Crea selectbox para cada tipo de estructura."""
+    """Crea selectbox para cada tipo de estructura, con claves dinámicas para reinicio visual."""
     seleccion = {}
 
-    def selectbox_con_etiquetas(label, datos, key):
+    # 🔑 Recuperar las claves dinámicas creadas en app.resetear_desplegables()
+    keys = st.session_state.get("keys_desplegables", {})
+
+    def selectbox_con_etiquetas(label, datos, key_base):
+        """Crea un selectbox con etiquetas descriptivas y clave dinámica."""
         if not datos:
             return None
+        key = keys.get(key_base, key_base)
         return st.selectbox(
             label,
             options=["Seleccionar estructura"] + datos["valores"],
-            index=0,  # siempre arranca en "Seleccionar estructura"
-            format_func=lambda x: datos["etiquetas"].get(x, x) if x in datos["valores"] else x,
+            index=0,
+            format_func=lambda x: datos["etiquetas"].get(x, x)
+            if x in datos["valores"]
+            else x,
             key=key
         )
 
