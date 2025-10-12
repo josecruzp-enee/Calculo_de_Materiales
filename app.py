@@ -105,20 +105,14 @@ def listas_desplegables():
 
     st.subheader("3. 🏗️ Estructuras del Proyecto")
 
- # 🔄 Si la app quedó marcada para reiniciar los desplegables, hacerlo ahora
+    # 🔄 Si la app quedó marcada para reiniciar los desplegables, hacerlo ahora
     if st.session_state.get("reiniciar_desplegables", False):
         st.session_state["reiniciar_desplegables"] = False
         resetear_desplegables()
-
-        # Intentar recargar interfaz de forma segura según versión de Streamlit
         try:
-            st.rerun()
-        except Exception:
-            if hasattr(st, "experimental_rerun"):
-                st.experimental_rerun()
-            else:
-                st.warning("⚠️ No se pudo recargar automáticamente la interfaz.")
-
+            st.rerun()  # ✅ recarga segura
+        except Exception as e:
+            st.warning(f"No se pudo recargar automáticamente ({e})")
 
     df_actual = st.session_state["df_puntos"]
     puntos_existentes = df_actual["Punto"].unique().tolist()
@@ -131,7 +125,7 @@ def listas_desplegables():
         resetear_desplegables()
 
     # --- Edición del punto actual ---
-    if "punto_en_edicion" in st.session_state and st.session_state["punto_en_edicion"]:
+    if st.session_state.get("punto_en_edicion"):
         punto = st.session_state["punto_en_edicion"]
         st.markdown(f"### ✏️ Editando {punto}")
 
@@ -143,9 +137,7 @@ def listas_desplegables():
         st.markdown("<hr style='border:0.5px solid #ddd; margin:0.7rem 0;'>", unsafe_allow_html=True)
 
         # --- Botón Guardar Estructura del Punto ---
-        guardar = st.button("💾 Guardar Estructura del Punto", type="primary", key="btn_guardar_estructura")
-
-        if guardar:
+        if st.button("💾 Guardar Estructura del Punto", type="primary", key="btn_guardar_estructura"):
             if punto in df_actual["Punto"].values:
                 fila_existente = df_actual[df_actual["Punto"] == punto].iloc[0].to_dict()
                 for col in ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]:
@@ -155,14 +147,10 @@ def listas_desplegables():
                         seleccion[col] = anterior + " + " + nuevo
                     elif anterior and not nuevo:
                         seleccion[col] = anterior
-
-                # Eliminar fila vieja
                 df_actual = df_actual[df_actual["Punto"] != punto]
 
             # Agregar fila actualizada
             df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
-
-            # Ordenar puntos numéricamente
             df_actual["orden"] = df_actual["Punto"].str.extract(r'(\d+)').astype(int)
             df_actual = df_actual.sort_values("orden").drop(columns="orden")
             st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
@@ -170,14 +158,11 @@ def listas_desplegables():
             st.success(f"✅ {punto} actualizado correctamente")
             resetear_desplegables()
             st.session_state.pop("punto_en_edicion", None)
-
             st.session_state["reiniciar_desplegables"] = True
-            if hasattr(st, "rerun"):
+            try:
                 st.rerun()
-            else:
-                st.experimental_rerun()
-    else:
-        punto = None
+            except Exception as e:
+                st.warning(f"No se pudo recargar automáticamente ({e})")
 
     # --- Vista previa general ---
     df = st.session_state["df_puntos"]
@@ -205,7 +190,10 @@ def listas_desplegables():
                 if st.button("✏️ Editar Punto", key="btn_editar_punto_fila"):
                     st.session_state["punto_en_edicion"] = seleccionado
                     resetear_desplegables()
-                    st.experimental_rerun()
+                    try:
+                        st.rerun()
+                    except Exception as e:
+                        st.warning(f"No se pudo recargar ({e})")
 
         with col3:
             punto_borrar = st.selectbox(
@@ -218,7 +206,6 @@ def listas_desplegables():
                 st.success(f"✅ Se eliminó {punto_borrar}")
 
     return df
-
 
 
 
@@ -405,6 +392,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
