@@ -105,14 +105,20 @@ def listas_desplegables():
 
     st.subheader("3. 🏗️ Estructuras del Proyecto")
 
-    # 🔄 Si la app quedó marcada para reiniciar los desplegables, hacerlo ahora
+ # 🔄 Si la app quedó marcada para reiniciar los desplegables, hacerlo ahora
     if st.session_state.get("reiniciar_desplegables", False):
         st.session_state["reiniciar_desplegables"] = False
         resetear_desplegables()
-        if hasattr(st, "rerun"):
+
+        # Intentar recargar interfaz de forma segura según versión de Streamlit
+        try:
             st.rerun()
-        else:
-            st.experimental_rerun()
+        except Exception:
+            if hasattr(st, "experimental_rerun"):
+                st.experimental_rerun()
+            else:
+                st.warning("⚠️ No se pudo recargar automáticamente la interfaz.")
+
 
     df_actual = st.session_state["df_puntos"]
     puntos_existentes = df_actual["Punto"].unique().tolist()
@@ -399,6 +405,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
