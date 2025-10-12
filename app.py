@@ -26,11 +26,20 @@ RUTA_DATOS_MATERIALES = os.path.join(BASE_DIR, "modulo", "Estructura_datos.xlsx"
 # Helpers
 # ========================
 def resetear_desplegables():
-    """Borra valores de selectbox para que vuelvan a 'Seleccionar estructura'."""
-    for key in ["sel_poste", "sel_primario", "sel_secundario",
-                "sel_retenidas", "sel_tierra", "sel_transformador"]:
+    """Resetea los selectbox y fuerza su recreación cambiando sus claves."""
+    claves_base = ["sel_poste", "sel_primario", "sel_secundario",
+                   "sel_retenidas", "sel_tierra", "sel_transformador"]
+
+    # Eliminar valores previos del estado
+    for key in claves_base:
         if key in st.session_state:
             del st.session_state[key]
+
+    # Generar nuevas claves únicas (con timestamp)
+    import time
+    st.session_state["keys_desplegables"] = {
+        key: f"{key}_{int(time.time() * 1000)}" for key in claves_base
+    }
 
 
 # ========================
@@ -369,5 +378,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
