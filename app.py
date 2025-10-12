@@ -119,13 +119,6 @@ def listas_desplegables():
         st.success(f"✏️ {st.session_state['punto_en_edicion']} creado y listo para editar")
         resetear_desplegables()
 
-    # --- Seleccionar punto existente ---
-    if puntos_existentes:
-        seleccionado = st.selectbox("📍 Selecciona un Punto existente:", puntos_existentes, index=0)
-        if st.button("✏️ Editar Punto seleccionado"):
-            st.session_state["punto_en_edicion"] = seleccionado
-            resetear_desplegables()
-
     # --- Edición del punto actual ---
     if "punto_en_edicion" in st.session_state and st.session_state["punto_en_edicion"]:
         punto = st.session_state["punto_en_edicion"]
@@ -135,7 +128,7 @@ def listas_desplegables():
         seleccion = crear_desplegables(opciones)
         seleccion["Punto"] = punto
 
-        # Espacio visual y separador fino
+        # Separador visual
         st.markdown("<hr style='border:0.5px solid #ddd; margin:0.7rem 0;'>", unsafe_allow_html=True)
 
         # --- Botón Guardar Estructura del Punto ---
@@ -143,7 +136,6 @@ def listas_desplegables():
 
         if guardar:
             if punto in df_actual["Punto"].values:
-                # Ya existe → combinar estructuras nuevas con las anteriores
                 fila_existente = df_actual[df_actual["Punto"] == punto].iloc[0].to_dict()
                 for col in ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]:
                     anterior = str(fila_existente.get(col, "")).strip()
@@ -164,20 +156,17 @@ def listas_desplegables():
             df_actual = df_actual.sort_values("orden").drop(columns="orden")
             st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
 
-            # ✅ Confirmación y limpieza
             st.success(f"✅ {punto} actualizado correctamente")
             resetear_desplegables()
             st.session_state.pop("punto_en_edicion", None)
 
-            # 🔄 Marcar para recargar con desplegables vacíos
             st.session_state["reiniciar_desplegables"] = True
-
             if hasattr(st, "rerun"):
                 st.rerun()
             else:
                 st.experimental_rerun()
     else:
-        punto = None  # evita "Editando None"
+        punto = None
 
     # --- Vista previa general ---
     df = st.session_state["df_puntos"]
@@ -185,21 +174,40 @@ def listas_desplegables():
         st.markdown("#### 📑 Vista de estructuras / materiales")
         st.dataframe(df, use_container_width=True, hide_index=True)
 
-        col1, col2 = st.columns(2)
+        # === Controles de acción (3 botones en fila) ===
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 1.2])
         with col1:
-            if st.button("🧹 Limpiar todo"):
+            if st.button("🧹 Limpiar todo", key="btn_limpiar_todo"):
                 st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
                 st.session_state.pop("punto_en_edicion", None)
                 resetear_desplegables()
                 st.success("✅ Se limpiaron todas las estructuras/materiales")
 
         with col2:
-            punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
-            if st.button("Borrar Punto"):
+            if df["Punto"].nunique() > 0:
+                seleccionado = st.selectbox(
+                    "📍 Punto a editar:",
+                    df["Punto"].unique(),
+                    key="select_editar_punto_fila"
+                )
+                if st.button("✏️ Editar Punto", key="btn_editar_punto_fila"):
+                    st.session_state["punto_en_edicion"] = seleccionado
+                    resetear_desplegables()
+                    st.experimental_rerun()
+
+        with col3:
+            punto_borrar = st.selectbox(
+                "❌ Punto a borrar:",
+                df["Punto"].unique(),
+                key="select_borrar_punto_fila"
+            )
+            if st.button("Borrar Punto", key="btn_borrar_punto_fila"):
                 st.session_state["df_puntos"] = df[df["Punto"] != punto_borrar].reset_index(drop=True)
                 st.success(f"✅ Se eliminó {punto_borrar}")
 
     return df
+
 
 
 
@@ -386,6 +394,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
