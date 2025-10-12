@@ -29,32 +29,40 @@ def cargar_opciones():
 
 
 def crear_desplegables(opciones):
-    """Crea selectbox para cada tipo de estructura, con claves dinámicas para reinicio visual."""
+    """Crea selectbox para cada tipo de estructura en una sola fila."""
     seleccion = {}
 
-    # 🔑 Recuperar las claves dinámicas creadas en app.resetear_desplegables()
-    keys = st.session_state.get("keys_desplegables", {})
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-    def selectbox_con_etiquetas(label, datos, key_base):
-        """Crea un selectbox con etiquetas descriptivas y clave dinámica."""
-        if not datos:
-            return None
-        key = keys.get(key_base, key_base)
-        return st.selectbox(
-            label,
-            options=["Seleccionar estructura"] + datos["valores"],
-            index=0,
-            format_func=lambda x: datos["etiquetas"].get(x, x)
-            if x in datos["valores"]
-            else x,
-            key=key
+    with col1:
+        seleccion["Poste"] = st.selectbox(
+            "Poste", ["Seleccionar estructura"] + opciones.get("Poste", {}).get("valores", []),
+            index=0, key="sel_poste"
         )
-
-    seleccion["Poste"] = selectbox_con_etiquetas("Selecciona Poste:", opciones.get("Poste"), "sel_poste")
-    seleccion["Primario"] = selectbox_con_etiquetas("Selecciona Primario:", opciones.get("Primaria"), "sel_primario")
-    seleccion["Secundario"] = selectbox_con_etiquetas("Selecciona Secundario:", opciones.get("Secundaria"), "sel_secundario")
-    seleccion["Retenidas"] = selectbox_con_etiquetas("Selecciona Retenida:", opciones.get("Retenidas"), "sel_retenidas")
-    seleccion["Conexiones a tierra"] = selectbox_con_etiquetas("Selecciona Aterrizaje:", opciones.get("Conexiones a tierra"), "sel_tierra")
-    seleccion["Transformadores"] = selectbox_con_etiquetas("Selecciona Transformador:", opciones.get("Transformadores"), "sel_transformador")
+    with col2:
+        seleccion["Primario"] = st.selectbox(
+            "Primario", ["Seleccionar estructura"] + opciones.get("Primaria", {}).get("valores", []),
+            index=0, key="sel_primario"
+        )
+    with col3:
+        seleccion["Secundario"] = st.selectbox(
+            "Secundario", ["Seleccionar estructura"] + opciones.get("Secundaria", {}).get("valores", []),
+            index=0, key="sel_secundario"
+        )
+    with col4:
+        seleccion["Retenidas"] = st.selectbox(
+            "Retenida", ["Seleccionar estructura"] + opciones.get("Retenidas", {}).get("valores", []),
+            index=0, key="sel_retenidas"
+        )
+    with col5:
+        seleccion["Conexiones a tierra"] = st.selectbox(
+            "Aterrizaje", ["Seleccionar estructura"] + opciones.get("Conexiones a tierra", {}).get("valores", []),
+            index=0, key="sel_tierra"
+        )
+    with col6:
+        seleccion["Transformadores"] = st.selectbox(
+            "Transformador", ["Seleccionar estructura"] + opciones.get("Transformadores", {}).get("valores", []),
+            index=0, key="sel_transformador"
+        )
 
     return seleccion
