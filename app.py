@@ -294,15 +294,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                                "Informe_Completo.pdf", "application/pdf", key="dl_full")
 
 
-# ========================
-# MAIN
-# ========================
-# ========================
-# MAIN
-# ========================
-# ========================
-# MAIN
-# ========================
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
@@ -311,7 +302,12 @@ def main():
     # (permite refrescar la app tras guardar, borrar o limpiar sin error en Streamlit Cloud)
     if st.session_state.get("force_reload", False):
         st.session_state["force_reload"] = False
-        st.experimental_rerun()
+
+        # ✅ Compatibilidad entre versiones de Streamlit
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
 
     # ======================
     # Inicialización del estado
@@ -369,7 +365,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
