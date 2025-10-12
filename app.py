@@ -300,6 +300,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
+        # 🧩 Guardar cables dentro de datos_proyecto antes de exportar
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
@@ -312,16 +313,23 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             "Retenidas", "Conexiones a tierra", "Transformadores"
         ]
 
-        # 1️⃣ Dividir los valores en listas
+        # 1️⃣ Dividir los valores en listas (separadas por coma o '+')
         for col in columnas_estructuras:
             df_expandido[col] = df_expandido[col].astype(str).apply(
-                lambda x: [s.strip() for s in re.split(r'[+,]', x) if s.strip() and s.strip().lower() != "seleccionar estructura"]
+                lambda x: [s.strip() for s in re.split(r'[+,]', x)
+                           if s.strip() and s.strip().lower() != "seleccionar estructura"]
             )
 
-        # 2️⃣ Expandir las listas en múltiples filas
+        # 2️⃣ Expandir las listas en múltiples filas (una por estructura)
         df_expandido = df_expandido.explode(columnas_estructuras, ignore_index=True)
-        # ======================================================
 
+        # 3️⃣ Mostrar vista previa para depuración
+        st.markdown("#### 🧪 Vista previa estructuras expandidas")
+        st.dataframe(df_expandido, use_container_width=True, hide_index=True)
+
+        # ======================================================
+        # 🔹 Generar PDFs
+        # ======================================================
         if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
             from modulo.procesar_materiales import procesar_materiales
             try:
@@ -334,23 +342,66 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                 st.session_state["pdfs_generados"] = resultados_pdf
                 st.success("✅ Reportes generados correctamente")
 
+                # Mostrar las claves devueltas (para depuración)
+                if isinstance(resultados_pdf, dict):
+                    st.info(f"📄 PDFs generados: {list(resultados_pdf.keys())}")
+                else:
+                    st.warning("⚠️ El módulo procesar_materiales no devolvió un diccionario válido.")
+
             except Exception as e:
                 st.error(f"❌ Error al generar reportes: {e}")
 
+        # ======================================================
+        # 🔹 Mostrar botones de descarga
+        # ======================================================
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
 
-            st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"],
-                               "Resumen_Materiales.pdf", "application/pdf", key="dl_mat")
-            st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"],
-                               "Resumen_Estructuras.pdf", "application/pdf", key="dl_estr_glob")
-            st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"],
-                               "Estructuras_Por_Punto.pdf", "application/pdf", key="dl_estr_punto")
-            st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"],
-                               "Materiales_Por_Punto.pdf", "application/pdf", key="dl_mat_punto")
-            st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
-                               "Informe_Completo.pdf", "application/pdf", key="dl_full")
+            st.markdown("### 📥 Descarga de Reportes Generados")
 
+            if isinstance(pdfs, dict):
+                if "materiales" in pdfs and pdfs["materiales"]:
+                    st.download_button(
+                        "📄 Descargar PDF de Materiales",
+                        pdfs["materiales"],
+                        "Resumen_Materiales.pdf",
+                        "application/pdf",
+                        key="dl_mat"
+                    )
+                if "estructuras_global" in pdfs and pdfs["estructuras_global"]:
+                    st.download_button(
+                        "📄 Descargar PDF de Estructuras (Global)",
+                        pdfs["estructuras_global"],
+                        "Resumen_Estructuras.pdf",
+                        "application/pdf",
+                        key="dl_estr_glob"
+                    )
+                if "estructuras_por_punto" in pdfs and pdfs["estructuras_por_punto"]:
+                    st.download_button(
+                        "📄 Descargar PDF de Estructuras por Punto",
+                        pdfs["estructuras_por_punto"],
+                        "Estructuras_Por_Punto.pdf",
+                        "application/pdf",
+                        key="dl_estr_punto"
+                    )
+                if "materiales_por_punto" in pdfs and pdfs["materiales_por_punto"]:
+                    st.download_button(
+                        "📄 Descargar PDF de Materiales por Punto",
+                        pdfs["materiales_por_punto"],
+                        "Materiales_Por_Punto.pdf",
+                        "application/pdf",
+                        key="dl_mat_punto"
+                    )
+                if "completo" in pdfs and pdfs["completo"]:
+                    st.download_button(
+                        "📄 Descargar Informe Completo",
+                        pdfs["completo"],
+                        "Informe_Completo.pdf",
+                        "application/pdf",
+                        key="dl_full"
+                    )
+            else:
+                st.error("⚠️ Los reportes no se generaron correctamente o el formato de salida no es válido.")
 
 
 def main():
@@ -425,6 +476,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
