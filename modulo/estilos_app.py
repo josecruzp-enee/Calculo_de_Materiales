@@ -9,35 +9,29 @@ import streamlit as st
 import os
 
 def aplicar_estilos(usar_encabezado_rojo=False):
-    """Aplica estilos CSS globales para toda la app, con encabezado institucional ENEE."""
+    """Aplica estilos globales con encabezado institucional ENEE."""
 
-    # ====== Rutas de los logos ======
     base_dir = os.path.dirname(__file__)
     logo_blanco = os.path.join(base_dir, "Imagen_ENEE.png")
     logo_rojo = os.path.join(base_dir, "Imagen_ENEE_Distribucion.png")
 
-    # ====== CSS GLOBAL ======
+    # ======== CSS GLOBAL ========
     st.markdown(
         """
         <style>
-        /* ======== GENERAL ======== */
+        /* ======== CONTENEDOR PRINCIPAL ======== */
         div.block-container {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-            padding-left: 2rem;
-            padding-right: 2rem;
-            margin-top: 100px !important; /* deja espacio para el encabezado */
+            padding-top: 1rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            margin-top: 110px !important; /* espacio para encabezado */
         }
 
         h1, h2, h3, h4, h5 {
-            color: #003366; /* azul institucional */
+            color: #003366;
             font-family: 'Segoe UI', sans-serif;
             font-weight: 700;
-        }
-
-        h2, h3 {
-            border-bottom: 2px solid #004080;
-            padding-bottom: 0.2rem;
         }
 
         p, label, span, div {
@@ -46,8 +40,7 @@ def aplicar_estilos(usar_encabezado_rojo=False):
 
         hr {
             border: 1px solid #cccccc;
-            margin-top: 0.8rem;
-            margin-bottom: 0.8rem;
+            margin: 0.8rem 0;
         }
 
         /* ======== BOTONES ======== */
@@ -59,18 +52,12 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             padding: 0.45rem 1rem !important;
             font-weight: 600 !important;
             font-size: 0.9rem !important;
-            transition: 0.3s;
+            transition: all 0.3s ease-in-out;
         }
 
         .stButton>button:hover {
             background-color: #0066cc !important;
             transform: scale(1.03);
-        }
-
-        /* ======== FILA DE BOTONES ======== */
-        div[data-testid="stHorizontalBlock"] {
-            justify-content: center !important;
-            gap: 1rem !important;
         }
 
         /* ======== SELECTBOX ======== */
@@ -97,13 +84,16 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             border-bottom: 3px solid #cc0000;
             display: flex;
             align-items: center;
+            gap: 12px;
             padding: 0.4rem 1rem;
             z-index: 999;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease-in-out;
         }
 
         .header .logo {
             height: 55px;
-            margin-right: 15px;
+            margin-right: 10px;
         }
 
         .header .titulo h1 {
@@ -128,6 +118,7 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             text-align: center;
             padding: 0.3rem 0;
             z-index: 999;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
         }
 
         .header-red .logo-red {
@@ -140,16 +131,17 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             text-align: center;
             font-size: 13px;
             color: #888888;
-            margin-top: 30px;
+            margin-top: 40px;
             border-top: 1px solid #cccccc;
             padding-top: 10px;
         }
+
         </style>
         """,
         unsafe_allow_html=True
     )
 
-    # ====== CABECERA INSTITUCIONAL ======
+    # ====== CABECERA ======
     if usar_encabezado_rojo:
         st.markdown(
             f"""
@@ -173,7 +165,7 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             unsafe_allow_html=True
         )
 
-    # ====== FOOTER INSTITUCIONAL ======
+    # ====== FOOTER ======
     st.markdown(
         """
         <div class='footer'>
