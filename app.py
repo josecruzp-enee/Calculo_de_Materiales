@@ -11,8 +11,6 @@ from modulo.entradas import cargar_estructuras_proyectadas
 from modulo.entradas import cargar_catalogo_materiales
 from modulo.configuracion_cables import seccion_cables
 
-
-
 # 👇 columnas base ajustadas a tu Excel
 COLUMNAS_BASE = [
     "Punto", "Poste", "Primario", "Secundario",
@@ -41,6 +39,8 @@ def resetear_desplegables():
 def seccion_datos_proyecto():
     formulario_datos_proyecto()
     mostrar_datos_formateados()
+    # ⚠️ Nota: el nivel de tensión seleccionado en el formulario se usa automáticamente
+    # para determinar qué columna (13.8 kV o 34.5 kV) se toma del archivo Estructura_datos.xlsx.
 
 
 # ========================
@@ -63,7 +63,7 @@ def seccion_entrada_estructuras(modo_carga):
 
 
 def cargar_desde_excel():
-    archivo_estructuras = st.file_uploader("Archivo de estructuras", type=["xlsx"])
+    archivo_estructuras = st.file_uploader("Archivo de estructuras", type=["xlsx"], key="upl_estructuras")
     if archivo_estructuras:
         ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
         try:
@@ -76,7 +76,7 @@ def cargar_desde_excel():
 
 
 def pegar_tabla():
-    texto_pegado = st.text_area("Pega aquí tu tabla CSV/tabulado", height=200)
+    texto_pegado = st.text_area("Pega aquí tu tabla CSV/tabulado", height=200, key="txt_pegar_tabla")
     if texto_pegado:
         df = pegar_texto_a_df(texto_pegado, COLUMNAS_BASE)
         st.success(f"✅ Tabla cargada con {len(df)} filas")
@@ -94,7 +94,7 @@ def listas_desplegables():
     puntos_existentes = df_actual["Punto"].unique().tolist()
 
     # Crear nuevo punto
-    if st.button("🆕 Crear nuevo Punto"):
+    if st.button("🆕 Crear nuevo Punto", key="btn_nuevo_punto"):
         nuevo_num = len(puntos_existentes) + 1
         st.session_state["punto_en_edicion"] = f"Punto {nuevo_num}"
         st.success(f"✏️ {st.session_state['punto_en_edicion']} creado y listo para editar")
@@ -102,19 +102,24 @@ def listas_desplegables():
 
     # Seleccionar un punto existente
     if puntos_existentes:
-        seleccionado = st.selectbox("📍 Selecciona un Punto existente:", puntos_existentes, index=0)
-        if st.button("✏️ Editar Punto seleccionado"):
+        seleccionado = st.selectbox(
+            "📍 Selecciona un Punto existente:",
+            puntos_existentes,
+            index=0,
+            key="sel_punto_existente"
+        )
+        if st.button("✏️ Editar Punto seleccionado", key="btn_editar_punto"):
             st.session_state["punto_en_edicion"] = seleccionado
             resetear_desplegables()
 
     # Si hay punto en edición
-    if "punto_en_edicion" in st.session_state:
+    if "punto_en_edicion" in st.session_state and st.session_state["punto_en_edicion"]:
         punto = st.session_state["punto_en_edicion"]
         st.markdown(f"### ✏️ Editando {punto}")
         seleccion = crear_desplegables(opciones)
         seleccion["Punto"] = punto
 
-        if st.button("💾 Guardar Punto"):
+        if st.button("💾 Guardar Punto", key="btn_guardar_punto"):
             if punto in df_actual["Punto"].values:
                 # Ya existe → combinar estructuras nuevas con las anteriores
                 fila_existente = df_actual[df_actual["Punto"] == punto].iloc[0].to_dict()
@@ -141,30 +146,42 @@ def listas_desplegables():
 
             st.success(f"✅ {punto} actualizado correctamente")
             resetear_desplegables()
-            st.session_state.pop("punto_en_edicion")
-            st.rerun()
+            st.session_state["punto_en_edicion"] = None
+            st.session_state["necesita_refrescar"] = True  # flag seguro
 
     df = st.session_state["df_puntos"]
 
     # Vista previa
     if not df.empty:
         st.markdown("#### 📑 Vista de estructuras / materiales")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🧹 Limpiar todo"):
+            if st.button("🧹 Limpiar todo", key="btn_limpiar_todo"):
                 st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
-                st.session_state.pop("punto_en_edicion", None)
+                st.session_state["punto_en_edicion"] = None
                 resetear_desplegables()
                 st.success("✅ Se limpiaron todas las estructuras/materiales")
+                st.session_state["necesita_refrescar"] = True
         with col2:
-            punto_borrar = st.selectbox("❌ Seleccionar Punto a borrar", df["Punto"].unique())
-            if st.button("Borrar Punto"):
+            punto_borrar = st.selectbox(
+                "❌ Seleccionar Punto a borrar",
+                df["Punto"].unique(),
+                key="sel_borrar_punto"
+            )
+            if st.button("Borrar Punto", key="btn_borrar_punto"):
                 st.session_state["df_puntos"] = df[df["Punto"] != punto_borrar].reset_index(drop=True)
                 st.success(f"✅ Se eliminó {punto_borrar}")
+                st.session_state["necesita_refrescar"] = True
+
+    # Rerender seguro al final del ciclo
+    if st.session_state.get("necesita_refrescar", False):
+        st.session_state["necesita_refrescar"] = False
+        st.experimental_rerun()
 
     return df
+
 
 # ========================
 # Adicionar materiales manualmente
@@ -199,12 +216,13 @@ def seccion_adicionar_material():
                 "🔧 Selecciona el Material",
                 options=[""] + opciones_materiales,
                 index=0,
-                placeholder="Ejemplo: BOMBILLO PARA LÁMPARA – C/U"
+                placeholder="Ejemplo: BOMBILLO PARA LÁMPARA – C/U",
+                key="sel_material_extra"
             )
 
         # --- Cantidad (entera) ---
         with col2:
-            cantidad = st.number_input("🔢 Cantidad", min_value=1, step=1, value=1)
+            cantidad = st.number_input("🔢 Cantidad", min_value=1, step=1, value=1, key="num_cantidad_extra")
 
         agregar = st.form_submit_button("➕ Agregar Material")
 
@@ -227,7 +245,7 @@ def seccion_adicionar_material():
         st.markdown("### 📋 Materiales adicionales añadidos")
         st.dataframe(
             pd.DataFrame(st.session_state["materiales_extra"]),
-            width="stretch"  # reemplaza use_container_width
+            width="stretch"
         )
 
 
@@ -237,13 +255,17 @@ def seccion_adicionar_material():
 def seccion_finalizar_calculo(df):
     if not df.empty:
         st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
-        if st.button("✅ Finalizar Cálculo"):
+        if st.button("✅ Finalizar Cálculo", key="btn_finalizar_calculo"):
             try:
                 st.session_state["calculo_finalizado"] = True
                 st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
             except Exception as e:
                 st.error(f"❌ Error al finalizar cálculo: {e}")
 
+
+# ========================
+# Exportación (única definición)
+# ========================
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
@@ -252,29 +274,23 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
-        if st.button("📥 Generar Reportes PDF"):
+        if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
             st.session_state["pdfs_generados"] = generar_pdfs(
                 modo_carga, ruta_estructuras, df, ruta_datos_materiales
             )
 
-# ========================
-# Exportación
-# ========================
-def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
-    if not df.empty and st.session_state.get("calculo_finalizado", False):
-        st.subheader("6. 📂 Exportación de Reportes")
-
-        if st.button("📥 Generar Reportes PDF"):
-            st.session_state["pdfs_generados"] = generar_pdfs(modo_carga, ruta_estructuras, df, ruta_datos_materiales)
-
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
-
-            st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"], "Resumen_Materiales.pdf", "application/pdf")
-            st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"], "Resumen_Estructuras.pdf", "application/pdf")
-            st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"], "Estructuras_Por_Punto.pdf", "application/pdf")
-            st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"], "Materiales_Por_Punto.pdf", "application/pdf")
-            st.download_button("📄 Descargar Informe Completo", pdfs["completo"], "Informe_Completo.pdf", "application/pdf")
+            st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"],
+                               "Resumen_Materiales.pdf", "application/pdf", key="dl_mat")
+            st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"],
+                               "Resumen_Estructuras.pdf", "application/pdf", key="dl_estr_glob")
+            st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"],
+                               "Estructuras_Por_Punto.pdf", "application/pdf", key="dl_estr_punto")
+            st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"],
+                               "Materiales_Por_Punto.pdf", "application/pdf", key="dl_mat_punto")
+            st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
+                               "Informe_Completo.pdf", "application/pdf", key="dl_full")
 
 
 # ========================
@@ -284,18 +300,24 @@ def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
-    modo_carga = st.radio(
-        "Selecciona modo de carga:",
-        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"]
-    )
-
     # ======================
     # Inicialización del estado
     # ======================
-    if "datos_proyecto" not in st.session_state:
-        st.session_state["datos_proyecto"] = {}
-    if "df_puntos" not in st.session_state:
-        st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
+    defaults = {
+        "datos_proyecto": {},
+        "df_puntos": pd.DataFrame(columns=COLUMNAS_BASE),
+        "materiales_extra": [],
+        "calculo_finalizado": False,
+        "punto_en_edicion": None,
+    }
+    for k, v in defaults.items():
+        st.session_state.setdefault(k, v)
+
+    modo_carga = st.radio(
+        "Selecciona modo de carga:",
+        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"],
+        key="modo_carga_radio"
+    )
 
     # ======================
     # 1️⃣ Sección de datos del proyecto
@@ -309,10 +331,8 @@ def main():
 
     # Guardar en los datos del proyecto
     if cables_registrados:
-        if "datos_proyecto" not in st.session_state:
-            st.session_state["datos_proyecto"] = {}
-
         st.session_state["datos_proyecto"]["cables_proyecto"] = cables_registrados
+        st.session_state["cables_proyecto"] = cables_registrados
 
     # ======================
     # 4️⃣ Carga de estructuras
@@ -333,20 +353,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
