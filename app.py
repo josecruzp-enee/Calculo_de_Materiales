@@ -147,7 +147,7 @@ def listas_desplegables():
             st.success(f"✅ {punto} actualizado correctamente")
             resetear_desplegables()
             st.session_state["punto_en_edicion"] = None
-            st.session_state["necesita_refrescar"] = True  # flag seguro
+            st.session_state["necesita_refrescar"] = True  # marcar actualización
 
     df = st.session_state["df_puntos"]
 
@@ -175,10 +175,18 @@ def listas_desplegables():
                 st.success(f"✅ Se eliminó {punto_borrar}")
                 st.session_state["necesita_refrescar"] = True
 
-    # Rerender seguro al final del ciclo
+    # === Rerender diferido y seguro ===
     if st.session_state.get("necesita_refrescar", False):
         st.session_state["necesita_refrescar"] = False
-        st.experimental_rerun()
+        with st.spinner("🔄 Actualizando vista..."):
+            st.empty()
+        try:
+            st.experimental_rerun()
+        except RuntimeError:
+            # Si Streamlit Cloud no permite rerun dentro de evento activo,
+            # diferirlo para el siguiente ciclo
+            st.session_state["force_reload"] = True
+            st.stop()
 
     return df
 
@@ -296,9 +304,17 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
 # ========================
 # MAIN
 # ========================
+# ========================
+# MAIN
+# ========================
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
+
+    # 🔄 Forzar recarga diferida si quedó pendiente del ciclo anterior
+    if st.session_state.get("force_reload", False):
+        st.session_state["force_reload"] = False
+        st.experimental_rerun()
 
     # ======================
     # Inicialización del estado
@@ -329,23 +345,22 @@ def main():
     # ======================
     cables_registrados = seccion_cables()
 
-    # Guardar en los datos del proyecto
     if cables_registrados:
         st.session_state["datos_proyecto"]["cables_proyecto"] = cables_registrados
         st.session_state["cables_proyecto"] = cables_registrados
 
     # ======================
-    # 4️⃣ Carga de estructuras
+    # 3️⃣ Carga de estructuras
     # ======================
     df, ruta_estructuras = seccion_entrada_estructuras(modo_carga)
 
     # ======================
-    # 5️⃣ Adición manual de materiales
+    # 4️⃣ Adición manual de materiales
     # ======================
     seccion_adicionar_material()
 
     # ======================
-    # 6️⃣ Cálculo final y exportación
+    # 5️⃣ Cálculo final y exportación
     # ======================
     seccion_finalizar_calculo(df)
     seccion_exportacion(df, modo_carga, ruta_estructuras, RUTA_DATOS_MATERIALES)
@@ -353,3 +368,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
