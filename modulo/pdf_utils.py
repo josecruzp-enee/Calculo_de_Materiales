@@ -175,8 +175,10 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     ]))
     elems.append(tabla)
     doc.build(elems)
-    buffer.seek(0)
-    return buffer
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
 
 # === Generar estructuras global ===
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
@@ -203,8 +205,10 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     ]))
     elems.append(tabla)
     doc.build(elems)
-    buffer.seek(0)
-    return buffer
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
 
 # === Generar estructuras por punto ===
 def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
@@ -232,8 +236,10 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
         elems.append(tabla)
         elems.append(Spacer(1, 0.2*inch))
     doc.build(elems)
-    buffer.seek(0)
-    return buffer
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
 
 # === Materiales adicionales ===
 def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
@@ -299,8 +305,10 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
         elems.append(Spacer(1, 0.2*inch))
 
     doc.build(elems)
-    buffer.seek(0)
-    return buffer
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
 
 # === PDF completo consolidado ===
 def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_mat_por_punto, datos_proyecto):
@@ -436,8 +444,11 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
 
     # === Construcción final del PDF ===
     doc.build(elems)
-    buffer.seek(0)
-    return buffer
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
+
+
 
 
 
