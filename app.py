@@ -306,7 +306,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
         # ======================================================
-        # 🔹 NUEVO BLOQUE: dividir y expandir estructuras concatenadas
+        # 🔹 Expandir estructuras concatenadas (por coma o '+')
         # ======================================================
         df_expandido = df.copy()
         columnas_estructuras = [
@@ -314,41 +314,44 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             "Retenidas", "Conexiones a tierra", "Transformadores"
         ]
 
-        # 1️⃣ Dividir los valores en listas (separadas por coma o '+')
+        # 1️⃣ Dividir valores en listas separadas
         for col in columnas_estructuras:
             df_expandido[col] = df_expandido[col].astype(str).apply(
                 lambda x: [s.strip() for s in re.split(r'[+,]', x)
                            if s.strip() and s.strip().lower() != "seleccionar estructura"]
             )
 
-        # 2️⃣ Expandir cada columna individualmente para evitar error de longitud desigual
+        # 2️⃣ Explode cada columna individualmente
         for col in columnas_estructuras:
             df_expandido = df_expandido.explode(col, ignore_index=True)
 
-        # 3️⃣ Mostrar vista previa para depuración
+        # 3️⃣ Mostrar vista previa (solo para depuración visual)
         st.markdown("#### 🧪 Vista previa estructuras expandidas")
         st.dataframe(df_expandido, use_container_width=True, hide_index=True)
 
         # ======================================================
-        # 🔹 Generar PDFs
+        # 🔹 Generar PDFs (ahora con flujo modular limpio)
         # ======================================================
         if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
-            from modulo.procesar_materiales import procesar_materiales
+            from modulo.generar_pdfs import generar_pdfs
             try:
-                resultados_pdf = procesar_materiales(
-                    archivo_estructuras=ruta_estructuras,
-                    archivo_materiales=ruta_datos_materiales,
-                    estructuras_df=df_expandido,
-                    datos_proyecto=st.session_state["datos_proyecto"]
-                )
+                with st.spinner("⏳ Generando reportes, por favor espere..."):
+                    resultados_pdf = generar_pdfs(
+                        modo_carga,
+                        ruta_estructuras,
+                        df_expandido,
+                        ruta_datos_materiales
+                    )
+
+                # Guardar resultados en sesión
                 st.session_state["pdfs_generados"] = resultados_pdf
                 st.success("✅ Reportes generados correctamente")
 
-                # Mostrar las claves devueltas (para depuración)
+                # Mostrar resumen rápido
                 if isinstance(resultados_pdf, dict):
                     st.info(f"📄 PDFs generados: {list(resultados_pdf.keys())}")
                 else:
-                    st.warning("⚠️ El módulo procesar_materiales no devolvió un diccionario válido.")
+                    st.warning("⚠️ El módulo generar_pdfs no devolvió un diccionario válido.")
 
             except Exception as e:
                 st.error(f"❌ Error al generar reportes: {e}")
@@ -362,7 +365,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             st.markdown("### 📥 Descarga de Reportes Generados")
 
             if isinstance(pdfs, dict):
-                if "materiales" in pdfs and pdfs["materiales"]:
+                if pdfs.get("materiales"):
                     st.download_button(
                         "📄 Descargar PDF de Materiales",
                         pdfs["materiales"],
@@ -370,7 +373,8 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                         "application/pdf",
                         key="dl_mat"
                     )
-                if "estructuras_global" in pdfs and pdfs["estructuras_global"]:
+
+                if pdfs.get("estructuras_global"):
                     st.download_button(
                         "📄 Descargar PDF de Estructuras (Global)",
                         pdfs["estructuras_global"],
@@ -378,7 +382,8 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                         "application/pdf",
                         key="dl_estr_glob"
                     )
-                if "estructuras_por_punto" in pdfs and pdfs["estructuras_por_punto"]:
+
+                if pdfs.get("estructuras_por_punto"):
                     st.download_button(
                         "📄 Descargar PDF de Estructuras por Punto",
                         pdfs["estructuras_por_punto"],
@@ -386,7 +391,8 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                         "application/pdf",
                         key="dl_estr_punto"
                     )
-                if "materiales_por_punto" in pdfs and pdfs["materiales_por_punto"]:
+
+                if pdfs.get("materiales_por_punto"):
                     st.download_button(
                         "📄 Descargar PDF de Materiales por Punto",
                         pdfs["materiales_por_punto"],
@@ -394,7 +400,8 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                         "application/pdf",
                         key="dl_mat_punto"
                     )
-                if "completo" in pdfs and pdfs["completo"]:
+
+                if pdfs.get("completo"):
                     st.download_button(
                         "📄 Descargar Informe Completo",
                         pdfs["completo"],
@@ -403,7 +410,8 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                         key="dl_full"
                     )
             else:
-                st.error("⚠️ Los reportes no se generaron correctamente o el formato de salida no es válido.")
+                st.warning("⚠️ Los reportes no se generaron correctamente o el formato no es válido.")
+
 
 
 def main():
@@ -478,6 +486,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
