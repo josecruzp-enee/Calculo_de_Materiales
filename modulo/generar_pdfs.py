@@ -13,24 +13,19 @@ from modulo.pdf_utils import (
 
 # === Función auxiliar para formatear el nivel de tensión ===
 def formato_tension(v_ll):
-    """
-    Convierte el valor de tensión de línea a línea (kV) en un texto del tipo:
-    '19.9 L-N / 34.5 L-L kV'
-    """
+    """Convierte 13.8 -> '7.9 L-N / 13.8 L-L KV'"""
     try:
         v_ll = float(v_ll)
         v_ln = round(v_ll / math.sqrt(3), 1)
-        return f"{v_ln} L-N / {v_ll} L-L kV"
+        return f"{v_ln} L-N / {v_ll} L-L KV"
     except (ValueError, TypeError):
-        # Si el dato no es numérico, lo devuelve tal cual
         return str(v_ll)
 
 
 def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
     """
     Genera todos los reportes PDF del proyecto:
-    - Lista de materiales global
-    - Materiales adicionados
+    - Resumen de materiales
     - Estructuras globales
     - Estructuras por punto
     - Materiales por punto
@@ -45,45 +40,42 @@ def generar_pdfs(modo_carga, archivo_estructuras, df, ruta_datos_materiales):
         datos_proyecto=st.session_state.get("datos_proyecto", {})
     )
 
-    # --- Aplicar formato especial al nivel de tensión ---
+    # === 2️⃣ Formatear tensión en texto legible ===
     if "nivel_de_tension" in datos_proyecto and datos_proyecto["nivel_de_tension"]:
         datos_proyecto["nivel_de_tension"] = formato_tension(datos_proyecto["nivel_de_tension"])
 
     nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
 
-    # === 🧪 DEPURACIÓN: mostrar qué llega ===
-    st.write("🧪 df_resumen (materiales):", df_resumen.head())
-    st.write("🧪 df_estructuras_resumen:", df_estructuras_resumen.head())
-    st.write("🧪 df_estructuras_por_punto:", df_estructuras_por_punto.head())
-    st.write("🧪 df_resumen_por_punto (materiales por punto):", df_resumen_por_punto.head())
-    st.write("🧪 datos_proyecto:", datos_proyecto)
-
-    # === 2️⃣ Incorporar materiales adicionales (si existen) ===
+    # === 3️⃣ Materiales adicionales (si existen) ===
     adicionales = st.session_state.get("materiales_extra", [])
     if adicionales:
         df_adicionales = pd.DataFrame(adicionales)
-        # Combinar con el resumen global
         df_resumen = pd.concat([df_resumen, df_adicionales], ignore_index=True)
         df_resumen = df_resumen.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
-        # Guardar también dentro de datos_proyecto para incluir en PDF completo
         datos_proyecto["materiales_extra"] = df_adicionales
     else:
-        df_adicionales = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
-        datos_proyecto["materiales_extra"] = df_adicionales
+        datos_proyecto["materiales_extra"] = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
 
-    # === 3️⃣ Generar los diferentes PDF ===
+    # === 4️⃣ Generar cada PDF ===
+    pdf_materiales = generar_pdf_materiales(df_resumen, nombre_proyecto, datos_proyecto)
+    pdf_estructuras_global = generar_pdf_estructuras_global(df_estructuras_resumen, nombre_proyecto)
+    pdf_estructuras_por_punto = generar_pdf_estructuras_por_punto(df_estructuras_por_punto, nombre_proyecto)
+    pdf_materiales_por_punto = generar_pdf_materiales_por_punto(df_resumen_por_punto, nombre_proyecto)
+    pdf_informe_completo = generar_pdf_completo(
+        df_resumen,
+        df_estructuras_resumen,
+        df_estructuras_por_punto,
+        df_resumen_por_punto,
+        datos_proyecto
+    )
+
+    # === 5️⃣ Devolver todo como diccionario ===
     pdfs = {
-        "materiales": generar_pdf_materiales(df_resumen, nombre_proyecto, datos_proyecto),
-        "estructuras_global": generar_pdf_estructuras_global(df_estructuras_resumen, nombre_proyecto),
-        "estructuras_por_punto": generar_pdf_estructuras_por_punto(df_estructuras_por_punto, nombre_proyecto),
-        "materiales_por_punto": generar_pdf_materiales_por_punto(df_resumen_por_punto, nombre_proyecto),
-        "completo": generar_pdf_completo(
-            df_resumen,
-            df_estructuras_resumen,
-            df_estructuras_por_punto,
-            df_resumen_por_punto,
-            datos_proyecto
-        ),
+        "materiales": pdf_materiales,
+        "estructuras_global": pdf_estructuras_global,
+        "estructuras_por_punto": pdf_estructuras_por_punto,
+        "materiales_por_punto": pdf_materiales_por_punto,
+        "completo": pdf_informe_completo,
     }
 
     return pdfs
