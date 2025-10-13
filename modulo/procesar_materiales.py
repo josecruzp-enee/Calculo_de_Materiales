@@ -125,17 +125,32 @@ def procesar_materiales(
     log("df_resumen_por_punto:\n" + str(df_resumen_por_punto.head(10)))
 
     # ======================================================
-    # 🔹 Crear PDFs temporales (placeholders)
+    # 🔹 Generar PDFs reales usando pdf_utils
     # ======================================================
-    from io import BytesIO
-    pdf_materiales = BytesIO(b"PDF materiales generado correctamente")
-    pdf_estructuras_global = BytesIO(b"PDF estructuras global generado correctamente")
-    pdf_estructuras_por_punto = BytesIO(b"PDF estructuras por punto generado correctamente")
-    pdf_materiales_por_punto = BytesIO(b"PDF materiales por punto generado correctamente")
-    pdf_informe_completo = BytesIO(b"PDF informe completo generado correctamente")
+    from modulo.pdf_utils import (
+        generar_pdf_materiales,
+        generar_pdf_estructuras_global,
+        generar_pdf_estructuras_por_punto,
+        generar_pdf_materiales_por_punto,
+        generar_pdf_completo
+    )
+
+    nombre_proyecto = datos_proyecto.get("nombre_proyecto", "Proyecto")
+
+    pdf_materiales = generar_pdf_materiales(df_resumen, nombre_proyecto, datos_proyecto)
+    pdf_estructuras_global = generar_pdf_estructuras_global(df_estructuras_resumen, nombre_proyecto)
+    pdf_estructuras_por_punto = generar_pdf_estructuras_por_punto(df_estructuras_por_punto, nombre_proyecto)
+    pdf_materiales_por_punto = generar_pdf_materiales_por_punto(df_resumen_por_punto, nombre_proyecto)
+    pdf_informe_completo = generar_pdf_completo(
+        df_resumen,
+        df_estructuras_resumen,
+        df_estructuras_por_punto,
+        df_resumen_por_punto,
+        datos_proyecto
+    )
 
     # ======================================================
-    # 🔹 Retornar diccionario de resultados (esperado por app.py)
+    # 🔹 Retornar diccionario de resultados
     # ======================================================
     return {
         "materiales": pdf_materiales,
@@ -144,7 +159,3 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
-
-
-
-
