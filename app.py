@@ -6,11 +6,20 @@ import os
 
 from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
-from modulo.generar_pdfs import generar_pdfs
 from modulo.entradas import cargar_estructuras_proyectadas
 from modulo.entradas import cargar_catalogo_materiales
 from modulo.configuracion_cables import seccion_cables
 from modulo.estilos_app import aplicar_estilos
+from modulo.procesar_materiales import procesar_materiales
+
+
+pdfs = procesar_materiales(
+    archivo_estructuras=archivo_estructuras,
+    archivo_materiales=ruta_datos_materiales,
+    estructuras_df=df,
+    datos_proyecto=st.session_state.get("datos_proyecto", {})
+)
+
 
 # Aplicar estilos institucionales ENEE
 aplicar_estilos()  # encabezado blanco
@@ -486,6 +495,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
