@@ -255,31 +255,57 @@ def seccion_finalizar_calculo(df):
 # ========================
 # Exportación
 # ========================
+# ========================
+# Exportación
+# ========================
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
     import re
 
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
+        # 🔹 Integrar cables registrados en los datos del proyecto
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
-        df_expandido = df.copy()
+        # ======================
+        # 🔹 Corrección del explode
+        # ======================
         columnas_estructuras = [
             "Poste", "Primario", "Secundario",
             "Retenidas", "Conexiones a tierra", "Transformadores"
         ]
-        for col in columnas_estructuras:
-            df_expandido[col] = df_expandido[col].astype(str).apply(
-                lambda x: [s.strip() for s in re.split(r'[+,]', x)
-                           if s.strip() and s.strip().lower() != "seleccionar estructura"]
-            )
-        for col in columnas_estructuras:
-            df_expandido = df_expandido.explode(col, ignore_index=True)
 
-        st.markdown("#### 🧪 Vista previa estructuras expandidas")
+        # Combinar todas las estructuras en una sola columna "Estructura"
+        df_expandido = df.copy()
+        df_expandido["Estructura"] = df_expandido[columnas_estructuras].astype(str).agg(' '.join, axis=1)
+
+        # Dividir por + o , y limpiar texto
+        df_expandido["Estructura"] = df_expandido["Estructura"].apply(
+            lambda x: [s.strip() for s in re.split(r'[+,]', x)
+                       if s.strip() and s.strip().lower() != "seleccionar estructura"]
+        )
+
+        # Expandir solo una vez
+        df_expandido = df_expandido.explode("Estructura", ignore_index=True)
+        df_expandido.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
+
+        st.markdown("#### 🧪 Vista previa estructuras expandidas (corregido)")
         st.dataframe(df_expandido, use_container_width=True, hide_index=True)
 
+        # ======================
+        # 🔹 Integrar materiales adicionales
+        # ======================
+        if st.session_state.get("materiales_extra"):
+            st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(st.session_state["materiales_extra"])
+        else:
+            st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(
+                columns=["Materiales", "Unidad", "Cantidad"]
+            )
+
+        # ======================
+        # 🔹 Generar PDFs
+        # ======================
         if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
             try:
                 with st.spinner("⏳ Generando reportes, por favor espere..."):
@@ -296,10 +322,12 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     st.info(f"📄 PDFs generados: {list(resultados_pdf.keys())}")
                 else:
                     st.warning("⚠️ El módulo procesar_materiales no devolvió un diccionario válido.")
-
             except Exception as e:
                 st.error(f"❌ Error al generar reportes: {e}")
 
+        # ======================
+        # 🔹 Botones de descarga
+        # ======================
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
             st.markdown("### 📥 Descarga de Reportes Generados")
@@ -319,7 +347,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                 if pdfs.get("completo"):
                     st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
                                        "Informe_Completo.pdf", "application/pdf", key="dl_full")
-
 
 # ========================
 # MAIN
@@ -359,3 +386,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
