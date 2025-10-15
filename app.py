@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 
 from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
@@ -12,24 +13,17 @@ from modulo.procesar_materiales import procesar_materiales  # ✅ usamos este di
 
 # Aplicar estilos institucionales ENEE
 aplicar_estilos()  # encabezado blanco
-# aplicar_estilos(usar_encabezado_rojo=True)  # si querés la franja roja
 
-# 👇 columnas base ajustadas a tu Excel
 COLUMNAS_BASE = [
     "Punto", "Poste", "Primario", "Secundario",
     "Retenidas", "Conexiones a tierra", "Transformadores"
 ]
 
-# 📌 Ruta fija al Excel base de materiales
 BASE_DIR = os.path.dirname(__file__)
 RUTA_DATOS_MATERIALES = os.path.join(BASE_DIR, "modulo", "Estructura_datos.xlsx")
 
 
-# ========================
-# Helpers
-# ========================
 def resetear_desplegables():
-    """Resetea los selectbox y fuerza su recreación cambiando sus claves."""
     claves_base = ["sel_poste", "sel_primario", "sel_secundario",
                    "sel_retenidas", "sel_tierra", "sel_transformador"]
 
@@ -43,17 +37,11 @@ def resetear_desplegables():
     }
 
 
-# ========================
-# Datos del proyecto
-# ========================
 def seccion_datos_proyecto():
     formulario_datos_proyecto()
     mostrar_datos_formateados()
 
 
-# ========================
-# Entrada de estructuras
-# ========================
 def seccion_entrada_estructuras(modo_carga):
     df = pd.DataFrame(columns=COLUMNAS_BASE)
     ruta_estructuras = None
@@ -189,9 +177,6 @@ def listas_desplegables():
     return df
 
 
-# ========================
-# Adicionar materiales manualmente
-# ========================
 def seccion_adicionar_material():
     st.subheader("4. 🧰 Adicionar Material")
     st.markdown("Agrega materiales adicionales al proyecto que no estén asociados a estructuras específicas.")
@@ -241,9 +226,6 @@ def seccion_adicionar_material():
         st.dataframe(pd.DataFrame(st.session_state["materiales_extra"]), use_container_width=True, hide_index=True)
 
 
-# ========================
-# Finalizar cálculo
-# ========================
 def seccion_finalizar_calculo(df):
     if not df.empty:
         st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
@@ -252,22 +234,17 @@ def seccion_finalizar_calculo(df):
             st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
 
 
-# ========================
-# Exportación
-# ========================
+# ============================================================
+# ✅ SECCIÓN EXPORTACIÓN (solo bloque corregido)
+# ============================================================
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
-    import re
 
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
-        # 🔹 Integrar cables registrados en los datos del proyecto
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
-        # ============================================================
-        # 🔹 Expansión limpia de estructuras (sin duplicados ni repetición)
-        # ============================================================
         columnas_estructuras = [
             "Poste", "Primario", "Secundario",
             "Retenidas", "Conexiones a tierra", "Transformadores"
@@ -276,49 +253,36 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
         df_expandido = df.copy()
 
         def limpiar_estructuras(fila):
-            """Combina y limpia las estructuras de todas las columnas de un punto."""
             estructuras = []
             for col in columnas_estructuras:
                 valor = str(fila.get(col, "")).strip()
                 if not valor or valor.lower() == "seleccionar estructura":
                     continue
-                # 🔹 Separar por coma, más, punto y coma o espacios múltiples
                 partes = re.split(r'[+,;]', valor)
                 for p in partes:
                     p = p.strip()
                     if p and p.lower() != "seleccionar estructura":
-                        estructuras.append(p)
-            # 🔹 Eliminar duplicados y normalizar texto
-            estructuras_limpias = list(dict.fromkeys([e.upper().replace("  ", " ") for e in estructuras]))
-            return estructuras_limpias
+                        estructuras.append(p.upper())
+            return estructuras
 
-        # Crear columna combinada limpia y expandir
         df_expandido["Estructura"] = df_expandido.apply(limpiar_estructuras, axis=1)
         df_expandido = df_expandido.explode("Estructura", ignore_index=True)
-
-        # Filtrar vacíos y normalizar
-        df_expandido = df_expandido[df_expandido["Estructura"].notna() & (df_expandido["Estructura"].str.strip() != "")]
-        df_expandido["Estructura"] = df_expandido["Estructura"].str.strip()
+        df_expandido = df_expandido[
+            df_expandido["Estructura"].notna() & (df_expandido["Estructura"].str.strip() != "")
+        ]
         df_expandido.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
-
-        # 🔹 Eliminar filas duplicadas (mismo Punto y misma estructura)
-        df_expandido = df_expandido.drop_duplicates(subset=["Punto", "codigodeestructura"]).reset_index(drop=True)
 
         st.markdown("#### 🧪 Vista previa estructuras expandidas (corregida)")
         st.dataframe(df_expandido, use_container_width=True, hide_index=True)
 
-        # Conteo rápido de estructuras
         conteo_preview = (
             df_expandido.groupby(["Punto", "codigodeestructura"])
             .size()
             .reset_index(name="Cantidad")
         )
-        st.caption("Conteo rápido de estructuras por punto:")
+        st.caption("Conteo rápido de estructuras por punto (respetando repeticiones reales):")
         st.dataframe(conteo_preview, use_container_width=True, hide_index=True)
 
-        # ======================
-        # 🔹 Integrar materiales adicionales
-        # ======================
         if st.session_state.get("materiales_extra"):
             st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(st.session_state["materiales_extra"])
         else:
@@ -326,9 +290,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                 columns=["Materiales", "Unidad", "Cantidad"]
             )
 
-        # ======================
-        # 🔹 Generar PDFs
-        # ======================
         if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
             try:
                 with st.spinner("⏳ Generando reportes, por favor espere..."):
@@ -348,9 +309,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             except Exception as e:
                 st.error(f"❌ Error al generar reportes: {e}")
 
-        # ======================
-        # 🔹 Botones de descarga
-        # ======================
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
             st.markdown("### 📥 Descarga de Reportes Generados")
@@ -372,9 +330,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                                        "Informe_Completo.pdf", "application/pdf", key="dl_full")
 
 
-# ========================
-# MAIN
-# ========================
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     aplicar_estilos()
