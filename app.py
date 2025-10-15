@@ -255,9 +255,6 @@ def seccion_finalizar_calculo(df):
 # ========================
 # Exportación
 # ========================
-# ========================
-# Exportación
-# ========================
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
     import re
 
@@ -268,30 +265,56 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
-        # ======================
-        # 🔹 Corrección del explode
-        # ======================
+        # ============================================================
+        # 🔹 Expansión limpia de estructuras (sin duplicados ni repetición)
+        # ============================================================
         columnas_estructuras = [
             "Poste", "Primario", "Secundario",
             "Retenidas", "Conexiones a tierra", "Transformadores"
         ]
 
-        # Combinar todas las estructuras en una sola columna "Estructura"
         df_expandido = df.copy()
-        df_expandido["Estructura"] = df_expandido[columnas_estructuras].astype(str).agg(' '.join, axis=1)
 
-        # Dividir por + o , y limpiar texto
-        df_expandido["Estructura"] = df_expandido["Estructura"].apply(
-            lambda x: [s.strip() for s in re.split(r'[+,]', x)
-                       if s.strip() and s.strip().lower() != "seleccionar estructura"]
-        )
+        def limpiar_estructuras(fila):
+            """Combina y limpia las estructuras de todas las columnas de un punto."""
+            estructuras = []
+            for col in columnas_estructuras:
+                valor = str(fila.get(col, "")).strip()
+                if not valor or valor.lower() == "seleccionar estructura":
+                    continue
+                # 🔹 Separar por coma, más, punto y coma o espacios múltiples
+                partes = re.split(r'[+,;]', valor)
+                for p in partes:
+                    p = p.strip()
+                    if p and p.lower() != "seleccionar estructura":
+                        estructuras.append(p)
+            # 🔹 Eliminar duplicados y normalizar texto
+            estructuras_limpias = list(dict.fromkeys([e.upper().replace("  ", " ") for e in estructuras]))
+            return estructuras_limpias
 
-        # Expandir solo una vez
+        # Crear columna combinada limpia y expandir
+        df_expandido["Estructura"] = df_expandido.apply(limpiar_estructuras, axis=1)
         df_expandido = df_expandido.explode("Estructura", ignore_index=True)
+
+        # Filtrar vacíos y normalizar
+        df_expandido = df_expandido[df_expandido["Estructura"].notna() & (df_expandido["Estructura"].str.strip() != "")]
+        df_expandido["Estructura"] = df_expandido["Estructura"].str.strip()
         df_expandido.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
 
-        st.markdown("#### 🧪 Vista previa estructuras expandidas (corregido)")
+        # 🔹 Eliminar filas duplicadas (mismo Punto y misma estructura)
+        df_expandido = df_expandido.drop_duplicates(subset=["Punto", "codigodeestructura"]).reset_index(drop=True)
+
+        st.markdown("#### 🧪 Vista previa estructuras expandidas (corregida)")
         st.dataframe(df_expandido, use_container_width=True, hide_index=True)
+
+        # Conteo rápido de estructuras
+        conteo_preview = (
+            df_expandido.groupby(["Punto", "codigodeestructura"])
+            .size()
+            .reset_index(name="Cantidad")
+        )
+        st.caption("Conteo rápido de estructuras por punto:")
+        st.dataframe(conteo_preview, use_container_width=True, hide_index=True)
 
         # ======================
         # 🔹 Integrar materiales adicionales
@@ -348,6 +371,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
                                        "Informe_Completo.pdf", "application/pdf", key="dl_full")
 
+
 # ========================
 # MAIN
 # ========================
@@ -386,4 +410,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
