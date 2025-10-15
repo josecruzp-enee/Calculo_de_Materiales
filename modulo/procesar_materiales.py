@@ -39,8 +39,16 @@ def procesar_materiales(
     tension, calibre_mt = validar_datos_proyecto(datos_proyecto)
     log(f"Tensión: {tension} Calibre MT: {calibre_mt}")
 
-    # 2️⃣ Conteo estructuras
-    conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
+    # 2️⃣ Conteo estructuras (corregido)
+    # 🔹 Antes: contaba estructuras repetidas por cada columna expandida
+    # 🔹 Ahora: elimina duplicados por punto y estructura antes del conteo
+    df_estructuras_unicas = df_estructuras.drop_duplicates(subset=["Punto", "codigodeestructura"])
+    conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras_unicas)
+
+    # 🔹 También limpia listas repetidas dentro de cada punto
+    for p in estructuras_por_punto:
+        estructuras_por_punto[p] = list(dict.fromkeys(estructuras_por_punto[p]))
+
     log(f"Conteo estructuras: {conteo}")
     log(f"Estructuras por punto: {estructuras_por_punto}")
 
