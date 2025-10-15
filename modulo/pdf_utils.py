@@ -218,27 +218,47 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
-    elems = [Paragraph(f"<b>Estructuras por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]),
-             Spacer(1, 12)]
+    elems = [
+        Paragraph(f"<b>Estructuras por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]),
+        Spacer(1, 12)
+    ]
+
+    # Ordenar los puntos correctamente (numéricamente)
     puntos = sorted(df_por_punto["Punto"].unique(), key=lambda x: int(re.sub(r'\D', '', str(x)) or 0))
+
     for p in puntos:
-        elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading2"]))
+        # 🔹 Evitar duplicar la palabra "Punto" en el encabezado
+        num = str(p).replace("Punto", "").strip()
+
+        elems.append(Spacer(1, 6))  # pequeño espacio antes de cada punto
+        elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading2"]))
+
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         data = [["Estructura", "Descripción", "Cantidad"]]
+
         for _, row in df_p.iterrows():
-            data.append([str(row["codigodeestructura"]), str(row["Descripcion"]), str(row["Cantidad"])])
+            data.append([
+                str(row["codigodeestructura"]),
+                str(row["Descripcion"]),
+                str(row["Cantidad"])
+            ])
+
         tabla = Table(data, colWidths=[1.5*inch, 4*inch, 1*inch])
         tabla.setStyle(TableStyle([
             ("GRID", (0,0), (-1,-1), 0.5, colors.black),
             ("BACKGROUND", (0,0), (-1,0), colors.lightblue),
-            ("ALIGN", (2,1), (2,-1), "CENTER")
+            ("ALIGN", (2,1), (2,-1), "CENTER"),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
         ]))
+
         elems.append(tabla)
         elems.append(Spacer(1, 0.2*inch))
+
     doc.build(elems)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 # === Materiales adicionales ===
@@ -447,6 +467,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
