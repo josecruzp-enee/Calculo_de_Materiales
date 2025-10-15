@@ -124,6 +124,23 @@ def procesar_materiales(
     )
     log("df_resumen_por_punto:\n" + str(df_resumen_por_punto.head(10)))
 
+    # 🔹 Integrar materiales adicionales (agregados manualmente desde Streamlit)
+    try:
+        import streamlit as st
+        materiales_extra = st.session_state.get("materiales_extra", [])
+        if materiales_extra:
+            df_extra = pd.DataFrame(materiales_extra)
+            # Añadir al resumen global
+            df_resumen = pd.concat([df_resumen, df_extra], ignore_index=True)
+            df_resumen = df_resumen.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+            # Guardar en datos_proyecto para mostrar en PDF completo
+            datos_proyecto["materiales_extra"] = df_extra
+            log(f"✅ Se integraron {len(df_extra)} materiales adicionales manuales")
+        else:
+            datos_proyecto["materiales_extra"] = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+    except Exception as e:
+        log(f"⚠️ No se pudo integrar materiales adicionales: {e}")
+
     # ======================================================
     # 🔹 Generar PDFs reales usando pdf_utils
     # ======================================================
