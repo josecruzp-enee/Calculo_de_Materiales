@@ -39,13 +39,14 @@ def extraer_conteo_estructuras(df_estructuras):
 
 def calcular_materiales_estructura(archivo_materiales, estructura, cant, tension, calibre_mt, tabla_conectores_mt):
     """
-    Carga los materiales asociados a una estructura desde el archivo de datos.
+    Carga los materiales asociados a una estructura desde el archivo de datos (Estructura_datos.xlsx).
+    Multiplica cantidades solo si la hoja tiene valores unitarios.
     """
     try:
-        # --- leer hoja sin encabezado ---
+        # --- Leer hoja completa sin encabezado ---
         df_temp = cargar_materiales(archivo_materiales, estructura, header=None)
 
-        # --- buscar fila donde aparezca la palabra "Material" ---
+        # --- Buscar la fila que contiene la palabra 'Material' (inicio de la tabla real) ---
         fila_encabezado = None
         for i, row in df_temp.iterrows():
             if row.astype(str).str.contains("Material", case=False, na=False).any():
@@ -53,33 +54,48 @@ def calcular_materiales_estructura(archivo_materiales, estructura, cant, tension
                 break
 
         if fila_encabezado is None:
+            print(f"⚠️ No se encontró encabezado en hoja {estructura}")
             return pd.DataFrame()
 
-        # --- volver a leer usando esa fila como encabezado ---
+        # --- Releer con encabezado correcto ---
         df = cargar_materiales(archivo_materiales, estructura, header=fila_encabezado)
         df.columns = df.columns.map(str).str.strip()
 
-        # --- verificar columnas necesarias ---
+        # --- Verificar columna principal ---
         if "Materiales" not in df.columns:
+            print(f"⚠️ Hoja {estructura} no contiene columna 'Materiales'")
             return pd.DataFrame()
 
-        # Buscar columna de tensión más parecida
+        # --- Buscar columna de tensión más cercana al valor solicitado (ej: 13.8) ---
         col_tension = next((c for c in df.columns if str(tension) in c), None)
         if not col_tension:
+            print(f"⚠️ No se encontró columna de tensión para {tension} en {estructura}")
             return pd.DataFrame()
 
-        # --- filtrar materiales válidos ---
+        # --- Filtrar filas válidas (cantidad > 0) ---
         df_filtrado = df[df[col_tension] > 0][["Materiales", "Unidad", col_tension]].copy()
 
-        # --- aplicar reemplazos de conectores ---
+        # --- Renombrar columna de cantidad ---
+        df_filtrado.rename(columns={col_tension: "Cantidad"}, inplace=True)
+
+        # --- Aplicar reemplazo de conectores según calibre MT ---
         df_filtrado["Materiales"] = aplicar_reemplazos_conectores(
-            df_filtrado["Materiales"].tolist(),
-            calibre_mt,
-            tabla_conectores_mt
+            df_filtrado["Materiales"].tolist(), calibre_mt, tabla_conectores_mt
         )
 
-        # --- calcular cantidades finales ---
-        df_filtrado["Cantidad"] = df_filtrado[col_tension] * cant
+        # --- Validar si los valores ya representan cantidades totales o unitarias ---
+        if df_filtrado["Cantidad"].sum() <= df_filtrado.shape[0]:
+            # si todos los valores son 1 o similares → multiplicar por el número de estructuras
+            df_filtrado["Cantidad"] = df_filtrado["Cantidad"] * cant
+        else:
+            # si ya vienen cantidades acumuladas, no multiplicar
+            df_filtrado["Cantidad"] = df_filtrado["Cantidad"]
+
+        # --- Asegurar formato final limpio ---
+        df_filtrado["Materiales"] = df_filtrado["Materiales"].astype(str).str.strip()
+        df_filtrado["Unidad"] = df_filtrado["Unidad"].astype(str).str.strip()
+        df_filtrado["Cantidad"] = df_filtrado["Cantidad"].astype(float)
+
         return df_filtrado[["Materiales", "Unidad", "Cantidad"]]
 
     except Exception as e:
