@@ -234,40 +234,48 @@ def seccion_finalizar_calculo(df):
             st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
 
 
-# ============================================================
-# ✅ SECCIÓN EXPORTACIÓN (versión corregida)
-# ============================================================
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
+    """
+    Sección final de la app: genera los reportes PDF de materiales y estructuras.
+    Integra tensión y calibre desde la sesión, con valores por defecto si no existen.
+    """
 
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
-        # --- Asegurar que cables_proyecto esté sincronizado ---
-        if "cables_proyecto" in st.session_state:
-            st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
+        # --- Asegurar que cables_proyecto esté sincronizado (a prueba de None) ---
+        datos_proyecto = st.session_state.get("datos_proyecto", {})
+        datos_cables = (
+            st.session_state.get("cables_proyecto")
+            or datos_proyecto.get("cables_proyecto")
+            or {}
+        )
 
-            # 🧩 Extraer tensión y calibre desde cables_proyecto
-            datos_cables = st.session_state["cables_proyecto"]
+        # Unificar fuentes: primero cables_proyecto, luego datos_proyecto, luego default
+        tension = (
+            datos_cables.get("tension")
+            or datos_cables.get("nivel_de_tension")
+            or datos_proyecto.get("nivel_de_tension")
+            or datos_proyecto.get("tension")
+            or 13.8  # ⚙️ valor por defecto si no hay tensión definida
+        )
 
-            # Buscar claves posibles
-            tension = (
-                datos_cables.get("tension")
-                or datos_cables.get("nivel_de_tension")
-                or 13.8  # valor por defecto
-            )
-            calibre_mt = (
-                datos_cables.get("calibre_mt")
-                or datos_cables.get("conductor_mt")
-                or None
-            )
+        calibre_mt = (
+            datos_cables.get("calibre_mt")
+            or datos_cables.get("conductor_mt")
+            or datos_proyecto.get("calibre_mt")
+            or "1/0 ASCR"  # ⚙️ valor por defecto si no hay calibre definido
+        )
 
-            # Guardar dentro de datos_proyecto para que lo reciba procesar_materiales
-            st.session_state["datos_proyecto"]["tension"] = tension
-            st.session_state["datos_proyecto"]["calibre_mt"] = calibre_mt
+        # Persistir en datos_proyecto para que lo reciba procesar_materiales()
+        st.session_state["datos_proyecto"]["tension"] = tension
+        st.session_state["datos_proyecto"]["calibre_mt"] = calibre_mt
+        st.session_state["datos_proyecto"]["cables_proyecto"] = datos_cables
 
-            # Mostrar en pantalla para confirmar
-            st.info(f"🔧 Nivel de tensión: {tension} kV  |  Calibre MT: {calibre_mt}")
+        # Mostrar en pantalla para confirmación visual
+        st.info(f"🔧 Nivel de tensión: {tension} kV  |  Calibre MT: {calibre_mt}")
 
+        # --- Procesamiento de estructuras ---
         columnas_estructuras = [
             "Poste", "Primario", "Secundario",
             "Retenidas", "Conexiones a tierra", "Transformadores"
@@ -353,8 +361,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"],
                                        "Materiales_Por_Punto.pdf", "application/pdf", key="dl_mat_punto")
                 if pdfs.get("completo"):
-                    st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
-                                       "Informe_Completo.pdf", "application/pdf", key="dl_full")
+                    st.download_button("📄 Descargar Informe Completo", pdfs_
 
 
 
@@ -393,4 +400,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
