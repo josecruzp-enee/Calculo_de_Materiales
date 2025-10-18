@@ -237,7 +237,9 @@ def seccion_finalizar_calculo(df):
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
     """
     Sección de exportación de reportes PDF y Excel.
-    Corrige el problema de duplicado de estructuras en la expansión de datos.
+    Corrige:
+    - Error 'list' object has no attribute 'get'
+    - Multiplicación de materiales al duplicar estructuras
     """
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
@@ -248,6 +250,13 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
 
             datos_cables = st.session_state["cables_proyecto"]
 
+            # ✅ Puede venir como lista o dict
+            if isinstance(datos_cables, list) and len(datos_cables) > 0:
+                datos_cables = datos_cables[0]
+            elif not isinstance(datos_cables, dict):
+                datos_cables = {}
+
+            # ✅ Recuperar tensión y calibre con valores por defecto
             tension = (
                 datos_cables.get("tension")
                 or datos_cables.get("nivel_de_tension")
@@ -256,6 +265,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             calibre_mt = (
                 datos_cables.get("calibre_mt")
                 or datos_cables.get("conductor_mt")
+                or datos_cables.get("Calibre")
                 or "1/0 ASCR"
             )
 
@@ -294,6 +304,9 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
         # 🩹 🔥 CORRECCIÓN: eliminar duplicados por Punto + Estructura
         df_expandido["Estructura"] = df_expandido["Estructura"].str.strip().str.upper()
         df_expandido.drop_duplicates(subset=["Punto", "Estructura"], inplace=True)
+
+        # ✅ NUEVO: si el usuario repitió el mismo punto en diferentes filas, también limpiar eso
+        df_expandido = df_expandido.drop_duplicates(subset=["Punto", "Estructura"])
 
         df_expandido.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
 
@@ -360,6 +373,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
                                        "Informe_Completo.pdf", "application/pdf", key="dl_full")
 
+
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     aplicar_estilos()
@@ -395,6 +409,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
