@@ -35,37 +35,31 @@ def procesar_materiales(
     else:
         raise ValueError("Debe proporcionar archivo_estructuras o estructuras_df")
 
-    # 1️⃣ Validar
+    # 1️⃣ Validar datos del proyecto
     tension, calibre_mt = validar_datos_proyecto(datos_proyecto)
     log(f"Tensión: {tension} Calibre MT: {calibre_mt}")
 
-    # 🔍 DEBUG PARA VER QUÉ DATOS LLEGAN
     log("⚙️ DEBUG VALIDAR DATOS PROYECTO")
     log(f"➡️ tension = {tension}")
     log(f"➡️ calibre_mt = {calibre_mt}")
     log(f"➡️ datos_proyecto = {datos_proyecto}")
 
-
-    # 2️⃣ Conteo estructuras (corregido)
-    # 🔹 Antes: contaba estructuras repetidas por cada columna expandida
-    # 🔹 Ahora: elimina duplicados por punto y estructura antes del conteo
+    # 2️⃣ Conteo estructuras
     df_estructuras_unicas = df_estructuras.drop_duplicates(subset=["Punto", "codigodeestructura"])
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras_unicas)
 
-    # 🔹 También limpia listas repetidas dentro de cada punto
     for p in estructuras_por_punto:
         estructuras_por_punto[p] = list(dict.fromkeys(estructuras_por_punto[p]))
 
     log(f"Conteo estructuras: {conteo}")
     log(f"Estructuras por punto: {estructuras_por_punto}")
 
-    # 3️⃣ Cargar índice
+    # 3️⃣ Cargar índice de estructuras
     df_indice = cargar_indice(archivo_materiales)
     log("Columnas originales índice: " + str(df_indice.columns.tolist()))
 
     df_indice.columns = df_indice.columns.str.strip().str.lower()
 
-    # Renombrar columnas clave
     if "código de estructura" in df_indice.columns:
         df_indice.rename(columns={"código de estructura": "codigodeestructura"}, inplace=True)
     if "descripcion" in df_indice.columns:
@@ -74,7 +68,7 @@ def procesar_materiales(
     log("Columnas normalizadas índice: " + str(df_indice.columns.tolist()))
     log("Primeras filas índice:\n" + str(df_indice.head(10)))
 
-    # 4️⃣ Conectores
+    # 4️⃣ Cargar conectores
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
 
     log("🧩 DEBUG ANTES DE CALCULAR MATERIALES:")
@@ -86,19 +80,22 @@ def procesar_materiales(
         excel_temp = pd.ExcelFile(archivo_materiales)
         log(f"📄 Hojas disponibles en Estructura_datos.xlsx: {excel_temp.sheet_names}")
 
-    # 5️⃣ Materiales por estructura
+    # 5️⃣ Calcular materiales (sin duplicar cantidades)
+    # 🩹 Solución definitiva: no multiplicar internamente por cantidad
     df_total = pd.concat(
         [
             calcular_materiales_estructura(
-                archivo_materiales, e, c, tension, calibre_mt, tabla_conectores_mt
+                archivo_materiales, e, 1, tension, calibre_mt, tabla_conectores_mt  # ← pasa 1 siempre
             )
             for e, c in conteo.items()
+            for _ in range(c)  # repite la estructura c veces, sin duplicar cantidades internas
         ],
         ignore_index=True
     )
+
     log("df_total (materiales por estructura):\n" + str(df_total.head(10)))
 
-    # 6️⃣ Resumen global materiales
+    # 6️⃣ Resumen global de materiales
     df_resumen = (
         df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
         if not df_total.empty
@@ -139,16 +136,13 @@ def procesar_materiales(
     )
     log("df_resumen_por_punto:\n" + str(df_resumen_por_punto.head(10)))
 
-    # 🔹 Integrar materiales adicionales (agregados manualmente desde Streamlit)
+    # 🔹 Integrar materiales adicionales
     try:
-        import streamlit as st
         materiales_extra = st.session_state.get("materiales_extra", [])
         if materiales_extra:
             df_extra = pd.DataFrame(materiales_extra)
-            # Añadir al resumen global
             df_resumen = pd.concat([df_resumen, df_extra], ignore_index=True)
             df_resumen = df_resumen.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
-            # Guardar en datos_proyecto para mostrar en PDF completo
             datos_proyecto["materiales_extra"] = df_extra
             log(f"✅ Se integraron {len(df_extra)} materiales adicionales manuales")
         else:
@@ -156,9 +150,7 @@ def procesar_materiales(
     except Exception as e:
         log(f"⚠️ No se pudo integrar materiales adicionales: {e}")
 
-    # ======================================================
-    # 🔹 Generar PDFs reales usando pdf_utils
-    # ======================================================
+    # 🔹 Generar PDFs
     from modulo.pdf_utils import (
         generar_pdf_materiales,
         generar_pdf_estructuras_global,
@@ -181,9 +173,7 @@ def procesar_materiales(
         datos_proyecto
     )
 
-    # ======================================================
-    # 🔹 Retornar diccionario de resultados
-    # ======================================================
+    # 🔹 Retornar resultados
     return {
         "materiales": pdf_materiales,
         "estructuras_global": pdf_estructuras_global,
@@ -191,4 +181,3 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
-
