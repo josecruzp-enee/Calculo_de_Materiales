@@ -361,8 +361,8 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"],
                                        "Materiales_Por_Punto.pdf", "application/pdf", key="dl_mat_punto")
                 if pdfs.get("completo"):
-                    st.download_button("📄 Descargar Informe Completo", pdfs_
-
+                    st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
+                                       "Informe_Completo.pdf", "application/pdf", key="dl_full")
 
 
 def main():
@@ -400,5 +400,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
