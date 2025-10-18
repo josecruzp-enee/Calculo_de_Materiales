@@ -235,15 +235,38 @@ def seccion_finalizar_calculo(df):
 
 
 # ============================================================
-# ✅ SECCIÓN EXPORTACIÓN (solo bloque corregido)
+# ✅ SECCIÓN EXPORTACIÓN (versión corregida)
 # ============================================================
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
 
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
+        # --- Asegurar que cables_proyecto esté sincronizado ---
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
+
+            # 🧩 Extraer tensión y calibre desde cables_proyecto
+            datos_cables = st.session_state["cables_proyecto"]
+
+            # Buscar claves posibles
+            tension = (
+                datos_cables.get("tension")
+                or datos_cables.get("nivel_de_tension")
+                or 13.8  # valor por defecto
+            )
+            calibre_mt = (
+                datos_cables.get("calibre_mt")
+                or datos_cables.get("conductor_mt")
+                or None
+            )
+
+            # Guardar dentro de datos_proyecto para que lo reciba procesar_materiales
+            st.session_state["datos_proyecto"]["tension"] = tension
+            st.session_state["datos_proyecto"]["calibre_mt"] = calibre_mt
+
+            # Mostrar en pantalla para confirmar
+            st.info(f"🔧 Nivel de tensión: {tension} kV  |  Calibre MT: {calibre_mt}")
 
         columnas_estructuras = [
             "Poste", "Primario", "Secundario",
@@ -283,6 +306,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
         st.caption("Conteo rápido de estructuras por punto (respetando repeticiones reales):")
         st.dataframe(conteo_preview, use_container_width=True, hide_index=True)
 
+        # --- Materiales adicionales ---
         if st.session_state.get("materiales_extra"):
             st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(st.session_state["materiales_extra"])
         else:
@@ -290,6 +314,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                 columns=["Materiales", "Unidad", "Cantidad"]
             )
 
+        # --- Botón principal de generación de reportes ---
         if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
             try:
                 with st.spinner("⏳ Generando reportes, por favor espere..."):
@@ -299,6 +324,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                         estructuras_df=df_expandido,
                         datos_proyecto=st.session_state.get("datos_proyecto", {})
                     )
+
                 st.session_state["pdfs_generados"] = resultados_pdf
                 st.success("✅ Reportes generados correctamente")
 
@@ -309,6 +335,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             except Exception as e:
                 st.error(f"❌ Error al generar reportes: {e}")
 
+        # --- Botones de descarga ---
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
             st.markdown("### 📥 Descarga de Reportes Generados")
@@ -328,6 +355,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                 if pdfs.get("completo"):
                     st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
                                        "Informe_Completo.pdf", "application/pdf", key="dl_full")
+
 
 
 def main():
@@ -365,3 +393,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
