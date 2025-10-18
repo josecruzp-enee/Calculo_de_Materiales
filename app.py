@@ -236,46 +236,34 @@ def seccion_finalizar_calculo(df):
 
 def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales):
     """
-    Sección final de la app: genera los reportes PDF de materiales y estructuras.
-    Integra tensión y calibre desde la sesión, con valores por defecto si no existen.
+    Sección de exportación de reportes PDF y Excel.
+    Corrige el problema de duplicado de estructuras en la expansión de datos.
     """
-
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
-        # --- Asegurar que cables_proyecto esté sincronizado (a prueba de None) ---
-        datos_proyecto = st.session_state.get("datos_proyecto", {})
-        datos_cables = (
-            st.session_state.get("cables_proyecto")
-            or datos_proyecto.get("cables_proyecto")
-            or {}
-        )
+        # --- Asegurar que cables_proyecto esté sincronizado ---
+        if "cables_proyecto" in st.session_state:
+            st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
-        # Unificar fuentes: primero cables_proyecto, luego datos_proyecto, luego default
-        tension = (
-            datos_cables.get("tension")
-            or datos_cables.get("nivel_de_tension")
-            or datos_proyecto.get("nivel_de_tension")
-            or datos_proyecto.get("tension")
-            or 13.8  # ⚙️ valor por defecto si no hay tensión definida
-        )
+            datos_cables = st.session_state["cables_proyecto"]
 
-        calibre_mt = (
-            datos_cables.get("calibre_mt")
-            or datos_cables.get("conductor_mt")
-            or datos_proyecto.get("calibre_mt")
-            or "1/0 ASCR"  # ⚙️ valor por defecto si no hay calibre definido
-        )
+            tension = (
+                datos_cables.get("tension")
+                or datos_cables.get("nivel_de_tension")
+                or 13.8
+            )
+            calibre_mt = (
+                datos_cables.get("calibre_mt")
+                or datos_cables.get("conductor_mt")
+                or "1/0 ASCR"
+            )
 
-        # Persistir en datos_proyecto para que lo reciba procesar_materiales()
-        st.session_state["datos_proyecto"]["tension"] = tension
-        st.session_state["datos_proyecto"]["calibre_mt"] = calibre_mt
-        st.session_state["datos_proyecto"]["cables_proyecto"] = datos_cables
+            st.session_state["datos_proyecto"]["tension"] = tension
+            st.session_state["datos_proyecto"]["calibre_mt"] = calibre_mt
 
-        # Mostrar en pantalla para confirmación visual
-        st.info(f"🔧 Nivel de tensión: {tension} kV  |  Calibre MT: {calibre_mt}")
+            st.info(f"🔧 Nivel de tensión: {tension} kV  |  Calibre MT: {calibre_mt}")
 
-        # --- Procesamiento de estructuras ---
         columnas_estructuras = [
             "Poste", "Primario", "Secundario",
             "Retenidas", "Conexiones a tierra", "Transformadores"
@@ -283,6 +271,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
 
         df_expandido = df.copy()
 
+        # === 🔧 Limpieza y expansión de estructuras ===
         def limpiar_estructuras(fila):
             estructuras = []
             for col in columnas_estructuras:
@@ -301,20 +290,27 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
         df_expandido = df_expandido[
             df_expandido["Estructura"].notna() & (df_expandido["Estructura"].str.strip() != "")
         ]
+
+        # 🩹 🔥 CORRECCIÓN: eliminar duplicados por Punto + Estructura
+        df_expandido["Estructura"] = df_expandido["Estructura"].str.strip().str.upper()
+        df_expandido.drop_duplicates(subset=["Punto", "Estructura"], inplace=True)
+
         df_expandido.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
 
+        # === Mostrar vista previa ===
         st.markdown("#### 🧪 Vista previa estructuras expandidas (corregida)")
         st.dataframe(df_expandido, use_container_width=True, hide_index=True)
 
+        # === Conteo rápido ===
         conteo_preview = (
             df_expandido.groupby(["Punto", "codigodeestructura"])
             .size()
             .reset_index(name="Cantidad")
         )
-        st.caption("Conteo rápido de estructuras por punto (respetando repeticiones reales):")
+        st.caption("Conteo rápido de estructuras por punto (sin duplicados):")
         st.dataframe(conteo_preview, use_container_width=True, hide_index=True)
 
-        # --- Materiales adicionales ---
+        # === Materiales adicionales ===
         if st.session_state.get("materiales_extra"):
             st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(st.session_state["materiales_extra"])
         else:
@@ -322,7 +318,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                 columns=["Materiales", "Unidad", "Cantidad"]
             )
 
-        # --- Botón principal de generación de reportes ---
+        # === Botón de generación ===
         if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
             try:
                 with st.spinner("⏳ Generando reportes, por favor espere..."):
@@ -343,7 +339,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             except Exception as e:
                 st.error(f"❌ Error al generar reportes: {e}")
 
-        # --- Botones de descarga ---
+        # === Botones de descarga ===
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
             st.markdown("### 📥 Descarga de Reportes Generados")
@@ -363,7 +359,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                 if pdfs.get("completo"):
                     st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
                                        "Informe_Completo.pdf", "application/pdf", key="dl_full")
-
 
 def main():
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
@@ -400,6 +395,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
