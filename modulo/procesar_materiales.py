@@ -39,6 +39,13 @@ def procesar_materiales(
     tension, calibre_mt = validar_datos_proyecto(datos_proyecto)
     log(f"Tensión: {tension} Calibre MT: {calibre_mt}")
 
+    # 🔍 DEBUG PARA VER QUÉ DATOS LLEGAN
+    log("⚙️ DEBUG VALIDAR DATOS PROYECTO")
+    log(f"➡️ tension = {tension}")
+    log(f"➡️ calibre_mt = {calibre_mt}")
+    log(f"➡️ datos_proyecto = {datos_proyecto}")
+
+
     # 2️⃣ Conteo estructuras (corregido)
     # 🔹 Antes: contaba estructuras repetidas por cada columna expandida
     # 🔹 Ahora: elimina duplicados por punto y estructura antes del conteo
@@ -184,3 +191,4 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
+
