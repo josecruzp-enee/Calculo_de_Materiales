@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-configuracion_cables.py — versión estable ENEE
+configuracion_cables.py — versión estable ENEE (compatible con app.py)
 Incluye:
-- Tipos: MT, BT, Neutro y Acerado
+- Tipos: MT, BT, Neutro, Acerado
 - Ingreso libre de distancia (m)
-- Unidades visibles [m]
-- Cálculo automático del total de cable
-- Integración con session_state
+- Unidades visuales [m]
+- Cálculo automático del total
+- Devuelve DataFrame válido y no vacío (evita ValueError)
 """
 
 import streamlit as st
@@ -17,9 +17,7 @@ def seccion_cables():
     """Interfaz Streamlit para selección y cálculo de cables del proyecto."""
 
     st.markdown("## ⚙️ Configuración de Cables del Proyecto")
-    st.markdown(
-        "Selecciona las configuraciones de red, calibres, distancias y longitudes totales de conductor por tipo."
-    )
+    st.markdown("Selecciona las configuraciones de red, calibres, distancias y longitudes totales de conductor por tipo.")
 
     # === DATOS BASE ===
     datos_proyecto = st.session_state.get("datos_proyecto", {})
@@ -34,7 +32,6 @@ def seccion_cables():
 
     # === FUNCIÓN AUXILIAR ===
     def calcular_total(distancia, fase):
-        """Calcula longitud total según número de fases."""
         if fase == "3F":
             return distancia * 3
         elif fase == "2F":
@@ -53,29 +50,22 @@ def seccion_cables():
 
     data = []
 
-    # === ESTILO PARA UNIDADES ===
-    st.markdown(
-        """
+    # === ESTILO ===
+    st.markdown("""
         <style>
-            .unidad-medida {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-            }
             .unidad-texto {
                 color: #555;
                 font-weight: 500;
-                margin-top: 2px;
+                margin-top: 4px;
             }
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
+    # === FORMULARIO POR TIPO ===
     for tipo in tipos:
         st.markdown(f"### 📦 {tipo}")
-
         col1, col2, col3, col4 = st.columns([1, 1.3, 1, 1])
+
         # --- FASE ---
         with col1:
             fase = st.selectbox(
@@ -128,18 +118,27 @@ def seccion_cables():
             )
             st.markdown("<div style='text-align:right; color:#555;'>[m]</div>", unsafe_allow_html=True)
 
-        data.append(
-            {
-                "Tipo": tipo,
-                "Fases": fase,
-                "Calibre": calibre_sel,
-                "Distancia (m)": distancia,
-                "Total Cable (m)": total,
-            }
-        )
+        data.append({
+            "Tipo": tipo,
+            "Fases": fase,
+            "Calibre": calibre_sel,
+            "Distancia (m)": distancia,
+            "Total Cable (m)": total
+        })
 
     # === CREAR DATAFRAME ===
     df_cables = pd.DataFrame(data)
+
+    # --- 🚫 Prevención del error de pandas ---
+    # Si por alguna razón queda vacío, devolvemos un DataFrame con una fila dummy.
+    if df_cables.empty:
+        df_cables = pd.DataFrame([{
+            "Tipo": "MT",
+            "Fases": "1F",
+            "Calibre": "1/0 ACSR",
+            "Distancia (m)": 0.0,
+            "Total Cable (m)": 0.0
+        }])
 
     # === MOSTRAR RESUMEN ===
     st.markdown("### 📘 Resumen de Cables Seleccionados")
@@ -156,4 +155,6 @@ def seccion_cables():
         f"✅ Configuración de cables guardada correctamente.  \n📏 **Longitud total general: {total_general:.1f} m**"
     )
 
+    # --- 🔥 Devolvemos SIEMPRE un DataFrame no vacío ---
     return df_cables
+
