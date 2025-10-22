@@ -238,25 +238,23 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
     """
     Sección de exportación de reportes PDF y Excel.
     Corrige:
-    - Error 'list' object has no attribute 'get'
-    - Multiplicación de materiales al duplicar estructuras
+    - Estructuras duplicadas
+    - Nombres con comas o símbolos
     """
     if not df.empty and st.session_state.get("calculo_finalizado", False):
         st.subheader("6. 📂 Exportación de Reportes")
 
-        # --- Asegurar que cables_proyecto esté sincronizado ---
+        # --- Sincronizar cables del proyecto ---
         if "cables_proyecto" in st.session_state:
             st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
             datos_cables = st.session_state["cables_proyecto"]
 
-            # ✅ Puede venir como lista o dict
             if isinstance(datos_cables, list) and len(datos_cables) > 0:
                 datos_cables = datos_cables[0]
             elif not isinstance(datos_cables, dict):
                 datos_cables = {}
 
-            # ✅ Recuperar tensión y calibre con valores por defecto
             tension = (
                 datos_cables.get("tension")
                 or datos_cables.get("nivel_de_tension")
@@ -281,57 +279,40 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
 
         df_expandido = df.copy()
 
-        # 🧹 Eliminar filas duplicadas por Punto antes de expandir (evita 'Punto 2' repetido)
-        if "Punto" in df_expandido.columns:
-            df_expandido = df_expandido.drop_duplicates(subset=["Punto"])
-
-        # === 🔧 Limpieza y expansión de estructuras (versión optimizada) ===
+        # ✅ FUNCIÓN CORREGIDA
         def limpiar_estructuras(fila):
             estructuras = []
             for col in columnas_estructuras:
-                valor = str(fila.get(col, "")).strip()
-                if not valor or valor.lower() == "seleccionar estructura":
+                valor = str(fila.get(col, '')).strip()
+                if not valor or valor.lower() == 'seleccionar estructura':
                     continue
                 partes = re.split(r'[+,;]', valor)
                 for p in partes:
                     p = p.strip().upper()
-                    if p and p not in ["SELECCIONAR", "ESTRUCTURA", "N/A", "NONE"]:
+                    # 🔧 elimina comas, paréntesis, símbolos y espacios internos
+                    p = re.sub(r"[^A-Z0-9\-\.]", "", p)
+                    if p and p not in ['SELECCIONAR', 'ESTRUCTURA', 'N/A', 'NONE']:
                         estructuras.append(p)
-            # quitar duplicados dentro del punto
             return list(dict.fromkeys(estructuras))
 
-        # ✅ Aplicar limpieza (lista por punto)
-        df_expandido["Estructuras"] = df_expandido.apply(limpiar_estructuras, axis=1)
+        # === Expandir estructuras ===
+        df_expandido["Estructura"] = df_expandido.apply(limpiar_estructuras, axis=1)
+        df_expandido = df_expandido.explode("Estructura", ignore_index=True)
+        df_expandido = df_expandido[
+            df_expandido["Estructura"].notna() & (df_expandido["Estructura"].str.strip() != "")
+        ]
 
-        # ✅ Agrupar en una sola fila por punto (unión de listas si el punto aparece en varias filas)
-        def unir_listas(listas):
-            acumulado = []
-            for lst in listas:
-                acumulado.extend(lst)
-            return sorted(set(acumulado))
+        df_expandido["Estructura"] = df_expandido["Estructura"].str.strip().str.upper()
+        df_expandido.drop_duplicates(subset=["Punto", "Estructura"], inplace=True)
 
-        df_expandido = (
-            df_expandido.groupby("Punto", as_index=False)
-            .agg({"Estructuras": unir_listas})
-        )
+        df_expandido.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
 
-        # ✅ Columna de texto concatenada para mostrar
-        df_expandido["Estructuras_concatenadas"] = df_expandido["Estructuras"].apply(lambda lst: ", ".join(lst))
-
-        # === Mostrar vista previa limpia ===
+        # === Vista previa ===
         st.markdown("#### 🧪 Vista previa estructuras expandidas (corregida)")
-        st.dataframe(df_expandido[["Punto", "Estructuras_concatenadas"]], use_container_width=True, hide_index=True)
+        st.dataframe(df_expandido, use_container_width=True, hide_index=True)
 
-        # === Preparar DataFrame final (una fila por Punto + codigodeestructura) ===
-        df_final = df_expandido.explode("Estructuras", ignore_index=True)
-        df_final.rename(columns={"Estructuras": "codigodeestructura"}, inplace=True)
-        df_final["codigodeestructura"] = df_final["codigodeestructura"].str.strip().str.upper()
-        df_final = df_final[df_final["codigodeestructura"].notna() & (df_final["codigodeestructura"] != "")]
-        df_final.drop_duplicates(subset=["Punto", "codigodeestructura"], inplace=True)
-
-        # === Conteo rápido (ya sobre df_final limpio) ===
         conteo_preview = (
-            df_final.groupby(["Punto", "codigodeestructura"])
+            df_expandido.groupby(["Punto", "codigodeestructura"])
             .size()
             .reset_index(name="Cantidad")
         )
@@ -346,14 +327,14 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                 columns=["Materiales", "Unidad", "Cantidad"]
             )
 
-        # === Botón de generación ===
+        # === Generar reportes ===
         if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
             try:
                 with st.spinner("⏳ Generando reportes, por favor espere..."):
                     resultados_pdf = procesar_materiales(
                         archivo_estructuras=ruta_estructuras,
                         archivo_materiales=ruta_datos_materiales,
-                        estructuras_df=df_final,  # 🔥 usar df_final limpio
+                        estructuras_df=df_expandido,
                         datos_proyecto=st.session_state.get("datos_proyecto", {})
                     )
 
@@ -367,7 +348,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
             except Exception as e:
                 st.error(f"❌ Error al generar reportes: {e}")
 
-        # === Botones de descarga ===
+        # === Descarga de reportes ===
         if "pdfs_generados" in st.session_state:
             pdfs = st.session_state["pdfs_generados"]
             st.markdown("### 📥 Descarga de Reportes Generados")
@@ -424,8 +405,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
