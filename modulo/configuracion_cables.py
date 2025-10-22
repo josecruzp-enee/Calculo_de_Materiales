@@ -7,10 +7,6 @@ y los guarda en st.session_state['datos_proyecto'].
 
 import streamlit as st
 import pandas as pd
-from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
 
 
 # =====================================================
