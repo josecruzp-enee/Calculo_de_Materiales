@@ -308,9 +308,6 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
         df_expandido.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
 
         # === Vista previa ===
-        st.markdown("#### 🧪 Vista previa estructuras expandidas (corregida)")
-        st.dataframe(df_expandido, use_container_width=True, hide_index=True)
-
         conteo_preview = (
             df_expandido.groupby(["Punto", "codigodeestructura"])
             .size()
@@ -405,3 +402,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
