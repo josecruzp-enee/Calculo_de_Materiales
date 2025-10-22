@@ -44,8 +44,24 @@ def procesar_materiales(
     log(f"➡️ calibre_mt = {calibre_mt}")
     log(f"➡️ datos_proyecto = {datos_proyecto}")
 
-    # 2️⃣ Conteo estructuras
+    # 2️⃣ Limpieza y conteo de estructuras
+    # 🧹 Eliminar filas vacías o puntos fantasma
+    log("🔍 Limpieza inicial de estructuras...")
+    filas_antes = len(df_estructuras)
+    df_estructuras = df_estructuras.dropna(how="all")
+    if "codigodeestructura" in df_estructuras.columns:
+        df_estructuras = df_estructuras[df_estructuras["codigodeestructura"].notna()]
+    filas_despues = len(df_estructuras)
+    log(f"🧹 Filas eliminadas: {filas_antes - filas_despues}")
+
+    # 🔹 Asegurar nombres uniformes
+    if "Punto" not in df_estructuras.columns and "punto" in df_estructuras.columns:
+        df_estructuras.rename(columns={"punto": "Punto"}, inplace=True)
+
+    # 🔹 Eliminar duplicados y evitar contar puntos vacíos
     df_estructuras_unicas = df_estructuras.drop_duplicates(subset=["Punto", "codigodeestructura"])
+
+    # 🔹 Obtener conteo real de estructuras
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras_unicas)
 
     for p in estructuras_por_punto:
@@ -86,7 +102,7 @@ def procesar_materiales(
         df_mat = calcular_materiales_estructura(
             archivo_materiales,
             e,
-            1,  # dejamos fijo en 1 para evitar multiplicación doble
+            1,  # ← dejamos fijo en 1 para evitar duplicaciones
             tension,
             calibre_mt,
             tabla_conectores_mt
@@ -94,7 +110,6 @@ def procesar_materiales(
         df_lista.append(df_mat)
 
     df_total = pd.concat(df_lista, ignore_index=True)
-
 
     # 6️⃣ Resumen global de materiales
     df_resumen = (
