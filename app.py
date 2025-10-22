@@ -367,54 +367,57 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
 
 
 def main():
+    # --- Configuración de página y estilos ---
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     aplicar_estilos()
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
 
-    # --- Inicialización del estado global ---
+    # --- Inicializar valores por defecto ---
     defaults = {
         "datos_proyecto": {},
         "df_puntos": pd.DataFrame(columns=COLUMNAS_BASE),
         "materiales_extra": [],
         "calculo_finalizado": False,
         "punto_en_edicion": None,
-        "cables_proyecto": {},  # ⚙️ nuevo valor por defecto
+        "cables_proyecto": {},
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
 
-    # --- Modo de carga ---
+    # --- Selección del modo de carga ---
     modo_carga = st.radio(
         "Selecciona modo de carga:",
         ["Desde archivo Excel", "Pegar tabla", "Listas desplegables"],
         key="modo_carga_radio"
     )
 
-    # --- Datos generales del proyecto ---
-    seccion_datos_proyecto()
+    st.markdown("---")
 
-    # --- Configuración de calibres (mantiene tu diseño original) ---
-    cables_registrados = seccion_cables()  # 🔹 función ya existente
+    # --- Sección de configuración de cables ---
+    st.subheader("⚙️ Configuración de Cables del Proyecto")
+    cables_registrados = seccion_cables()  # ✅ función devuelve calibres MT, BT, Neutro
 
     if cables_registrados:
-        # Guarda en session_state los calibres seleccionados
+        # Guardar calibres dentro de session_state
         st.session_state["datos_proyecto"]["cables_proyecto"] = cables_registrados
         st.session_state["cables_proyecto"] = cables_registrados
+        st.success("✅ Calibres registrados correctamente.")
 
-    # --- Entrada de estructuras ---
+    st.markdown("---")
+
+    # --- Sección de estructuras del proyecto ---
     df, ruta_estructuras = seccion_entrada_estructuras(modo_carga)
 
-    # --- Materiales adicionales ---
+    # --- Sección de materiales adicionales ---
     seccion_adicionar_material()
 
-    # --- Finalizar cálculo ---
+    # --- Procesamiento final del cálculo ---
     seccion_finalizar_calculo(df)
 
-    # --- Exportar PDFs y Excel ---
+    # --- Exportación del informe (PDF/Excel) ---
     seccion_exportacion(df, modo_carga, ruta_estructuras, RUTA_DATOS_MATERIALES)
 
 
 if __name__ == "__main__":
     main()
-
 
