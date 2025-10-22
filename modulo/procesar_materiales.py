@@ -18,6 +18,34 @@ except ImportError:
     log = print
 
 
+# ✅ Nueva función auxiliar integrada
+def aplicar_reemplazo_conectores_resumen(df_resumen, calibre_mt, tabla_conectores_mt, log=print):
+    """
+    Reemplaza automáticamente los conectores de compresión en el DataFrame de materiales,
+    usando la tabla de conectores cargada desde 'Estructura_datos.xlsx'.
+    """
+    try:
+        from modulo.conectores_mt import aplicar_reemplazos_conectores
+
+        if df_resumen.empty:
+            log("⚠️ No hay materiales para revisar conectores.")
+            return df_resumen
+
+        materiales_previos = df_resumen["Materiales"].tolist()
+
+        materiales_modificados = aplicar_reemplazos_conectores(
+            materiales_previos, calibre_mt, tabla_conectores_mt
+        )
+
+        df_resumen["Materiales"] = materiales_modificados
+        log(f"🔁 Reemplazo automático de conectores aplicado para calibre {calibre_mt}")
+        return df_resumen
+
+    except Exception as e:
+        log(f"⚠️ Error al aplicar reemplazo de conectores: {e}")
+        return df_resumen
+
+
 def procesar_materiales(
     archivo_estructuras=None,
     archivo_materiales=None,
@@ -25,7 +53,6 @@ def procesar_materiales(
     datos_proyecto=None
 ):
     if archivo_estructuras:
-        # ✅ Solo cargar datos del archivo si no fueron proporcionados desde la interfaz
         if not datos_proyecto:
             datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
         df_estructuras = cargar_estructuras_proyectadas(archivo_estructuras)
@@ -53,23 +80,20 @@ def procesar_materiales(
     filas_despues = len(df_estructuras)
     log(f"🧹 Filas eliminadas: {filas_antes - filas_despues}")
 
-    # 🔹 Asegurar nombres uniformes
     if "Punto" not in df_estructuras.columns and "punto" in df_estructuras.columns:
         df_estructuras.rename(columns={"punto": "Punto"}, inplace=True)
 
-    # 🔹 Eliminar duplicados y evitar contar puntos vacíos
     df_estructuras_unicas = df_estructuras.drop_duplicates(subset=["Punto", "codigodeestructura"])
 
-    # 🔹 Obtener conteo preliminar
+    # 🔹 Conteo preliminar
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras_unicas)
-
     for p in estructuras_por_punto:
         estructuras_por_punto[p] = list(dict.fromkeys(estructuras_por_punto[p]))
 
     log(f"Conteo estructuras inicial: {conteo}")
     log(f"Estructuras por punto: {estructuras_por_punto}")
 
-    # ✅ NUEVO BLOQUE: Recalcular conteo global (corrige problema de duplicados entre puntos)
+    # ✅ Recalcular conteo global total
     conteo_global_df = (
         df_estructuras_unicas.groupby("codigodeestructura")
         .size()
@@ -80,10 +104,9 @@ def procesar_materiales(
     for e, c in conteo.items():
         log(f"   {e}: {c} unidades totales")
 
-    # 3️⃣ Cargar índice de estructuras
+    # 3️⃣ Cargar índice
     df_indice = cargar_indice(archivo_materiales)
     log("Columnas originales índice: " + str(df_indice.columns.tolist()))
-
     df_indice.columns = df_indice.columns.str.strip().str.lower()
 
     if "código de estructura" in df_indice.columns:
@@ -106,13 +129,13 @@ def procesar_materiales(
         excel_temp = pd.ExcelFile(archivo_materiales)
         log(f"📄 Hojas disponibles en Estructura_datos.xlsx: {excel_temp.sheet_names}")
 
-    # 5️⃣ Calcular materiales (sin duplicar cantidades)
+    # 5️⃣ Calcular materiales (multiplicando por cantidad real)
     df_lista = []
     for e, c in conteo.items():
         df_mat = calcular_materiales_estructura(
             archivo_materiales,
             e,
-            c,  # ✅ ahora se multiplica por la cantidad total correcta (antes era fijo en 1)
+            c,  # ✅ ahora multiplica correctamente por cantidad total
             tension,
             calibre_mt,
             tabla_conectores_mt
@@ -129,13 +152,15 @@ def procesar_materiales(
     )
     log("df_resumen (materiales):\n" + str(df_resumen.head(10)))
 
+    # ✅ Reemplazo automático de conectores de compresión
+    df_resumen = aplicar_reemplazo_conectores_resumen(df_resumen, calibre_mt, tabla_conectores_mt, log)
+
     # 7️⃣ Resumen de estructuras globales
     if "codigodeestructura" not in df_indice.columns:
         df_indice["codigodeestructura"] = None
 
     df_indice["codigodeestructura"] = df_indice["codigodeestructura"].astype(str).str.strip().str.upper()
     conteo = {str(k).strip().upper(): v for k, v in conteo.items()}
-
     df_indice["Cantidad"] = df_indice["codigodeestructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
     log("df_estructuras_resumen:\n" + str(df_estructuras_resumen.head(10)))
@@ -162,7 +187,7 @@ def procesar_materiales(
     )
     log("df_resumen_por_punto:\n" + str(df_resumen_por_punto.head(10)))
 
-    # 🔹 Integrar materiales adicionales
+    # 🔹 Materiales adicionales
     try:
         materiales_extra = st.session_state.get("materiales_extra", [])
         if materiales_extra:
