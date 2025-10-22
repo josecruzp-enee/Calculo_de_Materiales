@@ -45,7 +45,6 @@ def procesar_materiales(
     log(f"➡️ datos_proyecto = {datos_proyecto}")
 
     # 2️⃣ Limpieza y conteo de estructuras
-    # 🧹 Eliminar filas vacías o puntos fantasma
     log("🔍 Limpieza inicial de estructuras...")
     filas_antes = len(df_estructuras)
     df_estructuras = df_estructuras.dropna(how="all")
@@ -61,14 +60,25 @@ def procesar_materiales(
     # 🔹 Eliminar duplicados y evitar contar puntos vacíos
     df_estructuras_unicas = df_estructuras.drop_duplicates(subset=["Punto", "codigodeestructura"])
 
-    # 🔹 Obtener conteo real de estructuras
+    # 🔹 Obtener conteo preliminar
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras_unicas)
 
     for p in estructuras_por_punto:
         estructuras_por_punto[p] = list(dict.fromkeys(estructuras_por_punto[p]))
 
-    log(f"Conteo estructuras: {conteo}")
+    log(f"Conteo estructuras inicial: {conteo}")
     log(f"Estructuras por punto: {estructuras_por_punto}")
+
+    # ✅ NUEVO BLOQUE: Recalcular conteo global (corrige problema de duplicados entre puntos)
+    conteo_global_df = (
+        df_estructuras_unicas.groupby("codigodeestructura")
+        .size()
+        .reset_index(name="Cantidad")
+    )
+    conteo = dict(zip(conteo_global_df["codigodeestructura"], conteo_global_df["Cantidad"]))
+    log("✅ Conteo global corregido considerando todos los puntos:")
+    for e, c in conteo.items():
+        log(f"   {e}: {c} unidades totales")
 
     # 3️⃣ Cargar índice de estructuras
     df_indice = cargar_indice(archivo_materiales)
@@ -102,14 +112,14 @@ def procesar_materiales(
         df_mat = calcular_materiales_estructura(
             archivo_materiales,
             e,
-            1,  # ← dejamos fijo en 1 para evitar duplicaciones
+            c,  # ✅ ahora se multiplica por la cantidad total correcta (antes era fijo en 1)
             tension,
             calibre_mt,
             tabla_conectores_mt
         )
         df_lista.append(df_mat)
 
-    df_total = pd.concat(df_lista, ignore_index=True)
+    df_total = pd.concat(df_lista, ignore_index=True) if df_lista else pd.DataFrame()
 
     # 6️⃣ Resumen global de materiales
     df_resumen = (
@@ -197,4 +207,3 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
-
