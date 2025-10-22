@@ -11,8 +11,7 @@ from modulo.configuracion_cables import seccion_cables
 from modulo.estilos_app import aplicar_estilos
 from modulo.procesar_materiales import procesar_materiales  # ✅ usamos este directamente
 
-# Aplicar estilos institucionales ENEE
-aplicar_estilos()  # encabezado blanco
+
 
 COLUMNAS_BASE = [
     "Punto", "Poste", "Primario", "Secundario",
@@ -402,4 +401,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
