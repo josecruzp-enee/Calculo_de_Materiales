@@ -10,7 +10,7 @@ import streamlit as st
 from datetime import date
 
 
-def seccion_datos_proyecto():
+def formulario_datos_proyecto():
     """Formulario compacto para ingresar los datos generales del proyecto."""
     st.markdown("### 📘 Datos Generales del Proyecto")
 
