@@ -1,36 +1,27 @@
-# -*- coding: utf-8 -*-
-"""
-Formulario principal del proyecto.
-Autor: José Nikol Cruz
-"""
+def seccion_datos_proyecto():
+    st.markdown("### 📘 Datos Generales del Proyecto")
 
-import streamlit as st
-from datetime import datetime
+    col1, col2 = st.columns(2)  # 👈 Dividimos en dos columnas
 
-def formulario_datos_proyecto():
-    """Formulario para ingresar los datos generales del proyecto."""
-    st.markdown("### 1️⃣ Datos Generales del Proyecto")
+    with col1:
+        nombre_proyecto = st.text_input("📄 Nombre del Proyecto", key="nombre_proyecto")
+        empresa = st.text_input("🏢 Empresa / Área", value="ENEE", key="empresa")
+        tension = st.selectbox("⚡ Nivel de Tensión (kV)", ["13.8", "34.5"], key="nivel_tension")
 
-    # --- Campos básicos ---
-    nombre = st.text_input("📘 Nombre del Proyecto", value=st.session_state.get("nombre_proyecto", ""))
-    codigo = st.text_input("🔢 Código / Expediente", value=st.session_state.get("codigo_proyecto", ""))
-    empresa = st.text_input("🏢 Empresa / Área", value=st.session_state.get("empresa", "ENEE"))
-    responsable = st.text_input("👷‍♂️ Responsable / Diseñador", value=st.session_state.get("responsable", ""))
-    nivel_tension = st.selectbox("⚡ Nivel de Tensión (kV)", ["13.8", "34.5"], index=0)
+    with col2:
+        codigo_proyecto = st.text_input("🔢 Código / Expediente", key="codigo_proyecto")
+        responsable = st.text_input("👷‍♂️ Responsable / Diseñador", key="responsable")
+        fecha_informe = st.date_input("📅 Fecha del Informe", key="fecha_informe")
 
-    # --- Guardar datos ---
+    # Guardar datos
     st.session_state["datos_proyecto"] = {
-        "nombre_proyecto": nombre,
-        "codigo_proyecto": codigo,
+        "nombre_proyecto": nombre_proyecto,
+        "codigo_proyecto": codigo_proyecto,
         "empresa": empresa,
         "responsable": responsable,
-        "nivel_de_tension": nivel_tension,
-        "fecha_informe": datetime.today().strftime("%d/%m/%Y")
+        "nivel_de_tension": tension,
+        "fecha_informe": str(fecha_informe),
     }
 
-def mostrar_datos_formateados():
-    """Muestra los datos ingresados de forma ordenada."""
-    if "datos_proyecto" in st.session_state:
-        st.markdown("### 🧾 Resumen de Datos del Proyecto")
-        datos = st.session_state["datos_proyecto"]
-        st.json(datos)
+    st.success("✅ Datos del proyecto guardados correctamente.")
+
