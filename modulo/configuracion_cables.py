@@ -1,4 +1,3 @@
-@@ -1,133 +1,69 @@
 # -*- coding: utf-8 -*-
 """
 configuracion_cables.py
