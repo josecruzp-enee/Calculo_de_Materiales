@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 configuracion_cables.py
-Versión completa restaurada con:
+Versión completa restaurada y optimizada con:
 - Botones para configuraciones de red primaria y secundaria
 - Ingreso de distancias (m)
 - Cálculo automático del total de cable
 - Guardado automático en st.session_state["datos_proyecto"]["cables_proyecto"]
+- Diseño visual coherente con estilo institucional ENEE
 """
 
 import streamlit as st
@@ -24,9 +25,9 @@ def seccion_cables():
 
     # === VALORES INICIALES ===
     tension = datos_proyecto.get("tension", 13.8)
-    calibre_mt = cables_guardados.get("Calibre", "1/0 ACSR")
-    calibre_bt = cables_guardados.get("Calibre_BT", "1/0 WP")
-    calibre_neutro = cables_guardados.get("Calibre_Neutro", "#2 AWG")
+    calibre_mt = cables_guardados[0]["Calibre"] if cables_guardados else "1/0 ACSR"
+    calibre_bt = cables_guardados[1]["Calibre"] if len(cables_guardados) > 1 else "1/0 WP"
+    calibre_neutro = cables_guardados[2]["Calibre"] if len(cables_guardados) > 2 else "#2 AWG"
 
     # === BLOQUE DE CONFIGURACIÓN PRIMARIA ===
     st.markdown("### ⚡ Configuración Primaria (MT)")
@@ -104,7 +105,7 @@ def seccion_cables():
 
     total_mt = calcular_total(dist_mt, config_mt)
     total_bt = calcular_total(dist_bt, config_bt)
-    total_neutro = dist_neutro  # Neutro siempre 1
+    total_neutro = dist_neutro  # Neutro siempre 1 fase
 
     # === TABLA DE RESULTADOS ===
     df_cables = pd.DataFrame({
@@ -127,4 +128,5 @@ def seccion_cables():
     st.session_state["datos_proyecto"] = datos_proyecto
 
     st.success("✅ Configuración de cables guardada correctamente.")
-    return df_cables.to_dict("records")
+
+    return df_cables
