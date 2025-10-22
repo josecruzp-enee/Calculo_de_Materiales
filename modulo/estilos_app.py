@@ -164,3 +164,74 @@ def aplicar_estilos(usar_encabezado_rojo=False):
         h3, h4 {margin-top: 0.5rem !important; margin-bottom: 0.4rem !important;}
     </style>
     """, unsafe_allow_html=True)
+
+        # === Ajuste de estilo compacto visual ===
+    st.markdown("""
+    <style>
+        /* Títulos más pequeños */
+        h1, h2, h3 {
+            margin-top: 0.3rem !important;
+            margin-bottom: 0.3rem !important;
+            font-weight: 600 !important;
+        }
+
+        /* Margen general compacto */
+        div.block-container {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+        }
+
+        /* Botones más delgados */
+        .stButton>button {
+            padding: 0.25rem 0.6rem !important;
+            font-size: 0.8rem !important;
+            border-radius: 5px !important;
+        }
+
+        /* Inputs más cortos */
+        .stTextInput input, .stSelectbox div[data-baseweb="select"], .stNumberInput input {
+            height: 32px !important;
+            font-size: 0.9rem !important;
+        }
+
+        /* Reducir el espacio entre widgets */
+        div[data-testid="stVerticalBlock"] {
+            gap: 0.3rem !important;
+            margin-bottom: 0.3rem !important;
+        }
+
+        /* Reducir el espacio en encabezados de secciones */
+        h2, h3 {
+            font-size: 1.05rem !important;
+        }
+
+        /* Reducir márgenes de DataFrames */
+        [data-testid="stDataFrame"] {
+            margin-top: -0.3rem !important;
+            margin-bottom: 0.3rem !important;
+        }
+
+        /* Encabezados de tabla más pequeños */
+        [data-testid="stDataFrame"] th, [data-testid="stDataFrame"] td {
+            font-size: 0.8rem !important;
+            padding: 2px 6px !important;
+        }
+
+        /* Bordes más suaves */
+        [data-testid="stDataFrame"] table {
+            border-radius: 4px !important;
+        }
+
+        /* Sección de "Configuración de cables" más compacta */
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0.8rem !important;
+        }
+
+        /* Evitar tanto blanco en secciones */
+        section.main > div {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
