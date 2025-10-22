@@ -154,3 +154,13 @@ def aplicar_estilos(usar_encabezado_rojo=False):
         """,
         unsafe_allow_html=True
     )
+
+    # ====== Ajuste compacto global ======
+    st.markdown("""
+    <style>
+        .block-container {padding-top: 0.8rem !important; padding-bottom: 0.8rem !important;}
+        .stTextInput, .stSelectbox, .stDateInput {margin-bottom: 0.4rem !important;}
+        .stButton>button {padding: 0.4rem 0.8rem !important; font-size: 0.9rem !important;}
+        h3, h4 {margin-top: 0.5rem !important; margin-bottom: 0.4rem !important;}
+    </style>
+    """, unsafe_allow_html=True)
