@@ -81,19 +81,20 @@ def procesar_materiales(
         log(f"📄 Hojas disponibles en Estructura_datos.xlsx: {excel_temp.sheet_names}")
 
     # 5️⃣ Calcular materiales (sin duplicar cantidades)
-    # 🩹 Solución definitiva: no multiplicar internamente por cantidad
-    df_total = pd.concat(
-        [
-            calcular_materiales_estructura(
-                archivo_materiales, e, 1, tension, calibre_mt, tabla_conectores_mt  # ← pasa 1 siempre
-            )
-            for e, c in conteo.items()
-            for _ in range(c)  # repite la estructura c veces, sin duplicar cantidades internas
-        ],
-        ignore_index=True
-    )
+    df_lista = []
+    for e, c in conteo.items():
+        df_mat = calcular_materiales_estructura(
+            archivo_materiales,
+            e,
+            1,  # dejamos fijo en 1 para evitar multiplicación doble
+            tension,
+            calibre_mt,
+            tabla_conectores_mt
+        )
+        df_lista.append(df_mat)
 
-    log("df_total (materiales por estructura):\n" + str(df_total.head(10)))
+    df_total = pd.concat(df_lista, ignore_index=True)
+
 
     # 6️⃣ Resumen global de materiales
     df_resumen = (
@@ -181,3 +182,4 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
+
