@@ -15,21 +15,39 @@ def cargar_estructuras_proyectadas(archivo_estructuras):
     return pd.read_excel(archivo_estructuras, sheet_name='estructuras')
 
 def extraer_estructuras_proyectadas(df_estructuras):
-    estructuras_proyectadas, estructuras_por_punto = [], {}
+    """
+    Extrae las estructuras proyectadas desde el DataFrame base.
+    Cada punto se procesa una sola vez y se evita duplicar combinaciones.
+    """
+    estructuras_proyectadas = []
+    estructuras_por_punto = {}
+
     for i, fila in df_estructuras.iterrows():
-        punto = fila.get("Punto #", f"Punto {i+1}")
-        estructuras_en_fila = []
+        punto = fila.get("Punto #", fila.get("Punto", f"Punto {i+1}"))
+
+        estructuras_en_punto = []
         for col in df_estructuras.columns:
-            celda = fila[col]
-            if pd.notna(celda):
-                celda_str = str(celda).replace("\n", " ").replace("\r", " ").strip()
-                patrones = re.findall(r"(?:(\d+)\s*)?([A-Z0-9\-\.]+)(?:\s*\(\s*P\s*\))?", celda_str, flags=re.IGNORECASE)
-                for cantidad_str, nombre in patrones:
-                    cantidad = int(cantidad_str) if cantidad_str else 1
-                    estructuras_en_fila.extend([nombre]*cantidad)
-                    estructuras_proyectadas.extend([nombre]*cantidad)
-        estructuras_por_punto[punto] = estructuras_en_fila
+            valor = fila[col]
+            if pd.notna(valor):
+                texto = str(valor).strip()
+                if texto and texto.upper() not in ["SELECCIONAR", "ESTRUCTURA", "N/A", "NONE"]:
+                    # separar estructuras en caso de múltiples valores por celda
+                    partes = [p.strip() for p in texto.replace("\n", " ").split(" ") if p.strip()]
+                    for parte in partes:
+                        # mantener solo códigos válidos
+                        if any(c.isalpha() for c in parte):
+                            estructuras_en_punto.append(parte)
+
+        # ⚙️ eliminar duplicados dentro del punto
+        estructuras_en_punto = list(dict.fromkeys(estructuras_en_punto))
+        estructuras_proyectadas.extend(estructuras_en_punto)
+        estructuras_por_punto[punto] = estructuras_en_punto
+
+    # ⚙️ eliminar duplicados globales
+    estructuras_proyectadas = list(dict.fromkeys(estructuras_proyectadas))
+
     return estructuras_proyectadas, estructuras_por_punto
+
 
 def cargar_materiales(archivo_materiales, hoja, header=None):
     return pd.read_excel(archivo_materiales, sheet_name=hoja, header=header)
@@ -113,6 +131,7 @@ def cargar_adicionales(archivo_estructuras):
     except:
         pass
     return pd.DataFrame(columns=['Materiales', 'Unidad', 'Cantidad'])
+
 
 
 
