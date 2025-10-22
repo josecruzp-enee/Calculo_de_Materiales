@@ -281,7 +281,11 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
 
         df_expandido = df.copy()
 
-        # === 🔧 Limpieza y expansión de estructuras ===
+        # 🧹 Eliminar filas duplicadas por Punto antes de expandir (evita 'Punto 2' repetido)
+        if "Punto" in df_expandido.columns:
+            df_expandido = df_expandido.drop_duplicates(subset=["Punto"])
+
+        # === 🔧 Limpieza y expansión de estructuras (versión optimizada) ===
         def limpiar_estructuras(fila):
             estructuras = []
             for col in columnas_estructuras:
@@ -290,33 +294,44 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     continue
                 partes = re.split(r'[+,;]', valor)
                 for p in partes:
-                    p = p.strip()
-                    if p and p.lower() != "seleccionar estructura":
-                        estructuras.append(p.upper())
-            return estructuras
+                    p = p.strip().upper()
+                    if p and p not in ["SELECCIONAR", "ESTRUCTURA", "N/A", "NONE"]:
+                        estructuras.append(p)
+            # quitar duplicados dentro del punto
+            return list(dict.fromkeys(estructuras))
 
-        df_expandido["Estructura"] = df_expandido.apply(limpiar_estructuras, axis=1)
-        df_expandido = df_expandido.explode("Estructura", ignore_index=True)
-        df_expandido = df_expandido[
-            df_expandido["Estructura"].notna() & (df_expandido["Estructura"].str.strip() != "")
-        ]
+        # ✅ Aplicar limpieza (lista por punto)
+        df_expandido["Estructuras"] = df_expandido.apply(limpiar_estructuras, axis=1)
 
-        # 🩹 🔥 CORRECCIÓN: eliminar duplicados por Punto + Estructura
-        df_expandido["Estructura"] = df_expandido["Estructura"].str.strip().str.upper()
-        df_expandido.drop_duplicates(subset=["Punto", "Estructura"], inplace=True)
+        # ✅ Agrupar en una sola fila por punto (unión de listas si el punto aparece en varias filas)
+        def unir_listas(listas):
+            acumulado = []
+            for lst in listas:
+                acumulado.extend(lst)
+            return sorted(set(acumulado))
 
-        # ✅ NUEVO: si el usuario repitió el mismo punto en diferentes filas, también limpiar eso
-        df_expandido = df_expandido.drop_duplicates(subset=["Punto", "Estructura"])
+        df_expandido = (
+            df_expandido.groupby("Punto", as_index=False)
+            .agg({"Estructuras": unir_listas})
+        )
 
-        df_expandido.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
+        # ✅ Columna de texto concatenada para mostrar
+        df_expandido["Estructuras_concatenadas"] = df_expandido["Estructuras"].apply(lambda lst: ", ".join(lst))
 
-        # === Mostrar vista previa ===
+        # === Mostrar vista previa limpia ===
         st.markdown("#### 🧪 Vista previa estructuras expandidas (corregida)")
-        st.dataframe(df_expandido, use_container_width=True, hide_index=True)
+        st.dataframe(df_expandido[["Punto", "Estructuras_concatenadas"]], use_container_width=True, hide_index=True)
 
-        # === Conteo rápido ===
+        # === Preparar DataFrame final (una fila por Punto + codigodeestructura) ===
+        df_final = df_expandido.explode("Estructuras", ignore_index=True)
+        df_final.rename(columns={"Estructuras": "codigodeestructura"}, inplace=True)
+        df_final["codigodeestructura"] = df_final["codigodeestructura"].str.strip().str.upper()
+        df_final = df_final[df_final["codigodeestructura"].notna() & (df_final["codigodeestructura"] != "")]
+        df_final.drop_duplicates(subset=["Punto", "codigodeestructura"], inplace=True)
+
+        # === Conteo rápido (ya sobre df_final limpio) ===
         conteo_preview = (
-            df_expandido.groupby(["Punto", "codigodeestructura"])
+            df_final.groupby(["Punto", "codigodeestructura"])
             .size()
             .reset_index(name="Cantidad")
         )
@@ -338,7 +353,7 @@ def seccion_exportacion(df, modo_carga, ruta_estructuras, ruta_datos_materiales)
                     resultados_pdf = procesar_materiales(
                         archivo_estructuras=ruta_estructuras,
                         archivo_materiales=ruta_datos_materiales,
-                        estructuras_df=df_expandido,
+                        estructuras_df=df_final,  # 🔥 usar df_final limpio
                         datos_proyecto=st.session_state.get("datos_proyecto", {})
                     )
 
