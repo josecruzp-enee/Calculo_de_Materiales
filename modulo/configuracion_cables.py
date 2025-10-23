@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 configuracion_cables.py
-Permite seleccionar los calibres de los conductores Primario (MT), Secundario (BT), Neutro,
-Retenidas y Piloto, y los guarda en st.session_state['datos_proyecto'].
+Permite seleccionar los calibres de los conductores MT, BT, Neutro (N),
+Retenidas y Piloto (HP), y los guarda en st.session_state['datos_proyecto'].
 """
 
 import streamlit as st
@@ -20,47 +20,71 @@ def seccion_cables():
     """Interfaz Streamlit para ingresar la configuración de cables del proyecto."""
     st.markdown("### 2️⃣ ⚡ Configuración y Calibres de Conductores")
 
-    # === Listas de calibres por tipo ===
+    # === Catálogos por tipo (renombrados a MT/BT/N/Retenida/HP) ===
     calibres_disponibles = {
-        "Primario": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR", "266.8 MCM", "336 MCM"],
-        "Secundario": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
-        "Neutro": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR"],
-        "Retenidas": ["1/4 Acerado", "3/8 Acerado", "5/8 Acerado"],
-        "Piloto": ["2 WP", "1/0 WP", "2/0 WP"],
+        "MT": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR", "266.8 MCM", "336 MCM"],
+        "BT": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
+        "N":  ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR"],
+        "Retenida": ["1/4 Acerado", "3/8 Acerado", "5/8 Acerado"],
+        "HP": ["2 WP", "1/0 WP", "2/0 WP"],
     }
 
-    # === Configuraciones disponibles ===
     configuraciones_disponibles = {
-        "Primario": ["1F", "2F", "3F"],
-        "Secundario": ["1F", "2F"],
-        "Neutro": ["1F"],        # ⚡ Neutro monofásico fijo
-        "Retenidas": ["Única"],
-        "Piloto": ["1F", "2F"],  # ⚡ Piloto permite 120/240 V
+        "MT": ["1F", "2F", "3F"],
+        "BT": ["1F", "2F"],
+        "N":  ["Única"],      # neutro sin fases
+        "Retenida": ["Única"],
+        "HP": ["1F", "2F"],
     }
 
     # === Configuración base del proyecto ===
     datos_proyecto = st.session_state.get("datos_proyecto", {})
 
-    # --- Calibres predeterminados ---
+    # --- Calibres predeterminados globales (no dependen del tipo seleccionado) ---
     calibre_mt_actual = datos_proyecto.get("calibre_mt", "1/0 ACSR")
     calibre_bt_actual = datos_proyecto.get("calibre_bt", "1/0 WP")
     calibre_neutro_actual = datos_proyecto.get("calibre_neutro", "#2 AWG")
 
-    # --- Opciones típicas de calibres ---
     opciones_mt = ["1/0 ACSR", "3/0 ACSR", "266.8 MCM", "336.4 MCM"]
     opciones_bt = ["1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"]
     opciones_neutro = ["#2 AWG", "#4 AWG", "1/0 ACSR", "2/0 ACSR"]
 
-    # --- Diseño visual ---
+    # === Estilo para el selector horizontal tipo "tabla" ===
+    st.markdown("""
+    <style>
+    .selector-box { border:1px solid #D0D7DE; border-radius:12px; padding:10px 12px; background:#ffffff; }
+    div[role="radiogroup"] > div { gap:0.25rem !important; }
+    div[role="radiogroup"] label {
+        border:1px solid #D0D7DE; border-radius:10px; padding:6px 12px; margin:2px 4px;
+        background:#F8FAFC; white-space:nowrap;
+    }
+    div[role="radiogroup"] input:checked + div p { font-weight:700 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
     col1, col2, col3, col4 = st.columns([1.3, 1, 1.3, 1.2])
 
     with col1:
-        tipo = st.selectbox(
-            "🔌 Tipo",
-            options=list(calibres_disponibles.keys()),
-            index=0,
-            key="tipo_circuito"
+        # 🔁 Mantén compatibilidad con estados previos
+        tipo_actual = st.session_state.get("tipo_tramo") or st.session_state.get("tipo") or "MT"
+        if tipo_actual not in ["MT", "BT", "N", "HP", "Retenida"]:
+            tipo_actual = "MT"
+
+        st.markdown("**Tipo**")
+        st.markdown('<div class="selector-box">', unsafe_allow_html=True)
+        tipo = st.radio(
+            label="",
+            options=["MT", "BT", "N", "HP", "Retenida"],
+            horizontal=True,
+            index=["MT", "BT", "N", "HP", "Retenida"].index(tipo_actual),
+            label_visibility="collapsed",
+            key="tipo_tramo_radio",
         )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # espejo de compatibilidad
+        st.session_state["tipo_tramo"] = tipo
+        st.session_state["tipo"] = tipo
 
         calibre_mt = st.selectbox(
             "⚡ Calibre del Primario (MT):",
@@ -69,10 +93,15 @@ def seccion_cables():
         )
 
     with col2:
-        if tipo == "Neutro":
-            configuracion = st.text_input("⚙️ Config.", value="1F", disabled=True, key="configuracion_neutro")
+        cfg_options = configuraciones_disponibles[tipo]
+        if cfg_options and cfg_options != ["Única"]:
+            def_cfg = st.session_state.get("configuracion_cable", cfg_options[0])
+            if def_cfg not in cfg_options:
+                def_cfg = cfg_options[0]
+            configuracion = st.selectbox("⚙️ Config.", cfg_options, index=cfg_options.index(def_cfg), key="configuracion_cable")
         else:
-            configuracion = st.selectbox("⚙️ Config.", configuraciones_disponibles[tipo], key="configuracion_cable")
+            configuracion = "Única"
+            st.text_input("⚙️ Config.", value="Única", disabled=True, key="configuracion_no_aplica")
 
         calibre_bt = st.selectbox(
             "💡 Calibre del Secundario (BT):",
@@ -81,12 +110,16 @@ def seccion_cables():
         )
 
     with col3:
-        calibre = st.selectbox("📏 Calibre", calibres_disponibles[tipo], key="calibre_cable")
+        cal_list = calibres_disponibles[tipo]
+        def_cal = st.session_state.get("calibre_cable", cal_list[0] if cal_list else "")
+        if def_cal not in cal_list:
+            def_cal = cal_list[0] if cal_list else ""
+        calibre = st.selectbox("📏 Calibre", cal_list, index=cal_list.index(def_cal) if cal_list else 0, key="calibre_cable")
 
     with col4:
         longitud = st.number_input("📐 Longitud (m)", min_value=0.0, step=10.0, key="longitud_cable")
 
-    # Derivar fases según configuración (1F, 2F, 3F)
+    # Derivar fases según configuración (1F, 2F, 3F, Única)
     fases = 1 if configuracion == "Única" else int(str(configuracion).replace("F", ""))
     total_cable = longitud * fases
 
@@ -162,3 +195,4 @@ def tabla_cables_pdf(datos_proyecto):
     elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total:,.2f} m", styleN))
     elems.append(Spacer(1, 0.25 * inch))
     return elems
+
