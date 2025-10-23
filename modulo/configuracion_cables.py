@@ -13,140 +13,130 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 
 
-# =====================================================
-# 1️⃣ SECCIÓN STREAMLIT: CONFIGURACIÓN DE CABLES
-# =====================================================
 def seccion_cables():
-    """Interfaz Streamlit para ingresar la configuración de cables del proyecto."""
-    st.markdown("### 2️⃣ ⚡ Configuración y Calibres de Conductores")
+    """Interfaz Streamlit como TABLA editable para configurar tramos de cable."""
+    st.markdown("### 2️⃣ ⚡ Configuración y calibres de conductores (tabla)")
 
-    # === Catálogos por tipo (renombrados a MT/BT/N/Retenida/HP) ===
-    calibres_disponibles = {
+    # ----- Catálogos -----
+    CALIBRES = {
         "MT": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR", "266.8 MCM", "336 MCM"],
         "BT": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
         "N":  ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR"],
-        "Retenida": ["1/4 Acerado", "3/8 Acerado", "5/8 Acerado"],
         "HP": ["2 WP", "1/0 WP", "2/0 WP"],
+        "Retenida": ["1/4", "5/8", "3/4"],   # <- como pediste
     }
+    TIPOS = ["MT", "BT", "N", "HP", "Retenida"]
 
-    configuraciones_disponibles = {
+    CONFIGS_BY_TIPO = {
         "MT": ["1F", "2F", "3F"],
-        "BT": ["1F", "2F"],
-        "N":  ["Única"],      # neutro sin fases
-        "Retenida": ["Única"],
-        "HP": ["1F", "2F"],
+        "BT": ["1F", "2F", "3F"],
+        "N":  ["N"],
+        "HP": ["1F+N", "2F"],
+        "Retenida": ["Única"],               # retenida no lleva fases
     }
 
-    # === Configuración base del proyecto ===
-    datos_proyecto = st.session_state.get("datos_proyecto", {})
+    # Unión ordenada de todas las configuraciones para el editor
+    CONFIGS_UNION = ["Única", "N", "1F", "1F+N", "2F", "3F"]
 
-    # --- Calibres predeterminados globales (no dependen del tipo seleccionado) ---
-    calibre_mt_actual = datos_proyecto.get("calibre_mt", "1/0 ACSR")
-    calibre_bt_actual = datos_proyecto.get("calibre_bt", "1/0 WP")
-    calibre_neutro_actual = datos_proyecto.get("calibre_neutro", "#2 AWG")
+    # Unión de todos los calibres (el post-proceso restringe por tipo)
+    CALIBRES_UNION = list(dict.fromkeys(c for lst in CALIBRES.values() for c in lst))
 
-    opciones_mt = ["1/0 ACSR", "3/0 ACSR", "266.8 MCM", "336.4 MCM"]
-    opciones_bt = ["1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"]
-    opciones_neutro = ["#2 AWG", "#4 AWG", "1/0 ACSR", "2/0 ACSR"]
-
-    # === Estilo para el selector horizontal tipo "tabla" ===
-    st.markdown("""
-    <style>
-    .selector-box { border:1px solid #D0D7DE; border-radius:12px; padding:10px 12px; background:#ffffff; }
-    div[role="radiogroup"] > div { gap:0.25rem !important; }
-    div[role="radiogroup"] label {
-        border:1px solid #D0D7DE; border-radius:10px; padding:6px 12px; margin:2px 4px;
-        background:#F8FAFC; white-space:nowrap;
-    }
-    div[role="radiogroup"] input:checked + div p { font-weight:700 !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    col1, col2, col3, col4 = st.columns([1.3, 1, 1.3, 1.2])
-
-    with col1:
-        # 🔁 Mantén compatibilidad con estados previos
-        tipo_actual = st.session_state.get("tipo_tramo") or st.session_state.get("tipo") or "MT"
-        if tipo_actual not in ["MT", "BT", "N", "HP", "Retenida"]:
-            tipo_actual = "MT"
-
-        st.markdown("**Tipo**")
-        st.markdown('<div class="selector-box">', unsafe_allow_html=True)
-        tipo = st.radio(
-            label="",
-            options=["MT", "BT", "N", "HP", "Retenida"],
-            horizontal=True,
-            index=["MT", "BT", "N", "HP", "Retenida"].index(tipo_actual),
-            label_visibility="collapsed",
-            key="tipo_tramo_radio",
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # espejo de compatibilidad
-        st.session_state["tipo_tramo"] = tipo
-        st.session_state["tipo"] = tipo
-
-        calibre_mt = st.selectbox(
-            "⚡ Calibre del Primario (MT):",
-            opciones_mt,
-            index=opciones_mt.index(calibre_mt_actual) if calibre_mt_actual in opciones_mt else 0
+    # ---- Estado inicial
+    if "cables_proyecto_df" not in st.session_state:
+        st.session_state["cables_proyecto_df"] = pd.DataFrame(
+            columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]
         )
 
-    with col2:
-        cfg_options = configuraciones_disponibles[tipo]
-        if cfg_options and cfg_options != ["Única"]:
-            def_cfg = st.session_state.get("configuracion_cable", cfg_options[0])
-            if def_cfg not in cfg_options:
-                def_cfg = cfg_options[0]
-            configuracion = st.selectbox("⚙️ Config.", cfg_options, index=cfg_options.index(def_cfg), key="configuracion_cable")
-        else:
-            configuracion = "Única"
-            st.text_input("⚙️ Config.", value="Única", disabled=True, key="configuracion_no_aplica")
+    st.caption("Agrega/edita filas; el total se calcula automáticamente según la configuración.")
 
-        calibre_bt = st.selectbox(
-            "💡 Calibre del Secundario (BT):",
-            opciones_bt,
-            index=opciones_bt.index(calibre_bt_actual) if calibre_bt_actual in opciones_bt else 0
-        )
+    # --- Editor de tabla
+    edited_df = st.data_editor(
+        st.session_state["cables_proyecto_df"],
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "Tipo": st.column_config.SelectboxColumn(
+                "Tipo", options=TIPOS, required=True, width="small",
+                help="MT, BT, N (neutro), HP (piloto), Retenida",
+            ),
+            "Configuración": st.column_config.SelectboxColumn(
+                "Config.", options=CONFIGS_UNION, required=True, width="small",
+                help="MT/BT: 1F,2F,3F · N: N · HP: 1F+N/2F · Retenida: Única",
+            ),
+            "Calibre": st.column_config.SelectboxColumn(
+                "Calibre", options=CALIBRES_UNION, required=True, width="medium",
+            ),
+            "Longitud (m)": st.column_config.NumberColumn(
+                "Longitud (m)", min_value=0.0, step=10.0, format="%.2f",
+            ),
+            "Total Cable (m)": st.column_config.NumberColumn(
+                "Total Cable (m)", disabled=True, format="%.2f",
+                help="Longitud × Nº de conductores/fases (autocalculado)",
+            ),
+        },
+        hide_index=True,
+    )
 
-    with col3:
-        cal_list = calibres_disponibles[tipo]
-        def_cal = st.session_state.get("calibre_cable", cal_list[0] if cal_list else "")
-        if def_cal not in cal_list:
-            def_cal = cal_list[0] if cal_list else ""
-        calibre = st.selectbox("📏 Calibre", cal_list, index=cal_list.index(def_cal) if cal_list else 0, key="calibre_cable")
+    # --- Reglas de negocio + cálculo de total por fila ---
+    def fases_de(cfg: str) -> int:
+        if not isinstance(cfg, str):
+            return 1
+        cfg = cfg.strip()
+        if cfg in ("Única", "N", "1F", "1F+N"):
+            return 1
+        if cfg == "2F":
+            return 2
+        if cfg == "3F":
+            return 3
+        return 1
 
-    with col4:
-        longitud = st.number_input("📐 Longitud (m)", min_value=0.0, step=10.0, key="longitud_cable")
+    processed = []
+    for _, row in edited_df.fillna("").iterrows():
+        if not row.get("Tipo"):
+            continue
+        tipo = str(row["Tipo"])
 
-    # Derivar fases según configuración (1F, 2F, 3F, Única)
-    fases = 1 if configuracion == "Única" else int(str(configuracion).replace("F", ""))
-    total_cable = longitud * fases
+        # Ajustar configuración permitida por tipo
+        cfg_permitidas = CONFIGS_BY_TIPO.get(tipo, ["Única"])
+        cfg = str(row["Configuración"]) if row.get("Configuración") else cfg_permitidas[0]
+        if cfg not in cfg_permitidas:
+            cfg = cfg_permitidas[0]
 
-    # Inicializar lista
-    if "cables_proyecto" not in st.session_state:
-        st.session_state.cables_proyecto = []
+        # Ajustar calibre válido para el tipo
+        cal_list = CALIBRES.get(tipo, CALIBRES_UNION)
+        cal = str(row["Calibre"]) if row.get("Calibre") else (cal_list[0] if cal_list else "")
+        if cal not in cal_list:
+            cal = cal_list[0] if cal_list else cal
 
-    # --- Botón agregar tramo ---
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("➕ Agregar tramo"):
-        st.session_state.cables_proyecto.append({
+        # Longitud y total
+        try:
+            L = float(row.get("Longitud (m)", 0.0))
+        except Exception:
+            L = 0.0
+        total = L * fases_de(cfg)
+
+        processed.append({
             "Tipo": tipo,
-            "Configuración": configuracion,
-            "Calibre": calibre,
-            "Longitud (m)": longitud,
-            "Total Cable (m)": total_cable
+            "Configuración": cfg,
+            "Calibre": cal,
+            "Longitud (m)": L,
+            "Total Cable (m)": total,
         })
-        st.success(f"✅ {tipo} agregado ({total_cable:.2f} m totales).")
 
-    # --- Mostrar tabla resultante ---
-    if st.session_state.cables_proyecto:
-        df = pd.DataFrame(st.session_state.cables_proyecto)
-        st.dataframe(df, use_container_width=True)
-        total = df["Total Cable (m)"].sum()
-        st.markdown(f"**🧮 Total Global de Cable:** {total:.2f} m")
+    df_out = pd.DataFrame(processed, columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"])
 
-    return st.session_state.get("cables_proyecto", [])
+    # ---- Persistir estados
+    st.session_state["cables_proyecto_df"] = df_out.copy()
+    lista = df_out.to_dict(orient="records")
+    st.session_state["cables_proyecto"] = lista
+    st.session_state.setdefault("datos_proyecto", {})
+    st.session_state["datos_proyecto"]["cables_proyecto"] = lista
+
+    # ---- Total global
+    if not df_out.empty:
+        st.markdown(f"**🧮 Total Global de Cable:** {df_out['Total Cable (m)'].sum():,.2f} m")
+
+    return lista
 
 
 # =====================================================
