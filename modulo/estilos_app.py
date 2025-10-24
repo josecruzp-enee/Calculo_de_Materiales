@@ -5,28 +5,32 @@ Define los estilos visuales globales de la aplicación Streamlit.
 Colores y tipografía inspirados en la línea institucional ENEE.
 """
 
-import os
 from pathlib import Path
 import base64
 import streamlit as st
 
-# --- Resolución robusta de rutas ---
-# Este archivo está en <repo>/modulo/estilos_app.py → la raíz es dos niveles arriba
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ASSETS_DIR = REPO_ROOT / "assets"
 DATA_IMG_DIR = REPO_ROOT / "data" / "imagenes"
-LEGACY_MODULO_DIR = Path(__file__).resolve().parent  # compatibilidad con ubicación anterior
+DATA_DIR = REPO_ROOT / "data"                       
+LEGACY_MODULO_DIR = Path(__file__).resolve().parent
 
 NOMBRE_LOGO_BLANCO = "Imagen_ENEE.png"
-NOMBRE_LOGO_ROJO = "Imagen_ENEE_Distribucion.png"
-NOMBRE_ENCABEZADO = "Imagen_Encabezado.jpg"  # opcional
+NOMBRE_LOGO_ROJO   = "Imagen_ENEE_Distribucion.png"
+NOMBRE_ENCABEZADO  = "Imagen Encabezado.jpg"        
 
 def _resolver_ruta_imagen(nombre: str) -> Path | None:
-    """Busca una imagen por prioridad: assets/ → data/imagenes/ → modulo/ (legado)."""
-    for ruta in (ASSETS_DIR / nombre, DATA_IMG_DIR / nombre, LEGACY_MODULO_DIR / nombre):
+    """Busca por prioridad: assets/ → data/imagenes/ → data/ → modulo/ (legado)."""
+    for ruta in (
+        ASSETS_DIR / nombre,
+        DATA_IMG_DIR / nombre,
+        DATA_DIR / nombre,                 
+        LEGACY_MODULO_DIR / nombre,
+    ):
         if ruta.is_file():
             return ruta
     return None
+
 
 def _img_to_base64(ruta: Path | None) -> str:
     """Convierte imagen a base64; si ruta es None o no existe, retorna cadena vacía."""
