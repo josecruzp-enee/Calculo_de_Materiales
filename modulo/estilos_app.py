@@ -5,23 +5,48 @@ Define los estilos visuales globales de la aplicación Streamlit.
 Colores y tipografía inspirados en la línea institucional ENEE.
 """
 
-import streamlit as st
 import os
+from pathlib import Path
 import base64
+import streamlit as st
 
-def aplicar_estilos(usar_encabezado_rojo=False):
-    """Aplica estilos globales con encabezado institucional ENEE."""
+# --- Resolución robusta de rutas ---
+# Este archivo está en <repo>/modulo/estilos_app.py → la raíz es dos niveles arriba
+REPO_ROOT = Path(__file__).resolve().parents[1]
+ASSETS_DIR = REPO_ROOT / "assets"
+DATA_IMG_DIR = REPO_ROOT / "data" / "imagenes"
+LEGACY_MODULO_DIR = Path(__file__).resolve().parent  # compatibilidad con ubicación anterior
 
-    base_dir = os.path.dirname(__file__)
-    logo_blanco = os.path.join(base_dir, "Imagen_ENEE.png")
-    logo_rojo = os.path.join(base_dir, "Imagen_ENEE_Distribucion.png")
+NOMBRE_LOGO_BLANCO = "Imagen_ENEE.png"
+NOMBRE_LOGO_ROJO = "Imagen_ENEE_Distribucion.png"
+NOMBRE_ENCABEZADO = "Imagen_Encabezado.jpg"  # opcional
 
-    # Leer y convertir imagen a base64 (para que funcione en Streamlit Cloud)
-    def img_to_base64(ruta):
+def _resolver_ruta_imagen(nombre: str) -> Path | None:
+    """Busca una imagen por prioridad: assets/ → data/imagenes/ → modulo/ (legado)."""
+    for ruta in (ASSETS_DIR / nombre, DATA_IMG_DIR / nombre, LEGACY_MODULO_DIR / nombre):
+        if ruta.is_file():
+            return ruta
+    return None
+
+def _img_to_base64(ruta: Path | None) -> str:
+    """Convierte imagen a base64; si ruta es None o no existe, retorna cadena vacía."""
+    if not ruta or not ruta.is_file():
+        return ""
+    try:
         with open(ruta, "rb") as img:
-            return base64.b64encode(img.read()).decode()
+            return base64.b64encode(img.read()).decode("utf-8")
+    except Exception as e:
+        st.warning(f"No se pudo leer la imagen '{ruta}': {e}")
+        return ""
 
-    logo_b64 = img_to_base64(logo_rojo if usar_encabezado_rojo else logo_blanco)
+def aplicar_estilos(usar_encabezado_rojo: bool = False) -> None:
+    """Aplica estilos globales con encabezado institucional ENEE (robusto a rutas)."""
+    # Resolver imágenes
+    ruta_logo = _resolver_ruta_imagen(NOMBRE_LOGO_ROJO if usar_encabezado_rojo else NOMBRE_LOGO_BLANCO)
+    ruta_encabezado = _resolver_ruta_imagen(NOMBRE_ENCABEZADO)
+
+    logo_b64 = _img_to_base64(ruta_logo)
+    encabezado_b64 = _img_to_base64(ruta_encabezado)
 
     # ======== CSS GLOBAL ========
     st.markdown(
@@ -68,7 +93,7 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             transform: scale(1.03);
         }
 
-        /* ======== SELECTBOX ======== */
+        /* ======== SELECTBOX / INPUTS ======== */
         .stSelectbox div[data-baseweb="select"],
         .stTextInput input, .stNumberInput input {
             border-radius: 6px !important;
@@ -125,25 +150,32 @@ def aplicar_estilos(usar_encabezado_rojo=False):
             border-top: 1px solid #cccccc;
             padding-top: 10px;
         }
-
         </style>
         """,
         unsafe_allow_html=True
     )
 
-    # ====== ENCABEZADO ======
-    st.markdown(
-        f"""
-        <div class='header'>
-            <img src='data:image/png;base64,{logo_b64}' alt='ENEE Logo'>
-            <div class='titulo'>
-                <h1>⚡ Sistema de Cálculo de Materiales</h1>
-                <h4>Gerencia de Distribución – Empresa Nacional de Energía Eléctrica (ENEE)</h4>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
+    # ====== ENCABEZADO (usa imágenes si están disponibles) ======
+    header_html = ["<div class='header'>"]
+    if logo_b64:
+        header_html.append(f"<img src='data:image/png;base64,{logo_b64}' alt='ENEE Logo'>")
+    header_html.append(
+        "<div class='titulo'>"
+        "<h1>⚡ Sistema de Cálculo de Materiales</h1>"
+        "<h4>Gerencia de Distribución – Empresa Nacional de Energía Eléctrica (ENEE)</h4>"
+        "</div>"
     )
+    header_html.append("</div>")
+    st.markdown("".join(header_html), unsafe_allow_html=True)
+
+    # (Opcional) Encabezado/gráfico adicional ancho si existe
+    if encabezado_b64:
+        st.markdown(
+            f"<div style='margin-top: .5rem;'><img alt='Encabezado' "
+            f"src='data:image/jpeg;base64,{encabezado_b64}' "
+            f"style='width:100%;max-height:140px;object-fit:cover;border-radius:8px;'/></div>",
+            unsafe_allow_html=True
+        )
 
     # ====== FOOTER ======
     st.markdown(
@@ -165,7 +197,7 @@ def aplicar_estilos(usar_encabezado_rojo=False):
     </style>
     """, unsafe_allow_html=True)
 
-        # === Ajuste de estilo compacto visual ===
+    # === Ajuste de estilo compacto visual ===
     st.markdown("""
     <style>
         /* Títulos más pequeños */
@@ -234,4 +266,3 @@ def aplicar_estilos(usar_encabezado_rojo=False):
         }
     </style>
     """, unsafe_allow_html=True)
-
