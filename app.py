@@ -14,6 +14,13 @@ from modulo.procesar_materiales import procesar_materiales
 from modulo.ui_base import renderizar_encabezado, inicializar_estado, seleccionar_modo_carga
 from modulo.ui_datos_proyecto import seccion_datos_proyecto
 
+# =========================
+# Constantes (se conservan)
+# =========================
+COLUMNAS_BASE = [
+    "Punto", "Poste", "Primario", "Secundario",
+    "Retenidas", "Conexiones a tierra", "Transformadores"
+]
 
 # =========================
 # Sección 2: Cables
@@ -465,4 +472,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
