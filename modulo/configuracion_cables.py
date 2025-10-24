@@ -40,9 +40,10 @@ def get_calibres() -> dict[str, list[str]]:
 
 
 def get_configs_por_tipo() -> dict[str, list[str]]:
+    # BT sólo: 2F, 2F+N, 2F+HP+N
     return {
         "MT": ["1F", "2F", "3F"],
-        "BT": ["1F", "2F", "3F"],
+        "BT": ["2F", "2F+N", "2F+HP+N"],
         "N":  ["N"],
         "HP": ["1F+N", "2F"],
         "Retenida": ["Única"],
@@ -50,8 +51,8 @@ def get_configs_por_tipo() -> dict[str, list[str]]:
 
 
 def get_configs_union() -> list[str]:
-    # Unión para el editor (la validación real se hace por tipo)
-    return ["Única", "N", "1F", "1F+N", "2F", "3F"]
+    # Unión total para el editor; la validación fina se hace por tipo
+    return ["Única", "N", "1F", "1F+N", "2F", "2F+N", "2F+HP+N", "3F"]
 
 
 def get_calibres_union() -> list[str]:
@@ -79,12 +80,24 @@ def conductores_de(cfg: str) -> int:
     if not isinstance(cfg, str):
         return 1
     c = cfg.strip().upper()
+
+    # 1 conductor
     if c in ("ÚNICA", "N", "1F"):
         return 1
+
+    # 2 conductores
     if c in ("1F+N", "2F"):
         return 2
-    if c == "3F":
+
+    # 3 conductores
+    if c in ("3F", "2F+N"):
         return 3
+
+    # 4 conductores (2F + HP + N)
+    if c == "2F+HP+N":
+        return 4
+
+    # predeterminado
     return 1
 
 
@@ -153,7 +166,7 @@ def construir_editor_tabla() -> pd.DataFrame:
             ),
             "Configuración": st.column_config.SelectboxColumn(
                 "Configuración", options=get_configs_union(), required=True, width="small",
-                help="MT/BT: 1F/2F/3F · N: N · HP: 1F+N/2F · Retenida: Única",
+                help="MT: 1F/2F/3F · BT: 2F/2F+N/2F+HP+N · N: N · HP: 1F+N/2F · Retenida: Única",
             ),
             "Calibre": st.column_config.SelectboxColumn(
                 "Calibre", options=get_calibres_union(), required=True, width="medium",
@@ -171,29 +184,30 @@ def construir_editor_tabla() -> pd.DataFrame:
     return edited_df
 
 
-def procesar_filas_cables(edited_df: pd.DataFrame) -> pd.DataFrame:
-    """Valida por tipo, ajusta configuración/calibre y calcula totales. Devuelve DataFrame limpio."""
-    configs_por_tipo = get_configs_por_tipo()
-    calibres_por_tipo = get_calibres()
-    calibres_union = get_calibres_union()
+def validar_y_calcular(edited_df: pd.DataFrame) -> pd.DataFrame:
+    """Valida por tipo (config/calibre válidos) y calcula 'Total Cable (m)' por fila."""
+    cfgs = get_configs_por_tipo()
+    cal_por_tipo = get_calibres()
 
     processed_rows = []
     for _, row in edited_df.fillna("").iterrows():
         if not row.get("Tipo"):
             continue
-
         tipo = str(row["Tipo"]).strip()
-        cfg_permitidas = configs_por_tipo.get(tipo, ["Única"])
 
-        cfg = str(row["Configuración"]).strip() if row.get("Configuración") else cfg_permitidas[0]
+        # Configuración permitida por tipo
+        cfg_permitidas = cfgs.get(tipo, ["Única"])
+        cfg = str(row["Configuración"]) if row.get("Configuración") else cfg_permitidas[0]
         if cfg not in cfg_permitidas:
             cfg = cfg_permitidas[0]
 
-        cal_list = calibres_por_tipo.get(tipo, calibres_union)
-        cal = str(row["Calibre"]).strip() if row.get("Calibre") else (cal_list[0] if cal_list else "")
-        if cal not in cal_list and cal_list:
-            cal = cal_list[0]
+        # Calibre permitido por tipo
+        cal_list = cal_por_tipo.get(tipo, get_calibres_union())
+        cal = str(row["Calibre"]) if row.get("Calibre") else (cal_list[0] if cal_list else "")
+        if cal not in cal_list:
+            cal = cal_list[0] if cal_list else cal
 
+        # Longitud y total
         try:
             L = float(row.get("Longitud (m)", 0.0))
         except Exception:
@@ -209,22 +223,23 @@ def procesar_filas_cables(edited_df: pd.DataFrame) -> pd.DataFrame:
             "Total Cable (m)": total,
         })
 
-    return pd.DataFrame(processed_rows, columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"])
+    df_out = pd.DataFrame(processed_rows, columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"])
+    return df_out
 
 
-def persistir_cables_en_estado(df_out: pd.DataFrame) -> None:
-    """Persiste df_out y su lista equivalente en session_state, incluyendo datos_proyecto."""
-    st.session_state["cables_proyecto_df"] = df_out.copy()
-    lista = df_out.to_dict(orient="records")
+def persistir_en_estado(df: pd.DataFrame) -> None:
+    """Sincroniza todas las vistas del estado con el DataFrame validado."""
+    st.session_state["cables_proyecto_df"] = df.copy()
+    lista = df.to_dict(orient="records")
     st.session_state["cables_proyecto"] = lista
     st.session_state.setdefault("datos_proyecto", {})
     st.session_state["datos_proyecto"]["cables_proyecto"] = lista
 
 
-def mostrar_total_global(df_out: pd.DataFrame) -> None:
-    """Muestra el total global de cable si hay datos."""
-    if not df_out.empty:
-        total_global = df_out["Total Cable (m)"].sum()
+def mostrar_total_global(df: pd.DataFrame) -> None:
+    """Muestra el total global de metros de cable."""
+    if not df.empty:
+        total_global = df["Total Cable (m)"].sum()
         st.markdown(f"**🧮 Total Global de Cable:** {total_global:,.2f} m")
 
 
@@ -235,17 +250,22 @@ def seccion_cables():
     """Interfaz Streamlit como TABLA editable para configurar tramos de cable."""
     st.markdown("### 2️⃣ ⚡ Configuración y calibres de conductores (tabla)")
 
+    # Estado base
     inicializar_df_cables_en_estado()
     normalizar_tipos_existentes()
     asegurar_fila_inicial()
 
+    # Editor
     edited_df = construir_editor_tabla()
-    df_out = procesar_filas_cables(edited_df)
 
-    persistir_cables_en_estado(df_out)
+    # Validación + cálculo y persistencia
+    df_out = validar_y_calcular(edited_df)
+    persistir_en_estado(df_out)
+
+    # Totales
     mostrar_total_global(df_out)
 
-    # Contrato actual: retorna lista de dicts
+    # Devuelve la lista de dicts (coherente con uso previo)
     return st.session_state["cables_proyecto"]
 
 
@@ -262,7 +282,7 @@ def tabla_cables_pdf(datos_proyecto):
     styleN = styles["Normal"]
     styleH = styles["Heading2"]
 
-    # Prioriza versión en memoria si existe
+    # Toma siempre la última versión en memoria si existe
     if st.session_state.get("cables_proyecto"):
         datos_proyecto = dict(datos_proyecto or {})
         datos_proyecto["cables_proyecto"] = st.session_state["cables_proyecto"]
@@ -307,3 +327,4 @@ def tabla_cables_pdf(datos_proyecto):
     elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
     elems.append(Spacer(1, 0.25 * inch))
     return elems
+
