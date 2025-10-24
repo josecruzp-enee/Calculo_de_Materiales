@@ -11,30 +11,21 @@ Secciones de UI y utilidades de la app:
 - Exportación (normalización, conteos, PDFs)
 """
 
-# modulo/ui_secciones.py (cabecera de imports robusta)
+# modulo/ui_secciones.py (imports con esquema actual/legado)
 import os
 import re
 import time
 import pandas as pd
 import streamlit as st
 
-# ---- Imports con fallback: nuevo esquema (modulo/io/...) o esquema legado (modulo/...)
-try:
-    # Esquema nuevo (IO plano)
-    from modulo.io.utils import guardar_archivo_temporal, pegar_texto_a_df
-    from modulo.io.entradas import cargar_estructuras_proyectadas, cargar_catalogo_materiales
-    IO_LAYOUT = "nuevo"
-except ModuleNotFoundError:
-    # Esquema legado (antes de mover a /io)
-    from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
-    from modulo.entradas import cargar_estructuras_proyectadas, cargar_catalogo_materiales
-    IO_LAYOUT = "legado"
+# === Esquema LEGADO (lo que tienes hoy; NO usa modulo/io) ===
+from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
+from modulo.entradas import cargar_estructuras_proyectadas, cargar_catalogo_materiales
 
 from modulo.formularios import formulario_datos_proyecto, mostrar_datos_formateados
 from modulo.configuracion_cables import seccion_cables
 from modulo.estilos_app import aplicar_estilos
 from modulo.procesar_materiales import procesar_materiales  # núcleo
-
 
 # =========================
 # Constantes (conservadas)
