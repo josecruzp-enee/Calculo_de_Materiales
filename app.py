@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 
-from modulo.ui_secciones import (
+from modulo.interfaz.ui_secciones import (
     renderizar_encabezado,
     inicializar_estado,
     seccion_datos_proyecto,
@@ -46,3 +46,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
