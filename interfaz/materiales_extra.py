@@ -3,10 +3,8 @@
 
 import pandas as pd
 import streamlit as st
-from interfaz.base import BASE_DIR
+from interfaz.base import ruta_datos_materiales_por_defecto
 from modulo.entradas import cargar_catalogo_materiales
-
-RUTA_DATOS_MATERIALES = os.path.join(BASE_DIR, "data", "Estructura_datos.xlsx")  # por si alguien llama directo
 
 def seccion_adicionar_material() -> None:
     st.subheader("4. 🧰 Adicionar Material")
@@ -15,7 +13,7 @@ def seccion_adicionar_material() -> None:
     if "materiales_extra" not in st.session_state:
         st.session_state["materiales_extra"] = []
 
-    catalogo_df = cargar_catalogo_materiales(RUTA_DATOS_MATERIALES)
+    catalogo_df = cargar_catalogo_materiales(ruta_datos_materiales_por_defecto())
     if catalogo_df.empty:
         st.warning("⚠️ No se pudo cargar el catálogo de materiales.")
         return
@@ -42,16 +40,20 @@ def seccion_adicionar_material() -> None:
         agregar = st.form_submit_button("➕ Agregar Material")
 
     if agregar and etiqueta_sel:
-        partes = etiqueta_sel.split(" – ")
-        material = partes[0].strip()
-        unidad = partes[1].strip() if len(partes) > 1 else ""
-        st.session_state["materiales_extra"].append({
-            "Materiales": material,
-            "Unidad": unidad,
-            "Cantidad": int(cantidad)
-        })
-        st.success(f"✅ Material agregado: {material} ({cantidad} {unidad})")
+        agregar_material_extra(etiqueta_sel, cantidad)
 
     if st.session_state["materiales_extra"]:
         st.markdown("### 📋 Materiales adicionales añadidos")
         st.dataframe(pd.DataFrame(st.session_state["materiales_extra"]), use_container_width=True, hide_index=True)
+
+def agregar_material_extra(etiqueta_sel: str, cantidad: int) -> None:
+    """Agrega un material adicional a session_state a partir de la etiqueta seleccionada."""
+    partes = etiqueta_sel.split(" – ")
+    material = partes[0].strip()
+    unidad = partes[1].strip() if len(partes) > 1 else ""
+    st.session_state["materiales_extra"].append({
+        "Materiales": material,
+        "Unidad": unidad,
+        "Cantidad": int(cantidad)
+    })
+    st.success(f"✅ Material agregado: {material} ({cantidad} {unidad})")
