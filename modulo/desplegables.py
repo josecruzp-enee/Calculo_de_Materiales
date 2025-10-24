@@ -2,8 +2,8 @@ import os
 import pandas as pd
 import streamlit as st
 
-# Ruta al Excel
-RUTA_EXCEL = os.path.join(os.path.dirname(__file__), "Estructura_datos.xlsx")
+REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
+RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
 
 
 def cargar_opciones():
@@ -114,3 +114,4 @@ def crear_desplegables(opciones):
         )
 
     return seleccion
+
