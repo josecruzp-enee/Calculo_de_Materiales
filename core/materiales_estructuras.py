@@ -2,7 +2,7 @@ import pandas as pd
 from collections import Counter
 from modulo.materiales_aux import limpiar_codigo, expandir_lista_codigos
 from modulo.entradas import extraer_estructuras_proyectadas, cargar_materiales
-from modulo.conectores_mt import aplicar_reemplazos_conectores
+from core.conectores_mt import aplicar_reemplazos_conectores
 
 def extraer_conteo_estructuras(df_estructuras):
     """
