@@ -6,10 +6,10 @@ from modulo.entradas import (
     cargar_indice,
     cargar_adicionales,
 )
-from modulo.conectores_mt import cargar_conectores_mt, determinar_calibre_por_estructura, aplicar_reemplazos_conectores
-from modulo.materiales_validacion import validar_datos_proyecto
-from modulo.materiales_estructuras import extraer_conteo_estructuras, calcular_materiales_estructura
-from modulo.materiales_puntos import calcular_materiales_por_punto
+from core.conectores_mt import cargar_conectores_mt, determinar_calibre_por_estructura, aplicar_reemplazos_conectores
+from core.materiales_validacion import validar_datos_proyecto
+from core.materiales_estructuras import extraer_conteo_estructuras, calcular_materiales_estructura
+from core.materiales_puntos import calcular_materiales_por_punto
 
 try:
     import streamlit as st
@@ -220,4 +220,5 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
+
 
