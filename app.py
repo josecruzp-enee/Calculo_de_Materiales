@@ -1,13 +1,13 @@
-## app.py  (versión compacta, una sola pantalla)
+# app.py  (versión compacta, una sola pantalla SIN claves duplicadas)
 # -*- coding: utf-8 -*-
 
 import streamlit as st
 
-# ==== Importa tus secciones existentes (sin cambios) ====
+# ==== Importa tus secciones existentes ====
 from interfaz.base import (
     renderizar_encabezado,
     inicializar_estado,
-    seleccionar_modo_carga,
+    seleccionar_modo_carga,           # crea el radio UNA sola vez
     ruta_datos_materiales_por_defecto,
 )
 from interfaz.datos_proyecto import seccion_datos_proyecto
@@ -24,37 +24,18 @@ def _css_compacto():
     st.markdown(
         """
         <style>
-        /* Contenedor más denso */
-        .block-container {
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
-            max-width: 1300px;
-        }
+        .block-container { padding-top: .5rem !important; padding-bottom: .5rem !important; max-width: 1300px; }
         h1,h2,h3 { margin: .3rem 0 .2rem 0 !important; }
         [data-testid="stVerticalBlock"] { gap: .4rem !important; }
         .stButton>button { padding: .35rem .7rem !important; border-radius: 6px !important; }
         .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
-            height: 34px !important; font-size: 0.92rem !important;
-            background: #f7f9fc !important;
+            height: 34px !important; font-size: .92rem !important; background: #f7f9fc !important;
         }
-        /* Tabs más delgadas */
         .stTabs [data-baseweb="tab"] { padding: 6px 10px !important; }
-        /* Barra fija superior de navegación local */
-        .nav-stick {
-            position: sticky; top: 0; z-index: 999;
-            background: white; padding: .4rem .6rem; margin: 0 0 .6rem 0;
-            border-bottom: 1px solid #e6e6e6;
-        }
-        .nav-stick .btn {
-            display:inline-block; margin: 2px 6px 2px 0; padding: .35rem .6rem;
-            background:#004080; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600;
-            text-decoration:none;
-        }
+        .nav-stick { position: sticky; top: 0; z-index: 999; background: white; padding: .4rem .6rem; margin: 0 0 .6rem 0; border-bottom: 1px solid #e6e6e6; }
+        .nav-stick .btn { display:inline-block; margin: 2px 6px 2px 0; padding: .35rem .6rem; background:#004080; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600; text-decoration:none; }
         .nav-stick .btn:hover { background:#0066cc; }
-        /* Secciones ancla: pequeño margen para que no quede tapado por la barra */
         .anchor-gap { scroll-margin-top: 70px; }
-        /* Oculta el “indice” rojo de radio en sidebar */
-        .stRadio [role="radiogroup"] div { gap: .35rem !important; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -65,9 +46,9 @@ def _barra_nav():
     st.markdown(
         """
         <div class="nav-stick">
-          <a class="btn" href="#datos"    >Datos</a>
-          <a class="btn" href="#cables"   >Cables</a>
-          <a class="btn" href="#modo"     >Modo de Carga</a>
+          <a class="btn" href="#datos">Datos</a>
+          <a class="btn" href="#cables">Cables</a>
+          <a class="btn" href="#modo">Modo de Carga</a>
           <a class="btn" href="#estructuras">Estructuras</a>
           <a class="btn" href="#materiales">Adicionar Material</a>
           <a class="btn" href="#final">Finalizar</a>
@@ -87,7 +68,6 @@ def main() -> None:
     _css_compacto()
     _barra_nav()
 
-    # Tabs (todo en una sola pantalla, sin “siguiente/anterior”)
     tabs = st.tabs([
         "1) Datos", "2) Cables", "3) Modo de Carga",
         "4) Estructuras", "5) Materiales", "6) Finalizar", "7) Exportación"
@@ -98,25 +78,28 @@ def main() -> None:
         st.markdown('<div id="datos" class="anchor-gap"></div>', unsafe_allow_html=True)
         seccion_datos_proyecto()
 
-    # 2) Cables (usa tu sección actual; ya dibuja su propio título interno)
+    # 2) Cables
     with tabs[1]:
         st.markdown('<div id="cables" class="anchor-gap"></div>', unsafe_allow_html=True)
         seccion_cables_proyecto()
 
-    # 3) Modo de carga (mantiene tu selector actual, solo embebido)
+    # 3) Modo de carga — CREA EL RADIO SOLO AQUÍ
     with tabs[2]:
         st.markdown('<div id="modo" class="anchor-gap"></div>', unsafe_allow_html=True)
         st.subheader("3) Modo de Carga")
-        modo = seleccionar_modo_carga()
-        # guardamos en estado por si otras secciones lo usan
+        modo = seleccionar_modo_carga()  # usa key="modo_carga_radio" internamente
         st.session_state["modo_carga_seleccionado"] = modo
 
-    # 4) Estructuras
+    # 4) Estructuras — NO crear de nuevo el radio: lee el valor ya elegido
     with tabs[3]:
         st.markdown('<div id="estructuras" class="anchor-gap"></div>', unsafe_allow_html=True)
-        modo = st.session_state.get("modo_carga_seleccionado", seleccionar_modo_carga())
+        modo = st.session_state.get("modo_carga_seleccionado")
+        if modo is None:
+            # Valor por defecto sin crear widget (evita clave duplicada)
+            modo = "Listas desplegables"
+            st.session_state["modo_carga_seleccionado"] = modo
+
         df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
-        # Persistimos para usar en Finalizar y Exportar
         st.session_state["df_estructuras_compacto"] = df_estructuras
         st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
 
