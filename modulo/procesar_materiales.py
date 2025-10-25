@@ -4,9 +4,12 @@ from modulo.entradas import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
     cargar_indice,
-    cargar_adicionales,
 )
-from core.conectores_mt import cargar_conectores_mt, determinar_calibre_por_estructura, aplicar_reemplazos_conectores
+from core.conectores_mt import (
+    cargar_conectores_mt,
+    determinar_calibre_por_estructura,
+    aplicar_reemplazos_conectores,
+)
 from core.materiales_validacion import validar_datos_proyecto
 from core.materiales_estructuras import extraer_conteo_estructuras, calcular_materiales_estructura
 from core.materiales_puntos import calcular_materiales_por_punto
@@ -24,8 +27,21 @@ def procesar_materiales(
     estructuras_df=None,
     datos_proyecto=None
 ):
+    """
+    Pipeline principal de procesamiento:
+    - Carga/usa datos del proyecto y estructuras (archivo o DataFrame)
+    - Valida datos del proyecto (tensión, calibre MT)
+    - Limpia estructuras y calcula conteos
+    - Carga índice y tabla de conectores
+    - Calcula materiales por estructura (multiplicando por cantidad)
+    - Reemplaza conectores por estructura según calibre detectado
+    - Calcula resúmenes globales, por punto
+    - Integra materiales adicionales manuales (session_state["materiales_extra"])
+    - Genera 5 PDFs y los devuelve en un dict
+    """
+
+    # 0) Entradas
     if archivo_estructuras:
-        # ✅ Solo cargar datos del archivo si no fueron proporcionados desde la interfaz
         if not datos_proyecto:
             datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
         df_estructuras = cargar_estructuras_proyectadas(archivo_estructuras)
@@ -35,7 +51,7 @@ def procesar_materiales(
     else:
         raise ValueError("Debe proporcionar archivo_estructuras o estructuras_df")
 
-    # 1️⃣ Validar datos del proyecto
+    # 1) Validar datos del proyecto
     tension, calibre_mt = validar_datos_proyecto(datos_proyecto)
     log(f"Tensión: {tension} Calibre MT: {calibre_mt}")
 
@@ -44,7 +60,7 @@ def procesar_materiales(
     log(f"➡️ calibre_mt = {calibre_mt}")
     log(f"➡️ datos_proyecto = {datos_proyecto}")
 
-    # 2️⃣ Limpieza y conteo de estructuras
+    # 2) Limpieza y conteo de estructuras
     log("🔍 Limpieza inicial de estructuras...")
     filas_antes = len(df_estructuras)
     df_estructuras = df_estructuras.dropna(how="all")
@@ -53,22 +69,21 @@ def procesar_materiales(
     filas_despues = len(df_estructuras)
     log(f"🧹 Filas eliminadas: {filas_antes - filas_despues}")
 
-    # 🔹 Asegurar nombres uniformes
+    # Uniformidad en nombre "Punto"
     if "Punto" not in df_estructuras.columns and "punto" in df_estructuras.columns:
         df_estructuras.rename(columns={"punto": "Punto"}, inplace=True)
 
-    # 🔹 Eliminar duplicados y evitar contar puntos vacíos
+    # Unicidad por Punto + Estructura
     df_estructuras_unicas = df_estructuras.drop_duplicates(subset=["Punto", "codigodeestructura"])
 
-    # 🔹 Obtener conteo preliminar (por compatibilidad con tu pipeline)
+    # Conteo preliminar + estructuras por punto
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras_unicas)
     for p in estructuras_por_punto:
         estructuras_por_punto[p] = list(dict.fromkeys(estructuras_por_punto[p]))
-
     log(f"Conteo estructuras inicial: {conteo}")
     log(f"Estructuras por punto: {estructuras_por_punto}")
 
-    # ✅ Recalcular conteo global total (corrige duplicados entre puntos)
+    # Recalcular conteo global corregido (por seguridad)
     conteo_global_df = (
         df_estructuras_unicas.groupby("codigodeestructura")
         .size()
@@ -79,20 +94,18 @@ def procesar_materiales(
     for e, c in conteo.items():
         log(f"   {e}: {c} unidades totales")
 
-    # 3️⃣ Cargar índice de estructuras
+    # 3) Cargar índice
     df_indice = cargar_indice(archivo_materiales)
     log("Columnas originales índice: " + str(df_indice.columns.tolist()))
-
     df_indice.columns = df_indice.columns.str.strip().str.lower()
     if "código de estructura" in df_indice.columns:
         df_indice.rename(columns={"código de estructura": "codigodeestructura"}, inplace=True)
     if "descripcion" in df_indice.columns:
         df_indice.rename(columns={"descripcion": "Descripcion"}, inplace=True)
-
     log("Columnas normalizadas índice: " + str(df_indice.columns.tolist()))
     log("Primeras filas índice:\n" + str(df_indice.head(10)))
 
-    # 4️⃣ Cargar conectores
+    # 4) Cargar conectores
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
 
     log("🧩 DEBUG ANTES DE CALCULAR MATERIALES:")
@@ -104,35 +117,44 @@ def procesar_materiales(
         excel_temp = pd.ExcelFile(archivo_materiales)
         log(f"📄 Hojas disponibles en Estructura_datos.xlsx: {excel_temp.sheet_names}")
 
-    # 5️⃣ Calcular materiales (multiplicando por cantidad real) con reemplazo de conectores POR ESTRUCTURA
+    # 5) Calcular materiales por estructura + Reemplazo de conectores por estructura
     df_lista = []
     for e, c in conteo.items():
-        # 🔎 Determinar calibre correcto según el tipo de estructura (MT/BT/Neutro)
+        # Calibre adecuado para esa estructura (MT/BT/Neutro)
         calibre_actual = determinar_calibre_por_estructura(e, datos_proyecto)
 
         df_mat = calcular_materiales_estructura(
-            archivo_materiales,
-            e,
-            c,              # ← multiplicación por cantidad total de esa estructura
-            tension,
-            calibre_actual, # ← se pasa el calibre correspondiente a ESA estructura
-            tabla_conectores_mt
+            archivo_materiales=archivo_materiales,
+            codigo_estructura=e,
+            cantidad=c,                    # multiplicación por cantidad detectada
+            tension=tension,
+            calibre=calibre_actual,        # calibre específico de ESA estructura
+            tabla_conectores=tabla_conectores_mt
         )
 
-        # 🔁 Reemplazo de conectores SOLO para las filas de esta estructura
+        # --- Reemplazo de conectores POR ESTRUCTURA con diagnóstico ---
         if not df_mat.empty and "Materiales" in df_mat.columns:
-            df_mat["Materiales"] = aplicar_reemplazos_conectores(
-                df_mat["Materiales"].tolist(),
-                calibre_actual,
-                tabla_conectores_mt
+            orig = df_mat["Materiales"].astype(str).tolist()
+            repl = aplicar_reemplazos_conectores(
+                orig,
+                calibre_estructura=calibre_actual,
+                tabla_conectores=tabla_conectores_mt,
+                codigo_estructura=e,        # filtra por familia (A/TM/TH/ER/B/R/etc.) si aplica
             )
-            log(f"🔄 Conectores actualizados en {e} (calibre {calibre_actual})")
+            if orig != repl:
+                log(f"🔁 Reemplazos realizados en {e} (calibre {calibre_actual}):")
+                for a, b in zip(orig, repl):
+                    if a != b and "CONECTOR" in a.upper():
+                        log(f"    '{a}'  →  '{b}'")
+            else:
+                log(f"⚠️ Sin reemplazos efectivos en {e} (calibre {calibre_actual}).")
+            df_mat["Materiales"] = repl
 
         df_lista.append(df_mat)
 
     df_total = pd.concat(df_lista, ignore_index=True) if df_lista else pd.DataFrame()
 
-    # 6️⃣ Resumen global de materiales (sumatoria final)
+    # 6) Resumen global de materiales
     df_resumen = (
         df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
         if not df_total.empty
@@ -140,20 +162,16 @@ def procesar_materiales(
     )
     log("df_resumen (materiales):\n" + str(df_resumen.head(10)))
 
-    # 🚫 Importante: NO aplicar reemplazo global aquí, para no pisar los cambios por estructura
-    # (antes aquí se forzaban todos los conectores al calibre_mt)
-
-    # 7️⃣ Resumen de estructuras globales
+    # 7) Resumen de estructuras globales
     if "codigodeestructura" not in df_indice.columns:
         df_indice["codigodeestructura"] = None
-
     df_indice["codigodeestructura"] = df_indice["codigodeestructura"].astype(str).str.strip().str.upper()
     conteo = {str(k).strip().upper(): v for k, v in conteo.items()}
     df_indice["Cantidad"] = df_indice["codigodeestructura"].map(conteo).fillna(0).astype(int)
     df_estructuras_resumen = df_indice[df_indice["Cantidad"] > 0]
     log("df_estructuras_resumen:\n" + str(df_estructuras_resumen.head(10)))
 
-    # 8️⃣ Estructuras por punto
+    # 8) Estructuras por punto (Cantidad = 1 por estructura listada en el punto)
     lista_por_punto = []
     for punto, estructuras in estructuras_por_punto.items():
         for est in estructuras:
@@ -169,13 +187,13 @@ def procesar_materiales(
     df_estructuras_por_punto = pd.DataFrame(lista_por_punto)
     log("df_estructuras_por_punto:\n" + str(df_estructuras_por_punto.head(10)))
 
-    # 9️⃣ Materiales por punto
+    # 9) Materiales por punto
     df_resumen_por_punto = calcular_materiales_por_punto(
         archivo_materiales, estructuras_por_punto, tension
     )
     log("df_resumen_por_punto:\n" + str(df_resumen_por_punto.head(10)))
 
-    # 🔹 Integrar materiales adicionales
+    # 🔟 Materiales adicionales (session_state)
     try:
         materiales_extra = st.session_state.get("materiales_extra", [])
         if materiales_extra:
@@ -189,7 +207,7 @@ def procesar_materiales(
     except Exception as e:
         log(f"⚠️ No se pudo integrar materiales adicionales: {e}")
 
-    # 🔹 Generar PDFs
+    # 11) Generar PDFs
     from modulo.pdf_utils import (
         generar_pdf_materiales,
         generar_pdf_estructuras_global,
@@ -212,7 +230,7 @@ def procesar_materiales(
         datos_proyecto
     )
 
-    # 🔹 Retornar resultados
+    # 12) Salida
     return {
         "materiales": pdf_materiales,
         "estructuras_global": pdf_estructuras_global,
@@ -220,5 +238,3 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
-
-
