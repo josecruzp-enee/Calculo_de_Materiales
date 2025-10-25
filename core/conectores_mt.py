@@ -27,7 +27,8 @@ def _norm_up(s: str) -> str:
 # ---------- 1) Cargar hoja 'conectores' ----------
 def cargar_conectores_mt(archivo_materiales) -> pd.DataFrame:
     """
-    Lee hoja 'conectores' y devuelve columnas: ['Calibre','Código','Descripción','Estructuras aplicables'].
+    Lee hoja 'conectores' y devuelve columnas:
+      ['Calibre','Código','Descripción','Estructuras aplicables'].
     Si algo falla, retorna DF vacío con esas columnas.
     """
     try:
@@ -101,7 +102,7 @@ def _familia(estructura: str) -> str:
     """
     Devuelve familia simplificada para filtrar por 'Estructuras aplicables': A / TM / TH / ER / B / R / CT / N ...
     """
-    e = _norm_up(estructura)
+    e = _norm_up(estructura or "")
     if e.startswith("TM"): return "TM"
     if e.startswith("TH"): return "TH"
     if e.startswith("ER"): return "ER"
@@ -119,8 +120,8 @@ def buscar_conector_mt(
 ) -> str | None:
     """
     Busca un conector preferentemente simétrico (x-x) y compatible con la familia de la estructura.
-    - calibre: texto como '1/0 ASCR', '3/0 ASCR', '266.8 MCM'
-    - codigo_estructura: p.ej. 'A-I-5', 'PC-40', 'R-1' (opcional)
+    - calibre: '1/0 ASCR', '3/0 ASCR', '266.8 MCM', etc.
+    - codigo_estructura: 'A-I-5', 'PC-40', 'R-1' (opcional)
     """
     if tabla_conectores.empty or not calibre:
         return None
@@ -129,27 +130,24 @@ def buscar_conector_mt(
     if not cpat:
         return None
 
-    fam = _familia(codigo_estructura or "")
+    fam = _familia(codigo_estructura)
     # patrón ( 1/0 - 1/0 ) con posibles espacios y guión o en dash
     patron = re.compile(rf"\(\s*{re.escape(cpat)}\s*[-–]\s*{re.escape(cpat)}\s*\)", re.IGNORECASE)
 
     candidatos = []
     for _, fila in tabla_conectores.iterrows():
-        desc = _norm_up(fila.get("Descripción", "")).replace(" ", "")
+        desc_raw = fila.get("Descripción", "")
+        desc = _norm_up(desc_raw).replace(" ", "")
         aplica = _norm_up(fila.get("Estructuras aplicables", ""))
-        # compatibilidad por familia (si aplica la hoja)
         compatible = True
         if aplica:
-            # 'A, TM, TH, ER' → lista
             familias = [x.strip() for x in aplica.split(",") if x.strip()]
             if familias:
                 compatible = fam in familias
 
-        # match simétrico
         if patron.search(desc) and compatible:
-            candidatos.append(str(fila.get("Descripción", "")))
+            candidatos.append(str(desc_raw))
 
-    # preferir el primero (o None si no hay)
     return candidatos[0] if candidatos else None
 
 
@@ -161,7 +159,7 @@ def aplicar_reemplazos_conectores(
     codigo_estructura: str | None = None
 ) -> list[str]:
     """
-    Reemplaza entradas que contengan 'CONECTOR' y 'COMPRES' (para cubrir COMPRESIÓN / COMPRESION)
+    Reemplaza entradas que contengan 'CONECTOR' y 'COMPRES' (cubre COMPRESIÓN/COMPRESION)
     por el conector de la tabla que mejor aplica al calibre y familia.
     """
     out = []
