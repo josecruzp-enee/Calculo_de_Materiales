@@ -198,16 +198,26 @@ def seccion_cables():
             hide_index=True,
             column_order=["__DEL__", "Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"],
             column_config={
-                "__DEL__": st.column_config.CheckboxColumn("Eliminar", width="small",
-                                                           help="Marca y pulsa Guardar para borrar"),
-                "Tipo": st.column_config.SelectboxColumn("Tipo", options=get_tipos(), required=True, width="small"),
-                "Configuración": st.column_config.SelectboxColumn("Configuración", options=get_configs_union(),
-                                                                  required=True, width="small"),
-                "Calibre": st.column_config.SelectboxColumn("Calibre", options=get_calibres_union(),
-                                                            required=True, width="medium"),
-                "Longitud (m)": st.column_config.NumberColumn("Longitud (m)", min_value=0.0, step=10.0, format="%.2f"),
-                "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", disabled=True, format="%.2f",
-                                                                 help="Longitud × Nº de conductores"),
+                "__DEL__": st.column_config.CheckboxColumn(
+                    "Eliminar", width="small",
+                    help="Marca y pulsa Guardar para borrar"
+                ),
+                "Tipo": st.column_config.SelectboxColumn(
+                    "Tipo", options=get_tipos(), required=True, width="small"
+                ),
+                "Configuración": st.column_config.SelectboxColumn(
+                    "Configuración", options=get_configs_union(), required=True, width="small"
+                ),
+                "Calibre": st.column_config.SelectboxColumn(
+                    "Calibre", options=get_calibres_union(), required=True, width="medium"
+                ),
+                "Longitud (m)": st.column_config.NumberColumn(
+                    "Longitud (m)", min_value=0.0, step=10.0, format="%.2f"
+                ),
+                "Total Cable (m)": st.column_config.NumberColumn(
+                    "Total Cable (m)", disabled=True, format="%.2f",
+                    help="Longitud × Nº de conductores"
+                ),
             },
         )
         c1, c2 = st.columns([1, 1])
@@ -232,9 +242,7 @@ def seccion_cables():
 
     st.markdown("---")
 
-    # ---------- RESULTADOS (presentación formal) ----------
-    st.caption("Resultados guardados (presentación limpia sin celdas editables).")
-
+    # ---------- RESULTADOS (solo tabla formal) ----------
     # CSS de contenedor con esquinas redondeadas
     st.markdown("""
     <style>
@@ -250,9 +258,8 @@ def seccion_cables():
     if df_out.empty:
         st.info("No hay datos guardados.")
     else:
-        _kpis(df_out)
-        st.table(_styler_formal(df_out[COLS_OFICIALES]))
-        st.markdown(f"**📏 Total Global de Cable:** {df_out['Total Cable (m)'].sum():,.2f} m")
+        df_out = df_out.reindex(columns=COLS_OFICIALES)
+        st.table(_styler_formal(df_out))
 
     # Devuelve lista (API histórica de tu app)
     return st.session_state.get("cables_proyecto", [])
