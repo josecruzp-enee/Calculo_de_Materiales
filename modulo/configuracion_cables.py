@@ -42,7 +42,7 @@ def get_configs_por_tipo() -> Dict[str, List[str]]:
     # BT sólo: 2F, 2F+N, 2F+HP+N
     return {
         "MT": ["1F", "2F", "3F"],
-        "BT": ["2F", "3F"],
+        "BT": ["2F", "2F+N", "2F+HP+N"],
         "N":  ["N"],
         "HP": ["1F+N", "2F"],
         "Retenida": ["Única"],
@@ -381,3 +381,4 @@ def tabla_cables_pdf(datos_proyecto):
     elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
     elems.append(Spacer(1, 0.25 * inch))
     return elems
+
