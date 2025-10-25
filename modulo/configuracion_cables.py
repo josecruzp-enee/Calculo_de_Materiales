@@ -1,9 +1,17 @@
- # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
-configuracion_cables.py
-Editor estable (con Guardar/Descartar) → tabla formal de resultados.
-- Buffer de edición en session_state (cables_buffer_df).
-- Datos “oficiales” en cables_proyecto_df / cables_proyecto.
+modulo/configuracion_cables.py
+
+Sección Cables con experiencia PRO:
+- Editor estable (formulario con Guardar/Descartar) y borrar filas con checkbox.
+- Validación por tipo y cálculo automático del total.
+- Resultados con tabla formal (no 'excel'), KPIs y total global.
+- Un solo título: '2️⃣ ⚡ Configuración y calibres de conductores (tabla)'.
+
+Datos oficiales:
+  st.session_state['cables_proyecto_df']  -> DataFrame
+  st.session_state['cables_proyecto']     -> lista de dicts
+  st.session_state['datos_proyecto']['cables_proyecto'] -> para otros módulos
 """
 
 from __future__ import annotations
@@ -12,7 +20,9 @@ import streamlit as st
 import pandas as pd
 from typing import List, Dict
 
-# ----------- Catálogos -----------
+# =========================
+# Catálogos
+# =========================
 def get_tipos() -> List[str]:
     return ["MT", "BT", "N", "HP", "Retenida"]
 
@@ -35,6 +45,7 @@ def get_configs_por_tipo() -> Dict[str, List[str]]:
     }
 
 def get_configs_union() -> List[str]:
+    # Para el editor (validación fina por tipo)
     return ["Única", "N", "1F", "1F+N", "2F", "2F+N", "2F+HP+N", "3F"]
 
 def get_calibres_union() -> List[str]:
@@ -49,49 +60,63 @@ def conductores_de(cfg: str) -> int:
     if c == "2F+HP+N":            return 4
     return 1
 
-# ----------- Estado base -----------
-def _init_state():
+
+# =========================
+# Estado y helpers
+# =========================
+COLS_OFICIALES = ["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]
+
+def _init_state() -> None:
+    """Crea data oficial y buffer de edición."""
     if "cables_proyecto_df" not in st.session_state:
-        st.session_state["cables_proyecto_df"] = pd.DataFrame(
-            columns=["Tipo","Configuración","Calibre","Longitud (m)","Total Cable (m)"]
-        )
+        st.session_state["cables_proyecto_df"] = pd.DataFrame(columns=COLS_OFICIALES)
+
+    # Fila guía si está vacío
     if st.session_state["cables_proyecto_df"].empty:
         st.session_state["cables_proyecto_df"] = pd.DataFrame([{
-            "Tipo":"MT","Configuración":"1F","Calibre":"1/0 ASCR",
-            "Longitud (m)":0.0,"Total Cable (m)":0.0
+            "Tipo": "MT", "Configuración": "1F", "Calibre": "1/0 ASCR",
+            "Longitud (m)": 0.0, "Total Cable (m)": 0.0
         }])
-    # Buffer de edición (copia ampliada con columna Eliminar)
+
+    # Buffer de edición (con columna Eliminar)
     if "cables_buffer_df" not in st.session_state:
         buf = st.session_state["cables_proyecto_df"].copy()
         if "__DEL__" not in buf.columns:
             buf.insert(0, "__DEL__", False)
         st.session_state["cables_buffer_df"] = buf
 
-# ----------- Validación + cálculo -----------
 def _validar_y_calcular(df_in: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza por tipo y calcula total; respeta borrados del checkbox."""
     cfgs = get_configs_por_tipo()
     cal_por_tipo = get_calibres()
 
-    # elimina filas marcadas
+    # Borrar filas marcadas (dtype seguro)
     if "__DEL__" in df_in.columns:
-        df_in = df_in[~df_in["__DEL__"]].drop(columns="__DEL__", errors="ignore")
+        mask = df_in["__DEL__"].fillna(False)
+        if mask.dtype != bool:
+            mask = mask.astype(bool, copy=False)
+        df_in = df_in[~mask].drop(columns="__DEL__", errors="ignore")
 
     rows = []
     for _, row in df_in.fillna("").iterrows():
-        if not row.get("Tipo"):  # ignora filas vacías
+        if not row.get("Tipo"):
             continue
+
         tipo = str(row["Tipo"]).strip()
 
-        cfg_permitidas = cfgs.get(tipo, ["Única"])
-        cfg = str(row.get("Configuración") or cfg_permitidas[0])
-        if cfg not in cfg_permitidas:
-            cfg = cfg_permitidas[0]
+        # Configuración permitida por tipo
+        cfg_ok = cfgs.get(tipo, ["Única"])
+        cfg = str(row.get("Configuración") or cfg_ok[0])
+        if cfg not in cfg_ok:
+            cfg = cfg_ok[0]
 
-        cal_list = cal_por_tipo.get(tipo, get_calibres_union())
-        cal = str(row.get("Calibre") or (cal_list[0] if cal_list else ""))
-        if cal not in cal_list and cal_list:
-            cal = cal_list[0]
+        # Calibre permitido por tipo
+        cal_ok = cal_por_tipo.get(tipo, get_calibres_union())
+        cal = str(row.get("Calibre") or (cal_ok[0] if cal_ok else ""))
+        if cal not in cal_ok and cal_ok:
+            cal = cal_ok[0]
 
+        # Longitud y total
         try:
             L = float(row.get("Longitud (m)", 0.0))
         except Exception:
@@ -105,48 +130,65 @@ def _validar_y_calcular(df_in: pd.DataFrame) -> pd.DataFrame:
             "Total Cable (m)": L * conductores_de(cfg),
         })
 
-    cols = ["Tipo","Configuración","Calibre","Longitud (m)","Total Cable (m)"]
-    return pd.DataFrame(rows, columns=cols)
+    return pd.DataFrame(rows, columns=COLS_OFICIALES)
 
 def _persistir_oficial(df: pd.DataFrame) -> None:
+    """Guarda versión oficial y sincroniza estructuras auxiliares."""
     st.session_state["cables_proyecto_df"] = df.copy()
     lista = df.to_dict(orient="records")
     st.session_state["cables_proyecto"] = lista
     st.session_state.setdefault("datos_proyecto", {})
     st.session_state["datos_proyecto"]["cables_proyecto"] = lista
 
-# ----------- Estilo tabla formal -----------
+def _kpis(df: pd.DataFrame) -> None:
+    c1, c2, c3 = st.columns(3)
+    with c1: st.metric("Filas", len(df))
+    with c2: st.metric("Longitud (m)", f"{df['Longitud (m)'].sum():,.2f}")
+    with c3: st.metric("Total Cable (m)", f"{df['Total Cable (m)'].sum():,.2f}")
+
 def _styler_formal(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+    """Tabla formal: encabezado gris, zebra, bordes finos, esquinas redondeadas."""
     return (
         df.style.hide(axis="index")
-        .format({"Longitud (m)":"{:,.2f}","Total Cable (m)":"{:,.2f}"}, na_rep="—")
+        .format({"Longitud (m)": "{:,.2f}", "Total Cable (m)": "{:,.2f}"}, na_rep="—")
         .set_table_styles(
             [
-                {"selector":"table",
-                 "props":[("border-collapse","separate"),("border-spacing","0"),
-                          ("border","1px solid #E5E7EB"),("border-radius","12px"),
-                          ("overflow","hidden"),("width","100%")]},
-                {"selector":"thead th",
-                 "props":[("background-color","#F3F4F6"),("color","#111827"),
-                          ("font-weight","700"),("font-size","13.5px"),
-                          ("text-align","left"),("padding","10px 12px"),
-                          ("border-bottom","1px solid #E5E7EB")]},
-                {"selector":"tbody td",
-                 "props":[("padding","10px 12px"),("border-bottom","1px solid #F1F5F9"),
-                          ("font-size","13px")]}
+                {"selector": "table",
+                 "props": [("border-collapse", "separate"),
+                           ("border-spacing", "0"),
+                           ("border", "1px solid #E5E7EB"),
+                           ("border-radius", "12px"),
+                           ("overflow", "hidden"),
+                           ("width", "100%")]},
+                {"selector": "thead th",
+                 "props": [("background-color", "#F3F4F6"),
+                           ("color", "#111827"),
+                           ("font-weight", "700"),
+                           ("font-size", "13.5px"),
+                           ("text-align", "left"),
+                           ("padding", "10px 12px"),
+                           ("border-bottom", "1px solid #E5E7EB")]},
+                {"selector": "tbody td",
+                 "props": [("padding", "10px 12px"),
+                           ("border-bottom", "1px solid #F1F5F9"),
+                           ("font-size", "13px")]},
             ]
         )
         .apply(lambda s: ["background-color: #FBFBFE" if i % 2 else "" for i in range(len(s))], axis=0)
     )
 
-# ----------- Sección principal -----------
+
+# =========================
+# Sección principal
+# =========================
 def seccion_cables():
     _init_state()
 
-    # ---------- 1) EDITOR (en formulario) ----------
-    st.markdown("### 2️⃣ ✏️ Configuración y calibres de conductores (editor)")
-    st.caption("Edita el buffer y pulsa **Guardar** para aplicar. Marca **Eliminar** para borrar filas.")
+    # ---------- TÍTULO ÚNICO ----------
+    st.markdown("## 2️⃣ ⚡ Configuración y calibres de conductores (tabla)")
 
+    # ---------- EDITOR (formulario estable) ----------
+    st.caption("Edita el buffer y pulsa **Guardar**. Marca **Eliminar** para borrar filas.")
     with st.form("editor_cables", clear_on_submit=False):
         edited = st.data_editor(
             st.session_state["cables_buffer_df"],
@@ -157,7 +199,7 @@ def seccion_cables():
             column_order=["__DEL__", "Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"],
             column_config={
                 "__DEL__": st.column_config.CheckboxColumn("Eliminar", width="small",
-                                                           help="Marca y luego pulsa Guardar para borrar"),
+                                                           help="Marca y pulsa Guardar para borrar"),
                 "Tipo": st.column_config.SelectboxColumn("Tipo", options=get_tipos(), required=True, width="small"),
                 "Configuración": st.column_config.SelectboxColumn("Configuración", options=get_configs_union(),
                                                                   required=True, width="small"),
@@ -168,22 +210,20 @@ def seccion_cables():
                                                                  help="Longitud × Nº de conductores"),
             },
         )
-        c1, c2 = st.columns([1,1])
+        c1, c2 = st.columns([1, 1])
         guardar = c1.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
         descartar = c2.form_submit_button("↩️ Descartar cambios", use_container_width=True)
 
-    # Manejo de botones
+    # Botones
     if guardar:
         df_validado = _validar_y_calcular(edited)
         _persistir_oficial(df_validado)
-        # refresca buffer desde oficial (y reañade columna Eliminar)
         buf = df_validado.copy()
         if "__DEL__" not in buf.columns:
             buf.insert(0, "__DEL__", False)
         st.session_state["cables_buffer_df"] = buf
-        st.success("✅ Cambios guardados correctamente.")
+        st.success("✅ Cambios guardados.")
     elif descartar:
-        # vuelve a la versión oficial
         buf = st.session_state["cables_proyecto_df"].copy()
         if "__DEL__" not in buf.columns:
             buf.insert(0, "__DEL__", False)
@@ -192,11 +232,10 @@ def seccion_cables():
 
     st.markdown("---")
 
-    # ---------- 2) RESULTADOS (tabla formal) ----------
-    st.markdown("### 2️⃣ ⚡ Configuración y calibres de conductores (tabla)")
+    # ---------- RESULTADOS (presentación formal) ----------
     st.caption("Resultados guardados (presentación limpia sin celdas editables).")
 
-    # CSS para bordes redondeados del contenedor
+    # CSS de contenedor con esquinas redondeadas
     st.markdown("""
     <style>
       .stTable > div { border-radius: 12px; overflow: hidden; border: 1px solid #E5E7EB; }
@@ -211,9 +250,9 @@ def seccion_cables():
     if df_out.empty:
         st.info("No hay datos guardados.")
     else:
-        df_out = df_out.reindex(columns=["Tipo","Configuración","Calibre","Longitud (m)","Total Cable (m)"])
-        st.table(_styler_formal(df_out))
-        st.markdown(f"**🧮 Total Global de Cable:** {df_out['Total Cable (m)'].sum():,.2f} m")
+        _kpis(df_out)
+        st.table(_styler_formal(df_out[COLS_OFICIALES]))
+        st.markdown(f"**📏 Total Global de Cable:** {df_out['Total Cable (m)'].sum():,.2f} m")
 
-    # Devuelve lista de dicts (coherente con el resto de la app)
+    # Devuelve lista (API histórica de tu app)
     return st.session_state.get("cables_proyecto", [])
