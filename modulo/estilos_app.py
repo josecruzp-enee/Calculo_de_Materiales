@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-modulo/estilos_app.py (compatible Python 3.8+)
-UI para Streamlit (ENEE) en un solo archivo:
-- Cabecera institucional fija y configurable
+modulo/estilos_app.py  (solo header; SIN título/subtítulo)
+Estilo visual global para la app Streamlit (ENEE).
+- Renderiza SOLO el header institucional fijo (sin H1 ni subtítulo)
 - Tokens de color / tipografía
 - Modo compacto para reducir espacios
 - Helpers: card, end_card, tabs, big_primary_button, json_box
+Compatibilidad: Python 3.8+
 """
 
 from __future__ import annotations
@@ -57,22 +58,23 @@ def _img_to_base64(ruta: Optional[Path]) -> str:
 # ========= INICIALIZACIÓN / TEMA =========
 def aplicar_estilos(
     usar_encabezado_rojo: bool = True,
-    titulo: str = "Cálculo de Materiales para Proyecto de Distribución",
-    subtitulo: str = "© 2025 · Sistema de Cálculo de Materiales | ENEE · Gerencia de Distribución",
     layout_wide: bool = True,
     sidebar_state: str = "expanded",
     page_icon: str = "⚡",
-    header_height: int = 48,   # altura del header fijo
-    spacer_px: int = 6,        # espacio entre header y título
+    header_height: int = 46,   # altura del header fijo
+    spacer_px: int = 4,        # (queda por si lo usas en tu propio título)
     compact: bool = True,      # reduce paddings/márgenes globales
-    show_banner: bool = False  # muestra (o no) imagen ancha decorativa
+    show_banner: bool = False  # no se usa por defecto
 ) -> None:
-    """Aplica tema global + cabecera institucional (robusto a rutas)."""
+    """
+    Aplica tema global + header institucional (SIN título ni subtítulo).
+    Maneja el H1/© desde tu propia vista (ej. interfaz/base.py).
+    """
 
     # Config de página (Streamlit falla si se llama 2 veces; ignoramos)
     try:
         st.set_page_config(
-            page_title=titulo,
+            page_title="Cálculo de materiales · ENEE",
             page_icon=page_icon,
             layout="wide" if layout_wide else "centered",
             initial_sidebar_state=sidebar_state,
@@ -112,13 +114,14 @@ def aplicar_estilos(
         html, body, [data-testid="stAppViewContainer"] {
             background: var(--enee-bg);
             color: var(--enee-text);
-            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial,
+                         "Noto Sans", "Liberation Sans", "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
         }
 
-        /* ===== CABECERA ===== */
+        /* ===== HEADER (solo barra) ===== */
         .enee-header {
             position: fixed; top: 0; left: 0; width: 100%;
-            background: linear-gradient(90deg, #ffffff 0%, """ + ("""#FFE5E5 45%, #ffffff 100%)""" if True else """#ffffff 100%)""") + """;
+            background: linear-gradient(90deg, #ffffff 0%, #FFE5E5 45%, #ffffff 100%);
             border-bottom: 4px solid var(--enee-primary);
             display: flex; align-items: center; gap: 10px;
             padding: 6px 12px;
@@ -131,13 +134,10 @@ def aplicar_estilos(
         .enee-brand strong { font-size: 14px; }
         .enee-brand small { color: var(--enee-muted); font-size: 12.5px; margin-top: -2px; }
 
-        /* ===== TÍTULO / SUBTÍTULO ===== */
-        .enee-pagetitle { margin-top: calc(var(--enee-header-h) + var(--enee-spacer)); }
-        .enee-title { font-size: 30px; font-weight: 800; margin: 2px 0 0 0; letter-spacing: -0.02em; }
-        .enee-subtitle { color: var(--enee-muted); font-size: 12.5px; margin: 2px 0 6px 0; }
-
         /* ===== CONTENEDOR CENTRAL ===== */
         div.block-container {
+            /* pegamos el contenido porque ya no hay título aquí */
+            margin-top: calc(var(--enee-header-h) + 6px) !important;
             padding-top: 0.4rem !important;
             padding-bottom: 0.8rem !important;
             padding-left: 1.5rem !important;
@@ -199,7 +199,7 @@ def aplicar_estilos(
         unsafe_allow_html=True,
     )
 
-    # ===== HEADER =====
+    # ===== HEADER (solo barra) =====
     header_html = ["<div class='enee-header'>"]
     if logo_b64:
         header_html.append("<img src='data:image/png;base64," + logo_b64 + "' alt='ENEE Logo'/>")
@@ -212,14 +212,7 @@ def aplicar_estilos(
     header_html.append("</div>")
     st.markdown("".join(header_html), unsafe_allow_html=True)
 
-    # ===== TÍTULO Y SUBTÍTULO =====
-    st.markdown(
-        "<div class='enee-pagetitle'><div class='enee-title'>⚡ " + titulo +
-        "</div><div class='enee-subtitle'>" + subtitulo + "</div></div>",
-        unsafe_allow_html=True,
-    )
-
-    # (Opcional) Imagen de encabezado ancha
+    # (Opcional) Imagen decorativa ancha (no recomendada si buscas compactar)
     if show_banner and encabezado_b64:
         st.markdown(
             "<div style='margin-top:.2rem;'><img alt='Encabezado' src='data:image/jpeg;base64," +
@@ -228,18 +221,14 @@ def aplicar_estilos(
             unsafe_allow_html=True,
         )
 
-    # ===== FOOTER DISCRETO =====
+    # Footer discreto
     st.markdown(
         """
         <style> footer {visibility:hidden;} </style>
-        <div style="text-align:center;font-size:13px;color:#888;margin-top:32px;">
-            © 2025 · Sistema de Cálculo de Materiales | ENEE – Gerencia de Distribución
-        </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # ===== Compactación adicional opcional =====
     if compact:
         st.markdown(
             """
