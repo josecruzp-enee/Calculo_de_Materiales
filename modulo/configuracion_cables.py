@@ -221,25 +221,33 @@ def seccion_cables():
             },
         )
         c1, c2 = st.columns([1, 1])
-        guardar = c1.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
+        guardar   = c1.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
         descartar = c2.form_submit_button("↩️ Descartar cambios", use_container_width=True)
 
-    # Botones
+    # ---------- ACCIONES ----------
     if guardar:
-        # FIX: borrar marcadas con dtype seguro
+        # Validar + aplicar borrados y persistir la versión oficial
         df_validado = _validar_y_calcular(edited)
         _persistir_oficial(df_validado)
+
+        # Reconstruir el buffer del editor SIN las filas borradas
         buf = df_validado.copy()
         if "__DEL__" not in buf.columns:
             buf.insert(0, "__DEL__", False)
         st.session_state["cables_buffer_df"] = buf
+
         st.success("✅ Cambios guardados.")
+        st.rerun()  # <<<<< fuerza repintado del editor con el buffer nuevo
+
     elif descartar:
+        # Restaurar el buffer desde la versión oficial
         buf = st.session_state["cables_proyecto_df"].copy()
         if "__DEL__" not in buf.columns:
             buf.insert(0, "__DEL__", False)
         st.session_state["cables_buffer_df"] = buf
+
         st.info("Cambios descartados.")
+        st.rerun()  # <<<<< repintar para que el editor muestre lo restaurado
 
     st.markdown("---")
 
@@ -253,7 +261,7 @@ def seccion_cables():
         df_disp = df_out.copy()
         df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
 
-        # df_disp SIN índice visible + formatos limpios
+        # Tabla limpia (sin índice)
         st.dataframe(
             df_disp,
             use_container_width=True,
@@ -267,6 +275,7 @@ def seccion_cables():
 
     # Devuelve lista (API histórica de tu app)
     return st.session_state.get("cables_proyecto", [])
+
 
 # =========================
 # Tabla de Cables para PDF (ReportLab)
