@@ -256,15 +256,25 @@ def seccion_cables():
 
     df_out = st.session_state["cables_proyecto_df"].copy()
     if df_out.empty:
-        st.info("No hay datos guardados.")
+      st.info("No hay datos guardados.")
     else:
-        # Orden oficial y agregar Ítem (1..n) como primera columna visible
-        df_out = df_out.reindex(columns=COLS_OFICIALES)
-        df_disp = df_out.copy()
-        df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
+      # Orden oficial y agregar Ítem (1..n)
+      df_out = df_out.reindex(columns=COLS_OFICIALES)
+      df_disp = df_out.copy()
+      df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
 
-        # Tabla limpia (sin índice real)
-        st.table(_styler_formal(df_disp))
+      # “Oculta” visualmente el índice (evita 0,1,... a la izquierda)
+      df_disp.index = [""] * len(df_disp)
+      df_disp.index.name = ""  # sin título de índice
+
+      # Estilo formal + centrado de la columna Ítem
+      sty = _styler_formal(df_disp).set_properties(
+        subset=pd.IndexSlice[:, ["Ítem"]],
+        **{"text-align": "center", "font-weight": "600"}
+      )
+
+      st.table(sty)
+
 
     # Devuelve lista (API histórica de tu app)
     return st.session_state.get("cables_proyecto", [])
