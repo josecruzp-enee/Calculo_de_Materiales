@@ -222,7 +222,52 @@ def seccion_cables():
                 "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", format="%.2f"),
             },
         )
-        st.markdown(f"**📏 Total Global de Cable:** {df_out['Total Cable (m)'].sum():,.2f} m")
+        # --- Helpers para el resumen por calibre ---
+def _fmt_metros(v: float) -> str:
+    # sin decimales si es entero, sino 2 decimales
+    if abs(v - round(v)) < 1e-9:
+        return f"{int(round(v)):,.0f} m"
+    return f"{v:,.2f} m"
+
+def _resumen_por_calibre(df: pd.DataFrame) -> str:
+    # Etiqueta amigable: para Retenida muestra "cable acerado 1/4", demás solo el calibre
+    etiquetas = df.apply(
+        lambda r: (f"cable acerado {r['Calibre']}" if str(r.get('Tipo','')).strip().upper() == "RETENIDA"
+                   else str(r['Calibre']).strip()),
+        axis=1
+    )
+    tmp = df.copy()
+    tmp["Etiqueta"] = etiquetas
+
+    # Sumar por etiqueta
+    totales = (tmp.groupby("Etiqueta", dropna=True)["Total Cable (m)"]
+                 .sum()
+                 .sort_values(ascending=False))
+
+    # Armar la frase: "2,000 m de <Etiqueta> + ..."
+    partes = [f"{_fmt_metros(m)} de {et}" for et, m in totales.items() if m > 0]
+    return " + ".join(partes) if partes else _fmt_metros(0)
+
+# ... dentro de tu seccion_cables(), reemplaza el total simple por esto:
+if not df_out.empty:
+    df_disp = df_out.reindex(columns=COLS_OFICIALES).copy()
+    df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
+
+    st.dataframe(
+        df_disp,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Ítem": st.column_config.NumberColumn("Ítem", format="%d", width="small"),
+            "Longitud (m)": st.column_config.NumberColumn("Longitud (m)", format="%.2f"),
+            "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", format="%.2f"),
+        },
+    )
+
+    # ⬇️ Nuevo resumen por calibre
+    resumen = _resumen_por_calibre(df_out)
+    st.markdown(f"**📏 Total Global de Cable:** {resumen}")
+
 
     return st.session_state.get("cables_proyecto", [])
 
