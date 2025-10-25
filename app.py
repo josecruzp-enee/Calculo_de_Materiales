@@ -1,13 +1,13 @@
-# app.py — versión compacta en una sola pantalla (anclas + barra fija)
+# app.py — navegación por secciones sin scroll (estado + query params)
 # -*- coding: utf-8 -*-
 
 import streamlit as st
 
-# ==== Importa tus secciones existentes ====
+# ==== Importa tus secciones ya existentes ====
 from interfaz.base import (
     renderizar_encabezado,
     inicializar_estado,
-    seleccionar_modo_carga,           # crea el radio UNA sola vez
+    seleccionar_modo_carga,           # crea el radio SOLO aquí
     ruta_datos_materiales_por_defecto,
 )
 from interfaz.datos_proyecto import seccion_datos_proyecto
@@ -17,105 +17,117 @@ from interfaz.materiales_extra import seccion_adicionar_material
 from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
 
 
-# =========================
-#  Estilos compactos + barra fija
-# =========================
-def _css_compacto():
+# ---------------------------
+#   Navegación sin scroll
+# ---------------------------
+SECCIONES = [
+    ("datos", "Datos"),
+    ("cables", "Cables"),
+    ("modo", "Modo de Carga"),
+    ("estructuras", "Estructuras"),
+    ("materiales", "Adicionar Material"),
+    ("final", "Finalizar"),
+    ("exportar", "Exportación"),
+]
+
+def _nav_estado_actual() -> str:
+    """Lee la sección actual desde query params o estado; pone un valor por defecto."""
+    qp = st.query_params.get("s")
+    if isinstance(qp, list):
+        qp = qp[0] if qp else None
+    sec = qp or st.session_state.get("sec") or "datos"
+    st.session_state["sec"] = sec
+    return sec
+
+def _ir_a(seccion: str) -> None:
+    """Cambia de sección y re-ejecuta."""
+    st.session_state["sec"] = seccion
+    st.query_params["s"] = seccion
+    st.rerun()
+
+def _barra_nav_botones(seccion_activa: str) -> None:
+    """Barra superior ‘pill buttons’ pegajosa (sticky)."""
     st.markdown(
         """
         <style>
-        .block-container { padding-top: .5rem !important; padding-bottom: .5rem !important; max-width: 1300px; }
-        h1,h2,h3 { margin: .3rem 0 .2rem 0 !important; }
-        [data-testid="stVerticalBlock"] { gap: .4rem !important; }
-        .stButton>button { padding: .35rem .7rem !important; border-radius: 6px !important; }
-        .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
-            height: 34px !important; font-size: .92rem !important; background: #f7f9fc !important;
-        }
-        .nav-stick { position: sticky; top: 0; z-index: 999; background: white; padding: .4rem .6rem; margin: 0 0 .6rem 0; border-bottom: 1px solid #e6e6e6; }
-        .nav-stick .btn { display:inline-block; margin: 2px 6px 2px 0; padding: .35rem .6rem; background:#004080; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600; text-decoration:none; }
-        .nav-stick .btn:hover { background:#0066cc; }
-        .anchor-gap { scroll-margin-top: 70px; }
+        .nav-top { position: sticky; top: 0; z-index: 999; background: white; padding: .5rem 0; border-bottom: 1px solid #e6e6e6; }
+        .pill { padding:.45rem .8rem; margin:.25rem .4rem .25rem 0; border-radius: 999px; font-weight:600; border:1px solid #cfe3ff; background:#eaf2ff; color:#0b3a82; display:inline-block; }
+        .pill.active { background:#0b3a82; color:#fff; border-color:#0b3a82; }
+        .pill button { background: transparent; border: none; color: inherit; font: inherit; }
+        .stButton>button { padding:.1rem .1rem; }
+        .block-container { max-width: 1300px; padding-top: .6rem; }
         </style>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
 
-def _barra_nav():
-    st.markdown(
-        """
-        <div class="nav-stick">
-          <a class="btn" href="#datos">Datos</a>
-          <a class="btn" href="#cables">Cables</a>
-          <a class="btn" href="#modo">Modo de Carga</a>
-          <a class="btn" href="#estructuras">Estructuras</a>
-          <a class="btn" href="#materiales">Adicionar Material</a>
-          <a class="btn" href="#final">Finalizar</a>
-          <a class="btn" href="#exportar">Exportación</a>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="nav-top">', unsafe_allow_html=True)
+    cols = st.columns(len(SECCIONES), gap="small")
+    for (i, (key, label)) in enumerate(SECCIONES):
+        active = "active" if key == seccion_activa else ""
+        with cols[i]:
+            st.markdown(f'<div class="pill {active}">', unsafe_allow_html=True)
+            # Cada botón tiene su propia key estable
+            if st.button(label, key=f"nav_{key}"):
+                _ir_a(key)
+            st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
-# =========================
-#  App compacta (una sola pantalla)
-# =========================
+# ---------------------------
+#           App
+# ---------------------------
 def main() -> None:
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
+
+    # Encabezado institucional / estado global de la app
     renderizar_encabezado()
     inicializar_estado()
-    _css_compacto()
-    _barra_nav()
 
-    # 1) Datos del proyecto
-    st.markdown('<div id="datos" class="anchor-gap"></div>', unsafe_allow_html=True)
-    seccion_datos_proyecto()
-    st.markdown("---")
+    # Navegación
+    seccion = _nav_estado_actual()
+    _barra_nav_botones(seccion)
 
-    # 2) Cables
-    st.markdown('<div id="cables" class="anchor-gap"></div>', unsafe_allow_html=True)
-    seccion_cables_proyecto()
-    st.markdown("---")
+    # ---------- Render condicional (solo UNA sección visible) ----------
+    if seccion == "datos":
+        seccion_datos_proyecto()
 
-    # 3) Modo de carga — CREA EL RADIO SOLO AQUÍ
-    st.markdown('<div id="modo" class="anchor-gap"></div>', unsafe_allow_html=True)
-    st.subheader("3) Modo de Carga")
-    modo = seleccionar_modo_carga()  # usa key="modo_carga_radio" internamente (una única vez)
-    st.session_state["modo_carga_seleccionado"] = modo
-    st.markdown("---")
+    elif seccion == "cables":
+        seccion_cables_proyecto()
 
-    # 4) Estructuras — lee el valor ya elegido (no vuelvas a crear el radio)
-    st.markdown('<div id="estructuras" class="anchor-gap"></div>', unsafe_allow_html=True)
-    modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
-    df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
-    st.session_state["df_estructuras_compacto"] = df_estructuras
-    st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
-    st.markdown("---")
+    elif seccion == "modo":
+        st.subheader("3) Modo de Carga")
+        # ⚠️ Este radio se crea solo aquí → evita claves duplicadas
+        modo = seleccionar_modo_carga()
+        st.session_state["modo_carga_seleccionado"] = modo
 
-    # 5) Materiales extra
-    st.markdown('<div id="materiales" class="anchor-gap"></div>', unsafe_allow_html=True)
-    seccion_adicionar_material()
-    st.markdown("---")
+    elif seccion == "estructuras":
+        # Lee el modo elegido previamente, o aplica el default sin crear widgets nuevos
+        modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
+        df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
+        st.session_state["df_estructuras_compacto"] = df_estructuras
+        st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
 
-    # 6) Finalizar
-    st.markdown('<div id="final" class="anchor-gap"></div>', unsafe_allow_html=True)
-    df_e = st.session_state.get("df_estructuras_compacto")
-    if df_e is None:
-        st.info("Carga primero las estructuras en la sección anterior.")
-    else:
-        seccion_finalizar_calculo(df_e)
-    st.markdown("---")
+    elif seccion == "materiales":
+        seccion_adicionar_material()
 
-    # 7) Exportación
-    st.markdown('<div id="exportar" class="anchor-gap"></div>', unsafe_allow_html=True)
-    df_e = st.session_state.get("df_estructuras_compacto")
-    ruta_e = st.session_state.get("ruta_estructuras_compacto")
-    seccion_exportacion(
-        df=df_e,
-        modo_carga=st.session_state.get("modo_carga_seleccionado"),
-        ruta_estructuras=ruta_e,
-        ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
-    )
+    elif seccion == "final":
+        df_e = st.session_state.get("df_estructuras_compacto")
+        if df_e is None:
+            st.info("Carga primero las estructuras en la sección ‘Estructuras’.")
+        else:
+            seccion_finalizar_calculo(df_e)
+
+    elif seccion == "exportar":
+        df_e = st.session_state.get("df_estructuras_compacto")
+        ruta_e = st.session_state.get("ruta_estructuras_compacto")
+        seccion_exportacion(
+            df=df_e,
+            modo_carga=st.session_state.get("modo_carga_seleccionado"),
+            ruta_estructuras=ruta_e,
+            ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
+        )
+
 
 if __name__ == "__main__":
     main()
