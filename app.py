@@ -46,16 +46,25 @@ def _ir_a(seccion: str) -> None:
     st.rerun()
 
 def _barra_nav_botones(seccion_activa: str) -> None:
-    """Barra superior ‘pill buttons’ pegajosa (sticky)."""
+    """Barra superior con botones estilo azul (como los anteriores)."""
     st.markdown(
         """
         <style>
-        .nav-top { position: sticky; top: 0; z-index: 999; background: white; padding: .5rem 0; border-bottom: 1px solid #e6e6e6; }
-        .pill { padding:.45rem .8rem; margin:.25rem .4rem .25rem 0; border-radius: 999px; font-weight:600; border:1px solid #cfe3ff; background:#eaf2ff; color:#0b3a82; display:inline-block; }
-        .pill.active { background:#0b3a82; color:#fff; border-color:#0b3a82; }
-        .pill button { background: transparent; border: none; color: inherit; font: inherit; }
-        .stButton>button { padding:.1rem .1rem; }
-        .block-container { max-width: 1300px; padding-top: .6rem; }
+        .nav-top { position: sticky; top: 0; z-index: 999; background: #fff; padding: .55rem 0 .6rem; border-bottom: 1px solid #e6e6e6; }
+        .pill { display:inline-block; margin:.25rem .45rem .25rem 0; }
+        .pill button {
+            background:#0A3D91;               /* azul ENEE */
+            color:#fff;
+            border:1px solid #0A3D91;
+            border-radius: 10px;
+            padding:.45rem .85rem;
+            font-weight:600;
+            font-size:.92rem;
+            box-shadow: 0 1px 0 rgba(0,0,0,.05);
+        }
+        .pill button:hover { background:#145CC9; border-color:#145CC9; }
+        .pill.active button { background:#072C69; border-color:#072C69; }
+        .stButton>button { min-width: 140px; }  /* ancho consistente como antes */
         </style>
         """,
         unsafe_allow_html=True
@@ -64,14 +73,14 @@ def _barra_nav_botones(seccion_activa: str) -> None:
     st.markdown('<div class="nav-top">', unsafe_allow_html=True)
     cols = st.columns(len(SECCIONES), gap="small")
     for (i, (key, label)) in enumerate(SECCIONES):
-        active = "active" if key == seccion_activa else ""
         with cols[i]:
-            st.markdown(f'<div class="pill {active}">', unsafe_allow_html=True)
-            # Cada botón tiene su propia key estable
+            active_cls = "active" if key == seccion_activa else ""
+            st.markdown(f'<div class="pill {active_cls}">', unsafe_allow_html=True)
             if st.button(label, key=f"nav_{key}"):
-                _ir_a(key)
+                _ir_a(key)  # cambia sección + rerun
             st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 # ---------------------------
@@ -131,3 +140,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
