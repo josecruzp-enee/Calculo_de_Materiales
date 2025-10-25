@@ -49,7 +49,7 @@ def procesar_materiales(
     # 2) Limpieza y conteo de estructuras
     log("🔍 Limpieza inicial de estructuras...")
     filas_antes = len(df_estructuras)
-    df_estructuras = df_estructuras.dropna(hoy="all") if hasattr(df_estructuras, "dropna") else df_estructuras.dropna(how="all")
+    df_estructuras = df_estructuras.dropna(how="all")
     if "codigodeestructura" in df_estructuras.columns:
         df_estructuras = df_estructuras[df_estructuras["codigodeestructura"].notna()]
     filas_despues = len(df_estructuras)
@@ -227,3 +227,4 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
+
