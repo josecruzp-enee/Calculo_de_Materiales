@@ -16,13 +16,15 @@ from interfaz.materiales_extra import seccion_adicionar_material
 from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
 
 
+# === Router de secciones (1 sola vista a la vez, sin scroll largo) ===
 SECCIONES = [
     "1) Datos del Proyecto",
     "2) Configuración de Cables",
     "3) Modo de Carga",
     "4) Estructuras del Proyecto",
-    "5) Finalizar Cálculo",
-    "6) Exportación",
+    "5) Adicionar Material",      # <-- ¡De vuelta aquí!
+    "6) Finalizar Cálculo",
+    "7) Exportación",
 ]
 
 
@@ -91,20 +93,24 @@ def main() -> None:
             return
 
         df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
-        # persistir resultados para pasos 5 y 6
+        # persistir resultados para pasos siguientes
         st.session_state["df_estructuras"] = df_estructuras
         st.session_state["ruta_estructuras"] = ruta_estructuras
 
-    # 5) Finalizar cálculo (usa df_estructuras)
-    elif seleccion == "5) Finalizar Cálculo":
+    # 5) Adicionar Material (independiente del modo de carga)
+    elif seleccion == "5) Adicionar Material":
+        seccion_adicionar_material()
+
+    # 6) Finalizar cálculo (usa df_estructuras)
+    elif seleccion == "6) Finalizar Cálculo":
         df_estructuras = st.session_state.get("df_estructuras")
         if df_estructuras is None:
             st.warning("Ingresá primero las **Estructuras del Proyecto**.")
             return
         seccion_finalizar_calculo(df_estructuras)
 
-    # 6) Exportación (usa todo lo previo)
-    elif seleccion == "6) Exportación":
+    # 7) Exportación (usa todo lo previo)
+    elif seleccion == "7) Exportación":
         df_estructuras = st.session_state.get("df_estructuras")
         modo = st.session_state.get("modo_carga")
         ruta_estructuras = st.session_state.get("ruta_estructuras")
