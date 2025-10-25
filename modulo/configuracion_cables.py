@@ -208,8 +208,7 @@ def seccion_cables():
     if df_out.empty:
         st.info("No hay datos guardados.")
     else:
-        _kpis(df_out)
-
+        # SIN KPIs: solo tabla limpia + total global
         df_disp = df_out.reindex(columns=COLS_OFICIALES).copy()
         df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
 
@@ -226,4 +225,5 @@ def seccion_cables():
         st.markdown(f"**📏 Total Global de Cable:** {df_out['Total Cable (m)'].sum():,.2f} m")
 
     return st.session_state.get("cables_proyecto", [])
+
 
