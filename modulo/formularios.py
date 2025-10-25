@@ -11,10 +11,10 @@ from datetime import date
 
 
 def formulario_datos_proyecto():
-    """Formulario compacto para ingresar los datos generales del proyecto."""
+    """Formulario compacto para ingresar los datos generales del proyecto (sin bloque de resumen)."""
     st.markdown("### 📘 Datos Generales del Proyecto")
 
-    # Crear dos columnas para reducir espacio vertical
+    # Dos columnas para menor altura
     col1, col2 = st.columns(2)
 
     with col1:
@@ -27,31 +27,38 @@ def formulario_datos_proyecto():
         responsable = st.text_input("👷‍♂️ Responsable / Diseñador", key="responsable")
         fecha_informe = st.date_input("📅 Fecha del Informe", value=date.today(), key="fecha_informe")
 
-    # Guardar los datos en el session_state
-    datos = {
+    # Persistir en session_state (sin mostrar JSON)
+    st.session_state["datos_proyecto"] = {
         "nombre_proyecto": nombre_proyecto,
         "codigo_proyecto": codigo_proyecto,
         "empresa": empresa,
         "responsable": responsable,
         "nivel_de_tension": nivel_tension,
-        "fecha_informe": str(fecha_informe)
+        "fecha_informe": str(fecha_informe),
     }
 
-    st.session_state["datos_proyecto"] = datos
-
-    # Mostrar resumen visual
-    st.markdown("#### 🧾 Resumen de Datos del Proyecto")
-    st.write(datos)
-
+    # Aviso breve de guardado
     st.success("✅ Datos del proyecto guardados correctamente.")
 
 
-def mostrar_datos_formateados():
-    """Muestra los datos del proyecto en formato de tabla."""
-    if "datos_proyecto" in st.session_state:
-        datos = st.session_state["datos_proyecto"]
-        st.markdown("#### 📄 Datos Guardados")
-        for k, v in datos.items():
-            st.write(f"**{k.replace('_', ' ').title()}**: {v}")
-    else:
+def mostrar_datos_formateados(show=False):
+    """
+    (Opcional) Muestra un bloque compacto de 'Datos Guardados'.
+    Por defecto NO muestra nada para mantener la interfaz limpia.
+    """
+    if not show:
+        return
+
+    datos = st.session_state.get("datos_proyecto") or {}
+    if not datos:
         st.warning("⚠️ Aún no se han ingresado datos del proyecto.")
+        return
+
+    st.markdown("#### 📄 Datos Guardados")
+    st.write(f"**Nombre Proyecto:** {datos.get('nombre_proyecto','')}")
+    st.write(f"**Código Proyecto:** {datos.get('codigo_proyecto','')}")
+    st.write(f"**Empresa:** {datos.get('empresa','')}")
+    st.write(f"**Responsable:** {datos.get('responsable','')}")
+    st.write(f"**Nivel de Tensión:** {datos.get('nivel_de_tension','')}")
+    st.write(f"**Fecha del Informe:** {datos.get('fecha_informe','')}")
+
