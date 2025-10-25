@@ -16,6 +16,17 @@ from interfaz.estructuras import seccion_entrada_estructuras
 from interfaz.materiales_extra import seccion_adicionar_material
 from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
 
+# app.py
+import os
+import streamlit as st
+
+# Ruta absoluta al archivo dentro de la carpeta "data"
+BASE_DIR = os.path.dirname(__file__)
+RUTA_DATOS_MATERIALES = os.path.join(BASE_DIR, "data", "Estructura_datos.xlsx")
+
+# Déjalo disponible para toda la app
+st.session_state.setdefault("ruta_datos_materiales", RUTA_DATOS_MATERIALES)
+
 
 # ---------------------------
 #   Navegación sin scroll
@@ -140,4 +151,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
