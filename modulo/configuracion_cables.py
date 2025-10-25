@@ -242,7 +242,7 @@ def seccion_cables():
 
     st.markdown("---")
 
-    # ---------- RESULTADOS (solo tabla formal) ----------
+    # ---------- RESULTADOS (solo tabla formal con columna 'Ítem') ----------
     # CSS de contenedor con esquinas redondeadas
     st.markdown("""
     <style>
@@ -258,8 +258,14 @@ def seccion_cables():
     if df_out.empty:
         st.info("No hay datos guardados.")
     else:
+        # Orden oficial y agregar Ítem (1..n) como primera columna visible
         df_out = df_out.reindex(columns=COLS_OFICIALES)
-        st.table(_styler_formal(df_out))
+        df_disp = df_out.copy()
+        df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
+
+        # Tabla limpia (sin índice real)
+        st.table(_styler_formal(df_disp))
 
     # Devuelve lista (API histórica de tu app)
     return st.session_state.get("cables_proyecto", [])
+
