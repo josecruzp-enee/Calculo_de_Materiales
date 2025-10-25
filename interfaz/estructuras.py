@@ -45,6 +45,7 @@ def listas_desplegables():
     df_actual = st.session_state["df_puntos"]
     puntos_existentes = df_actual["Punto"].unique().tolist()
 
+    # Crear nuevo punto
     if st.button("🆕 Crear nuevo Punto"):
         nuevo_num = len(puntos_existentes) + 1
         st.session_state["punto_en_edicion"] = f"Punto {nuevo_num}"
@@ -55,28 +56,47 @@ def listas_desplegables():
         punto = st.session_state["punto_en_edicion"]
         st.markdown(f"### ✏️ Editando {punto}")
 
+        # Editor (usa tus desplegables)
         seleccion = crear_desplegables(opciones)
         seleccion["Punto"] = punto
-        st.markdown("<hr style='border:0.5px solid #ddd; margin:0.7rem 0;'>", unsafe_allow_html=True)
+
+        # 🔧 Modo de guardado: por defecto REEMPLAZAR (sin sumar).
+        st.markdown(
+            "<hr style='border:0.5px solid #ddd; margin:0.7rem 0;'>",
+            unsafe_allow_html=True
+        )
+        sumar_con_existente = st.toggle("➕ Sumar con lo existente (+)", value=False, help="Si está desactivado, se REEMPLAZA completamente lo guardado en este Punto.")
 
         if st.button("💾 Guardar Estructura del Punto", type="primary", key="btn_guardar_estructura"):
+            # Si el punto ya existe, lo quitamos de la tabla (para volver a insertarlo actualizado)
             if punto in df_actual["Punto"].values:
-                fila_existente = df_actual[df_actual["Punto"] == punto].iloc[0].to_dict()
-                for col in ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]:
-                    anterior = str(fila_existente.get(col, "")).strip()
-                    nuevo = str(seleccion.get(col, "")).strip()
-                    if anterior and nuevo and anterior != nuevo:
-                        seleccion[col] = anterior + " + " + nuevo
-                    elif anterior and not nuevo:
-                        seleccion[col] = anterior
+                if sumar_con_existente:
+                    # --- MODO SUMAR (compatibilidad con tu comportamiento anterior) ---
+                    fila_existente = df_actual[df_actual["Punto"] == punto].iloc[0].to_dict()
+                    for col in ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]:
+                        anterior = str(fila_existente.get(col, "")).strip()
+                        nuevo = str(seleccion.get(col, "")).strip()
+                        if anterior and nuevo and anterior != nuevo:
+                            seleccion[col] = f"{anterior} + {nuevo}"
+                        elif anterior and not nuevo:
+                            seleccion[col] = anterior
+                # En ambos modos, removemos la fila anterior para insertar la nueva
                 df_actual = df_actual[df_actual["Punto"] != punto]
 
+            # Insertar la nueva versión del punto (REEMPLAZO TOTAL por defecto)
             df_actual = pd.concat([df_actual, pd.DataFrame([seleccion])], ignore_index=True)
-            df_actual["orden"] = df_actual["Punto"].str.extract(r'(\d+)').astype(int)
-            df_actual = df_actual.sort_values("orden").drop(columns="orden")
+
+            # Ordenar por número de punto si aplica
+            if "Punto" in df_actual.columns:
+                try:
+                    df_actual["orden"] = df_actual["Punto"].str.extract(r'(\d+)').astype(int)
+                    df_actual = df_actual.sort_values("orden").drop(columns="orden")
+                except Exception:
+                    pass
+
             st.session_state["df_puntos"] = df_actual.reset_index(drop=True)
 
-            st.success(f"✅ {punto} actualizado correctamente")
+            st.success(f"✅ {punto} actualizado correctamente" + (" (sumando con lo existente)" if sumar_con_existente else " (reemplazado)"))
             resetear_desplegables()
             st.session_state.pop("punto_en_edicion", None)
             st.session_state["reiniciar_desplegables"] = True
@@ -85,6 +105,7 @@ def listas_desplegables():
             except Exception as e:
                 st.warning(f"No se pudo recargar automáticamente ({e})")
 
+    # ===== Tabla y acciones rápidas =====
     df = st.session_state["df_puntos"]
     if not df.empty:
         st.markdown("#### 📑 Vista de estructuras / materiales")
@@ -92,6 +113,7 @@ def listas_desplegables():
 
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 1, 1.2])
+
         with col1:
             if st.button("🧹 Limpiar todo", key="btn_limpiar_todo"):
                 st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
@@ -125,17 +147,3 @@ def listas_desplegables():
                 st.success(f"✅ Se eliminó {punto_borrar}")
 
     return df
-
-def seccion_entrada_estructuras(modo_carga: str):
-    """Despacha al modo de carga seleccionado."""
-    df = pd.DataFrame(columns=COLUMNAS_BASE)
-    ruta_estructuras = None
-
-    if modo_carga == "Desde archivo Excel":
-        df, ruta_estructuras = cargar_desde_excel()
-    elif modo_carga == "Pegar tabla":
-        df = pegar_tabla()
-    elif modo_carga == "Listas desplegables":
-        df = listas_desplegables()
-
-    return df, ruta_estructuras
