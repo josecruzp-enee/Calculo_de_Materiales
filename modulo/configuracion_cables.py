@@ -2,29 +2,28 @@
 """
 modulo/configuracion_cables.py
 
-Sección Cables (UX pulida):
-- Editor (buffer) arriba con columna "Eliminar".
-- Guardar valida por tipo, calcula total y persiste.
-- Descartar regresa el buffer a lo oficial.
-- Si el editor está vacío pero hay datos guardados -> se rellena con lo oficial.
-- KPIs + tabla limpia de resultados con columna Ítem (1..n) sin índice.
+Sección Cables:
+- Editor estable con Guardar/Descartar y columna Eliminar.
+- Sin fila "semilla": el editor inicia vacío (usa + para agregar).
+- Validación por Tipo: configura Calibre/Configuración válidos y calcula Total Cable.
+- Tabla final limpia sin índice y con columna Ítem (1..n).
+- Resumen por calibre: "2,000 m de 1/0 ASCR + ...", y para Retenida: "cable acerado <calibre>".
 
-Estado:
-  st.session_state['cables_proyecto_df']  -> DataFrame oficial
-  st.session_state['cables_proyecto']     -> lista(dicts) oficial
-  st.session_state['cables_buffer_df']    -> DataFrame del editor (con __DEL__)
-  st.session_state['datos_proyecto']['cables_proyecto'] -> espejo para otros módulos
+Datos oficiales:
+  st.session_state['cables_proyecto_df']                 -> DataFrame oficial
+  st.session_state['cables_proyecto']                    -> lista de dicts oficial
+  st.session_state['datos_proyecto']['cables_proyecto']  -> espejo para otros módulos
 """
 
 from __future__ import annotations
+from typing import List, Dict
 
-from typing import Dict, List
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
-# ---------------------------
+# =========================
 # Catálogos
-# ---------------------------
+# =========================
 def get_tipos() -> List[str]:
     return ["MT", "BT", "N", "HP", "Retenida"]
 
@@ -47,12 +46,12 @@ def get_configs_por_tipo() -> Dict[str, List[str]]:
     }
 
 def get_configs_union() -> List[str]:
+    # Para el editor (validación fina por tipo)
     return ["Única", "N", "1F", "1F+N", "2F", "2F+N", "2F+HP+N", "3F"]
 
 def get_calibres_union() -> List[str]:
     cal = get_calibres()
-    # dedup preservando orden
-    return list(dict.fromkeys(c for grupo in cal.values() for c in grupo))
+    return list(dict.fromkeys(c for lista in cal.values() for c in lista))
 
 def conductores_de(cfg: str) -> int:
     c = (cfg or "").strip().upper()
@@ -63,52 +62,69 @@ def conductores_de(cfg: str) -> int:
     return 1
 
 
-# ---------------------------
-# Estado y utilitarios
-# ---------------------------
+# =========================
+# Estado y helpers
+# =========================
 COLS_OFICIALES = ["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]
 
+def _ensure_columns(df: pd.DataFrame, with_del: bool = False) -> pd.DataFrame:
+    """Asegura columnas en el orden esperado (opcionalmente con __DEL__)."""
+    cols = (["__DEL__"] + COLS_OFICIALES) if with_del else COLS_OFICIALES
+    base = {c: [] for c in cols}
+    out = pd.DataFrame(base)
+    if df is None or df.empty:
+        return out
+    df2 = df.copy()
+    # agrega faltantes
+    for c in cols:
+        if c not in df2.columns:
+            df2[c] = False if c == "__DEL__" else (0.0 if c in ("Longitud (m)", "Total Cable (m)") else "")
+    # ordena
+    return df2[cols]
+
 def _init_state() -> None:
-    """Crea estructuras base sin filas ‘guía’."""
+    """Crea data oficial y buffer de edición sin fila semilla."""
     if "cables_proyecto_df" not in st.session_state:
         st.session_state["cables_proyecto_df"] = pd.DataFrame(columns=COLS_OFICIALES)
 
+    # Buffer de edición (con columna Eliminar), sin sembrar una fila por defecto
     if "cables_buffer_df" not in st.session_state:
-        ofi = st.session_state["cables_proyecto_df"].copy()
-        buf = ofi if not ofi.empty else pd.DataFrame(columns=COLS_OFICIALES)
-        if "__DEL__" not in buf.columns:
-            buf.insert(0, "__DEL__", False)
+        buf = st.session_state["cables_proyecto_df"].copy()
+        buf = _ensure_columns(buf, with_del=True)
         st.session_state["cables_buffer_df"] = buf
 
 def _validar_y_calcular(df_in: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza por tipo, asegura opciones válidas y calcula ‘Total Cable (m)’."""
+    """Normaliza por tipo y calcula total; respeta borrados del checkbox."""
     cfgs = get_configs_por_tipo()
     cal_por_tipo = get_calibres()
 
-    # Eliminar filas marcadas
-    if "__DEL__" in df_in.columns:
-        mask = df_in["__DEL__"].fillna(False)
-        if mask.dtype is not bool:
-            mask = mask.astype(bool, copy=False)
-        df_in = df_in[~mask].drop(columns="__DEL__", errors="ignore")
+    # Borrar filas marcadas (dtype seguro)
+    df_in = _ensure_columns(df_in, with_del=True)
+    mask = df_in["__DEL__"].fillna(False)
+    if mask.dtype != bool:
+        mask = mask.astype(bool, copy=False)
+    df_in = df_in[~mask].drop(columns="__DEL__", errors="ignore")
 
     rows = []
     for _, row in df_in.fillna("").iterrows():
-        if not row.get("Tipo"):
-            continue
+        if not str(row.get("Tipo", "")).strip():
+            continue  # ignora filas vacías
 
         tipo = str(row["Tipo"]).strip()
 
+        # Configuración permitida por tipo
         cfg_ok = cfgs.get(tipo, ["Única"])
-        cfg = str(row.get("Configuración") or cfg_ok[0])
+        cfg = str(row.get("Configuración") or cfg_ok[0]).strip()
         if cfg not in cfg_ok:
             cfg = cfg_ok[0]
 
+        # Calibre permitido por tipo
         cal_ok = cal_por_tipo.get(tipo, get_calibres_union())
-        cal = str(row.get("Calibre") or (cal_ok[0] if cal_ok else ""))
+        cal = str(row.get("Calibre") or (cal_ok[0] if cal_ok else "")).strip()
         if cal_ok and cal not in cal_ok:
             cal = cal_ok[0]
 
+        # Longitud y total
         try:
             L = float(row.get("Longitud (m)", 0.0))
         except Exception:
@@ -125,29 +141,52 @@ def _validar_y_calcular(df_in: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=COLS_OFICIALES)
 
 def _persistir_oficial(df: pd.DataFrame) -> None:
-    st.session_state["cables_proyecto_df"] = df.copy()
-    lista = df.to_dict(orient="records")
+    """Guarda versión oficial y sincroniza estructuras auxiliares."""
+    df_ok = _ensure_columns(df, with_del=False)
+    st.session_state["cables_proyecto_df"] = df_ok.copy()
+    lista = df_ok.to_dict(orient="records")
     st.session_state["cables_proyecto"] = lista
     st.session_state.setdefault("datos_proyecto", {})
     st.session_state["datos_proyecto"]["cables_proyecto"] = lista
 
-def _kpis(df: pd.DataFrame) -> None:
-    c1, c2, c3 = st.columns(3)
-    with c1: st.metric("Filas", len(df))
-    with c2: st.metric("Longitud (m)", f"{df['Longitud (m)'].sum():,.2f}")
-    with c3: st.metric("Total Cable (m)", f"{df['Total Cable (m)'].sum():,.2f}")
+# --- Helpers para resumen por calibre ---
+def _fmt_metros(v: float) -> str:
+    if abs(v - round(v)) < 1e-9:
+        return f"{int(round(v)):,.0f} m"
+    return f"{v:,.2f} m"
+
+def _resumen_por_calibre(df: pd.DataFrame) -> str:
+    if df is None or df.empty:
+        return _fmt_metros(0)
+    tmp = df.copy()
+
+    # Etiqueta amigable: Retenida => "cable acerado <calibre>", otros => solo calibre
+    tmp["Etiqueta"] = tmp.apply(
+        lambda r: (f"cable acerado {str(r.get('Calibre','')).strip()}"
+                   if str(r.get("Tipo","")).strip().upper() == "RETENIDA"
+                   else str(r.get("Calibre","")).strip()),
+        axis=1
+    )
+
+    totales = (tmp.groupby("Etiqueta", dropna=True)["Total Cable (m)"]
+                 .sum()
+                 .sort_values(ascending=False))
+
+    partes = [f"{_fmt_metros(m)} de {et}" for et, m in totales.items() if m > 0]
+    return " + ".join(partes) if partes else _fmt_metros(0)
 
 
-# ---------------------------
-# UI principal
-# ---------------------------
+# =========================
+# Sección principal
+# =========================
 def seccion_cables():
     _init_state()
 
+    # ---------- TÍTULO ----------
     st.markdown("## 2️⃣ ⚡ Configuración y calibres de conductores (tabla)")
-    st.caption("Edita el buffer y pulsa **Guardar**. Marca **Eliminar** para borrar filas.")
 
-    # --- Editor (buffer) ---
+    # ---------- EDITOR (formulario estable) ----------
+    st.caption("Edita el buffer y pulsa **Guardar**. Marca **Eliminar** para borrar filas.")
     with st.form("editor_cables", clear_on_submit=False):
         edited = st.data_editor(
             st.session_state["cables_buffer_df"],
@@ -158,60 +197,59 @@ def seccion_cables():
             column_order=["__DEL__", "Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"],
             column_config={
                 "__DEL__": st.column_config.CheckboxColumn(
-                    "Eliminar", help="Marca y pulsa Guardar para borrar", width="small"
+                    "Eliminar", width="small",
+                    help="Marca y pulsa Guardar para borrar"
                 ),
-                "Tipo": st.column_config.SelectboxColumn("Tipo", options=get_tipos(), required=True, width="small"),
+                "Tipo": st.column_config.SelectboxColumn(
+                    "Tipo", options=get_tipos(), required=False, width="small"
+                ),
                 "Configuración": st.column_config.SelectboxColumn(
-                    "Configuración", options=get_configs_union(), required=True, width="small"
+                    "Configuración", options=get_configs_union(), required=False, width="small"
                 ),
                 "Calibre": st.column_config.SelectboxColumn(
-                    "Calibre", options=get_calibres_union(), required=True, width="medium"
+                    "Calibre", options=get_calibres_union(), required=False, width="medium"
                 ),
-                "Longitud (m)": st.column_config.NumberColumn("Longitud (m)", min_value=0.0, step=10.0, format="%.2f"),
-                "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", disabled=True, format="%.2f"),
+                "Longitud (m)": st.column_config.NumberColumn(
+                    "Longitud (m)", min_value=0.0, step=10.0, format="%.2f"
+                ),
+                "Total Cable (m)": st.column_config.NumberColumn(
+                    "Total Cable (m)", disabled=True, format="%.2f",
+                    help="Longitud × Nº de conductores"
+                ),
             },
         )
         c1, c2 = st.columns([1, 1])
         guardar = c1.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
         descartar = c2.form_submit_button("↩️ Descartar cambios", use_container_width=True)
 
-    # --- Acciones ---
+    # Botones
     if guardar:
-        df_ok = _validar_y_calcular(edited)
-        _persistir_oficial(df_ok)
+        df_validado = _validar_y_calcular(edited)
+        _persistir_oficial(df_validado)
 
-        # reconstruir buffer desde oficial
-        buf = df_ok.copy()
-        if "__DEL__" not in buf.columns:
-            buf.insert(0, "__DEL__", False)
+        # Sincroniza buffer con oficial (incluye __DEL__ desmarcado)
+        buf = _ensure_columns(st.session_state["cables_proyecto_df"], with_del=True)
+        buf["__DEL__"] = False
         st.session_state["cables_buffer_df"] = buf
         st.success("✅ Cambios guardados.")
 
     elif descartar:
-        ofi = st.session_state["cables_proyecto_df"].copy()
-        if "__DEL__" not in ofi.columns:
-            ofi.insert(0, "__DEL__", False)
-        st.session_state["cables_buffer_df"] = ofi
+        buf = _ensure_columns(st.session_state["cables_proyecto_df"], with_del=True)
+        buf["__DEL__"] = False
+        st.session_state["cables_buffer_df"] = buf
         st.info("Cambios descartados.")
-
-    # 🔁 Re-poblar editor si quedó vacío pero hay datos guardados
-    if st.session_state["cables_buffer_df"].empty and not st.session_state["cables_proyecto_df"].empty:
-        ofi = st.session_state["cables_proyecto_df"].copy()
-        if "__DEL__" not in ofi.columns:
-            ofi.insert(0, "__DEL__", False)
-        st.session_state["cables_buffer_df"] = ofi
 
     st.markdown("---")
 
-    # --- Resultados (solo lectura) ---
+    # ---------- RESULTADOS (tabla limpia + resumen por calibre) ----------
     df_out = st.session_state["cables_proyecto_df"].copy()
     if df_out.empty:
         st.info("No hay datos guardados.")
     else:
-        # SIN KPIs: solo tabla limpia + total global
         df_disp = df_out.reindex(columns=COLS_OFICIALES).copy()
         df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
 
+        # Tabla final limpia SIN índice real
         st.dataframe(
             df_disp,
             use_container_width=True,
@@ -222,53 +260,10 @@ def seccion_cables():
                 "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", format="%.2f"),
             },
         )
-        # --- Helpers para el resumen por calibre ---
-def _fmt_metros(v: float) -> str:
-    # sin decimales si es entero, sino 2 decimales
-    if abs(v - round(v)) < 1e-9:
-        return f"{int(round(v)):,.0f} m"
-    return f"{v:,.2f} m"
 
-def _resumen_por_calibre(df: pd.DataFrame) -> str:
-    # Etiqueta amigable: para Retenida muestra "cable acerado 1/4", demás solo el calibre
-    etiquetas = df.apply(
-        lambda r: (f"cable acerado {r['Calibre']}" if str(r.get('Tipo','')).strip().upper() == "RETENIDA"
-                   else str(r['Calibre']).strip()),
-        axis=1
-    )
-    tmp = df.copy()
-    tmp["Etiqueta"] = etiquetas
+        # Resumen por calibre
+        st.markdown(f"**📏 Total Global de Cable:** {_resumen_por_calibre(df_out)}")
 
-    # Sumar por etiqueta
-    totales = (tmp.groupby("Etiqueta", dropna=True)["Total Cable (m)"]
-                 .sum()
-                 .sort_values(ascending=False))
-
-    # Armar la frase: "2,000 m de <Etiqueta> + ..."
-    partes = [f"{_fmt_metros(m)} de {et}" for et, m in totales.items() if m > 0]
-    return " + ".join(partes) if partes else _fmt_metros(0)
-
-# ... dentro de tu seccion_cables(), reemplaza el total simple por esto:
-if not df_out.empty:
-    df_disp = df_out.reindex(columns=COLS_OFICIALES).copy()
-    df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
-
-    st.dataframe(
-        df_disp,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Ítem": st.column_config.NumberColumn("Ítem", format="%d", width="small"),
-            "Longitud (m)": st.column_config.NumberColumn("Longitud (m)", format="%.2f"),
-            "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", format="%.2f"),
-        },
-    )
-
-    # ⬇️ Nuevo resumen por calibre
-    resumen = _resumen_por_calibre(df_out)
-    st.markdown(f"**📏 Total Global de Cable:** {resumen}")
-
-
+    # Devuelve lista (API histórica de tu app)
     return st.session_state.get("cables_proyecto", [])
-
 
