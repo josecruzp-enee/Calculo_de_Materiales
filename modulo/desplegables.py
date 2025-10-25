@@ -50,6 +50,58 @@ def multiselect_con_etiquetas(label, datos, key, valores_previos_str=""):
     return " , ".join(seleccionados) if seleccionados else ""
 
 
+import os
+import pandas as pd
+import streamlit as st
+
+REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
+RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
+
+
+def cargar_opciones():
+    """Lee la hoja 'indice' y organiza opciones por Clasificación."""
+    df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
+    df.columns = df.columns.str.strip()
+
+    clas_col = "Clasificación" if "Clasificación" in df.columns else "Clasificacion"
+    cod_col = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
+    desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
+
+    opciones = {}
+    for clasificacion in df[clas_col].dropna().unique():
+        subset = df[df[clas_col] == clasificacion]
+        codigos = subset[cod_col].dropna().tolist()
+        etiquetas = {
+            row[cod_col]: f"{row[cod_col]} – {row[desc_col]}"
+            for _, row in subset.iterrows() if pd.notna(row[cod_col])
+        }
+        opciones[clasificacion] = {"valores": codigos, "etiquetas": etiquetas}
+
+    return opciones
+
+
+def multiselect_con_etiquetas(label, datos, key, valores_previos_str=""):
+    """Crea un multiselect que guarda y recuerda múltiples estructuras."""
+    if not datos:
+        return ""
+
+    # Separar valores previos (si existen) por “,”
+    valores_previos = []
+    if valores_previos_str:
+        valores_previos = [v.strip() for v in valores_previos_str.split(",") if v.strip() in datos["valores"]]
+
+    seleccionados = st.multiselect(
+        label,
+        options=datos["valores"],
+        default=valores_previos,
+        format_func=lambda x: datos["etiquetas"].get(x, x),
+        key=key
+    )
+
+    # Devolver como texto concatenado
+    return " , ".join(seleccionados) if seleccionados else ""
+
+
 def crear_desplegables(opciones):
     """Crea multiselects para todos los tipos de estructura en una sola fila."""
     seleccion = {}
@@ -114,4 +166,7 @@ def crear_desplegables(opciones):
         )
 
     return seleccion
+
+
+
 
