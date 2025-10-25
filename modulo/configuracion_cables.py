@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
+ # -*- coding: utf-8 -*-
 """
 configuracion_cables.py
-Sección Streamlit para gestionar tramos de cable como TABLA editable.
-Guarda en:
-- st.session_state["cables_proyecto_df"]  (DataFrame)
-- st.session_state["cables_proyecto"]     (lista de dicts)
-- st.session_state["datos_proyecto"]["cables_proyecto"] (para PDF)
+Editor estable (con Guardar/Descartar) → tabla formal de resultados.
+- Buffer de edición en session_state (cables_buffer_df).
+- Datos “oficiales” en cables_proyecto_df / cables_proyecto.
 """
 
 from __future__ import annotations
@@ -14,19 +12,9 @@ import streamlit as st
 import pandas as pd
 from typing import List, Dict
 
-# ReportLab (solo si generas PDF)
-from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
-
-
-# =========================
-# Catálogos (getters)
-# =========================
+# ----------- Catálogos -----------
 def get_tipos() -> List[str]:
     return ["MT", "BT", "N", "HP", "Retenida"]
-
 
 def get_calibres() -> Dict[str, List[str]]:
     return {
@@ -37,9 +25,7 @@ def get_calibres() -> Dict[str, List[str]]:
         "Retenida": ["1/4", "5/8", "3/4"],
     }
 
-
 def get_configs_por_tipo() -> Dict[str, List[str]]:
-    # BT sólo: 2F, 2F+N, 2F+HP+N
     return {
         "MT": ["1F", "2F", "3F"],
         "BT": ["2F", "2F+N", "2F+HP+N"],
@@ -48,330 +34,186 @@ def get_configs_por_tipo() -> Dict[str, List[str]]:
         "Retenida": ["Única"],
     }
 
-
 def get_configs_union() -> List[str]:
-    # Unión total para el editor; la validación fina se hace por tipo
     return ["Única", "N", "1F", "1F+N", "2F", "2F+N", "2F+HP+N", "3F"]
-
 
 def get_calibres_union() -> List[str]:
     cal = get_calibres()
-    dedup = list(dict.fromkeys(c for lista in cal.values() for c in lista))
-    return dedup
+    return list(dict.fromkeys(c for lista in cal.values() for c in lista))
 
-
-def get_mapa_legacy_tipos() -> Dict[str, str]:
-    # Para normalizar etiquetas antiguas a las actuales
-    return {
-        "Primario": "MT",
-        "Secundario": "BT",
-        "Neutro": "N",
-        "Piloto": "HP",
-        "Retenidas": "Retenida",
-    }
-
-
-# =========================
-# Utilidades puras
-# =========================
 def conductores_de(cfg: str) -> int:
-    """Número de conductores para calcular 'Total Cable (m)' según configuración."""
-    if not isinstance(cfg, str):
-        return 1
-    c = cfg.strip().upper()
-
-    if c in ("ÚNICA", "N", "1F"):
-        return 1
-    if c in ("1F+N", "2F"):
-        return 2
-    if c in ("3F", "2F+N"):
-        return 3
-    if c == "2F+HP+N":
-        return 4
+    c = (cfg or "").strip().upper()
+    if c in ("ÚNICA", "N", "1F"): return 1
+    if c in ("1F+N", "2F"):       return 2
+    if c in ("3F", "2F+N"):       return 3
+    if c == "2F+HP+N":            return 4
     return 1
 
-
-# =========================
-# Estado y normalización
-# =========================
-def inicializar_df_cables_en_estado() -> None:
-    """Crea en session_state un DataFrame vacío con columnas esperadas, si no existe."""
+# ----------- Estado base -----------
+def _init_state():
     if "cables_proyecto_df" not in st.session_state:
         st.session_state["cables_proyecto_df"] = pd.DataFrame(
-            columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]
+            columns=["Tipo","Configuración","Calibre","Longitud (m)","Total Cable (m)"]
         )
-
-
-def normalizar_tipos_existentes() -> None:
-    """Normaliza etiquetas antiguas a las nuevas en todos los orígenes de estado."""
-    m = get_mapa_legacy_tipos()
-
-    df_prev = st.session_state.get("cables_proyecto_df")
-    if isinstance(df_prev, pd.DataFrame) and not df_prev.empty and "Tipo" in df_prev.columns:
-        st.session_state["cables_proyecto_df"]["Tipo"] = df_prev["Tipo"].replace(m)
-
-    lista_prev = st.session_state.get("cables_proyecto")
-    if isinstance(lista_prev, list) and lista_prev:
-        for fila in lista_prev:
-            if isinstance(fila, dict) and "Tipo" in fila and fila["Tipo"] in m:
-                fila["Tipo"] = m[fila["Tipo"]]
-        if df_prev is None or (hasattr(df_prev, "empty") and df_prev.empty):
-            st.session_state["cables_proyecto_df"] = pd.DataFrame(lista_prev)
-
-    datos = st.session_state.get("datos_proyecto", {})
-    cp_dp = datos.get("cables_proyecto")
-    if isinstance(cp_dp, list):
-        for fila in cp_dp:
-            if isinstance(fila, dict) and "Tipo" in fila and fila["Tipo"] in m:
-                fila["Tipo"] = m[fila["Tipo"]]
-        if st.session_state.get("cables_proyecto_df") is None or st.session_state["cables_proyecto_df"].empty:
-            st.session_state["cables_proyecto_df"] = pd.DataFrame(cp_dp)
-
-
-def asegurar_fila_inicial() -> None:
-    """Si el DF está vacío, agrega una fila guía inicial."""
-    df = st.session_state["cables_proyecto_df"]
-    if df.empty:
+    if st.session_state["cables_proyecto_df"].empty:
         st.session_state["cables_proyecto_df"] = pd.DataFrame([{
-            "Tipo": "MT", "Configuración": "1F", "Calibre": "1/0 ASCR",
-            "Longitud (m)": 0.0, "Total Cable (m)": 0.0
+            "Tipo":"MT","Configuración":"1F","Calibre":"1/0 ASCR",
+            "Longitud (m)":0.0,"Total Cable (m)":0.0
         }])
+    # Buffer de edición (copia ampliada con columna Eliminar)
+    if "cables_buffer_df" not in st.session_state:
+        buf = st.session_state["cables_proyecto_df"].copy()
+        if "__DEL__" not in buf.columns:
+            buf.insert(0, "__DEL__", False)
+        st.session_state["cables_buffer_df"] = buf
 
-
-# =========================
-# Editor (data_editor)
-# =========================
-def construir_editor_tabla() -> pd.DataFrame:
-    """Muestra el editor y devuelve el DataFrame editado (sin validar por tipo)."""
-    st.caption("Agrega/edita filas; el **Total** se calcula automáticamente según la configuración.")
-
-    edited_df = st.data_editor(
-        st.session_state["cables_proyecto_df"],
-        num_rows="dynamic",
-        use_container_width=True,
-        column_config={
-            "Tipo": st.column_config.SelectboxColumn(
-                "Tipo", options=get_tipos(), required=True, width="small",
-                help="MT, BT, N (neutro), HP (piloto), Retenida",
-            ),
-            "Configuración": st.column_config.SelectboxColumn(
-                "Configuración", options=get_configs_union(), required=True, width="small",
-                help="MT: 1F/2F/3F · BT: 2F/2F+N/2F+HP+N · N: N · HP: 1F+N/2F · Retenida: Única",
-            ),
-            "Calibre": st.column_config.SelectboxColumn(
-                "Calibre", options=get_calibres_union(), required=True, width="medium",
-            ),
-            "Longitud (m)": st.column_config.NumberColumn(
-                "Longitud (m)", min_value=0.0, step=10.0, format="%.2f",
-            ),
-            "Total Cable (m)": st.column_config.NumberColumn(
-                "Total Cable (m)", disabled=True, format="%.2f",
-                help="Longitud × Nº de conductores (autocalculado)",
-            ),
-        },
-        hide_index=True,
-    )
-    return edited_df
-
-
-# =========================
-# Validación + cálculo
-# =========================
-def validar_y_calcular(edited_df: pd.DataFrame) -> pd.DataFrame:
-    """Valida por tipo (config/calibre válidos) y calcula 'Total Cable (m)' por fila."""
+# ----------- Validación + cálculo -----------
+def _validar_y_calcular(df_in: pd.DataFrame) -> pd.DataFrame:
     cfgs = get_configs_por_tipo()
     cal_por_tipo = get_calibres()
 
-    processed_rows = []
-    for _, row in edited_df.fillna("").iterrows():
-        if not row.get("Tipo"):
+    # elimina filas marcadas
+    if "__DEL__" in df_in.columns:
+        df_in = df_in[~df_in["__DEL__"]].drop(columns="__DEL__", errors="ignore")
+
+    rows = []
+    for _, row in df_in.fillna("").iterrows():
+        if not row.get("Tipo"):  # ignora filas vacías
             continue
         tipo = str(row["Tipo"]).strip()
 
-        # Configuración permitida por tipo
         cfg_permitidas = cfgs.get(tipo, ["Única"])
-        cfg = str(row["Configuración"]) if row.get("Configuración") else cfg_permitidas[0]
+        cfg = str(row.get("Configuración") or cfg_permitidas[0])
         if cfg not in cfg_permitidas:
             cfg = cfg_permitidas[0]
 
-        # Calibre permitido por tipo
         cal_list = cal_por_tipo.get(tipo, get_calibres_union())
-        cal = str(row["Calibre"]) if row.get("Calibre") else (cal_list[0] if cal_list else "")
-        if cal not in cal_list:
-            cal = cal_list[0] if cal_list else cal
+        cal = str(row.get("Calibre") or (cal_list[0] if cal_list else ""))
+        if cal not in cal_list and cal_list:
+            cal = cal_list[0]
 
-        # Longitud y total
         try:
             L = float(row.get("Longitud (m)", 0.0))
         except Exception:
             L = 0.0
 
-        total = L * conductores_de(cfg)
-
-        processed_rows.append({
+        rows.append({
             "Tipo": tipo,
             "Configuración": cfg,
             "Calibre": cal,
             "Longitud (m)": L,
-            "Total Cable (m)": total,
+            "Total Cable (m)": L * conductores_de(cfg),
         })
 
-    df_out = pd.DataFrame(processed_rows, columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"])
-    return df_out
+    cols = ["Tipo","Configuración","Calibre","Longitud (m)","Total Cable (m)"]
+    return pd.DataFrame(rows, columns=cols)
 
-
-def persistir_en_estado(df: pd.DataFrame) -> None:
-    """Sincroniza todas las vistas del estado con el DataFrame validado."""
+def _persistir_oficial(df: pd.DataFrame) -> None:
     st.session_state["cables_proyecto_df"] = df.copy()
     lista = df.to_dict(orient="records")
     st.session_state["cables_proyecto"] = lista
     st.session_state.setdefault("datos_proyecto", {})
     st.session_state["datos_proyecto"]["cables_proyecto"] = lista
 
-
-def mostrar_total_global(df: pd.DataFrame) -> None:
-    """Muestra el total global de metros de cable."""
-    if not df.empty:
-        total_global = df["Total Cable (m)"].sum()
-        st.markdown(f"**🧮 Total Global de Cable:** {total_global:,.2f} m")
-
-
-# =========================
-# Estilo “tabla formal” (no Excel)
-# =========================
+# ----------- Estilo tabla formal -----------
 def _styler_formal(df: pd.DataFrame) -> pd.io.formats.style.Styler:
-    """Encabezado sobrio, zebra, bordes finos y esquinas redondeadas."""
     return (
-        df.style
-        .hide(axis="index")
-        .format({"Longitud (m)": "{:,.2f}", "Total Cable (m)": "{:,.2f}"}, na_rep="—")
+        df.style.hide(axis="index")
+        .format({"Longitud (m)":"{:,.2f}","Total Cable (m)":"{:,.2f}"}, na_rep="—")
         .set_table_styles(
             [
-                {"selector": "table",
-                 "props": [("border-collapse", "separate"),
-                           ("border-spacing", "0"),
-                           ("border", "1px solid #E5E7EB"),
-                           ("border-radius", "12px"),
-                           ("overflow", "hidden"),
-                           ("width", "100%")]},
-                {"selector": "thead th",
-                 "props": [("background-color", "#F3F4F6"),
-                           ("color", "#111827"),
-                           ("font-weight", "700"),
-                           ("font-size", "13.5px"),
-                           ("text-align", "left"),
-                           ("padding", "10px 12px"),
-                           ("border-bottom", "1px solid #E5E7EB")]},
-                {"selector": "tbody td",
-                 "props": [("padding", "10px 12px"),
-                           ("border-bottom", "1px solid #F1F5F9"),
-                           ("font-size", "13px")]},
+                {"selector":"table",
+                 "props":[("border-collapse","separate"),("border-spacing","0"),
+                          ("border","1px solid #E5E7EB"),("border-radius","12px"),
+                          ("overflow","hidden"),("width","100%")]},
+                {"selector":"thead th",
+                 "props":[("background-color","#F3F4F6"),("color","#111827"),
+                          ("font-weight","700"),("font-size","13.5px"),
+                          ("text-align","left"),("padding","10px 12px"),
+                          ("border-bottom","1px solid #E5E7EB")]},
+                {"selector":"tbody td",
+                 "props":[("padding","10px 12px"),("border-bottom","1px solid #F1F5F9"),
+                          ("font-size","13px")]}
             ]
         )
         .apply(lambda s: ["background-color: #FBFBFE" if i % 2 else "" for i in range(len(s))], axis=0)
     )
 
-
-# =========================
-# 1️⃣ Sección Streamlit (editor + vista formal)
-# =========================
+# ----------- Sección principal -----------
 def seccion_cables():
-    """Interfaz Streamlit: editor (arriba) + tabla formal (abajo)."""
+    _init_state()
+
+    # ---------- 1) EDITOR (en formulario) ----------
+    st.markdown("### 2️⃣ ✏️ Configuración y calibres de conductores (editor)")
+    st.caption("Edita el buffer y pulsa **Guardar** para aplicar. Marca **Eliminar** para borrar filas.")
+
+    with st.form("editor_cables", clear_on_submit=False):
+        edited = st.data_editor(
+            st.session_state["cables_buffer_df"],
+            key="cables_editor",
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            column_order=["__DEL__", "Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"],
+            column_config={
+                "__DEL__": st.column_config.CheckboxColumn("Eliminar", width="small",
+                                                           help="Marca y luego pulsa Guardar para borrar"),
+                "Tipo": st.column_config.SelectboxColumn("Tipo", options=get_tipos(), required=True, width="small"),
+                "Configuración": st.column_config.SelectboxColumn("Configuración", options=get_configs_union(),
+                                                                  required=True, width="small"),
+                "Calibre": st.column_config.SelectboxColumn("Calibre", options=get_calibres_union(),
+                                                            required=True, width="medium"),
+                "Longitud (m)": st.column_config.NumberColumn("Longitud (m)", min_value=0.0, step=10.0, format="%.2f"),
+                "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", disabled=True, format="%.2f",
+                                                                 help="Longitud × Nº de conductores"),
+            },
+        )
+        c1, c2 = st.columns([1,1])
+        guardar = c1.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
+        descartar = c2.form_submit_button("↩️ Descartar cambios", use_container_width=True)
+
+    # Manejo de botones
+    if guardar:
+        df_validado = _validar_y_calcular(edited)
+        _persistir_oficial(df_validado)
+        # refresca buffer desde oficial (y reañade columna Eliminar)
+        buf = df_validado.copy()
+        if "__DEL__" not in buf.columns:
+            buf.insert(0, "__DEL__", False)
+        st.session_state["cables_buffer_df"] = buf
+        st.success("✅ Cambios guardados correctamente.")
+    elif descartar:
+        # vuelve a la versión oficial
+        buf = st.session_state["cables_proyecto_df"].copy()
+        if "__DEL__" not in buf.columns:
+            buf.insert(0, "__DEL__", False)
+        st.session_state["cables_buffer_df"] = buf
+        st.info("Cambios descartados.")
+
+    st.markdown("---")
+
+    # ---------- 2) RESULTADOS (tabla formal) ----------
     st.markdown("### 2️⃣ ⚡ Configuración y calibres de conductores (tabla)")
+    st.caption("Resultados guardados (presentación limpia sin celdas editables).")
 
-    # Estado base
-    inicializar_df_cables_en_estado()
-    normalizar_tipos_existentes()
-    asegurar_fila_inicial()
+    # CSS para bordes redondeados del contenedor
+    st.markdown("""
+    <style>
+      .stTable > div { border-radius: 12px; overflow: hidden; border: 1px solid #E5E7EB; }
+      .stTable thead tr th:first-child { border-top-left-radius: 12px; }
+      .stTable thead tr th:last-child  { border-top-right-radius: 12px; }
+      .stTable tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
+      .stTable tbody tr:last-child td:last-child  { border-bottom-right-radius: 12px; }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # Editor (para capturar)
-    edited_df = construir_editor_tabla()
+    df_out = st.session_state["cables_proyecto_df"].copy()
+    if df_out.empty:
+        st.info("No hay datos guardados.")
+    else:
+        df_out = df_out.reindex(columns=["Tipo","Configuración","Calibre","Longitud (m)","Total Cable (m)"])
+        st.table(_styler_formal(df_out))
+        st.markdown(f"**🧮 Total Global de Cable:** {df_out['Total Cable (m)'].sum():,.2f} m")
 
-    # Validación + cálculo y persistencia
-    df_out = validar_y_calcular(edited_df)
-    persistir_en_estado(df_out)
-
-    # Totales (texto)
-    mostrar_total_global(df_out)
-
-    # ---- Vista formal (no Excel) ----
-    st.markdown("#### Tabla de calibres")
-    st.caption("Presentación limpia sin celdas editables.")
-    # Pulido extra (bordes y radios en el contenedor de Streamlit)
-    st.markdown(
-        """
-        <style>
-          .stTable > div { border-radius: 12px; overflow: hidden; border: 1px solid #E5E7EB; }
-          .stTable thead tr th:first-child { border-top-left-radius: 12px; }
-          .stTable thead tr th:last-child  { border-top-right-radius: 12px; }
-          .stTable tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
-          .stTable tbody tr:last-child td:last-child  { border-bottom-right-radius: 12px; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.table(_styler_formal(df_out))
-
-    # Devuelve la lista de dicts (coherente con uso previo)
-    return st.session_state["cables_proyecto"]
-
-
-# =========================
-# 2️⃣ Tabla para PDF (ReportLab)
-# =========================
-def tabla_cables_pdf(datos_proyecto):
-    """
-    Genera elementos ReportLab (tabla + totales) para insertar en el PDF.
-    Lee de datos_proyecto["cables_proyecto"] y, si existe, refleja lo último en session_state.
-    """
-    elems = []
-    styles = getSampleStyleSheet()
-    styleN = styles["Normal"]
-    styleH = styles["Heading2"]
-
-    # Toma siempre la última versión en memoria si existe
-    if st.session_state.get("cables_proyecto"):
-        datos_proyecto = dict(datos_proyecto or {})
-        datos_proyecto["cables_proyecto"] = st.session_state["cables_proyecto"]
-
-    filas = (datos_proyecto or {}).get("cables_proyecto", [])
-    if not filas:
-        return elems
-
-    df = pd.DataFrame(filas, columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"])
-    if df.empty:
-        return elems
-
-    elems.append(Spacer(1, 0.2 * inch))
-    elems.append(Paragraph("⚡ Configuración y Calibres de Conductores", styleH))
-    elems.append(Spacer(1, 0.1 * inch))
-
-    data = [["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]]
-    for _, row in df.iterrows():
-        data.append([
-            str(row.get("Tipo", "")),
-            str(row.get("Configuración", "")),
-            str(row.get("Calibre", "")),
-            f"{float(row.get('Longitud (m)', 0.0)):.2f}",
-            f"{float(row.get('Total Cable (m)', 0.0)):.2f}",
-        ])
-
-    tabla = Table(data, colWidths=[1.2 * inch] * 5)
-    tabla.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-    ]))
-
-    elems.append(tabla)
-    elems.append(Spacer(1, 0.15 * inch))
-
-    total_global = df["Total Cable (m)"].sum()
-    elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
-    elems.append(Spacer(1, 0.25 * inch))
-    return elems
-
+    # Devuelve lista de dicts (coherente con el resto de la app)
+    return st.session_state.get("cables_proyecto", [])
