@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 configuracion_cables.py
-Sección Streamlit para gestionar tramos de cable como TABLA editable o vista formal.
+Sección Streamlit para gestionar tramos de cable como TABLA editable.
 Guarda en:
 - st.session_state["cables_proyecto_df"]  (DataFrame)
 - st.session_state["cables_proyecto"]     (lista de dicts)
@@ -139,46 +139,10 @@ def asegurar_fila_inicial() -> None:
 
 
 # =========================
-# Estilos (vista formal)
-# =========================
-def _styler_formal(df: pd.DataFrame) -> pd.io.formats.style.Styler:
-    """Tabla institucional: encabezado sobrio, zebra, bordes finos y esquinas redondeadas."""
-    return (
-        df.style
-        .hide(axis="index")
-        .format({"Longitud (m)": "{:,.2f}", "Total Cable (m)": "{:,.2f}"}, na_rep="—")
-        .set_table_styles(
-            [
-                {"selector": "table",
-                 "props": [("border-collapse", "separate"),
-                           ("border-spacing", "0"),
-                           ("border", "1px solid #E5E7EB"),
-                           ("border-radius", "12px"),
-                           ("overflow", "hidden"),
-                           ("width", "100%")]},
-                {"selector": "thead th",
-                 "props": [("background-color", "#F3F4F6"),
-                           ("color", "#111827"),
-                           ("font-weight", "700"),
-                           ("font-size", "13.5px"),
-                           ("text-align", "left"),
-                           ("padding", "10px 12px"),
-                           ("border-bottom", "1px solid #E5E7EB")]},
-                {"selector": "tbody td",
-                 "props": [("padding", "10px 12px"),
-                           ("border-bottom", "1px solid #F1F5F9"),
-                           ("font-size", "13px")]},
-            ]
-        )
-        .apply(lambda s: ["background-color: #FBFBFE" if i % 2 else "" for i in range(len(s))], axis=0)
-    )
-
-
-# =========================
-# Editor y validación
+# Editor (data_editor)
 # =========================
 def construir_editor_tabla() -> pd.DataFrame:
-    """Muestra el editor de tabla y devuelve el DataFrame editado (sin validar por tipo)."""
+    """Muestra el editor y devuelve el DataFrame editado (sin validar por tipo)."""
     st.caption("Agrega/edita filas; el **Total** se calcula automáticamente según la configuración.")
 
     edited_df = st.data_editor(
@@ -210,6 +174,9 @@ def construir_editor_tabla() -> pd.DataFrame:
     return edited_df
 
 
+# =========================
+# Validación + cálculo
+# =========================
 def validar_y_calcular(edited_df: pd.DataFrame) -> pd.DataFrame:
     """Valida por tipo (config/calibre válidos) y calcula 'Total Cable (m)' por fila."""
     cfgs = get_configs_por_tipo()
@@ -270,54 +237,80 @@ def mostrar_total_global(df: pd.DataFrame) -> None:
 
 
 # =========================
+# Estilo “tabla formal” (no Excel)
+# =========================
+def _styler_formal(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+    """Encabezado sobrio, zebra, bordes finos y esquinas redondeadas."""
+    return (
+        df.style
+        .hide(axis="index")
+        .format({"Longitud (m)": "{:,.2f}", "Total Cable (m)": "{:,.2f}"}, na_rep="—")
+        .set_table_styles(
+            [
+                {"selector": "table",
+                 "props": [("border-collapse", "separate"),
+                           ("border-spacing", "0"),
+                           ("border", "1px solid #E5E7EB"),
+                           ("border-radius", "12px"),
+                           ("overflow", "hidden"),
+                           ("width", "100%")]},
+                {"selector": "thead th",
+                 "props": [("background-color", "#F3F4F6"),
+                           ("color", "#111827"),
+                           ("font-weight", "700"),
+                           ("font-size", "13.5px"),
+                           ("text-align", "left"),
+                           ("padding", "10px 12px"),
+                           ("border-bottom", "1px solid #E5E7EB")]},
+                {"selector": "tbody td",
+                 "props": [("padding", "10px 12px"),
+                           ("border-bottom", "1px solid #F1F5F9"),
+                           ("font-size", "13px")]},
+            ]
+        )
+        .apply(lambda s: ["background-color: #FBFBFE" if i % 2 else "" for i in range(len(s))], axis=0)
+    )
+
+
+# =========================
 # 1️⃣ Sección Streamlit (editor + vista formal)
 # =========================
 def seccion_cables():
-    """Interfaz Streamlit: toggle Editor/Vista formal y persistencia."""
-    st.markdown("### ⚡ Configuración de Cables del Proyecto")
+    """Interfaz Streamlit: editor (arriba) + tabla formal (abajo)."""
+    st.markdown("### 2️⃣ ⚡ Configuración y calibres de conductores (tabla)")
 
     # Estado base
     inicializar_df_cables_en_estado()
     normalizar_tipos_existentes()
     asegurar_fila_inicial()
 
-    # Toggle: edición o presentación formal
-    modo_presentacion = st.toggle(
-        "Modo presentación (tabla formal)",
-        value=True,  # activado por defecto para que NO parezca Excel
-        help="Desactiva para editar la tabla."
+    # Editor (para capturar)
+    edited_df = construir_editor_tabla()
+
+    # Validación + cálculo y persistencia
+    df_out = validar_y_calcular(edited_df)
+    persistir_en_estado(df_out)
+
+    # Totales (texto)
+    mostrar_total_global(df_out)
+
+    # ---- Vista formal (no Excel) ----
+    st.markdown("#### Tabla de calibres (vista formal)")
+    st.caption("Presentación limpia sin celdas editables.")
+    # Pulido extra (bordes y radios en el contenedor de Streamlit)
+    st.markdown(
+        """
+        <style>
+          .stTable > div { border-radius: 12px; overflow: hidden; border: 1px solid #E5E7EB; }
+          .stTable thead tr th:first-child { border-top-left-radius: 12px; }
+          .stTable thead tr th:last-child  { border-top-right-radius: 12px; }
+          .stTable tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
+          .stTable tbody tr:last-child td:last-child  { border-bottom-right-radius: 12px; }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
-
-    if not modo_presentacion:
-        # ----- EDITOR -----
-        edited_df = construir_editor_tabla()
-        df_out = validar_y_calcular(edited_df)
-        persistir_en_estado(df_out)
-        mostrar_total_global(df_out)
-    else:
-        # ----- VISTA FORMAL -----
-        df = st.session_state.get("cables_proyecto_df", pd.DataFrame()).copy()
-        if df.empty:
-            st.info("No hay datos de cables para mostrar. Desactiva el modo presentación para editar.")
-            return
-
-        # Asegurar formato y orden de columnas
-        df = df.reindex(columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"])
-        # CSS de pulido extra (bordes y radios)
-        st.markdown(
-            """
-            <style>
-              .stTable > div { border-radius: 12px; overflow: hidden; border: 1px solid #E5E7EB; }
-              .stTable thead tr th:first-child { border-top-left-radius: 12px; }
-              .stTable thead tr th:last-child  { border-top-right-radius: 12px; }
-              .stTable tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
-              .stTable tbody tr:last-child td:last-child  { border-bottom-right-radius: 12px; }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.table(_styler_formal(df))
-        mostrar_total_global(df)
+    st.table(_styler_formal(df_out))
 
     # Devuelve la lista de dicts (coherente con uso previo)
     return st.session_state["cables_proyecto"]
