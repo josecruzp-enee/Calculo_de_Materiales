@@ -1,136 +1,179 @@
 # -*- coding: utf-8 -*-
 """
 core/conectores_mt.py
-Carga y reemplazo de conectores de compresión según calibre y tipo de estructura.
+Utilidades para cargar la hoja de conectores y reemplazar en función del calibre y tipo
+de estructura. Tolerante a acentos, mayúsculas/minúsculas y variaciones en la
+descripción (“COMPRESION” / “COMPRESIÓN”, espacios, MCM/ASCR/AAC, etc.).
+
+Funciones públicas:
+- cargar_conectores_mt(archivo_materiales) -> pd.DataFrame
+- determinar_calibre_por_estructura(cod_estructura, datos_proyecto) -> str
+- aplicar_reemplazos_conectores(lista_materiales, calibre_estructura, tabla_conectores) -> list[str]
 """
 
 from __future__ import annotations
+
 import re
 import unicodedata
+from typing import Optional, List
+
 import pandas as pd
 
-# --------------------------
-# Utilidades de normalización
-# --------------------------
-def _strip_accents(s: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
-def _norm_txt(s: str) -> str:
-    s = str(s or "")
-    s = _strip_accents(s)
-    s = s.replace("º", "").replace("°", "")
-    return s.upper().strip()
+# =========================
+# Normalización de texto
+# =========================
+def _sin_acentos(s: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", str(s))
+        if unicodedata.category(c) != "Mn"
+    )
 
-# --------------------------
-# 1) Cargar hoja 'conectores'
-# --------------------------
-def cargar_conectores_mt(archivo_materiales) -> pd.DataFrame:
-    """Devuelve columnas: Calibre, Código, Descripción, Estructuras aplicables."""
+def _norm(s: str) -> str:
+    """Mayúsculas + sin acentos + strip."""
+    return _sin_acentos(s).upper().strip()
+
+
+# =========================
+# Carga de hoja "conectores"
+# =========================
+def cargar_conectores_mt(archivo_materiales: str) -> pd.DataFrame:
+    """
+    Carga la hoja 'conectores' del Excel de materiales.
+    Devuelve siempre un DataFrame con columnas: Calibre, Código, Descripción, Estructuras aplicables
+    (crea columnas vacías si faltan).
+    """
     try:
         df = pd.read_excel(archivo_materiales, sheet_name="conectores")
-    except Exception:
+        # Normalizar encabezados
+        df.columns = [c.strip() for c in df.columns]
+
+        # Mapear nombres esperados (tolerante)
+        rename_map = {}
+        for col in df.columns:
+            col_n = _norm(col)
+            if col_n.startswith("CALIBRE"):
+                rename_map[col] = "Calibre"
+            elif col_n.startswith("COD") or col_n == "CODIGO":
+                rename_map[col] = "Código"
+            elif "DESC" in col_n:
+                rename_map[col] = "Descripción"
+            elif "APLIC" in col_n or "ESTRUCT" in col_n:
+                rename_map[col] = "Estructuras aplicables"
+
+        df = df.rename(columns=rename_map)
+
+        # Asegurar columnas
+        for c in ["Calibre", "Código", "Descripción", "Estructuras aplicables"]:
+            if c not in df.columns:
+                df[c] = ""
+
+        # Orden amistoso
+        return df[["Calibre", "Código", "Descripción", "Estructuras aplicables"]]
+    except Exception as e:
+        print(f"⚠️ No se pudo cargar hoja 'conectores': {e}")
         return pd.DataFrame(columns=["Calibre", "Código", "Descripción", "Estructuras aplicables"])
 
-    # Normaliza encabezados
-    df.columns = [_norm_txt(c).title() for c in df.columns]
-    if "Descripción" not in df.columns:
-        for col in df.columns:
-            if "DESC" in _norm_txt(col):
-                df = df.rename(columns={col: "Descripción"})
-                break
 
-    # Asegura columnas esperadas
-    for col in ["Calibre", "Código", "Descripción", "Estructuras aplicables"]:
-        if col not in df.columns:
-            df[col] = ""
-
-    # Normaliza valores de texto (mantiene capitalización original en Descripción para el PDF)
-    df["Calibre"] = df["Calibre"].apply(_norm_txt)
-    df["Código"] = df["Código"].apply(_norm_txt)
-    df["Estructuras aplicables"] = df["Estructuras aplicables"].apply(_norm_txt)
-
-    return df[["Calibre", "Código", "Descripción", "Estructuras aplicables"]]
-
-# -------------------------------------------------
-# 2) Determinar calibre por tipo de estructura (A/B)
-# -------------------------------------------------
-def determinar_calibre_por_estructura(codigo_estructura: str, datos_proyecto: dict) -> str:
+# =========================
+# Calibre según estructura
+# =========================
+def determinar_calibre_por_estructura(estructura: str, datos_proyecto: dict) -> str:
     """
-    A*, TM*, TH*, ER*   → MT
-    B*, R*              → BT
-    CT*, *N*, *NEUTRO*  → Neutro
+    Heurística simple:
+    - A*, TM*, TH*, ER*  → calibre MT (por defecto '1/0 ASCR')
+    - B*, R*             → calibre BT (por defecto '1/0 WP')
+    - contiene CT / N    → calibre Neutro (por defecto '#2 AWG')
+    - otro               → calibre MT
     """
-    e = _norm_txt(codigo_estructura)
-    cal_mt = _norm_txt(datos_proyecto.get("calibre_mt", "")) or "1/0 ASCR"
-    cal_bt = _norm_txt(datos_proyecto.get("calibre_bt", "")) or "1/0 WP"
-    cal_n  = _norm_txt(datos_proyecto.get("calibre_neutro", "")) or "#2 AWG"
+    estructura = _norm(estructura)
 
-    if e.startswith(("A", "TM", "TH", "ER")):
-        return cal_mt
-    if e.startswith(("B", "R")):
-        return cal_bt
-    if (" CT" in f" {e} ") or (" N" in f" {e} ") or ("NEUTRO" in e):
-        return cal_n
-    return cal_mt
+    calibre_mt = _norm(datos_proyecto.get("calibre_mt", "") or "")
+    calibre_bt = _norm(datos_proyecto.get("calibre_bt", "") or "")
+    calibre_n  = _norm(datos_proyecto.get("calibre_neutro", "") or "")
 
-# -------------------------------------------------
-# 3) Buscar conector simétrico o compatible
-# -------------------------------------------------
-def _pat_simetrico(calibre_norm: str) -> re.Pattern:
-    # (1/0-1/0)  (266.8-266.8) etc.
-    return re.compile(rf"\(\s*{re.escape(calibre_norm)}\s*[-–]\s*{re.escape(calibre_norm)}\s*\)", re.IGNORECASE)
+    if any(estructura.startswith(pref) for pref in ("A", "TM", "TH", "ER")):
+        return calibre_mt or "1/0 ASCR"
+    if any(estructura.startswith(pref) for pref in ("B", "R")):
+        return calibre_bt or "1/0 WP"
+    if ("CT" in estructura) or (estructura.startswith("N")) or ("NEUTRO" in estructura):
+        return calibre_n or "#2 AWG"
+    return calibre_mt or "1/0 ASCR"
 
-def _pat_compatible(calibre_norm: str) -> re.Pattern:
-    # (266.8-3/0), (266.8-2/0), ... — busca al menos que aparezca calibre_norm dentro del paréntesis
-    return re.compile(rf"\(\s*{re.escape(calibre_norm)}\s*[-–].*?\)", re.IGNORECASE)
 
-def buscar_conector_mt(calibre: str, tabla_conectores: pd.DataFrame) -> str | None:
+# =========================
+# Búsqueda tolerante del conector
+# =========================
+def _calibre_token(cal: str) -> str:
+    """Token para coincidir dentro de paréntesis: sin espacios ni sufijos."""
+    return (
+        _norm(cal)
+        .replace(" ", "")
+        .replace("ASCR", "")
+        .replace("AAC", "")
+        .replace("MCM", "")
+        .strip()
+    )
+
+def buscar_conector_mt(calibre: str, tabla_conectores: pd.DataFrame) -> Optional[str]:
     """
-    1) Intenta simétrico (calibre-calibre)
-    2) Si no hay, intenta compatible (calibre-otro)
+    Estrategia de matching (por orden):
+      1) Simétrico exacto: (X-X) → ej. (266.8-266.8), (1/0-1/0)
+      2) Compatible: (X-ALGO)  → ej. (266.8-3/0), (266.8-2/0)
+      3) Último recurso: si contiene el token (X) + 'CONECTOR' + 'COMPRESION'
+    Devuelve la 'Descripción' del conector o None si no encuentra.
     """
-    if tabla_conectores is None or tabla_conectores.empty:
+    if tabla_conectores is None or getattr(tabla_conectores, "empty", True):
         return None
 
-    cal = _norm_txt(calibre)
-    # El calibre en conectores suele venir con o sin sufijo (ASCR, MCM). Quitamos eso para el patrón.
-    cal_norm = cal.replace(" ", "")
-    cal_norm = cal_norm.replace("ASCR", "").replace("AAC", "").replace("MCM", "").strip()
+    token = _calibre_token(calibre)
+    if not token:
+        return None
 
-    # Recorre por orden
-    for patron in (_pat_simetrico(cal_norm), _pat_compatible(cal_norm)):
-        for _, fila in tabla_conectores.iterrows():
-            desc_raw = str(fila.get("Descripción", ""))
-            desc = _norm_txt(desc_raw).replace(" ", "")
-            if patron.search(desc):
-                return desc_raw  # devolvemos tal cual para que salga bonito en PDF
-    return None
+    pat_sim = re.compile(rf"\(\s*{re.escape(token)}\s*[-–]\s*{re.escape(token)}\s*\)")
+    pat_any = re.compile(rf"\(\s*{re.escape(token)}\s*[-–].*?\)")
 
-# -------------------------------------------------
-# 4) Reemplazo dentro de la lista de materiales
-# -------------------------------------------------
+    candidato = None
+    for _, row in tabla_conectores.iterrows():
+        desc = str(row.get("Descripción", ""))
+        desc_nosp = _norm(desc).replace(" ", "")
+
+        # 1) simétrico
+        if pat_sim.search(desc_nosp):
+            return desc
+
+        # 2) compatible
+        if candidato is None and pat_any.search(desc_nosp):
+            candidato = desc
+
+        # 3) último recurso
+        if candidato is None and (token in desc_nosp) and ("CONECTOR" in desc_nosp) and ("COMPRESION" in desc_nosp):
+            candidato = desc
+
+    return candidato
+
+
+# =========================
+# Reemplazo en lista de materiales
+# =========================
+def _es_conector(material: str) -> bool:
+    m = _norm(material)
+    return ("CONECTOR" in m) and (("COMPRESION" in m) or ("COMPRESIÓN" in m))
+
 def aplicar_reemplazos_conectores(
-    lista_materiales: list[str],
+    lista_materiales: List[str],
     calibre_estructura: str,
     tabla_conectores: pd.DataFrame,
-    logger=None,
-) -> list[str]:
+) -> List[str]:
     """
-    Reemplaza cualquier ítem que contenga 'CONECTOR' y 'COMPRESION/COMPRESIÓN'
-    por el conector que corresponda al calibre de la estructura.
+    Recorre la lista de materiales y reemplaza los que sean conectores por
+    el que corresponda al calibre de ESTA estructura.
     """
-    if not lista_materiales:
-        return lista_materiales
-
-    out = []
-    cal = calibre_estructura
-    for mat in lista_materiales:
-        mat_norm = _norm_txt(mat)
-        if ("CONECTOR" in mat_norm) and (("COMPRESION" in mat_norm) or ("COMPRESION" in mat_norm.replace("Ó","O"))):
-            nuevo = buscar_conector_mt(cal, tabla_conectores)
-            if nuevo:
-                if logger: logger(f"🔁 Reemplazo: '{mat}'  →  '{nuevo}'")
-                out.append(nuevo)
-                continue
-        out.append(mat)
-    return out
+    salida: List[str] = []
+    for mat in (lista_materiales or []):
+        if _es_conector(mat):
+            nuevo = buscar_conector_mt(calibre_estructura, tabla_conectores)
+            salida.append(nuevo if nuevo else mat)
+        else:
+            salida.append(mat)
+    return salida
