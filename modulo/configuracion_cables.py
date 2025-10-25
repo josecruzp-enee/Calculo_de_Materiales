@@ -267,3 +267,81 @@ def seccion_cables():
 
     # Devuelve lista (API histórica de tu app)
     return st.session_state.get("cables_proyecto", [])
+
+# =========================
+# Tabla de Cables para PDF (ReportLab)
+# =========================
+def tabla_cables_pdf(datos_proyecto=None):
+    """
+    Devuelve una lista de flowables (ReportLab) con la tabla de cables para insertar en PDFs.
+    - Lee primero de st.session_state['cables_proyecto'] si existe (siempre la versión más reciente).
+    - Como respaldo, usa datos_proyecto['cables_proyecto'] si viene desde otros pasos.
+    """
+    # Import local para no cargar ReportLab si no se exporta PDF
+    try:
+        from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import inch
+    except Exception:
+        # Si no está reportlab, devolvemos vacío (la exportación avisará en otra capa)
+        return []
+
+    elems = []
+    styles = getSampleStyleSheet()
+    styleN = styles["Normal"]
+    styleH = styles["Heading2"]
+
+    # 1) Tomar SIEMPRE la última versión en memoria, si existe
+    filas = None
+    if isinstance(st.session_state.get("cables_proyecto"), list) and st.session_state["cables_proyecto"]:
+        filas = st.session_state["cables_proyecto"]
+    elif isinstance(datos_proyecto, dict) and isinstance(datos_proyecto.get("cables_proyecto"), list):
+        filas = datos_proyecto["cables_proyecto"]
+
+    if not filas:
+        return elems  # nada que mostrar
+
+    df = pd.DataFrame(filas, columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"])
+    if df.empty:
+        return elems
+
+    # 2) Encabezado
+    elems.append(Spacer(1, 0.20 * inch))
+    elems.append(Paragraph("⚡ Configuración y Calibres de Conductores", styleH))
+    elems.append(Spacer(1, 0.10 * inch))
+
+    # 3) Datos de tabla
+    data = [["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]]
+    for _, row in df.iterrows():
+        data.append([
+            str(row.get("Tipo", "")),
+            str(row.get("Configuración", "")),
+            str(row.get("Calibre", "")),
+            f"{float(row.get('Longitud (m)', 0.0)):.2f}",
+            f"{float(row.get('Total Cable (m)', 0.0)):.2f}",
+        ])
+
+    # 4) Tabla y estilos
+    col_widths = [1.1 * inch, 1.35 * inch, 1.6 * inch, 1.25 * inch, 1.45 * inch]
+    tabla = Table(data, colWidths=col_widths, repeatRows=1)
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.whitesmoke),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",   (0, 0), (-1, 0), 9),
+        ("ALIGN",      (0, 0), (-1, -1), "CENTER"),
+        ("GRID",       (0, 0), (-1, -1), 0.5, colors.grey),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+        ("FONTSIZE",   (0, 1), (-1, -1), 9),
+    ]))
+
+    elems.append(tabla)
+    elems.append(Spacer(1, 0.12 * inch))
+
+    # 5) Total global
+    total_global = df["Total Cable (m)"].sum()
+    elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
+    elems.append(Spacer(1, 0.20 * inch))
+    return elems
+
