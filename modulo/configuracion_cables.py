@@ -246,3 +246,119 @@ def seccion_cables():
         st.markdown(f"**📏 Total Global de Cable:** {_resumen_por_calibre(df_out)}")
 
     return st.session_state.get("cables_proyecto", [])
+
+# =========================
+# Soporte para PDFs (usado por modulo.pdf_utils)
+# =========================
+def tabla_cables_pdf(datos_proyecto):
+    """
+    Devuelve una lista de flowables (ReportLab) con la tabla de cables
+    para insertar en los PDFs. Toma la fuente de datos más fresca disponible:
+      1) st.session_state['cables_proyecto'] (lista de dicts)
+      2) st.session_state['cables_proyecto_df'] (DataFrame)
+      3) (datos_proyecto or {})['cables_proyecto'] (lista de dicts)
+    Si no hay datos, retorna [] sin fallar.
+    """
+    elems = []
+
+    # Importar aquí para no forzar dependencia en tiempo de carga del módulo
+    try:
+        from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import inch
+    except Exception:
+        # Si ReportLab no está disponible, no romper la generación (el caller decide)
+        return elems
+
+    # ---- 1) Recuperar datos ----
+    try:
+        import pandas as pd
+    except Exception:
+        return elems
+
+    # Prioridad: session_state (lista) → session_state (df) → datos_proyecto (lista)
+    fuente = None
+    if isinstance(st.session_state.get("cables_proyecto"), list) and st.session_state["cables_proyecto"]:
+        fuente = st.session_state["cables_proyecto"]
+    elif isinstance(st.session_state.get("cables_proyecto_df"), pd.DataFrame) and not st.session_state["cables_proyecto_df"].empty:
+        fuente = st.session_state["cables_proyecto_df"].to_dict(orient="records")
+    else:
+        lista_dp = (datos_proyecto or {}).get("cables_proyecto", [])
+        if isinstance(lista_dp, list) and lista_dp:
+            fuente = lista_dp
+
+    if not fuente:
+        return elems
+
+    # ---- 2) Normalizar columnas esperadas ----
+    df = pd.DataFrame(fuente).copy()
+
+    colmap_flex = {
+        # estándar
+        "Tipo": "Tipo",
+        "Configuración": "Configuración",
+        "Calibre": "Calibre",
+        "Longitud (m)": "Longitud (m)",
+        "Total Cable (m)": "Total Cable (m)",
+        # variantes posibles
+        "Longitud": "Longitud (m)",
+        "Total": "Total Cable (m)",
+        "total": "Total Cable (m)",
+        "longitud": "Longitud (m)",
+    }
+    # Renombrar si hay variantes
+    df.rename(columns={c: colmap_flex[c] for c in list(df.columns) if c in colmap_flex}, inplace=True)
+
+    cols = ["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]
+    # Crear columnas faltantes si no existen
+    for c in cols:
+        if c not in df.columns:
+            df[c] = "" if c in ("Tipo", "Configuración", "Calibre") else 0.0
+
+    # Ordenar/filtrar
+    df = df[cols].copy()
+
+    # Tipos numéricos seguros para formato
+    for c in ("Longitud (m)", "Total Cable (m)"):
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
+
+    # ---- 3) Construir flowables ----
+    styles = getSampleStyleSheet()
+    styleH = styles["Heading2"]
+    styleN = styles["Normal"]
+
+    elems.append(Spacer(1, 0.20 * inch))
+    elems.append(Paragraph("⚡ Configuración y Calibres de Conductores", styleH))
+    elems.append(Spacer(1, 0.10 * inch))
+
+    data = [["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]]
+    for _, row in df.iterrows():
+        data.append([
+            str(row["Tipo"]),
+            str(row["Configuración"]),
+            str(row["Calibre"]),
+            f"{float(row['Longitud (m)']):.2f}",
+            f"{float(row['Total Cable (m)']):.2f}",
+        ])
+
+    tabla = Table(data, colWidths=[1.2 * inch] * 5)
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+    ]))
+    elems.append(tabla)
+
+    # Total global
+    total_global = float(df["Total Cable (m)"].sum())
+    elems.append(Spacer(1, 0.15 * inch))
+    elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
+    elems.append(Spacer(1, 0.20 * inch))
+
+    return elems
+
