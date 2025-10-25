@@ -295,7 +295,7 @@ def seccion_cables():
     mostrar_total_global(df_out)
 
     # ---- Vista formal (no Excel) ----
-    st.markdown("#### Tabla de calibres (vista formal)")
+    st.markdown("#### Tabla de calibres")
     st.caption("Presentación limpia sin celdas editables.")
     # Pulido extra (bordes y radios en el contenedor de Streamlit)
     st.markdown(
