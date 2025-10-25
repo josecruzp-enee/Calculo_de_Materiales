@@ -226,6 +226,7 @@ def seccion_cables():
 
     # Botones
     if guardar:
+        # FIX: borrar marcadas con dtype seguro
         df_validado = _validar_y_calcular(edited)
         _persistir_oficial(df_validado)
         buf = df_validado.copy()
@@ -242,40 +243,27 @@ def seccion_cables():
 
     st.markdown("---")
 
-    # ---------- RESULTADOS (solo tabla formal con columna 'Ítem') ----------
-    # CSS de contenedor con esquinas redondeadas
-    st.markdown("""
-    <style>
-      .stTable > div { border-radius: 12px; overflow: hidden; border: 1px solid #E5E7EB; }
-      .stTable thead tr th:first-child { border-top-left-radius: 12px; }
-      .stTable thead tr th:last-child  { border-top-right-radius: 12px; }
-      .stTable tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
-      .stTable tbody tr:last-child td:last-child  { border-bottom-right-radius: 12px; }
-    </style>
-    """, unsafe_allow_html=True)
-
+    # ---------- RESULTADOS (tabla estable sin índice 0,1...) ----------
     df_out = st.session_state["cables_proyecto_df"].copy()
     if df_out.empty:
-      st.info("No hay datos guardados.")
+        st.info("No hay datos guardados.")
     else:
-      # Orden oficial y agregar Ítem (1..n)
-      df_out = df_out.reindex(columns=COLS_OFICIALES)
-      df_disp = df_out.copy()
-      df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
+        # Orden oficial y agregar Ítem 1..n (primera columna visible)
+        df_out = df_out.reindex(columns=COLS_OFICIALES)
+        df_disp = df_out.copy()
+        df_disp.insert(0, "Ítem", range(1, len(df_disp) + 1))
 
-      # “Oculta” visualmente el índice (evita 0,1,... a la izquierda)
-      df_disp.index = [""] * len(df_disp)
-      df_disp.index.name = ""  # sin título de índice
-
-      # Estilo formal + centrado de la columna Ítem
-      sty = _styler_formal(df_disp).set_properties(
-        subset=pd.IndexSlice[:, ["Ítem"]],
-        **{"text-align": "center", "font-weight": "600"}
-      )
-
-      st.table(sty)
-
+        # df_disp SIN índice visible + formatos limpios
+        st.dataframe(
+            df_disp,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Ítem": st.column_config.NumberColumn("Ítem", format="%d", width="small"),
+                "Longitud (m)": st.column_config.NumberColumn("Longitud (m)", format="%.2f"),
+                "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", format="%.2f"),
+            },
+        )
 
     # Devuelve lista (API histórica de tu app)
     return st.session_state.get("cables_proyecto", [])
-
