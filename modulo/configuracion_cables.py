@@ -1,19 +1,18 @@
 # -*- coding: utf-8 -*-
 """
 configuracion_cables.py
-Sección Streamlit para gestionar tramos de cable como TABLA editable.
+Sección Streamlit para gestionar tramos de cable como TABLA editable o vista formal.
 Guarda en:
 - st.session_state["cables_proyecto_df"]  (DataFrame)
 - st.session_state["cables_proyecto"]     (lista de dicts)
 - st.session_state["datos_proyecto"]["cables_proyecto"] (para PDF)
-
-No se usan variables globales (solo imports).
 """
 
 from __future__ import annotations
 
 import streamlit as st
 import pandas as pd
+from typing import List, Dict
 
 # ReportLab (solo si generas PDF)
 from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
@@ -25,11 +24,11 @@ from reportlab.lib.units import inch
 # =========================
 # Catálogos (getters)
 # =========================
-def get_tipos() -> list[str]:
+def get_tipos() -> List[str]:
     return ["MT", "BT", "N", "HP", "Retenida"]
 
 
-def get_calibres() -> dict[str, list[str]]:
+def get_calibres() -> Dict[str, List[str]]:
     return {
         "MT": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR", "266.8 MCM", "336 MCM"],
         "BT": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
@@ -39,29 +38,29 @@ def get_calibres() -> dict[str, list[str]]:
     }
 
 
-def get_configs_por_tipo() -> dict[str, list[str]]:
+def get_configs_por_tipo() -> Dict[str, List[str]]:
     # BT sólo: 2F, 2F+N, 2F+HP+N
     return {
         "MT": ["1F", "2F", "3F"],
-        "BT": ["2F", "2F+N", "2F+HP+N"],
+        "BT": ["2F", "3F"],
         "N":  ["N"],
         "HP": ["1F+N", "2F"],
         "Retenida": ["Única"],
     }
 
 
-def get_configs_union() -> list[str]:
+def get_configs_union() -> List[str]:
     # Unión total para el editor; la validación fina se hace por tipo
     return ["Única", "N", "1F", "1F+N", "2F", "2F+N", "2F+HP+N", "3F"]
 
 
-def get_calibres_union() -> list[str]:
+def get_calibres_union() -> List[str]:
     cal = get_calibres()
     dedup = list(dict.fromkeys(c for lista in cal.values() for c in lista))
     return dedup
 
 
-def get_mapa_legacy_tipos() -> dict[str, str]:
+def get_mapa_legacy_tipos() -> Dict[str, str]:
     # Para normalizar etiquetas antiguas a las actuales
     return {
         "Primario": "MT",
@@ -81,23 +80,14 @@ def conductores_de(cfg: str) -> int:
         return 1
     c = cfg.strip().upper()
 
-    # 1 conductor
     if c in ("ÚNICA", "N", "1F"):
         return 1
-
-    # 2 conductores
     if c in ("1F+N", "2F"):
         return 2
-
-    # 3 conductores
     if c in ("3F", "2F+N"):
         return 3
-
-    # 4 conductores (2F + HP + N)
     if c == "2F+HP+N":
         return 4
-
-    # predeterminado
     return 1
 
 
@@ -146,6 +136,42 @@ def asegurar_fila_inicial() -> None:
             "Tipo": "MT", "Configuración": "1F", "Calibre": "1/0 ASCR",
             "Longitud (m)": 0.0, "Total Cable (m)": 0.0
         }])
+
+
+# =========================
+# Estilos (vista formal)
+# =========================
+def _styler_formal(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+    """Tabla institucional: encabezado sobrio, zebra, bordes finos y esquinas redondeadas."""
+    return (
+        df.style
+        .hide(axis="index")
+        .format({"Longitud (m)": "{:,.2f}", "Total Cable (m)": "{:,.2f}"}, na_rep="—")
+        .set_table_styles(
+            [
+                {"selector": "table",
+                 "props": [("border-collapse", "separate"),
+                           ("border-spacing", "0"),
+                           ("border", "1px solid #E5E7EB"),
+                           ("border-radius", "12px"),
+                           ("overflow", "hidden"),
+                           ("width", "100%")]},
+                {"selector": "thead th",
+                 "props": [("background-color", "#F3F4F6"),
+                           ("color", "#111827"),
+                           ("font-weight", "700"),
+                           ("font-size", "13.5px"),
+                           ("text-align", "left"),
+                           ("padding", "10px 12px"),
+                           ("border-bottom", "1px solid #E5E7EB")]},
+                {"selector": "tbody td",
+                 "props": [("padding", "10px 12px"),
+                           ("border-bottom", "1px solid #F1F5F9"),
+                           ("font-size", "13px")]},
+            ]
+        )
+        .apply(lambda s: ["background-color: #FBFBFE" if i % 2 else "" for i in range(len(s))], axis=0)
+    )
 
 
 # =========================
@@ -244,26 +270,54 @@ def mostrar_total_global(df: pd.DataFrame) -> None:
 
 
 # =========================
-# 1️⃣ Sección Streamlit (tabla)
+# 1️⃣ Sección Streamlit (editor + vista formal)
 # =========================
 def seccion_cables():
-    """Interfaz Streamlit como TABLA editable para configurar tramos de cable."""
-    st.markdown("### 2️⃣ ⚡ Configuración y calibres de conductores (tabla)")
+    """Interfaz Streamlit: toggle Editor/Vista formal y persistencia."""
+    st.markdown("### ⚡ Configuración de Cables del Proyecto")
 
     # Estado base
     inicializar_df_cables_en_estado()
     normalizar_tipos_existentes()
     asegurar_fila_inicial()
 
-    # Editor
-    edited_df = construir_editor_tabla()
+    # Toggle: edición o presentación formal
+    modo_presentacion = st.toggle(
+        "Modo presentación (tabla formal)",
+        value=True,  # activado por defecto para que NO parezca Excel
+        help="Desactiva para editar la tabla."
+    )
 
-    # Validación + cálculo y persistencia
-    df_out = validar_y_calcular(edited_df)
-    persistir_en_estado(df_out)
+    if not modo_presentacion:
+        # ----- EDITOR -----
+        edited_df = construir_editor_tabla()
+        df_out = validar_y_calcular(edited_df)
+        persistir_en_estado(df_out)
+        mostrar_total_global(df_out)
+    else:
+        # ----- VISTA FORMAL -----
+        df = st.session_state.get("cables_proyecto_df", pd.DataFrame()).copy()
+        if df.empty:
+            st.info("No hay datos de cables para mostrar. Desactiva el modo presentación para editar.")
+            return
 
-    # Totales
-    mostrar_total_global(df_out)
+        # Asegurar formato y orden de columnas
+        df = df.reindex(columns=["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"])
+        # CSS de pulido extra (bordes y radios)
+        st.markdown(
+            """
+            <style>
+              .stTable > div { border-radius: 12px; overflow: hidden; border: 1px solid #E5E7EB; }
+              .stTable thead tr th:first-child { border-top-left-radius: 12px; }
+              .stTable thead tr th:last-child  { border-top-right-radius: 12px; }
+              .stTable tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
+              .stTable tbody tr:last-child td:last-child  { border-bottom-right-radius: 12px; }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.table(_styler_formal(df))
+        mostrar_total_global(df)
 
     # Devuelve la lista de dicts (coherente con uso previo)
     return st.session_state["cables_proyecto"]
@@ -327,4 +381,3 @@ def tabla_cables_pdf(datos_proyecto):
     elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
     elems.append(Spacer(1, 0.25 * inch))
     return elems
-
