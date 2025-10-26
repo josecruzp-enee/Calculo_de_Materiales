@@ -161,17 +161,18 @@ def _barra_puntos(df_actual):
 # ==============================
 def _fila_agregar(opciones):
     cats = {
-        "Poste": _opciones_categoria(opciones, "Poste"),
-        "Primario": _opciones_categoria(opciones, "Primario"),
-        "Secundario": _opciones_categoria(opciones, "Secundario"),
-        "Retenidas": _opciones_categoria(opciones, "Retenidas"),
+        "Poste":              _opciones_categoria(opciones, "Poste"),
+        "Primario":           _opciones_categoria(opciones, "Primario"),
+        "Secundario":         _opciones_categoria(opciones, "Secundario"),
+        "Retenidas":          _opciones_categoria(opciones, "Retenidas"),
         "Conexiones a tierra": _opciones_categoria(opciones, "Conexiones a tierra"),
-        "Transformadores": _opciones_categoria(opciones, "Transformadores"),
+        "Transformadores":     _opciones_categoria(opciones, "Transformadores"),
     }
 
     cols = st.columns([2, 2, 2, 2, 2, 2, 1])
     keys = ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]
 
+    # ✅ Crea los selectbox SIN escribir en session_state manualmente
     for i, (cat, (vals, labs)) in enumerate(cats.items()):
         with cols[i]:
             st.selectbox(
@@ -181,6 +182,7 @@ def _fila_agregar(opciones):
                 key=keys[i]
             )
 
+    # ✅ Botón ➕ Agregar — limpia selects después
     with cols[6]:
         if st.button("➕", type="primary"):
             for i, cat in enumerate(cats.keys()):
@@ -188,11 +190,13 @@ def _fila_agregar(opciones):
                 if sel:
                     add_item(cat, sel, 1)
 
+            # ✅ Limpiar inmediatamente los selects
             for k in keys:
-                st.session_state.pop(k, None)
+                if k in st.session_state:
+                    del st.session_state[k]
 
-            st.success("✅ ¡Agregado!")
-            st.rerun()
+            # ✅ Recargar la interfaz para reflejar la limpieza
+            st.experimental_rerun()
 
 
 # ==============================
