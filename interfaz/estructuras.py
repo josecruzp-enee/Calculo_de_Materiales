@@ -12,23 +12,26 @@ Comportamiento clave:
 - Al pasar de SUMAR  -> GUARDAR: se limpian los campos de SUMAR al guardar
 - Tras GUARDAR: se limpian TODOS y se vuelve a modo EDITAR
 
-Cómo usar desde app.py:
-from interfaz.estructuras import seccion_entrada_estructuras
+Cómo usar desde app.py (modo "clásico" de este proyecto):
+    df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
 
-seccion_entrada_estructuras(
-    opciones_poste=["Madera", "Cemento"],
-    opciones_primario=["1/0 ACSR", "3/0 ACSR", "4/0 ACSR"],
-    opciones_secundario=["#2 ACSR", "1/0 ACSR"],
-    opciones_retenidas=["R-0", "R-1", "R-2"],
-    opciones_tierra=["Sin conexión", "Varilla 5/8\" x 8'", "Malla"],
-    opciones_transformadores=["Ninguno", "25 kVA", "37.5 kVA", "50 kVA"],
-    on_guardar=mi_funcion_guardar  # opcional; si no se pasa, guarda en session_state["puntos"]
-)
+Cómo usar como UI completa (tu versión original):
+    from interfaz.estructuras import seccion_entrada_estructuras
+    seccion_entrada_estructuras(
+        opciones_poste=[...],
+        opciones_primario=[...],
+        opciones_secundario=[...],
+        opciones_retenidas=[...],
+        opciones_tierra=[...],
+        opciones_transformadores=[...],
+        on_guardar=mi_callback_opcional
+    )
 """
 
-from typing import Callable, List, Optional, Dict, Any
+from typing import Callable, List, Optional, Dict, Any, Tuple
 import streamlit as st
-
+import pandas as pd
+import os
 
 # ---------------------------
 # Utilidades de estado/limpieza
@@ -44,13 +47,10 @@ def _with_placeholder(opciones: List[str], placeholder: str) -> List[str]:
     """Asegura que la lista tenga un placeholder en la primera posición."""
     if not opciones:
         return [placeholder]
-    # Si ya existe un placeholder similar, no duplicar
     lower_set = {o.strip().lower() for o in opciones}
     if placeholder.strip().lower() in lower_set:
-        # moverlo al inicio si estuviera en otra posición
         ops = [o for o in opciones if o.strip().lower() != placeholder.strip().lower()]
         return [placeholder] + ops
-    # Si ya tienen "-" como placeholder, respétalo
     if "-" in opciones and opciones[0].strip() == "-":
         return opciones
     return [placeholder] + opciones
@@ -59,9 +59,7 @@ def _with_placeholder(opciones: List[str], placeholder: str) -> List[str]:
 def _init_state(placeholder: str):
     if "modo" not in st.session_state:
         st.session_state["modo"] = "editar"
-    # Guardamos el placeholder para limpieza consistente
     st.session_state["_placeholder"] = placeholder
-    # Inicializamos contenedor de puntos si no existe
     if "puntos" not in st.session_state:
         st.session_state["puntos"] = []
 
@@ -86,11 +84,49 @@ def _limpiar_todo():
     _limpiar_sumar()
 
 
+# --------------------------------------------------------
+# CARGADOR tipo (df, ruta) para compatibilidad con app.py
+# --------------------------------------------------------
+
+def _cargar_estructuras(modo: str = "local") -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    """
+    Devuelve (df_estructuras, ruta_estructuras) para mantener compatibilidad con app.py.
+    - modo in {"app","cloud","web"} -> file_uploader
+    - cualquier otro -> intenta leer 'estructura_lista.xlsx' en disco
+    """
+    modo = (modo or "local").strip().lower()
+
+    if modo in {"app", "cloud", "web"}:
+        archivo = st.file_uploader("Cargar 'estructura_lista.xlsx'", type=["xlsx"])
+        if not archivo:
+            # Aún no cargan archivo: devolvemos (None, None) pero sin romper el flujo
+            return None, None
+        try:
+            df = pd.read_excel(archivo)
+            nombre = getattr(archivo, "name", "estructura_lista.xlsx")
+            return df, nombre
+        except Exception as e:
+            st.error(f"Error leyendo el Excel cargado: {e}")
+            return None, None
+
+    # modo "local" (o similar): leer desde disco
+    ruta = "estructura_lista.xlsx"
+    try:
+        df = pd.read_excel(ruta)
+        return df, ruta
+    except FileNotFoundError:
+        st.error(f"No se encontró el archivo local: {os.path.abspath(ruta)}")
+        return None, ruta
+    except Exception as e:
+        st.error(f"Error leyendo {ruta}: {e}")
+        return None, ruta
+
+
 # ---------------------------
-# UI principal
+# UI principal (tu versión)
 # ---------------------------
 
-def seccion_entrada_estructuras(
+def _seccion_ui_entrada_estructuras(
     opciones_poste: List[str],
     opciones_primario: List[str],
     opciones_secundario: List[str],
@@ -103,18 +139,7 @@ def seccion_entrada_estructuras(
 ):
     """
     Renderiza la sección con 3 modos (Editar / Sumar / Guardar) y limpieza automática.
-
-    Args:
-        opciones_poste: Lista de opciones para el tipo de poste.
-        opciones_primario: Opciones para conductor primario.
-        opciones_secundario: Opciones para conductor secundario.
-        opciones_retenidas: Opciones de retenidas.
-        opciones_tierra: Opciones de conexión a tierra.
-        opciones_transformadores: Opciones de transformador.
-        on_guardar: Callback opcional que recibe un dict con los datos del punto.
-                    Si no se provee, se agregará a st.session_state["puntos"].
-        placeholder: Texto de placeholder para selects.
-        titulo: Título de la sección.
+    NO retorna nada (pinta UI y escribe en session_state["puntos"] o llama on_guardar).
     """
     _init_state(placeholder)
 
@@ -146,30 +171,27 @@ def seccion_entrada_estructuras(
         if st.button("💾 Guardar punto", use_container_width=True):
             # Armamos el dict del punto con lo que haya hoy en el formulario
             data = {
-                "poste":        st.session_state.get("poste", placeholder),
-                "primario":     st.session_state.get("primario", placeholder),
-                "secundario":   st.session_state.get("secundario", placeholder),
-                "retenidas":    st.session_state.get("retenidas", placeholder),
-                "ctierra":      st.session_state.get("ctierra", placeholder),
-                "transformador":st.session_state.get("transformador", placeholder),
+                "poste":         st.session_state.get("poste", placeholder),
+                "primario":      st.session_state.get("primario", placeholder),
+                "secundario":    st.session_state.get("secundario", placeholder),
+                "retenidas":     st.session_state.get("retenidas", placeholder),
+                "ctierra":       st.session_state.get("ctierra", placeholder),
+                "transformador": st.session_state.get("transformador", placeholder),
             }
 
             # Validación mínima (opcional): evitar guardar todo vacío
-            todo_placeholder = all(v == placeholder for v in data.values())
-            if todo_placeholder:
+            if all(v == placeholder for v in data.values()):
                 st.warning("No se guardó: completa al menos un campo antes de guardar.")
             else:
                 try:
                     if on_guardar is not None:
                         on_guardar(data)
                     else:
-                        # Default: guardar en session_state["puntos"]
                         st.session_state["puntos"].append(data)
                     st.success("✅ Punto guardado correctamente.")
                 except Exception as e:
                     st.error(f"Error al guardar el punto: {e}")
                 finally:
-                    # Limpiamos todo y regresamos a modo editar
                     _limpiar_todo()
                     st.session_state["modo"] = "editar"
                     st.rerun()  # asegura que la UI quede vacía
@@ -179,15 +201,15 @@ def seccion_entrada_estructuras(
     # ---------------------------
     # Contenido según modo activo
     # ---------------------------
-    modo = st.session_state.get("modo", "editar")
+    modo_ui = st.session_state.get("modo", "editar")
 
-    if modo == "editar":
+    if modo_ui == "editar":
         st.subheader("Editar características del poste")
         st.selectbox("Poste", ops_poste, key="poste")
         st.selectbox("Conductor primario", ops_primario, key="primario")
         st.selectbox("Conductor secundario", ops_secundario, key="secundario")
 
-    elif modo == "sumar":
+    elif modo_ui == "sumar":
         st.subheader("Agregar elementos al poste")
         st.selectbox("Retenidas", ops_retenidas, key="retenidas")
         st.selectbox("Conexión a tierra", ops_tierra, key="ctierra")
@@ -198,16 +220,56 @@ def seccion_entrada_estructuras(
     # ---------------------------
     with st.expander("Vista rápida del punto actual (no guardado)"):
         st.write({
-            "poste":        st.session_state.get("poste", placeholder),
-            "primario":     st.session_state.get("primario", placeholder),
-            "secundario":   st.session_state.get("secundario", placeholder),
-            "retenidas":    st.session_state.get("retenidas", placeholder),
-            "ctierra":      st.session_state.get("ctierra", placeholder),
-            "transformador":st.session_state.get("transformador", placeholder),
+            "poste":         st.session_state.get("poste", placeholder),
+            "primario":      st.session_state.get("primario", placeholder),
+            "secundario":    st.session_state.get("secundario", placeholder),
+            "retenidas":     st.session_state.get("retenidas", placeholder),
+            "ctierra":       st.session_state.get("ctierra", placeholder),
+            "transformador": st.session_state.get("transformador", placeholder),
         })
 
     # Listado de puntos guardados (si no usas callback)
     if on_guardar is None and st.session_state.get("puntos"):
         st.divider()
         st.caption("Puntos guardados en esta sesión:")
-        st.table(st.session_state["puntos"])
+        st.table(st.session_state["puntos"])  # este es estructuras.py
+
+
+# -------------------------------------------------------------------
+# DISPATCHER: una sola API que soporta AMBOS USOS sin tocar app.py
+# -------------------------------------------------------------------
+
+def seccion_entrada_estructuras(*args, **kwargs):
+    """
+    Uso 1 (compatibilidad con app.py):
+        df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
+    Uso 2 (UI original):
+        seccion_entrada_estructuras(opciones_poste=[...], ..., on_guardar=..., placeholder=..., titulo=...)
+
+    Regla:
+      - Si el primer argumento posicional es un str (p.ej. "app" / "local"), o si viene 'modo' en kwargs,
+        actuamos como CARGADOR y devolvemos (df, ruta).
+      - Si detectamos kwargs propios de la UI (opciones_poste, etc.), pintamos la UI y devolvemos (None, None)
+        para no romper posibles desempaquetados.
+    """
+    # Detectar patrón "modo"
+    if (len(args) == 1 and isinstance(args[0], str)) or ("modo" in kwargs and isinstance(kwargs["modo"], str)):
+        modo = args[0] if (len(args) == 1 and isinstance(args[0], str)) else kwargs.get("modo", "local")
+        return _cargar_estructuras(modo)
+
+    # Detectar patrón UI (kwargs con opciones)
+    ui_keys = {
+        "opciones_poste",
+        "opciones_primario",
+        "opciones_secundario",
+        "opciones_retenidas",
+        "opciones_tierra",
+        "opciones_transformadores",
+    }
+    if ui_keys & set(kwargs.keys()):
+        # Llamar a la UI y retornar tupla neutra para evitar TypeError si el llamador desempaqueta.
+        _seccion_ui_entrada_estructuras(**kwargs)
+        return None, None
+
+    # Si llega aquí, no sabemos qué quiso el llamador: intentamos cargar por defecto.
+    return _cargar_estructuras("local")
