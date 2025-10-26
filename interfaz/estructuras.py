@@ -157,30 +157,34 @@ def _fila_agregar(opciones):
         "Transformadores":     _opciones_categoria(opciones, "Transformadores"),
     }
 
-    cols = st.columns([2,2,2,2,2,2,1])
+    cols = st.columns([2, 2, 2, 2, 2, 2, 1])
     keys = ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]
 
+    # ✅ CORREGIDO: NUNCA asignamos a session_state nosotros
     for i, (cat, (vals, labs)) in enumerate(cats.items()):
         with cols[i]:
-            st.session_state[keys[i]] = st.selectbox(
+            st.selectbox(
                 cat,
                 [""] + vals,
                 format_func=lambda x, labs=labs: labs.get(x, x),
                 key=keys[i]
             )
 
+    # ✅ Botón: toma valores desde session_state
     with cols[6]:
-        if st.button("➕", key="add_all", type="primary"):
+        if st.button("➕", type="primary", key="add_all"):
             for i, cat in enumerate(cats.keys()):
-                sel = st.session_state.get(keys[i])
+                sel = st.session_state.get(keys[i], "")
                 if sel:
                     add_item(cat, sel, 1)
 
+            # Limpiar selects al terminar
             for k in keys:
                 st.session_state.pop(k, None)
 
-            st.success("✅ ¡Agregado!")
+            st.success("✅ ¡Estructuras agregadas!")
             st.rerun()
+
 
 
 def _vista_guardar():
