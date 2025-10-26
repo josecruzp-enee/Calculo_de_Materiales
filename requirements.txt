@@ -9,4 +9,6 @@ openpyxl
 Pillow
 networkx
 PyPDF2
-
+simplekml
+folium
+streamlit-folium
