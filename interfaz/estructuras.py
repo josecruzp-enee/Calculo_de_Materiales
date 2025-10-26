@@ -469,19 +469,33 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, s
     # ✅ Si no es ninguno de los anteriores → usar la UI de desplegables
     res = listas_desplegables()
     if res is None or not isinstance(res, tuple):
-        # Siempre devuelve una tupla para evitar errores en app.py
         return None, None
 
-    # --- 🧩 DEBUG: verificar DataFrame antes de enviarlo a exportación ---
+    # --- 🧩 DEBUG + LIMPIEZA ---
     try:
         if isinstance(res, tuple) and isinstance(res[0], pd.DataFrame):
             df_dbg = res[0]
-            st.markdown("### 🧪 DEBUG: vista previa de df_expandido")
+
+            # 🔧 Normalización: convertir listas/tuplas a texto plano
+            for col in ["Punto", "codigodeestructura"]:
+                if col in df_dbg.columns:
+                    df_dbg[col] = df_dbg[col].apply(
+                        lambda x: ", ".join(map(str, x)) if isinstance(x, (list, tuple, set)) else str(x)
+                    )
+
+            # Reemplazar nulos por cadenas vacías
+            df_dbg = df_dbg.fillna("")
+
+            # Mostrar vista previa en Streamlit
+            st.markdown("### 🧪 DEBUG: vista previa de df_expandido (normalizado)")
             st.dataframe(df_dbg.head(10), use_container_width=True)
             st.write("**Columnas:**", list(df_dbg.columns))
             st.write("**Tipos de datos:**")
             st.write(df_dbg.dtypes)
             st.write("**Forma:**", df_dbg.shape)
+
+            # Reasignar el DataFrame limpio al resultado
+            res = (df_dbg, res[1])
     except Exception as e:
         st.error(f"⚠️ Error en debug de seccion_entrada_estructuras: {e}")
 
