@@ -48,7 +48,6 @@ def _init_punto_state():
         st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
 
     if "punto_en_edicion" not in st.session_state:
-        # primer punto por defecto si no existe ninguno
         df = st.session_state["df_puntos"]
         if not df.empty:
             st.session_state["punto_en_edicion"] = df["Punto"].iloc[0]
@@ -108,7 +107,7 @@ def _opciones_categoria(opciones_dict, llave_catalogo: str) -> tuple[list[str], 
     Estructura típica:
       {
         "Poste": {"valores": [...], "etiquetas": {codigo: "codigo – desc", ...}},
-        "Primaria": {...}, "Secundaria": {...}, "Retenidas": {...},
+        "Primario": {...}, "Secundario": {...}, "Retenidas": {...},
         "Conexiones a tierra": {...}, "Transformadores": {...}
       }
     """
@@ -118,50 +117,34 @@ def _opciones_categoria(opciones_dict, llave_catalogo: str) -> tuple[list[str], 
     return valores, etiquetas
 
 
-def fila_categoria(label: str, valores: list[str], etiquetas: dict, key_prefix: str):
-    """Fila compacta: select + cantidad mini + botón Agregar."""
-    st.markdown(f"**{label}**")
-    c1, c2, c3 = st.columns([7, 1.1, 1.9])  # ajusta proporciones a tu ancho
-
-    with c1:
-        sel = st.selectbox(
-            "", valores,
-            index=0 if valores else None,
-            key=f"{key_prefix}_sel",
-            label_visibility="collapsed",
-            format_func=lambda x: etiquetas.get(x, x),
-        )
-    with c2:
-        qty = st.number_input(
-            " ", min_value=1, max_value=99, step=1, value=1,
-            key=f"{key_prefix}_qty", label_visibility="collapsed"
-        )
-    with c3:
-        if st.button("➕ Agregar", key=f"{key_prefix}_add"):
-            add_item(label, sel, qty)
-            st.success(f"Añadido: {qty}× {etiquetas.get(sel, sel)}")
+def _val_or_dash(s: str) -> str:
+    """Muestra '-' cuando no hay selección (opción B)."""
+    return s if (s and str(s).strip()) else "-"
 
 
 def _consolidado_a_fila(punto: str) -> dict:
     """Devuelve una fila compatible con COLUMNAS_BASE a partir del dict consolidado."""
     return {
         "Punto": punto,
-        "Poste": render_cat_str(punto, "Poste"),
-        "Primario": render_cat_str(punto, "Primario"),
-        "Secundario": render_cat_str(punto, "Secundario"),
-        "Retenidas": render_cat_str(punto, "Retenidas"),
-        "Conexiones a tierra": render_cat_str(punto, "Conexiones a tierra"),
-        "Transformadores": render_cat_str(punto, "Transformadores"),
+        "Poste": _val_or_dash(render_cat_str(punto, "Poste")),
+        "Primario": _val_or_dash(render_cat_str(punto, "Primario")),
+        "Secundario": _val_or_dash(render_cat_str(punto, "Secundario")),
+        "Retenidas": _val_or_dash(render_cat_str(punto, "Retenidas")),
+        "Conexiones a tierra": _val_or_dash(render_cat_str(punto, "Conexiones a tierra")),
+        "Transformadores": _val_or_dash(render_cat_str(punto, "Transformadores")),
     }
 
 
 def listas_desplegables():
     """
-    UI de edición por Punto con select + cantidad + agregar (no elimina
-    opciones del desplegable y permite 2× del mismo código).
+    UI de edición por Punto con UNA FILA HORIZONTAL:
+    [Poste ▼][Primario ▼][Secundario ▼][Retenidas ▼][Tierra ▼][Trafo ▼][ 1 ][➕ Agregar todo]
+    - Sin botones +/- (se ingresa cantidad directamente; default=1)
+    - Un solo botón agrega toda la fila
+    - Tras agregar, se resetean selectores y cantidad
     """
     from modulo.desplegables import cargar_opciones
-    opciones = cargar_opciones()  # lee 'indice' y arma {"valores": [...], "etiquetas": {...}}
+    opciones = cargar_opciones()  # {"Poste": {"valores": [...], "etiquetas": {...}}, ...}
 
     st.subheader("3. 🏗️ Estructuras del Proyecto")
 
@@ -172,18 +155,16 @@ def listas_desplegables():
     colA, colB, colC, colD = st.columns([1.2, 1.2, 1.8, 1.2])
     with colA:
         if st.button("🆕 Crear nuevo Punto"):
-            # siguiente número
             existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
             nums = []
-            for p in existentes:
+            for p_ in existentes:
                 try:
-                    nums.append(int(pd.to_numeric(pd.Series(p).str.extract(r"(\d+)")[0]).iloc[0]))
+                    nums.append(int(pd.to_numeric(pd.Series(p_).str.extract(r"(\d+)")[0]).iloc[0]))
                 except Exception:
                     pass
             nuevo_num = (max(nums) + 1) if nums else 1
             nuevo = f"Punto {nuevo_num}"
             st.session_state["punto_en_edicion"] = nuevo
-            # reset contenedor del nuevo punto
             st.session_state["puntos_data"][nuevo] = {
                 "Poste": {}, "Primario": {}, "Secundario": {},
                 "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
@@ -195,7 +176,6 @@ def listas_desplegables():
             p_sel = st.selectbox("📍 Ir a punto:", df_actual["Punto"].unique(), key="sel_goto_punto")
             if st.button("✏️ Editar", key="btn_editar_punto"):
                 st.session_state["punto_en_edicion"] = p_sel
-                # si existe fila previa, parsearla a dict consolidado básico (opcional)
                 if p_sel not in st.session_state["puntos_data"]:
                     st.session_state["puntos_data"][p_sel] = {k: {} for k in
                         ["Poste","Primario","Secundario","Retenidas","Conexiones a tierra","Transformadores"]}
@@ -221,20 +201,91 @@ def listas_desplegables():
     p = st.session_state["punto_en_edicion"]
     st.markdown(f"### ✏️ Editando {p}")
 
-    # Catálogos desde tus opciones (ojo: 'Primaria' -> 'Primario')
+    # Catálogos de opciones
     val_poste, lab_poste = _opciones_categoria(opciones, "Poste")
-    val_pri,   lab_pri   = _opciones_categoria(opciones, "Primaria")
-    val_sec,   lab_sec   = _opciones_categoria(opciones, "Secundaria")
+    val_pri,   lab_pri   = _opciones_categoria(opciones, "Primario")
+    val_sec,   lab_sec   = _opciones_categoria(opciones, "Secundario")
     val_ret,   lab_ret   = _opciones_categoria(opciones, "Retenidas")
     val_ct,    lab_ct    = _opciones_categoria(opciones, "Conexiones a tierra")
     val_tr,    lab_tr    = _opciones_categoria(opciones, "Transformadores")
 
-    fila_categoria("Poste", val_poste, lab_poste, "poste")
-    fila_categoria("Primario", val_pri, lab_pri, "primario")
-    fila_categoria("Secundario", val_sec, lab_sec, "secundario")
-    fila_categoria("Retenidas", val_ret, lab_ret, "retenidas")
-    fila_categoria("Conexiones a tierra", val_ct, lab_ct, "ctierra")
-    fila_categoria("Transformadores", val_tr, lab_tr, "trafo")
+    # ===== FILA ÚNICA de selección =====
+    st.markdown("#### ➕ Agregar estructuras a este punto")
+
+    cols = st.columns([2,2,2,2,2,2,1,1])
+
+    with cols[0]:
+        poste_sel = st.selectbox(
+            "Poste",
+            [""] + val_poste,
+            format_func=lambda x: lab_poste.get(x, x),
+            key="poste_sel"
+        )
+
+    with cols[1]:
+        prim_sel = st.selectbox(
+            "Primario",
+            [""] + val_pri,
+            format_func=lambda x: lab_pri.get(x, x),
+            key="prim_sel"
+        )
+
+    with cols[2]:
+        sec_sel = st.selectbox(
+            "Secundario",
+            [""] + val_sec,
+            format_func=lambda x: lab_sec.get(x, x),
+            key="sec_sel"
+        )
+
+    with cols[3]:
+        ret_sel = st.selectbox(
+            "Retenidas",
+            [""] + val_ret,
+            format_func=lambda x: lab_ret.get(x, x),
+            key="ret_sel"
+        )
+
+    with cols[4]:
+        tierra_sel = st.selectbox(
+            "Tierra",
+            [""] + val_ct,
+            format_func=lambda x: lab_ct.get(x, x),
+            key="tierra_sel"
+        )
+
+    with cols[5]:
+        tr_sel = st.selectbox(
+            "Transformador",
+            [""] + val_tr,
+            format_func=lambda x: lab_tr.get(x, x),
+            key="tr_sel"
+        )
+
+    with cols[6]:
+        cant = st.number_input("Cant.", min_value=1, step=1, value=1, key="cant_sel")
+
+    with cols[7]:
+        if st.button("➕ Agregar todo", key="add_all", type="primary"):
+            if cant > 0:
+                if poste_sel:  add_item("Poste", poste_sel, cant)
+                if prim_sel:   add_item("Primario", prim_sel, cant)
+                if sec_sel:    add_item("Secundario", sec_sel, cant)
+                if ret_sel:    add_item("Retenidas", ret_sel, cant)
+                if tierra_sel: add_item("Conexiones a tierra", tierra_sel, cant)
+                if tr_sel:     add_item("Transformadores", tr_sel, cant)
+
+                # ✅ Reset automático tras agregar
+                st.session_state["poste_sel"] = ""
+                st.session_state["prim_sel"] = ""
+                st.session_state["sec_sel"] = ""
+                st.session_state["ret_sel"] = ""
+                st.session_state["tierra_sel"] = ""
+                st.session_state["tr_sel"] = ""
+                st.session_state["cant_sel"] = 1
+
+                st.success("✅ ¡Se agregó la fila completa!")
+                st.rerun()
 
     st.markdown("---")
 
@@ -245,13 +296,13 @@ def listas_desplegables():
 
     # ---------- Edición rápida (restar/eliminar) ----------
     st.markdown("##### ✂️ Editar seleccionados")
-    cols = st.columns(3)
-    with cols[0]:
+    cols_ed = st.columns(3)
+    with cols_ed[0]:
         cat = st.selectbox("Categoría", ["Poste","Primario","Secundario","Retenidas","Conexiones a tierra","Transformadores"], key="chip_cat")
-    with cols[1]:
+    with cols_ed[1]:
         codes = list(st.session_state["puntos_data"][p][cat].keys())
         code = st.selectbox("Código", codes, key="chip_code")
-    with cols[2]:
+    with cols_ed[2]:
         c1, c2 = st.columns(2)
         if c1.button("– Restar uno", key="chip_minus"):
             remove_item(cat, code, all_qty=False)
