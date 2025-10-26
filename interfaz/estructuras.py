@@ -462,4 +462,11 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, s
         return cargar_desde_excel()
     if modo == "pegar":
         return pegar_tabla()
-    return 
+
+    # ✅ Si no es ninguno de los anteriores → usar la UI de desplegables
+    res = listas_desplegables()
+    if res is None or not isinstance(res, tuple):
+        # Siempre devuelve una tupla para evitar errores en app.py
+        return None, None
+    return res
+
