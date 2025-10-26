@@ -194,10 +194,23 @@ def _vista_guardar():
     st.dataframe(pd.DataFrame([data_row]), use_container_width=True, hide_index=True)
 
     if st.button("💾 Guardar punto", type="primary"):
+        # Guardar fila consolidada
         df = st.session_state["df_puntos"]
         df = df[df["Punto"] != p]
         st.session_state["df_puntos"] = pd.concat([df, pd.DataFrame([data_row])], ignore_index=True)
         st.success("✅ Guardado!")
+
+        # ✅ Limpiar info temporal del punto
+        st.session_state["puntos_data"][p] = {
+            "Poste": {}, "Primario": {}, "Secundario": {},
+            "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
+        }
+
+        # ✅ Limpiar selects
+        for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
+            st.session_state.pop(k, None)
+
+        st.rerun()
 
     df_all = st.session_state["df_puntos"]
     if not df_all.empty:
