@@ -155,6 +155,20 @@ def main() -> None:
             st.warning("⚠️ Primero completa la sección ‘Estructuras’ antes de exportar.")
             st.info("Ve a la pestaña **Estructuras**, carga o genera tus datos, y luego vuelve aquí.")
         else:
+            # ==========================================================
+            # 🔍 DEBUG: inspecciona el DataFrame antes de exportar
+            # ==========================================================
+            st.markdown("### 🧩 DEBUG: DataFrame antes de exportar")
+            st.write("Columnas:", df_e.columns.tolist())
+            st.write("Shape:", df_e.shape)
+            if len(df_e) > 0:
+                st.dataframe(df_e.head(10), use_container_width=True)
+            else:
+                st.info("⚠️ DataFrame vacío antes de exportar")
+
+            # ==========================================================
+            # Ejecución normal de la exportación
+            # ==========================================================
             seccion_exportacion(
                 df=df_e,
                 modo_carga=st.session_state.get("modo_carga_seleccionado"),
