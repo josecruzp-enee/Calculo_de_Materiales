@@ -478,11 +478,14 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 # =============================================================================
 # Función pública: llamada por app.py
 # =============================================================================
-from typing import Tuple
+from typing import Tuple, Optional
 import pandas as pd
 import streamlit as st
 
-def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, str | None]:
+# Asegúrate de que estas funciones estén definidas o importadas:
+# cargar_desde_excel(), pegar_tabla(), listas_desplegables()
+
+def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """
     Devuelve (df_estructuras_largo, ruta_estructuras_xlsx) según el modo:
       - "excel"  -> cargar desde .xlsx
@@ -503,7 +506,7 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, s
     # --- 🧩 DEBUG + LIMPIEZA ---
     try:
         if isinstance(res, tuple) and isinstance(res[0], pd.DataFrame):
-            df_dbg = res[0]
+            df_dbg = res[0].copy()
 
             # 🔧 Normalización: convertir listas/tuplas a texto plano
             for col in ["Punto", "codigodeestructura"]:
@@ -514,3 +517,19 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, s
 
             # Reemplazar nulos por cadenas vacías
             df_dbg = df_dbg.fillna("")
+
+            # Mostrar vista previa en Streamlit
+            st.markdown("### 🧪 DEBUG: vista previa de df_expandido (normalizado)")
+            st.dataframe(df_dbg.head(10), use_container_width=True)
+            st.write("**Columnas:**", list(df_dbg.columns))
+            st.write("**Tipos de datos:**")
+            st.write(df_dbg.dtypes)
+            st.write("**Forma:**", df_dbg.shape)
+
+            # Reasignar el DataFrame limpio al resultado
+            res = (df_dbg, res[1])
+    except Exception as e:
+        st.error(f"⚠️ Error en debug de seccion_entrada_estructuras: {e}")
+
+    return res
+
