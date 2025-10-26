@@ -12,6 +12,29 @@ from typing import Tuple, List, Dict
 import pandas as pd
 import streamlit as st
 
+import pandas as pd
+# otros imports que tengas
+
+# --- Función de debug y normalización ---
+def debug_y_normalizar_df(df_expandido):
+    columnas_a_chequear = ["Punto", "codigodeestructura"]
+
+    for col in columnas_a_chequear:
+        for i, val in enumerate(df_expandido[col]):
+            if isinstance(val, (list, tuple)):
+                print(f"⚠️ Fila {i}, columna '{col}' contiene un objeto no 1D: {val}")
+                df_expandido.at[i, col] = val[0] if len(val) > 0 else None
+            elif val is None:
+                print(f"⚠️ Fila {i}, columna '{col}' es None. Convertido a string vacío.")
+                df_expandido.at[i, col] = ""
+        df_expandido[col] = df_expandido[col].astype(str)
+
+    print("✅ Debug y normalización completados. DataFrame listo para exportar.")
+    print(df_expandido.head())
+    return df_expandido
+
+
+
 # =============================================================================
 # Esquema base (ANCHO) que ve el usuario en la UI
 # =============================================================================
