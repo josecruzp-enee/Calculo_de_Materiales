@@ -15,6 +15,7 @@ from interfaz.cables import seccion_cables_proyecto
 from interfaz.estructuras import seccion_entrada_estructuras
 from interfaz.materiales_extra import seccion_adicionar_material
 from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
+from interfaz.mapa_kml import seccion_mapa_kmz
 
 # app.py
 import os
@@ -151,5 +152,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
