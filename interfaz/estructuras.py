@@ -86,18 +86,34 @@ def _expand_wide_to_long(df_ancho: pd.DataFrame) -> pd.DataFrame:
     df = _normalizar_columnas(df_ancho, COLUMNAS_BASE).copy()
     cat_cols = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
     rows = []
+
     for _, r in df.iterrows():
         punto = str(r.get("Punto", "")).strip()
         for col in cat_cols:
-            for piece in _split_cell_items(str(r.get(col, "") or "")):
+            val = r.get(col, "")
+            # 🧹 Asegurar que sea string plano
+            if isinstance(val, (list, tuple)):
+                val = ", ".join(map(str, val))
+            if not isinstance(val, str):
+                val = str(val)
+
+            for piece in _split_cell_items(val):
                 code, qty = _parse_item(piece)
                 if code:
                     rows.append({
                         "Punto": punto,
-                        "codigodeestructura": code,   # EXACTO como lo exige el generador
+                        "codigodeestructura": code,
                         "cantidad": int(qty),
                     })
-    return pd.DataFrame(rows, columns=["Punto", "codigodeestructura", "cantidad"])
+
+    # 🧩 Asegurar DataFrame limpio y plano
+    if not rows:
+        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+
+    df_out = pd.DataFrame(rows, columns=["Punto", "codigodeestructura", "cantidad"])
+    df_out = df_out.astype({"Punto": "string", "codigodeestructura": "string", "cantidad": "int"})
+    return df_out
+
 
 def _materializar_df_a_archivo(df_ancho: pd.DataFrame, etiqueta: str = "data") -> str:
     """
