@@ -39,20 +39,15 @@ def pegar_tabla():
 
 
 # =========================================================
-# NUEVO MODO: Listas con Select + Cantidad + Agregar (PRO)
+# MODELO: Estado por punto
 # =========================================================
-
-# ---- Estado por punto (diccionario consolidado) ----
 def _init_punto_state():
     if "df_puntos" not in st.session_state:
         st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
 
-    if "punto_en_edicion" not in st.session_state:
+    if "punto_en_edicion" not in st.session_state or not st.session_state["punto_en_edicion"]:
         df = st.session_state["df_puntos"]
-        if not df.empty:
-            st.session_state["punto_en_edicion"] = df["Punto"].iloc[0]
-        else:
-            st.session_state["punto_en_edicion"] = "Punto 1"
+        st.session_state["punto_en_edicion"] = df["Punto"].iloc[0] if not df.empty else "Punto 1"
 
     if "puntos_data" not in st.session_state:
         st.session_state["puntos_data"] = {}
@@ -60,113 +55,50 @@ def _init_punto_state():
     p = st.session_state["punto_en_edicion"]
     if p not in st.session_state["puntos_data"]:
         st.session_state["puntos_data"][p] = {
-            "Poste": {},
-            "Primario": {},
-            "Secundario": {},
-            "Retenidas": {},
-            "Conexiones a tierra": {},
-            "Transformadores": {},
+            "Poste": {}, "Primario": {}, "Secundario": {},
+            "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
         }
 
 
-def add_item(categoria: str, codigo: str, cantidad: int):
-    """Consolida X + X => 2× X dentro del Punto actual."""
-    if not codigo or cantidad <= 0:
+def add_item(categoria: str, codigo: str, cantidad: int = 1):
+    if not codigo:
         return
     p = st.session_state["punto_en_edicion"]
     bucket = st.session_state["puntos_data"][p][categoria]
-    bucket[codigo] = bucket.get(codigo, 0) + int(cantidad)
-
-
-def remove_item(categoria: str, codigo: str, all_qty: bool = False):
-    """Resta 1 unidad o elimina por completo un código de la categoría."""
-    p = st.session_state["punto_en_edicion"]
-    bucket = st.session_state["puntos_data"][p][categoria]
-    if codigo in bucket:
-        if all_qty or bucket[codigo] <= 1:
-            bucket.pop(codigo, None)
-        else:
-            bucket[codigo] -= 1
+    bucket[codigo] = bucket.get(codigo, 0) + cantidad
 
 
 def render_cat_str(punto: str, categoria: str) -> str:
-    """Convierte el dict consolidado en texto: '2× R-1, A-I-5'."""
     data = st.session_state["puntos_data"][punto][categoria]
     if not data:
         return ""
-    parts = []
-    for code, n in data.items():
-        parts.append(f"{n}× {code}" if n > 1 else code)
-    return ", ".join(parts)
+    return ", ".join(
+        f"{n}× {code}" if n > 1 else code
+        for code, n in data.items()
+    )
 
 
-# ---- Opciones (códigos + etiquetas) desde tu Excel/índice ----
-def _opciones_categoria(opciones_dict, llave_catalogo: str) -> tuple[list[str], dict]:
-    """
-    opciones_dict viene de modulo.desplegables.cargar_opciones()
-    Estructura típica:
-      {
-        "Poste": {"valores": [...], "etiquetas": {codigo: "codigo – desc", ...}},
-        "Primario": {...}, "Secundario": {...}, "Retenidas": {...},
-        "Conexiones a tierra": {...}, "Transformadores": {...}
-      }
-    """
-    bloque = opciones_dict.get(llave_catalogo) or {}
-    valores = bloque.get("valores", []) or []
-    etiquetas = bloque.get("etiquetas", {}) or {}
-    return valores, etiquetas
+def _val_or_dash(s): return s if (s and str(s).strip()) else "-"
 
 
-def _val_or_dash(s: str) -> str:
-    """Muestra '-' cuando no hay selección (opción B)."""
-    return s if (s and str(s).strip()) else "-"
-
-
-def _consolidado_a_fila(punto: str) -> dict:
-    """Devuelve una fila compatible con COLUMNAS_BASE a partir del dict consolidado."""
+def _consolidado_a_fila(p: str) -> dict:
     return {
-        "Punto": punto,
-        "Poste": _val_or_dash(render_cat_str(punto, "Poste")),
-        "Primario": _val_or_dash(render_cat_str(punto, "Primario")),
-        "Secundario": _val_or_dash(render_cat_str(punto, "Secundario")),
-        "Retenidas": _val_or_dash(render_cat_str(punto, "Retenidas")),
-        "Conexiones a tierra": _val_or_dash(render_cat_str(punto, "Conexiones a tierra")),
-        "Transformadores": _val_or_dash(render_cat_str(punto, "Transformadores")),
+        "Punto": p,
+        "Poste": _val_or_dash(render_cat_str(p, "Poste")),
+        "Primario": _val_or_dash(render_cat_str(p, "Primario")),
+        "Secundario": _val_or_dash(render_cat_str(p, "Secundario")),
+        "Retenidas": _val_or_dash(render_cat_str(p, "Retenidas")),
+        "Conexiones a tierra": _val_or_dash(render_cat_str(p, "Conexiones a tierra")),
+        "Transformadores": _val_or_dash(render_cat_str(p, "Transformadores")),
     }
 
 
-def listas_desplegables():
-    """
-    UI de edición por Punto con UNA FILA HORIZONTAL:
-    [Poste ▼][Primario ▼][Secundario ▼][Retenidas ▼][Tierra ▼][Trafo ▼][➕ Agregar todo]
-    - Sin cantidad: siempre agrega 1 unidad por cada selección hecha.
-    """
-    from modulo.desplegables import cargar_opciones
-    opciones = cargar_opciones()
-
-    st.subheader("3. 🏗️ Estructuras del Proyecto")
-
-    _init_punto_state()
-
-    # --- Fix robusto para evitar "Editando None" ---
-    if not st.session_state.get("punto_en_edicion"):
-        df_tmp = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
-        if not df_tmp.empty:
-            st.session_state["punto_en_edicion"] = df_tmp["Punto"].iloc[0]
-        else:
-            st.session_state["punto_en_edicion"] = "Punto 1"
-            if "puntos_data" not in st.session_state:
-                st.session_state["puntos_data"] = {}
-            if "Punto 1" not in st.session_state["puntos_data"]:
-                st.session_state["puntos_data"]["Punto 1"] = {
-                    "Poste": {}, "Primario": {}, "Secundario": {},
-                    "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
-                }
-
-    df_actual = st.session_state["df_puntos"]
-
-    # ---------- Barra superior ----------
+# =========================================================
+# UI Componentes (Refactor)
+# =========================================================
+def _barra_puntos(df_actual):
     colA, colB, colC, colD = st.columns([1.2, 1.2, 1.8, 1.2])
+
     with colA:
         if st.button("🆕 Crear nuevo Punto"):
             existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
@@ -183,19 +115,18 @@ def listas_desplegables():
 
     with colB:
         if not df_actual.empty:
-            p_sel = st.selectbox("📍 Ir a punto:", df_actual["Punto"].unique(), key="sel_goto_punto")
-            if st.button("✏️ Editar", key="btn_editar_punto"):
+            p_sel = st.selectbox("📍 Ir a punto:", df_actual["Punto"].unique(), key="sel_goto")
+            if st.button("✏️ Editar", key="btn_edit"):
                 st.session_state["punto_en_edicion"] = p_sel
-                # OJO: opción A (fila limpia). Solo cambiamos el punto; no precargamos selects.
                 resetear_desplegables()
 
     with colC:
         if not df_actual.empty:
-            p_del = st.selectbox("❌ Borrar punto:", df_actual["Punto"].unique(), key="sel_del_punto")
-            if st.button("Borrar", key="btn_borrar_punto"):
+            p_del = st.selectbox("❌ Borrar punto:", df_actual["Punto"].unique(), key="sel_del")
+            if st.button("Borrar", key="btn_del"):
                 st.session_state["df_puntos"] = df_actual[df_actual["Punto"] != p_del].reset_index(drop=True)
                 st.session_state["puntos_data"].pop(p_del, None)
-                st.success(f"✅ Se eliminó {p_del}")
+                st.success("✅ Se eliminó")
 
     with colD:
         if st.button("🧹 Limpiar todo"):
@@ -205,93 +136,100 @@ def listas_desplegables():
             _init_punto_state()
             st.success("✅ Todo limpio")
 
-    st.markdown("---")
 
-    # ---------- Edición del Punto actual ----------
+def _fila_agregar(opciones):
     p = st.session_state["punto_en_edicion"]
-    st.markdown(f"### ✏️ Editando {p}")
 
-    # Catálogos
-    val_poste, lab_poste = _opciones_categoria(opciones, "Poste")
-    val_pri,   lab_pri   = _opciones_categoria(opciones, "Primario")
-    val_sec,   lab_sec   = _opciones_categoria(opciones, "Secundario")
-    val_ret,   lab_ret   = _opciones_categoria(opciones, "Retenidas")
-    val_ct,    lab_ct    = _opciones_categoria(opciones, "Conexiones a tierra")
-    val_tr,    lab_tr    = _opciones_categoria(opciones, "Transformadores")
+    cats = {
+        "Poste":        _opciones_categoria(opciones, "Poste"),
+        "Primario":     _opciones_categoria(opciones, "Primario"),
+        "Secundario":   _opciones_categoria(opciones, "Secundario"),
+        "Retenidas":    _opciones_categoria(opciones, "Retenidas"),
+        "Conexiones a tierra": _opciones_categoria(opciones, "Conexiones a tierra"),
+        "Transformadores":     _opciones_categoria(opciones, "Transformadores"),
+    }
 
-    # ===== FILA ÚNICA (sin cantidad) =====
-    st.markdown("#### ➕ Agregar estructuras a este punto")
-    cols = st.columns([2,2,2,2,2,2,1])  # 6 selects + botón
+    cols = st.columns([2,2,2,2,2,2,1])
+    keys = ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]
 
-    with cols[0]:
-        poste_sel = st.selectbox("Poste", [""] + val_poste, format_func=lambda x: lab_poste.get(x, x), key="poste_sel")
-    with cols[1]:
-        prim_sel = st.selectbox("Primario", [""] + val_pri, format_func=lambda x: lab_pri.get(x, x), key="prim_sel")
-    with cols[2]:
-        sec_sel = st.selectbox("Secundario", [""] + val_sec, format_func=lambda x: lab_sec.get(x, x), key="sec_sel")
-    with cols[3]:
-        ret_sel = st.selectbox("Retenidas", [""] + val_ret, format_func=lambda x: lab_ret.get(x, x), key="ret_sel")
-    with cols[4]:
-        tierra_sel = st.selectbox("Tierra", [""] + val_ct, format_func=lambda x: lab_ct.get(x, x), key="tierra_sel")
-    with cols[5]:
-        tr_sel = st.selectbox("Transformador", [""] + val_tr, format_func=lambda x: lab_tr.get(x, x), key="tr_sel")
+    # Selects
+    for i, (cat, (vals, labs)) in enumerate(cats.items()):
+        with cols[i]:
+            st.session_state[keys[i]] = st.selectbox(
+                cat, [""] + vals,
+                format_func=lambda x, labs=labs: labs.get(x, x),
+                key=keys[i]
+            )
 
+    # Botón agregar
     with cols[6]:
-        if st.button("➕ Agregar todo", type="primary", key="add_all"):
-            # Siempre agrega 1 por cada selección hecha
-            if poste_sel:  add_item("Poste", poste_sel, 1)
-            if prim_sel:   add_item("Primario", prim_sel, 1)
-            if sec_sel:    add_item("Secundario", sec_sel, 1)
-            if ret_sel:    add_item("Retenidas", ret_sel, 1)
-            if tierra_sel: add_item("Conexiones a tierra", tierra_sel, 1)
-            if tr_sel:     add_item("Transformadores", tr_sel, 1)
+        if st.button("➕", key="add_all", type="primary"):
+            for i, cat in enumerate(cats.keys()):
+                sel = st.session_state.get(keys[i])
+                if sel:
+                    add_item(cat, sel, 1)
 
-            # Reset seguro (solo los selects)
-            for k in ["poste_sel", "prim_sel", "sec_sel", "ret_sel", "tierra_sel", "tr_sel"]:
+            for k in keys:
                 st.session_state.pop(k, None)
 
-            st.success("✅ ¡Se agregó la fila completa!")
+            st.success("✅ ¡Agregado!")
             st.rerun()
+
+
+def _vista_guardar():
+    p = st.session_state["punto_en_edicion"]
+    data_row = _consolidado_a_fila(p)
+
+    st.dataframe(pd.DataFrame([data_row]), use_container_width=True, hide_index=True)
+
+    if st.button("💾 Guardar punto", type="primary"):
+        df = st.session_state["df_puntos"]
+        df = df[df["Punto"] != p]
+        st.session_state["df_puntos"] = pd.concat([df, pd.DataFrame([data_row])], ignore_index=True)
+        st.success("✅ Guardado!")
+
+    df_all = st.session_state["df_puntos"]
+    if not df_all.empty:
+        st.dataframe(df_all, use_container_width=True, hide_index=True)
+
+
+# =========================================================
+# Controlador
+# =========================================================
+def listas_desplegables():
+    from modulo.desplegables import cargar_opciones
+    opciones = cargar_opciones()
+
+    st.subheader("3. 🏗️ Estructuras del Proyecto")
+    _init_punto_state()
+    df_actual = st.session_state["df_puntos"]
+
+    _barra_puntos(df_actual)
 
     st.markdown("---")
 
-    # ---------- Vista consolidada del punto ----------
-    st.markdown("#### 📑 Vista de estructuras / materiales (consolidado)")
-    data_row = _consolidado_a_fila(p)
-    st.dataframe(pd.DataFrame([data_row]), use_container_width=True, hide_index=True)
+    p = st.session_state["punto_en_edicion"]
+    st.markdown(f"### ✏️ Editando {p}")
+    st.markdown("#### ➕ Agregar estructuras a este punto")
+    _fila_agregar(opciones)
 
-    # ---------- Guardar punto ----------
-    if st.button("💾 Guardar Estructura del Punto", type="primary"):
-        fila = _consolidado_a_fila(p)
-        df = st.session_state["df_puntos"]
-        df = df[df["Punto"] != p]
-        st.session_state["df_puntos"] = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
-        st.success("✅ Punto guardado")
+    st.markdown("---")
+    _vista_guardar()
 
-    # Tabla completa
-    df_all = st.session_state["df_puntos"]
-    if not df_all.empty:
-        st.markdown("#### 🗂️ Puntos del proyecto")
-        st.dataframe(df_all, use_container_width=True, hide_index=True)
-
-    return df_all
-
-
+    return st.session_state["df_puntos"]
 
 
 # ==============================
-# Despachador por modo
+# Despachador
 # ==============================
 def seccion_entrada_estructuras(modo_carga: str):
-    """Despacha al modo de carga seleccionado."""
-    df = pd.DataFrame(columns=COLUMNAS_BASE)
-    ruta_estructuras = None
+    df, ruta = pd.DataFrame(columns=COLUMNAS_BASE), None
 
     if modo_carga == "Desde archivo Excel":
-        df, ruta_estructuras = cargar_desde_excel()
+        df, ruta = cargar_desde_excel()
     elif modo_carga == "Pegar tabla":
         df = pegar_tabla()
     elif modo_carga == "Listas desplegables":
         df = listas_desplegables()
 
-    return df, ruta_estructuras
+    return df, ruta
