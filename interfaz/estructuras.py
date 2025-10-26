@@ -26,15 +26,22 @@ COLUMNAS_BASE: List[str] = [
 ]
 
 def _normalizar_columnas(df: pd.DataFrame, columnas: List[str]) -> pd.DataFrame:
+    """Asegura todas las columnas requeridas y ordena como espera la app."""
     df = df.copy()
+    # Renombres comunes desde archivos del usuario
+    df = df.rename(columns={
+        "Retenida": "Retenidas",
+        "Aterrizaje": "Conexiones a tierra",
+        "Transformador": "Transformadores",
+    })
     for c in columnas:
         if c not in df.columns:
             df[c] = ""
-    # Mantener el orden esperado por la app
-    return df[[c for c in columnas if c in df.columns]]
+    # Mantener orden
+    return df[columnas]
 
 def _parsear_texto_a_df(texto: str, columnas: List[str]) -> pd.DataFrame:
-    """Convierte texto pegado (CSV/TSV/; o | o whitespace) a DataFrame."""
+    """Convierte texto pegado (CSV/TSV/; o | o whitespace) a DataFrame ancho."""
     txt = (texto or "").strip()
     if not txt:
         return pd.DataFrame(columns=columnas)
@@ -54,15 +61,16 @@ def _parsear_texto_a_df(texto: str, columnas: List[str]) -> pd.DataFrame:
 
 def _materializar_df_a_archivo(df: pd.DataFrame, etiqueta: str = "data") -> str:
     """
-    Escribe el DF a un .xlsx temporal con hoja EXACTA 'estructuras' y
-    devuelve la ruta ABSOLUTA. Así el motor de reportes siempre encuentra la hoja.
+    Escribe el DF en un .xlsx temporal con hoja EXACTA 'estructuras' (formato ancho)
+    y devuelve la ruta ABSOLUTA. Esto cumple el contrato del generador de reportes.
     """
     ts = int(time.time())
     tmpdir = tempfile.gettempdir()
     ruta = os.path.join(tmpdir, f"estructuras_{etiqueta}_{ts}.xlsx")
 
+    df_out = _normalizar_columnas(df, COLUMNAS_BASE)
+
     # Intentar con openpyxl y, si no, con xlsxwriter
-    writer = None
     try:
         writer = pd.ExcelWriter(ruta, engine="openpyxl")
     except Exception:
@@ -73,7 +81,7 @@ def _materializar_df_a_archivo(df: pd.DataFrame, etiqueta: str = "data") -> str:
             raise e
 
     with writer:
-        df.to_excel(writer, sheet_name="estructuras", index=False)
+        df_out.to_excel(writer, sheet_name="estructuras", index=False)
 
     return ruta
 
@@ -87,10 +95,18 @@ def cargar_desde_excel() -> Tuple[pd.DataFrame | None, str | None]:
         return None, None
     nombre = getattr(archivo, "name", "estructura_lista.xlsx")
     try:
-        df = pd.read_excel(archivo)
+        # Si el archivo ya tiene hoja 'estructuras', úsala; si no, lee la primera y normaliza
+        xls = pd.ExcelFile(archivo)
+        hoja = None
+        for s in xls.sheet_names:
+            if s.strip().lower() == "estructuras":
+                hoja = s
+                break
+        df = pd.read_excel(xls, sheet_name=hoja or xls.sheet_names[0])
     except Exception as e:
         st.error(f"Error leyendo el Excel: {e}")
         return None, None
+
     df = _normalizar_columnas(df, COLUMNAS_BASE)
     ruta_tmp = _materializar_df_a_archivo(df, "excel")
     st.success(f"✅ Cargadas {len(df)} filas desde {nombre}")
@@ -121,7 +137,7 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
     Intenta cargar opciones desde modulo.desplegables.cargar_opciones().
     Estructura por categoría:
       {"valores": [cod1, cod2, ...], "etiquetas": {cod1: "cod1 – desc", ...}}
-    Si no existe el módulo, retorna un fallback mínimo.
+    Si no existe el módulo, retorna un fallback mínimo (para que la UI no se rompa).
     """
     try:
         from modulo.desplegables import cargar_opciones  # type: ignore
@@ -134,23 +150,17 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
             opciones[key].setdefault("etiquetas", {})
         return opciones
     except Exception:
-        # Fallback simple para que la UI funcione aunque no exista el módulo
+        # Fallback simple
         return {
-            "Poste": {"valores": ["PC-40", "PM-35"], "etiquetas": {
-                "PC-40": "PC-40 – Poste de Concreto de 40 Pies.",
-                "PM-35": "PM-35 – Poste de Madera de 35 Pies.",
+            "Poste": {"valores": ["PC-40 (E)", "PM-35 (E)"], "etiquetas": {
+                "PC-40 (E)": "PC-40 (E) – Poste de Concreto de 40 Pies.",
+                "PM-35 (E)": "PM-35 (E) – Poste de Madera de 35 Pies.",
             }},
-            "MT": {"valores": ["1/0 ACSR", "3/0 ACSR", "4/0 ACSR"], "etiquetas": {}},
-            "BT": {"valores": ["#2 ACSR", "1/0 ACSR"], "etiquetas": {}},
-            "Retenidas": {"valores": ["R-0", "R-1", "R-2"], "etiquetas": {
-                "R-1": "R-1 – Estructura Secundaria dos Fase en triple remate."
-            }},
-            "Conexiones a tierra": {"valores": ['CT-N', 'Varilla 5/8" x 8\'', "Malla"], "etiquetas": {
-                "CT-N": "CT-N – Conexión Tierra a Neutro."
-            }},
-            "Transformadores": {"valores": ["TD", "25 kVA", "37.5 kVA", "50 kVA"], "etiquetas": {
-                "TD": "TD – Estructura Secundaria dos Fase en triple remate."
-            }},
+            "MT": {"valores": ["A-I-1 (E)", "A-II-5 (E)", "A-III-7 (E)"], "etiquetas": {}},
+            "BT": {"valores": ["B-I-1 (R)", "B-II-1 (R)", "B-II-4C (R)"], "etiquetas": {}},
+            "Retenidas": {"valores": ["R-1 (E)", "R-4 (E)", "R-5T (E)"], "etiquetas": {}},
+            "Conexiones a tierra": {"valores": ["CT-N (P)", "CT-N (E)"], "etiquetas": {}},
+            "Transformadores": {"valores": ["TD (P)", "25 kVA", "37.5 kVA", "50 kVA"], "etiquetas": {}},
         }
 
 def _pick_vals_labels(opciones: dict, prefer: list[str], fuzzy_fragments: list[str] | None = None):
@@ -247,6 +257,7 @@ def _fila_categoria_ui(label: str, valores: list[str], etiquetas: dict, key_pref
             st.success(f"Añadido: {qty}× {etiquetas.get(sel, sel)}")
 
 def _consolidado_a_fila(punto: str) -> Dict[str, str]:
+    """Devuelve una fila ancho (como tu Excel de ejemplo)."""
     return {
         "Punto": punto,
         "Poste": _render_cat_str(punto, "Poste"),
@@ -260,7 +271,7 @@ def _consolidado_a_fila(punto: str) -> Dict[str, str]:
 def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     """
     UI PRO con desplegables (MT/BT, Primario/Secundario) + cantidad.
-    Consolida por Punto y guarda en st.session_state["df_puntos"].
+    Consolida por Punto y guarda en st.session_state["df_puntos"] en formato ancho.
     Devuelve (df, ruta_tmp_xlsx) cuando hay datos.
     """
     _ensure_df_sesion()
@@ -348,7 +359,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     _fila_categoria_ui("Transformadores",       vals_tr,    lab_tr,    key_prefix)
 
     st.markdown("---")
-    # Vista consolidada del punto
+    # Vista consolidada del punto (formato ancho)
     st.markdown("#### 📑 Vista consolidada del punto")
     row = _consolidado_a_fila(punto)
     st.dataframe(pd.DataFrame([row]), use_container_width=True, hide_index=True)
@@ -378,7 +389,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
         st.session_state["df_puntos"] = pd.concat([base, pd.DataFrame([fila])], ignore_index=True)
         st.success("✅ Punto guardado")
 
-    # Tabla completa
+    # Tabla completa (ancha)
     df_all = st.session_state["df_puntos"]
     if not df_all.empty:
         st.markdown("#### 🗂️ Puntos del proyecto")
@@ -405,8 +416,8 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, str | None]:
     """
     Devuelve siempre una tupla (df_estructuras, ruta_estructuras) según el modo:
-      - "Excel"  -> carga desde file_uploader y materializa a archivo temporal (hoja 'estructuras')
-      - "Pegar"  -> parsea texto CSV/TSV y materializa a archivo temporal (hoja 'estructuras')
+      - "excel"  -> carga desde file_uploader y materializa a archivo temporal (hoja 'estructuras')
+      - "pegar"  -> parsea texto CSV/TSV y materializa a archivo temporal (hoja 'estructuras')
       - otro     -> UI de Desplegables (MT/BT) y materializa a archivo temporal (hoja 'estructuras')
     """
     modo = (modo_carga or "").strip().lower()
