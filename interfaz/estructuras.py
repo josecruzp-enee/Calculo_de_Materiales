@@ -157,7 +157,7 @@ def _fila_agregar(opciones):
     cols = st.columns([2,2,2,2,2,2,1])
 
     # Dibujar selects (se limpian automáticamente cuando el key no existe)
-    for i,(cat,key)=enumerate(cats):
+    for i, (cat, key) in enumerate(cats):
         vals,labs=_opciones_categoria(opciones,cat)
         with cols[i]:
             st.selectbox(cat,[""]+vals,format_func=lambda x,l=labs: l.get(x,x),key=key)
