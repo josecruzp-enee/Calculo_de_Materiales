@@ -1,129 +1,209 @@
-# ====== PARCHE DE COMPATIBILIDAD (PEGAR AL FINAL DE estructuras.py) ======
-from typing import Tuple, Optional, Dict, Any
+# interfaz/estructuras.py
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+import io
 import os
+from typing import Optional, Tuple, List
+
 import pandas as pd
 import streamlit as st
 
-# 1) Renombra tu función UI original si aún no está renombrada
-try:
-    _seccion_ui_entrada_estructuras  # ya existe
-except NameError:
-    _seccion_ui_entrada_estructuras = seccion_entrada_estructuras  # alias a tu UI
+# =============================================================================
+# Configuración base y utilidades seguras
+# =============================================================================
 
-# 2) Cargador tolerante que devuelve (df, ruta) según 'modo'
-def _cargar_estructuras(modo: str = "local") -> Tuple[Optional[pd.DataFrame], Optional[str]]:
-    modo = (modo or "local").strip().lower()
+# Esquema mínimo esperado por el resto de la app
+COLUMNAS_BASE: List[str] = [
+    "Punto",
+    "Poste",
+    "Primario",
+    "Secundario",
+    "Retenidas",
+    "Conexiones a tierra",
+    "Transformadores",
+]
 
-    # Reusar si ya se eligió en esta sesión
-    ruta_sesion = st.session_state.get("ruta_estructuras")
-    if ruta_sesion and os.path.isfile(ruta_sesion):
+def _normalizar_columnas(df: pd.DataFrame, columnas: List[str]) -> pd.DataFrame:
+    """Asegura que existan todas las columnas base y devuelve df ordenado."""
+    df = df.copy()
+    for c in columnas:
+        if c not in df.columns:
+            df[c] = ""
+    return df[columnas]
+
+def _parsear_texto_a_df(texto: str, columnas: List[str]) -> pd.DataFrame:
+    """Convierte texto pegado (CSV/TSV/; or |) en DataFrame y normaliza columnas."""
+    txt = (texto or "").strip()
+    if not txt:
+        return pd.DataFrame(columns=columnas)
+
+    df = None
+    for sep in ("\t", ",", ";", "|"):
         try:
-            return pd.read_excel(ruta_sesion), ruta_sesion
-        except Exception as e:
-            st.error(f"Error leyendo {ruta_sesion}: {e}")
+            df = pd.read_csv(io.StringIO(txt), sep=sep)
+            break
+        except Exception:
+            df = None
+    if df is None:
+        try:
+            df = pd.read_csv(io.StringIO(txt), delim_whitespace=True)
+        except Exception:
+            return pd.DataFrame(columns=columnas)
+    return _normalizar_columnas(df, columnas)
 
-    # Candidatas locales y por variable de entorno
-    ruta_env = os.environ.get("ESTRUCTURAS_PATH")
-    candidatas = []
-    if ruta_env:
-        candidatas.append(ruta_env)
-    candidatas += [
-        "estructura_lista.xlsx",
-        os.path.join(os.getcwd(), "estructura_lista.xlsx"),
-        os.path.join(os.path.dirname(__file__), "..", "estructura_lista.xlsx"),
-        os.path.join(os.path.dirname(__file__), "estructura_lista.xlsx"),
-    ]
+# =============================================================================
+# Modo: Excel
+# =============================================================================
 
-    def _leer_primera_existente(paths):
-        for p in paths:
-            p_abs = os.path.abspath(p)
-            if os.path.isfile(p_abs):
-                try:
-                    df = pd.read_excel(p_abs)
-                    st.session_state["ruta_estructuras"] = p_abs
-                    return df, p_abs
-                except Exception as e:
-                    st.error(f"Error leyendo {p_abs}: {e}")
+def cargar_desde_excel() -> Tuple[pd.DataFrame | None, str | None]:
+    """
+    Carga un Excel con estructuras.
+    Devuelve (df, ruta/nombre). Si el usuario no sube nada, (None, None).
+    """
+    archivo = st.file_uploader("Archivo de estructuras (.xlsx)", type=["xlsx"], key="upl_estructuras")
+    if not archivo:
         return None, None
 
-    # Modos que obligan a uploader (útil en Cloud)
-    if modo in {"app", "cloud", "web"}:
-        archivo = st.file_uploader("Cargar 'estructura_lista.xlsx'", type=["xlsx"])
-        if not archivo:
-            # Intenta también local por si estás desarrollando en tu PC
-            df, ruta = _leer_primera_existente(candidatas)
-            if df is not None:
-                return df, ruta
-            with st.expander("No se encontró archivo local. Opciones para continuar"):
-                st.write(
-                    "• Sube el archivo con el botón arriba.\n"
-                    "• O define la variable de entorno `ESTRUCTURAS_PATH`.\n"
-                    "• O coloca `estructura_lista.xlsx` en la raíz del proyecto."
+    nombre = getattr(archivo, "name", "estructura_lista.xlsx")
+    try:
+        df = pd.read_excel(archivo)
+    except Exception as e:
+        st.error(f"Error leyendo el Excel: {e}")
+        return None, nombre
+
+    df = _normalizar_columnas(df, COLUMNAS_BASE)
+    st.success(f"✅ Cargadas {len(df)} filas desde {nombre}")
+    return df, nombre
+
+# =============================================================================
+# Modo: Pegar tabla (CSV/TSV)
+# =============================================================================
+
+def pegar_tabla() -> Tuple[pd.DataFrame | None, str | None]:
+    """
+    Permite pegar una tabla CSV/TSV en un TextArea.
+    Devuelve (df, 'PEGA/TEXTO') si hay contenido; (None, None) si vacío.
+    """
+    texto_pegado = st.text_area("Pega aquí tu tabla (CSV/TSV)", height=200, key="txt_pegar_tabla")
+    if not texto_pegado:
+        return None, None
+
+    df = _parsear_texto_a_df(texto_pegado, COLUMNAS_BASE)
+    st.success(f"✅ Tabla cargada con {len(df)} filas")
+    return df, "PEGA/TEXTO"
+
+# =============================================================================
+# Modo: Listas (UI simple para construir la tabla en sesión)
+# =============================================================================
+
+def _ensure_df_sesion():
+    if "df_puntos" not in st.session_state:
+        st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
+
+def _form_point_editor():
+    """
+    Pequeña UI para construir/editar filas de COLUMNAS_BASE y guardarlas en sesión.
+    """
+    _ensure_df_sesion()
+    df_actual = st.session_state["df_puntos"]
+
+    st.subheader("🏗️ Estructuras del Proyecto (Listas)")
+    st.caption("Completa los campos y usa “Agregar/Actualizar punto” para construir la tabla.")
+
+    with st.form("frm_punto"):
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            punto = st.text_input("Punto", value="Punto 1")
+        with c2:
+            st.write(" ")
+
+        colA, colB = st.columns(2)
+        with colA:
+            poste = st.text_input("Poste", value="")
+            primario = st.text_input("Primario", value="")
+            secundario = st.text_input("Secundario", value="")
+        with colB:
+            retenidas = st.text_input("Retenidas", value="")
+            ctierra = st.text_input("Conexiones a tierra", value="")
+            trafo = st.text_input("Transformadores", value="")
+
+        agregado = st.form_submit_button("💾 Agregar / Actualizar punto", type="primary")
+        if agregado:
+            fila = {
+                "Punto": punto.strip(),
+                "Poste": poste.strip(),
+                "Primario": primario.strip(),
+                "Secundario": secundario.strip(),
+                "Retenidas": retenidas.strip(),
+                "Conexiones a tierra": ctierra.strip(),
+                "Transformadores": trafo.strip(),
+            }
+            base = st.session_state["df_puntos"]
+            # Reemplaza si ya existe el punto
+            if not base.empty and fila["Punto"] in base["Punto"].values:
+                base = base[base["Punto"] != fila["Punto"]]
+            st.session_state["df_puntos"] = pd.concat([base, pd.DataFrame([fila])], ignore_index=True)
+            st.success(f"✅ Guardado {fila['Punto']}")
+
+    # Barra de acciones sobre la tabla
+    df = st.session_state["df_puntos"]
+    if not df.empty:
+        st.markdown("---")
+        st.markdown("#### 📑 Tabla de puntos")
+        st.dataframe(df.sort_values(by="Punto"), use_container_width=True, hide_index=True)
+
+        colx, coly, colz = st.columns(3)
+        with colx:
+            if st.button("🧹 Limpiar todo", use_container_width=True):
+                st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
+                st.success("✅ Tabla limpiada")
+        with coly:
+            if not df.empty:
+                p_del = st.selectbox("❌ Punto a borrar", df["Punto"].tolist(), key="sel_borrar_punto")
+                if st.button("Borrar punto", use_container_width=True):
+                    st.session_state["df_puntos"] = df[df["Punto"] != p_del].reset_index(drop=True)
+                    st.success(f"✅ Eliminado {p_del}")
+        with colz:
+            if not df.empty:
+                st.download_button(
+                    "⬇️ Descargar CSV",
+                    df.sort_values(by="Punto").to_csv(index=False).encode("utf-8"),
+                    file_name="estructuras_puntos.csv",
+                    mime="text/csv",
+                    use_container_width=True,
                 )
-            return None, None
-        try:
-            df = pd.read_excel(archivo)
-            nombre = getattr(archivo, "name", "estructura_lista.xlsx")
-            st.session_state["ruta_estructuras"] = nombre
-            return df, nombre
-        except Exception as e:
-            st.error(f"Error leyendo el Excel cargado: {e}")
-            return None, None
 
-    # Modo "local": intenta rutas; si falla, cae a uploader
-    df, ruta = _leer_primera_existente(candidatas)
-    if df is not None:
-        return df, ruta
-
-    st.info("No se encontró un archivo local de estructuras. Sube uno para continuar.")
-    archivo = st.file_uploader("Cargar 'estructura_lista.xlsx'", type=["xlsx"], key="uploader_local_fallback")
-    if archivo:
-        try:
-            df = pd.read_excel(archivo)
-            nombre = getattr(archivo, "name", "estructura_lista.xlsx")
-            st.session_state["ruta_estructuras"] = nombre
-            return df, nombre
-        except Exception as e:
-            st.error(f"Error leyendo el Excel cargado: {e}")
-            return None, None
-
-    with st.expander("Detalles de búsqueda de archivo"):
-        st.write("Se intentaron estas rutas:")
-        for p in candidatas:
-            st.write(f"• {os.path.abspath(p)}")
+def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
+    """
+    Renderiza la UI simple de Listas y devuelve (df, 'UI/LISTAS') si hay datos;
+    si no hay filas aún, (None, None).
+    """
+    _form_point_editor()
+    df = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        df = _normalizar_columnas(df, COLUMNAS_BASE)
+        return df, "UI/LISTAS"
     return None, None
 
-# 3) Dispatcher que soporta AMBOS USOS sin tocar app.py
-def seccion_entrada_estructuras(*args, **kwargs):
+# =============================================================================
+# Función pública llamada por app.py
+# =============================================================================
+
+def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, str | None]:
     """
-    Uso 1 (como en app.py):
-        df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
-    Uso 2 (UI):
-        seccion_entrada_estructuras(opciones_poste=[...], ..., opciones_transformadores=[...], on_guardar=...)
+    Devuelve siempre una tupla (df_estructuras, ruta_estructuras) según el modo:
+      - "Excel"  -> carga desde file_uploader
+      - "Pegar"  -> parsea texto CSV/TSV
+      - otro     -> UI de Listas para construir df en sesión
     """
-    # ¿Nos llamaron con un único argumento 'modo' o con kw 'modo'?
-    if (len(args) == 1 and isinstance(args[0], str)) or ("modo" in kwargs and isinstance(kwargs.get("modo"), str)):
-        modo = args[0] if (len(args) == 1 and isinstance(args[0], str)) else kwargs.get("modo", "local")
-        return _cargar_estructuras(modo)
+    modo = (modo_carga or "").strip().lower()
 
-    # ¿Nos llamaron con kwargs propios de la UI?
-    ui_keys = {
-        "opciones_poste",
-        "opciones_primario",
-        "opciones_secundario",
-        "opciones_retenidas",
-        "opciones_tierra",
-        "opciones_transformadores",
-        "on_guardar",
-        "placeholder",
-        "titulo",
-    }
-    if ui_keys & set(kwargs.keys()):
-        _seccion_ui_entrada_estructuras(**kwargs)
-        # Para no romper si el llamador desempaqueta en dos variables:
-        return None, None
+    if modo == "excel":
+        return cargar_desde_excel()
 
-    # Si es ambiguo, cae por defecto al cargador local (compatibilidad)
-    return _cargar_estructuras("local")
-# ====== FIN PARCHE ======
+    if modo == "pegar":
+        return pegar_tabla()
 
+    # Cualquier otro valor cae a la UI de listas
+    return listas_desplegables()
