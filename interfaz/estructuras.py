@@ -78,6 +78,16 @@ def render_cat_str(punto: str, categoria: str) -> str:
     )
 
 
+# ===========================
+# NECESARIO AQUÍ (ANTES QUE _fila_agregar)
+# ===========================
+def _opciones_categoria(opciones_dict, llave_catalogo: str) -> tuple[list[str], dict]:
+    bloque = opciones_dict.get(llave_catalogo) or {}
+    valores = bloque.get("valores", []) or []
+    etiquetas = bloque.get("etiquetas", {}) or {}
+    return valores, etiquetas
+
+
 def _val_or_dash(s): return s if (s and str(s).strip()) else "-"
 
 
@@ -138,13 +148,11 @@ def _barra_puntos(df_actual):
 
 
 def _fila_agregar(opciones):
-    p = st.session_state["punto_en_edicion"]
-
     cats = {
-        "Poste":        _opciones_categoria(opciones, "Poste"),
-        "Primario":     _opciones_categoria(opciones, "Primario"),
-        "Secundario":   _opciones_categoria(opciones, "Secundario"),
-        "Retenidas":    _opciones_categoria(opciones, "Retenidas"),
+        "Poste":              _opciones_categoria(opciones, "Poste"),
+        "Primario":           _opciones_categoria(opciones, "Primario"),
+        "Secundario":         _opciones_categoria(opciones, "Secundario"),
+        "Retenidas":          _opciones_categoria(opciones, "Retenidas"),
         "Conexiones a tierra": _opciones_categoria(opciones, "Conexiones a tierra"),
         "Transformadores":     _opciones_categoria(opciones, "Transformadores"),
     }
@@ -152,16 +160,15 @@ def _fila_agregar(opciones):
     cols = st.columns([2,2,2,2,2,2,1])
     keys = ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]
 
-    # Selects
     for i, (cat, (vals, labs)) in enumerate(cats.items()):
         with cols[i]:
             st.session_state[keys[i]] = st.selectbox(
-                cat, [""] + vals,
+                cat,
+                [""] + vals,
                 format_func=lambda x, labs=labs: labs.get(x, x),
                 key=keys[i]
             )
 
-    # Botón agregar
     with cols[6]:
         if st.button("➕", key="add_all", type="primary"):
             for i, cat in enumerate(cats.keys()):
@@ -205,7 +212,6 @@ def listas_desplegables():
     df_actual = st.session_state["df_puntos"]
 
     _barra_puntos(df_actual)
-
     st.markdown("---")
 
     p = st.session_state["punto_en_edicion"]
