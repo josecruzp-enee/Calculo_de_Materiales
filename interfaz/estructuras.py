@@ -1,6 +1,8 @@
 # interfaz/estructuras.py
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+from typing import Tuple, Optional
+import pandas as pd
 
 import io
 import os
