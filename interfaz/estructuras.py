@@ -476,6 +476,10 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 # =============================================================================
 # Función pública: llamada por app.py
 # =============================================================================
+from typing import Tuple
+import pandas as pd
+import streamlit as st
+
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, str | None]:
     """
     Devuelve (df_estructuras_largo, ruta_estructuras_xlsx) según el modo:
@@ -508,20 +512,3 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, s
 
             # Reemplazar nulos por cadenas vacías
             df_dbg = df_dbg.fillna("")
-
-            # Mostrar vista previa en Streamlit
-            st.markdown("### 🧪 DEBUG: vista previa de df_expandido (normalizado)")
-            st.dataframe(df_dbg.head(10), use_container_width=True)
-            st.write("**Columnas:**", list(df_dbg.columns))
-            st.write("**Tipos de datos:**")
-            st.write(df_dbg.dtypes)
-            st.write("**Forma:**", df_dbg.shape)
-
-            # Reasignar el DataFrame limpio al resultado
-            res = (df_dbg, res[1])
-    except Exception as e:
-        st.error(f"⚠️ Error en debug de seccion_entrada_estructuras: {e}")
-
-    return res
-
-
