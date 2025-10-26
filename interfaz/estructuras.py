@@ -25,6 +25,56 @@ COLUMNAS_BASE: List[str] = [
     "Transformadores",
 ]
 
+import re
+
+def _parse_items_cell(cell: str):
+    """
+    Convierte '2× R-1, A-I-5 (E)' -> [('R-1',2),('A-I-5',1)]
+    Acepta 'x' o '×' y quita sufijos entre paréntesis (E)/(P)/(R).
+    """
+    if not isinstance(cell, str):
+        return []
+    s = cell.strip()
+    if not s or s == "-":
+        return []
+    items = []
+    for piece in [p.strip() for p in s.split(",") if p.strip()]:
+        m = re.match(r"^(\d+)\s*[x×]\s*(.+)$", piece, flags=re.I)
+        qty = int(m.group(1)) if m else 1
+        code = (m.group(2) if m else piece).strip()
+        # quitar sufijo entre paréntesis final, ej. 'A-I-4 (E)' -> 'A-I-4'
+        code = re.sub(r"\s*\([^)]*\)\s*$", "", code).strip()
+        if code:
+            items.append((code, qty))
+    return items
+
+def _expand_wide_to_long(df_ancho: pd.DataFrame) -> pd.DataFrame:
+    """
+    De la tabla ancha (Punto, Poste, Primario, Secundario, Retenidas, Conexiones a tierra, Transformadores)
+    genera filas con columnas: Punto, codigodeestructura, cantidad, categoria.
+    """
+    cat_cols = [
+        ("Poste", "Poste"),
+        ("Primario", "Primario"),             # MT
+        ("Secundario", "Secundario"),         # BT
+        ("Retenidas", "Retenidas"),
+        ("Conexiones a tierra", "Conexiones a tierra"),
+        ("Transformadores", "Transformadores"),
+    ]
+    rows = []
+    for _, r in df_ancho.iterrows():
+        punto = str(r.get("Punto", "")).strip()
+        for col, cat in cat_cols:
+            cell = str(r.get(col, "") or "").strip()
+            for code, qty in _parse_items_cell(cell):
+                rows.append({
+                    "Punto": punto,
+                    "codigodeestructura": code,  # en minúsculas todo junto (lo que pide el reporte)
+                    "cantidad": int(qty),
+                    "categoria": cat,
+                })
+    return pd.DataFrame(rows, columns=["Punto", "codigodeestructura", "cantidad", "categoria"])
+
 def _normalizar_columnas(df: pd.DataFrame, columnas: List[str]) -> pd.DataFrame:
     """Asegura todas las columnas requeridas y ordena como espera la app."""
     df = df.copy()
@@ -61,16 +111,18 @@ def _parsear_texto_a_df(texto: str, columnas: List[str]) -> pd.DataFrame:
 
 def _materializar_df_a_archivo(df: pd.DataFrame, etiqueta: str = "data") -> str:
     """
-    Escribe el DF en un .xlsx temporal con hoja EXACTA 'estructuras' (formato ancho)
-    y devuelve la ruta ABSOLUTA. Esto cumple el contrato del generador de reportes.
+    Escribe un .xlsx temporal con:
+      - Hoja 'estructuras'      -> formato LARGO con columnas: Punto, codigodeestructura, cantidad, categoria
+      - Hoja 'estructuras_ancha'-> formato ANCHO para revisión en la UI
     """
     ts = int(time.time())
     tmpdir = tempfile.gettempdir()
     ruta = os.path.join(tmpdir, f"estructuras_{etiqueta}_{ts}.xlsx")
 
-    df_out = _normalizar_columnas(df, COLUMNAS_BASE)
+    df_ancho = _normalizar_columnas(df, COLUMNAS_BASE)
+    df_largo = _expand_wide_to_long(df_ancho)
 
-    # Intentar con openpyxl y, si no, con xlsxwriter
+    # Escritor Excel
     try:
         writer = pd.ExcelWriter(ruta, engine="openpyxl")
     except Exception:
@@ -81,9 +133,13 @@ def _materializar_df_a_archivo(df: pd.DataFrame, etiqueta: str = "data") -> str:
             raise e
 
     with writer:
-        df_out.to_excel(writer, sheet_name="estructuras", index=False)
+        # Esta es la hoja que lee tu motor de reportes
+        df_largo.to_excel(writer, sheet_name="estructuras", index=False)
+        # Hoja auxiliar para que tú veas el resumen ancho
+        df_ancho.to_excel(writer, sheet_name="estructuras_ancha", index=False)
 
     return ruta
+
 
 # =============================================================================
 # Modo: Excel
