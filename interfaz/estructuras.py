@@ -190,144 +190,79 @@ def _consolidado_a_fila(punto: str) -> Dict[str, str]:
         "Transformadores": _render_cat_str(punto, "Transformadores"),
     }
 
-def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
+def _pick_vals_labels(opciones: dict, prefer: list[str], fuzzy_fragments: list[str] = None):
     """
-    UI PRO con desplegables y cantidad por categoría. Consolida al vuelo y permite
-    guardar por Punto en st.session_state["df_puntos"].
+    Devuelve (valores, etiquetas) probando primero claves 'prefer' y luego
+    una búsqueda suave por fragmentos (fuzzy).
     """
-    _ensure_df_sesion()
-    _ensure_punto_en_edicion()
-    _ensure_data_consolidada()
+    # 1) intenta claves preferidas en orden
+    for k in prefer:
+        blk = opciones.get(k)
+        if blk and blk.get("valores"):
+            vals = blk.get("valores", [])
+            labs = blk.get("etiquetas", {}) or {}
+            # asegúrate de tener etiquetas básicas
+            if not labs:
+                labs = {c: c for c in vals}
+            return vals, labs
 
-    df_actual = st.session_state["df_puntos"]
-    punto = st.session_state["punto_en_edicion"]
-    opciones = _cargar_opciones_catalogo()
+    # 2) búsqueda fuzzy por fragmentos
+    if fuzzy_fragments:
+        for k, blk in opciones.items():
+            k_low = str(k).lower()
+            if any(f in k_low for f in fuzzy_fragments):
+                if blk and blk.get("valores"):
+                    vals = blk.get("valores", [])
+                    labs = blk.get("etiquetas", {}) or {}
+                    if not labs:
+                        labs = {c: c for c in vals}
+                    return vals, labs
 
-    st.subheader("🏗️ Estructuras del Proyecto (Desplegables)")
+    # 3) vacío
+    return [], {}
 
-    # Barra superior
-    colA, colB, colC, colD = st.columns([1.2, 1.2, 1.8, 1.2])
-    with colA:
-        if st.button("🆕 Crear nuevo Punto"):
-            existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
-            nums = []
-            for p in existentes:
-                try:
-                    n = int(pd.to_numeric(pd.Series(p).str.extract(r"(\d+)")[0]).iloc[0])
-                    nums.append(n)
-                except Exception:
-                    pass
-            nuevo = f"Punto {(max(nums) + 1) if nums else 1}"
-            st.session_state["punto_en_edicion"] = nuevo
-            _ensure_data_consolidada()
-            st.success(f"✏️ {nuevo} creado y listo para editar")
+# ---------- Opciones por categoría (robusto a MT/BT y otras variantes) ----------
+vals_poste, lab_poste = _pick_vals_labels(
+    opciones,
+    prefer=["Poste"],
+    fuzzy_fragments=["poste"]
+)
 
-    with colB:
-        if not df_actual.empty:
-            p_sel = st.selectbox("📍 Ir a punto:", df_actual["Punto"].unique(), key="sel_goto_punto")
-            if st.button("✏️ Editar", key="btn_editar_punto"):
-                st.session_state["punto_en_edicion"] = p_sel
-                _ensure_data_consolidada()
-                st.success(f"✏️ Editando {p_sel}")
+# PRIMARIO: soporta Primario/Primaria/MT/Media Tensión, etc.
+vals_pri, lab_pri = _pick_vals_labels(
+    opciones,
+    prefer=["Primario", "Primaria", "MT", "Media Tensión", "Media Tension", "MT Primario", "Primaria MT"],
+    fuzzy_fragments=["primar", "media", "mt"]
+)
 
-    with colC:
-        if not df_actual.empty:
-            p_del = st.selectbox("❌ Borrar punto:", df_actual["Punto"].unique(), key="sel_del_punto")
-            if st.button("Borrar", key="btn_borrar_punto"):
-                st.session_state["df_puntos"] = df_actual[df_actual["Punto"] != p_del].reset_index(drop=True)
-                st.session_state["puntos_data"].pop(p_del, None)
-                st.success(f"✅ Se eliminó {p_del}")
+# SECUNDARIO: soporta Secundario/Secundaria/BT/Baja Tensión, etc.
+vals_sec, lab_sec = _pick_vals_labels(
+    opciones,
+    prefer=["Secundario", "Secundaria", "BT", "Baja Tensión", "Baja Tension", "BT Secundario", "Secundaria BT"],
+    fuzzy_fragments=["secund", "baja", "bt"]
+)
 
-    with colD:
-        if st.button("🧹 Limpiar todo"):
-            st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
-            st.session_state["puntos_data"] = {}
-            st.session_state["punto_en_edicion"] = "Punto 1"
-            _ensure_data_consolidada()
-            st.success("✅ Se limpiaron todas las estructuras/materiales")
+vals_ret, lab_ret = _pick_vals_labels(
+    opciones,
+    prefer=["Retenidas"],
+    fuzzy_fragments=["reten"]
+)
 
-    st.markdown("---")
-    # Editor actual
-    punto = st.session_state["punto_en_edicion"]
-    st.markdown(f"### ✏️ Editando {punto}")
+vals_ct, lab_ct = _pick_vals_labels(
+    opciones,
+    prefer=["Conexiones a tierra", "Tierra", "Puesta a tierra"],
+    fuzzy_fragments=["tierra", "puesta"]
+)
 
-    # Opciones por categoría (nota: 'Primaria' -> 'Primario' en nombre de columna)
-    vals_poste  = opciones.get("Poste", {}).get("valores", [])
-    lab_poste   = opciones.get("Poste", {}).get("etiquetas", {})
+vals_tr, lab_tr = _pick_vals_labels(
+    opciones,
+    prefer=["Transformadores", "Transformador"],
+    fuzzy_fragments=["trafo", "transfor"]
+)
 
-    vals_pri    = opciones.get("Primaria", {}).get("valores", [])
-    lab_pri     = opciones.get("Primaria", {}).get("etiquetas", {})
+# (Opcional) ver las claves reales que trae tu catálogo
+# st.caption(f"Claves en catálogo: {list(opciones.keys())}")
 
-    vals_sec    = opciones.get("Secundaria", {}).get("valores", [])
-    lab_sec     = opciones.get("Secundaria", {}).get("etiquetas", {})
-
-    vals_ret    = opciones.get("Retenidas", {}).get("valores", [])
-    lab_ret     = opciones.get("Retenidas", {}).get("etiquetas", {})
-
-    vals_ct     = opciones.get("Conexiones a tierra", {}).get("valores", [])
-    lab_ct      = opciones.get("Conexiones a tierra", {}).get("etiquetas", {})
-
-    vals_tr     = opciones.get("Transformadores", {}).get("valores", [])
-    lab_tr      = opciones.get("Transformadores", {}).get("etiquetas", {})
-
-    key_prefix = f"kp_{punto}"
-
-    _fila_categoria_ui("Poste",        vals_poste, lab_poste, key_prefix)
-    _fila_categoria_ui("Primario",     vals_pri,   lab_pri,   key_prefix)
-    _fila_categoria_ui("Secundario",   vals_sec,   lab_sec,   key_prefix)
-    _fila_categoria_ui("Retenidas",    vals_ret,   lab_ret,   key_prefix)
-    _fila_categoria_ui("Conexiones a tierra", vals_ct, lab_ct, key_prefix)
-    _fila_categoria_ui("Transformadores",      vals_tr, lab_tr, key_prefix)
-
-    st.markdown("---")
-    # Vista consolidada del punto
-    st.markdown("#### 📑 Vista consolidada del punto")
-    row = _consolidado_a_fila(punto)
-    st.dataframe(pd.DataFrame([row]), use_container_width=True, hide_index=True)
-
-    # Edición rápida (restar/eliminar)
-    st.markdown("##### ✂️ Editar seleccionados")
-    cols = st.columns(3)
-    with cols[0]:
-        cat = st.selectbox("Categoría", ["Poste","Primario","Secundario","Retenidas","Conexiones a tierra","Transformadores"], key="chip_cat")
-    with cols[1]:
-        codes = list(st.session_state["puntos_data"][punto][cat].keys())
-        code = st.selectbox("Código", codes, key="chip_code")
-    with cols[2]:
-        c1, c2 = st.columns(2)
-        if c1.button("– Restar uno", key="chip_minus"):
-            _remove_item(cat, code, all_qty=False)
-        if c2.button("🗑 Eliminar todo", key="chip_del"):
-            _remove_item(cat, code, all_qty=True)
-
-    st.markdown("---")
-    # Guardar punto en df_puntos (reemplaza la fila del punto)
-    if st.button("💾 Guardar Estructura del Punto", type="primary", key="btn_guardar_estructura"):
-        fila = _consolidado_a_fila(punto)
-        base = st.session_state["df_puntos"]
-        if not base.empty:
-            base = base[base["Punto"] != punto]
-        st.session_state["df_puntos"] = pd.concat([base, pd.DataFrame([fila])], ignore_index=True)
-        st.success("✅ Punto guardado")
-
-    # Mostrar tabla completa
-    df_all = st.session_state["df_puntos"]
-    if not df_all.empty:
-        st.markdown("#### 🗂️ Puntos del proyecto")
-        st.dataframe(df_all.sort_values(by="Punto"), use_container_width=True, hide_index=True)
-
-        st.download_button(
-            "⬇️ Descargar CSV",
-            df_all.sort_values(by="Punto").to_csv(index=False).encode("utf-8"),
-            file_name="estructuras_puntos.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-
-    df_final = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
-    if isinstance(df_final, pd.DataFrame) and not df_final.empty:
-        return _normalizar_columnas(df_final, COLUMNAS_BASE), "UI/LISTAS"
-    return None, None
 
 # =============================================================================
 # Función pública llamada por app.py
