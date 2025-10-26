@@ -1,238 +1,213 @@
-# -*- coding: utf-8 -*-
 # interfaz/estructuras.py
+# -*- coding: utf-8 -*-
 
-from __future__ import annotations
-import pandas as pd
+"""
+Sección de entrada de estructuras con 3 modos:
+1) Editar  -> Selección de poste / primario / secundario
+2) Sumar   -> Retenidas / Conexión a tierra / Transformador
+3) Guardar -> Persiste el punto y limpia todo
+
+Comportamiento clave:
+- Al pasar de EDITAR -> SUMAR: se limpian los campos de EDITAR
+- Al pasar de SUMAR  -> GUARDAR: se limpian los campos de SUMAR al guardar
+- Tras GUARDAR: se limpian TODOS y se vuelve a modo EDITAR
+
+Cómo usar desde app.py:
+from interfaz.estructuras import seccion_entrada_estructuras
+
+seccion_entrada_estructuras(
+    opciones_poste=["Madera", "Cemento"],
+    opciones_primario=["1/0 ACSR", "3/0 ACSR", "4/0 ACSR"],
+    opciones_secundario=["#2 ACSR", "1/0 ACSR"],
+    opciones_retenidas=["R-0", "R-1", "R-2"],
+    opciones_tierra=["Sin conexión", "Varilla 5/8\" x 8'", "Malla"],
+    opciones_transformadores=["Ninguno", "25 kVA", "37.5 kVA", "50 kVA"],
+    on_guardar=mi_funcion_guardar  # opcional; si no se pasa, guarda en session_state["puntos"]
+)
+"""
+
+from typing import Callable, List, Optional, Dict, Any
 import streamlit as st
 
-from interfaz.base import COLUMNAS_BASE, resetear_desplegables
-from modulo.utils import guardar_archivo_temporal, pegar_texto_a_df
-from modulo.entradas import cargar_estructuras_proyectadas
+
+# ---------------------------
+# Utilidades de estado/limpieza
+# ---------------------------
+
+_PLACEHOLDER_DEFAULT = "— Selecciona —"
+
+_EDIT_KEYS = ["poste", "primario", "secundario"]
+_SUM_KEYS  = ["retenidas", "ctierra", "transformador"]
 
 
-# ===============================================
-# MODO: Desde Excel
-# ===============================================
-def cargar_desde_excel():
-    archivo_estructuras = st.file_uploader("Archivo de estructuras", type=["xlsx"], key="upl_estructuras")
-    if archivo_estructuras:
-        ruta_estructuras = guardar_archivo_temporal(archivo_estructuras)
-        try:
-            df = cargar_estructuras_proyectadas(ruta_estructuras)
-            st.success("✅ Hoja 'estructuras' cargada")
-            return df, ruta_estructuras
-        except Exception as e:
-            st.error(f"❌ Error: {e}")
-    return pd.DataFrame(columns=COLUMNAS_BASE), None
+def _with_placeholder(opciones: List[str], placeholder: str) -> List[str]:
+    """Asegura que la lista tenga un placeholder en la primera posición."""
+    if not opciones:
+        return [placeholder]
+    # Si ya existe un placeholder similar, no duplicar
+    lower_set = {o.strip().lower() for o in opciones}
+    if placeholder.strip().lower() in lower_set:
+        # moverlo al inicio si estuviera en otra posición
+        ops = [o for o in opciones if o.strip().lower() != placeholder.strip().lower()]
+        return [placeholder] + ops
+    # Si ya tienen "-" como placeholder, respétalo
+    if "-" in opciones and opciones[0].strip() == "-":
+        return opciones
+    return [placeholder] + opciones
 
 
-# ===============================================
-# MODO: Pegar tabla
-# ===============================================
-def pegar_tabla():
-    texto = st.text_area("Pega aquí tu tabla CSV/tabulado", height=200)
-    if texto:
-        df = pegar_texto_a_df(texto, COLUMNAS_BASE)
-        st.success(f"✅ {len(df)} filas cargadas")
-        return df
-    return pd.DataFrame(columns=COLUMNAS_BASE)
+def _init_state(placeholder: str):
+    if "modo" not in st.session_state:
+        st.session_state["modo"] = "editar"
+    # Guardamos el placeholder para limpieza consistente
+    st.session_state["_placeholder"] = placeholder
+    # Inicializamos contenedor de puntos si no existe
+    if "puntos" not in st.session_state:
+        st.session_state["puntos"] = []
 
 
-# =========================================================
-# MODELO: Estado Consolidado por Punto
-# =========================================================
-def _init_punto_state():
-    if "df_puntos" not in st.session_state:
-        st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
-
-    if "punto_en_edicion" not in st.session_state:
-        df = st.session_state["df_puntos"]
-        st.session_state["punto_en_edicion"] = df["Punto"].iloc[0] if not df.empty else "Punto 1"
-
-    if "puntos_data" not in st.session_state:
-        st.session_state["puntos_data"] = {}
-
-    p = st.session_state["punto_en_edicion"]
-    if p not in st.session_state["puntos_data"]:
-        st.session_state["puntos_data"][p] = {
-            "Poste": {}, "Primario": {}, "Secundario": {},
-            "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
-        }
+def _limpiar(keys: List[str]):
+    """Limpia un grupo de keys al placeholder."""
+    ph = st.session_state.get("_placeholder", _PLACEHOLDER_DEFAULT)
+    for k in keys:
+        st.session_state[k] = ph
 
 
-def add_item(cat, code):
-    if not code:
-        return
-    p = st.session_state["punto_en_edicion"]
-    cnt = st.session_state["puntos_data"][p][cat]
-    cnt[code] = cnt.get(code, 0) + 1
+def _limpiar_editar():
+    _limpiar(_EDIT_KEYS)
 
 
-def render_cat_str(p, cat):
-    data = st.session_state["puntos_data"][p][cat]
-    if not data:
-        return ""
-    return ", ".join(f"{n}× {c}" if n > 1 else c for c, n in data.items())
+def _limpiar_sumar():
+    _limpiar(_SUM_KEYS)
 
 
-def _val_or_dash(v): return v if v.strip() else "-"
+def _limpiar_todo():
+    _limpiar_editar()
+    _limpiar_sumar()
 
 
-def _fila_dict(p):
-    return {
-        "Punto": p,
-        "Poste": _val_or_dash(render_cat_str(p, "Poste")),
-        "Primario": _val_or_dash(render_cat_str(p, "Primario")),
-        "Secundario": _val_or_dash(render_cat_str(p, "Secundario")),
-        "Retenidas": _val_or_dash(render_cat_str(p, "Retenidas")),
-        "Conexiones a tierra": _val_or_dash(render_cat_str(p, "Conexiones a tierra")),
-        "Transformadores": _val_or_dash(render_cat_str(p, "Transformadores")),
-    }
+# ---------------------------
+# UI principal
+# ---------------------------
 
+def seccion_entrada_estructuras(
+    opciones_poste: List[str],
+    opciones_primario: List[str],
+    opciones_secundario: List[str],
+    opciones_retenidas: List[str],
+    opciones_tierra: List[str],
+    opciones_transformadores: List[str],
+    on_guardar: Optional[Callable[[Dict[str, Any]], None]] = None,
+    placeholder: str = _PLACEHOLDER_DEFAULT,
+    titulo: str = "Estructuras del Punto"
+):
+    """
+    Renderiza la sección con 3 modos (Editar / Sumar / Guardar) y limpieza automática.
 
-def _opciones_categoria(opciones, key):
-    obj = opciones.get(key, {})
-    return obj.get("valores", []), obj.get("etiquetas", {})
+    Args:
+        opciones_poste: Lista de opciones para el tipo de poste.
+        opciones_primario: Opciones para conductor primario.
+        opciones_secundario: Opciones para conductor secundario.
+        opciones_retenidas: Opciones de retenidas.
+        opciones_tierra: Opciones de conexión a tierra.
+        opciones_transformadores: Opciones de transformador.
+        on_guardar: Callback opcional que recibe un dict con los datos del punto.
+                    Si no se provee, se agregará a st.session_state["puntos"].
+        placeholder: Texto de placeholder para selects.
+        titulo: Título de la sección.
+    """
+    _init_state(placeholder)
 
+    st.markdown(f"### {titulo}")
 
-# =========================================================
-# UI: Barra de control de puntos
-# =========================================================
-def _barra_puntos(df_actual):
-    colA, colB, colC, colD = st.columns([1.2, 1.2, 1.8, 1.2])
+    # Opciones con placeholder asegurado al inicio
+    ops_poste         = _with_placeholder(opciones_poste, placeholder)
+    ops_primario      = _with_placeholder(opciones_primario, placeholder)
+    ops_secundario    = _with_placeholder(opciones_secundario, placeholder)
+    ops_retenidas     = _with_placeholder(opciones_retenidas, placeholder)
+    ops_tierra        = _with_placeholder(opciones_tierra, placeholder)
+    ops_transformador = _with_placeholder(opciones_transformadores, placeholder)
 
-    with colA:
-        if st.button("🆕 Punto nuevo"):
-            existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
-            nums = [int("".join(filter(str.isdigit, p))) for p in existentes if any(c.isdigit() for c in p)]
-            nuevo = f"Punto {(max(nums) + 1) if nums else 1}"
-            st.session_state["punto_en_edicion"] = nuevo
-            st.session_state["puntos_data"][nuevo] = {
-                "Poste": {}, "Primario": {}, "Secundario": {},
-                "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
+    # ---------------------------
+    # Barra de acciones (3 modos)
+    # ---------------------------
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("✏️ Editar", use_container_width=True):
+            st.session_state["modo"] = "editar"
+            _limpiar_sumar()  # al cambiar a editar limpiamos SUMAR
+
+    with c2:
+        if st.button("➕ Sumar", use_container_width=True):
+            st.session_state["modo"] = "sumar"
+            _limpiar_editar()  # al cambiar a sumar limpiamos EDITAR
+
+    with c3:
+        if st.button("💾 Guardar punto", use_container_width=True):
+            # Armamos el dict del punto con lo que haya hoy en el formulario
+            data = {
+                "poste":        st.session_state.get("poste", placeholder),
+                "primario":     st.session_state.get("primario", placeholder),
+                "secundario":   st.session_state.get("secundario", placeholder),
+                "retenidas":    st.session_state.get("retenidas", placeholder),
+                "ctierra":      st.session_state.get("ctierra", placeholder),
+                "transformador":st.session_state.get("transformador", placeholder),
             }
-            resetear_desplegables()
-            st.success(f"📍 {nuevo} creado")
 
-    with colB:
-        if not df_actual.empty:
-            p_sel = st.selectbox("Ir a:", df_actual["Punto"].unique(), key="goto")
-            if st.button("✏️ Editar"):
-                st.session_state["punto_en_edicion"] = p_sel
-                resetear_desplegables()
+            # Validación mínima (opcional): evitar guardar todo vacío
+            todo_placeholder = all(v == placeholder for v in data.values())
+            if todo_placeholder:
+                st.warning("No se guardó: completa al menos un campo antes de guardar.")
+            else:
+                try:
+                    if on_guardar is not None:
+                        on_guardar(data)
+                    else:
+                        # Default: guardar en session_state["puntos"]
+                        st.session_state["puntos"].append(data)
+                    st.success("✅ Punto guardado correctamente.")
+                except Exception as e:
+                    st.error(f"Error al guardar el punto: {e}")
+                finally:
+                    # Limpiamos todo y regresamos a modo editar
+                    _limpiar_todo()
+                    st.session_state["modo"] = "editar"
+                    st.rerun()  # asegura que la UI quede vacía
 
-    with colC:
-        if not df_actual.empty:
-            p_del = st.selectbox("Eliminar:", df_actual["Punto"].unique(), key="del")
-            if st.button("🗑 Borrar"):
-                st.session_state["df_puntos"] = df_actual[df_actual["Punto"] != p_del]
-                st.session_state["puntos_data"].pop(p_del, None)
-                st.success("✅ Eliminado")
+    st.divider()
 
-    with colD:
-        if st.button("🧹 Limpiar todo"):
-            st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
-            st.session_state["puntos_data"] = {}
-            st.session_state["punto_en_edicion"] = "Punto 1"
-            _init_punto_state()
-            resetear_desplegables()
-            st.success("✅ Todo limpio")
+    # ---------------------------
+    # Contenido según modo activo
+    # ---------------------------
+    modo = st.session_state.get("modo", "editar")
 
+    if modo == "editar":
+        st.subheader("Editar características del poste")
+        st.selectbox("Poste", ops_poste, key="poste")
+        st.selectbox("Conductor primario", ops_primario, key="primario")
+        st.selectbox("Conductor secundario", ops_secundario, key="secundario")
 
-# =========================================================
-# UI: Fila de selects para agregar estructuras
-# =========================================================
-def _fila_agregar(opciones):
-    p = st.session_state["punto_en_edicion"]
+    elif modo == "sumar":
+        st.subheader("Agregar elementos al poste")
+        st.selectbox("Retenidas", ops_retenidas, key="retenidas")
+        st.selectbox("Conexión a tierra", ops_tierra, key="ctierra")
+        st.selectbox("Transformador", ops_transformador, key="transformador")
 
-    cats = [
-        ("Poste", "poste_sel"),
-        ("Primario", "prim_sel"),
-        ("Secundario", "sec_sel"),
-        ("Retenidas", "ret_sel"),
-        ("Conexiones a tierra", "tierra_sel"),
-        ("Transformadores", "tr_sel")
-    ]
+    # ---------------------------
+    # Vista rápida (opcional)
+    # ---------------------------
+    with st.expander("Vista rápida del punto actual (no guardado)"):
+        st.write({
+            "poste":        st.session_state.get("poste", placeholder),
+            "primario":     st.session_state.get("primario", placeholder),
+            "secundario":   st.session_state.get("secundario", placeholder),
+            "retenidas":    st.session_state.get("retenidas", placeholder),
+            "ctierra":      st.session_state.get("ctierra", placeholder),
+            "transformador":st.session_state.get("transformador", placeholder),
+        })
 
-    cols = st.columns([2,2,2,2,2,2,1])
-
-    # Dibujar selects (se limpian automáticamente cuando el key no existe)
-    for i, (cat, key) in enumerate(cats):
-        vals,labs=_opciones_categoria(opciones,cat)
-        with cols[i]:
-            st.selectbox(cat,[""]+vals,format_func=lambda x,l=labs: l.get(x,x),key=key)
-
-    with cols[6]:
-        if st.button("➕"):
-            for cat,key in cats:
-                sel = st.session_state.get(key,"")
-                if sel:
-                    add_item(cat, sel)
-
-            st.session_state["limpiar_selects"]=True
-            st.success("✅ Agregado")
-
-
-# =========================================================
-# UI: Vista del punto + guardar
-# =========================================================
-def _vista_y_guardar():
-    p = st.session_state["punto_en_edicion"]
-    fila = _fila_dict(p)
-    st.dataframe(pd.DataFrame([fila]), use_container_width=True, hide_index=True)
-
-    if st.button("💾 Guardar punto", type="primary"):
-        df = st.session_state["df_puntos"]
-        df = df[df["Punto"] != p]
-        st.session_state["df_puntos"] = pd.concat([df,pd.DataFrame([fila])], ignore_index=True)
-        st.success("✅ Guardado!")
-
-    df_all = st.session_state["df_puntos"]
-    if not df_all.empty:
-        st.dataframe(df_all, use_container_width=True, hide_index=True)
-
-
-# =========================================================
-# Controlador principal del modo desplegables
-# =========================================================
-def listas_desplegables():
-    from modulo.desplegables import cargar_opciones
-    opciones = cargar_opciones()
-
-    st.subheader("3. 🏗️ Estructuras del Proyecto")
-
-    _init_punto_state()
-    df_actual = st.session_state["df_puntos"]
-
-    _barra_puntos(df_actual)
-    st.markdown("---")
-
-    p = st.session_state["punto_en_edicion"]
-    st.markdown(f"✏️ Editando {p}")
-    _fila_agregar(opciones)
-
-    # ✅ Limpieza SEGURA de selects
-    if st.session_state.get("limpiar_selects", False):
-        for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
-            st.session_state.pop(k, None)
-        st.session_state["limpiar_selects"]=False
-        st.rerun()
-
-    st.markdown("---")
-    _vista_y_guardar()
-
-    return st.session_state["df_puntos"]
-
-
-# =========================================================
-# Despachador según modo ingreso
-# =========================================================
-def seccion_entrada_estructuras(modo_carga: str):
-    if modo_carga == "Desde archivo Excel":
-        return cargar_desde_excel()
-    elif modo_carga == "Pegar tabla":
-        return pegar_tabla(), None
-    elif modo_carga == "Listas desplegables":
-        return listas_desplegables(), None
-
-    return pd.DataFrame(columns=COLUMNAS_BASE), None
+    # Listado de puntos guardados (si no usas callback)
+    if on_guardar is None and st.session_state.get("puntos"):
+        st.divider()
+        st.caption("Puntos guardados en esta sesión:")
+        st.table(st.session_state["puntos"])
