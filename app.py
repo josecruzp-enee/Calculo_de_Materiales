@@ -40,6 +40,7 @@ SECCIONES = [
     ("materiales", "Adicionar Material"),
     ("final", "Finalizar"),
     ("exportar", "Exportación"),
+    ("mapa_kml", "Mapa / KMZ"),  # <-- agregado
 ]
 
 def _nav_estado_actual() -> str:
@@ -149,9 +150,9 @@ def main() -> None:
             ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
         )
 
+    elif seccion == "mapa_kml":
+        seccion_mapa_kmz()
+
 
 if __name__ == "__main__":
     main()
-
-
-
