@@ -2,19 +2,131 @@
 # interfaz/exportacion.py
 
 import re
+from typing import List, Dict, Tuple, Optional
+
+import numpy as _np
 import pandas as pd
 import streamlit as st
+
 from modulo.procesar_materiales import procesar_materiales
 
-# Regex precompiladas para rendimiento
-_RE_SPLIT = re.compile(r"[+,;]")
+# =============================================================================
+# Regex precompiladas
+# =============================================================================
+_RE_SPLIT = re.compile(r"[+,;\n\r]+")   # incluye saltos de línea
 _RE_SANIT = re.compile(r"[^A-Z0-9\-\.]")
 
 COLUMNAS_ESTRUCTURAS = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
 
+# =============================================================================
+# Utils de saneo 1-D (blindaje definitivo para groupby)
+# =============================================================================
+def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Convierte columnas MultiIndex/Tuplas a texto plano 'a / b / c' y normaliza espacios."""
+    flat = []
+    for c in df.columns:
+        if isinstance(c, tuple):
+            flat.append(" / ".join(map(str, c)))
+        else:
+            flat.append(str(c))
+    out = df.copy()
+    out.columns = [s.strip() for s in flat]
+    return out
+
+def _dedup_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Hace únicos los nombres de columna agregando sufijos .1, .2, ... cuando se repiten."""
+    cols = list(map(str, df.columns))
+    seen: Dict[str, int] = {}
+    newcols: List[str] = []
+    for c in cols:
+        if c not in seen:
+            seen[c] = 0
+            newcols.append(c)
+        else:
+            seen[c] += 1
+            newcols.append(f"{c}.{seen[c]}")
+    out = df.copy()
+    out.columns = newcols
+    return out
+
+def _scalarize_cell(x) -> str:
+    """Convierte cualquier valor no 1-D a string plano."""
+    if isinstance(x, (list, tuple, set)):
+        return ", ".join(map(str, x))
+    if isinstance(x, _np.ndarray):
+        return ", ".join(map(str, x.tolist()))
+    if isinstance(x, (pd.Series, pd.DataFrame)):
+        try:
+            return ", ".join(map(str, pd.Series(x).squeeze().tolist()))
+        except Exception:
+            return str(x)
+    if x is None:
+        return ""
+    return str(x)
+
+def _to_int_safe(v) -> int:
+    try:
+        iv = int(float(v))
+        return iv if iv >= 0 else 0
+    except Exception:
+        return 0
+
+def coerce_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Devuelve SIEMPRE un DataFrame NUEVO y 1-D con columnas EXACTAS:
+    ['Punto','codigodeestructura','cantidad'] listo para groupby.
+    - flatten + dedup de nombres
+    - asegura columnas mínimas
+    - scalariza celdas
+    - limpia sufijos de códigos '(...)' al final
+    - cantidad → int (si no existe, usa 1 por fila)
+    - reconstrucción desde arrays 1-D
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+
+    df = _flatten_columns(df)
+    df = _dedup_columns(df).copy()
+
+    # Asegura columnas requeridas; si 'cantidad' no existe, la creamos = 1
+    if "Punto" not in df.columns:
+        df["Punto"] = ""
+    if "codigodeestructura" not in df.columns:
+        # si no existe, intenta derivarla de 'Estructura'
+        if "Estructura" in df.columns:
+            df["codigodeestructura"] = df["Estructura"]
+        else:
+            df["codigodeestructura"] = ""
+    if "cantidad" not in df.columns:
+        # si hay 'Cantidad', úsala; si no, será 1
+        if "Cantidad" in df.columns:
+            df["cantidad"] = df["Cantidad"]
+        else:
+            df["cantidad"] = 1
+
+    p = df["Punto"].map(_scalarize_cell).map(str).str.strip()
+    c = df["codigodeestructura"].map(_scalarize_cell).map(str).str.strip()
+    # limpia sufijos "(E)" "(P)" "(R)" o cualquier paréntesis final
+    c = c.str.replace(r"\s*\([^)]*\)\s*$", "", regex=True).str.strip()
+    q = df["cantidad"].map(_to_int_safe).astype(int)
+
+    mask = (c != "") & (q > 0)
+    p, c, q = p[mask], c[mask], q[mask]
+
+    out = pd.DataFrame({
+        "Punto": _np.asarray(p.values, dtype=object),
+        "codigodeestructura": _np.asarray(c.values, dtype=object),
+        "cantidad": _np.asarray(q.values, dtype=_np.int64),
+    }, columns=["Punto", "codigodeestructura", "cantidad"])
+
+    return out.reset_index(drop=True)
+
+# =============================================================================
+# Helpers de expansión (si el DF de entrada está en ANCHO)
+# =============================================================================
 def _limpiar_listado(valor: str) -> list[str]:
     """Normaliza una celda de estructuras en lista limpia sin duplicados preservando orden."""
-    if not valor or str(valor).strip().lower() == 'seleccionar estructura':
+    if not valor or str(valor).strip().lower() == "seleccionar estructura":
         return []
     out = []
     for p in _RE_SPLIT.split(str(valor)):
@@ -24,30 +136,54 @@ def _limpiar_listado(valor: str) -> list[str]:
     vistos, res = set(), []
     for x in out:
         if x not in vistos:
-            res.append(x); vistos.add(x)
+            res.append(x)
+            vistos.add(x)
     return res
 
 def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
-    """Crea df_expandido con una fila por (Punto, codigodeestructura) sin duplicados."""
+    """
+    Si 'codigodeestructura' existe -> respeta como LARGO.
+    Si no, crea df_expandido con una fila por (Punto, codigodeestructura) desde columnas ANCHO.
+    """
+    if "codigodeestructura" in df.columns:
+        # ya es LARGO o casi; devuelve copia para coerce posterior
+        base = df.copy()
+        # si no hay 'cantidad', la agregamos en 1 para cada fila
+        if "cantidad" not in base.columns:
+            base["cantidad"] = 1
+        return base
+
+    # Caso ANCHO → construir listado por fila
     df2 = df.copy()
     df2["Estructura"] = df2.apply(
         lambda fila: sum((_limpiar_listado(fila.get(c, "")) for c in COLUMNAS_ESTRUCTURAS), []),
         axis=1
     )
     df2 = df2.explode("Estructura", ignore_index=True)
-    df2 = df2[df2["Estructura"].notna() & (df2["Estructura"].str.strip() != "")]
-    df2["Estructura"] = df2["Estructura"].str.strip().str.upper()
+    df2 = df2[df2["Estructura"].notna() & (df2["Estructura"].astype(str).str.strip() != "")]
+    df2["Estructura"] = df2["Estructura"].astype(str).str.strip().str.upper()
     df2.drop_duplicates(subset=["Punto", "Estructura"], inplace=True)
     df2.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
-    return df2
+    df2["cantidad"] = 1
+    return df2[["Punto", "codigodeestructura", "cantidad"]]
 
+# =============================================================================
+# UI de conteo rápido y sección final
+# =============================================================================
 def _preview_conteo(df_expandido: pd.DataFrame) -> None:
+    # 🔒 Blindaje: garantizamos 1-D y columnas exactas
+    df_expandido = coerce_expandido_para_groupby(df_expandido)
+
+    # Conteo por punto y código
     conteo = (
-        df_expandido.groupby(["Punto", "codigodeestructura"])
-        .size()
-        .reset_index(name="Cantidad")
+        df_expandido
+        .groupby(["Punto", "codigodeestructura"], dropna=False)["cantidad"]
+        .sum()
+        .reset_index()
+        .rename(columns={"cantidad": "Cantidad"})
+        .sort_values(["Punto", "codigodeestructura"])
     )
-    st.caption("Conteo rápido de estructuras por punto (sin duplicados):")
+    st.caption("Conteo rápido de estructuras por punto:")
     st.dataframe(conteo, use_container_width=True, hide_index=True)
 
 def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
@@ -57,6 +193,9 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
             st.session_state["calculo_finalizado"] = True
             st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
 
+# =============================================================================
+# Sección principal de exportación
+# =============================================================================
 def seccion_exportacion(
     df: pd.DataFrame,
     modo_carga: str,
@@ -90,8 +229,13 @@ def seccion_exportacion(
         st.session_state["datos_proyecto"]["calibre_mt"] = calibre_mt
         st.info(f"🔧 Nivel de tensión: {tension} kV  |  Calibre MT: {calibre_mt}")
 
-    # 2) Expandir estructuras
+    # 2) Expandir estructuras (ANCHO → LARGO si hace falta)
     df_expandido = _expandir_estructuras(df)
+
+    # 2.1) Coerción 1-D ANTES de cualquier uso
+    df_expandido = coerce_expandido_para_groupby(df_expandido)
+
+    # 2.2) Preview
     _preview_conteo(df_expandido)
 
     # 3) Materiales adicionales → DataFrame
@@ -109,7 +253,7 @@ def seccion_exportacion(
                 resultados_pdf = procesar_materiales(
                     archivo_estructuras=ruta_estructuras,
                     archivo_materiales=ruta_datos_materiales,
-                    estructuras_df=df_expandido,
+                    estructuras_df=df_expandido,  # ← ya limpio y 1-D
                     datos_proyecto=st.session_state.get("datos_proyecto", {})
                 )
 
@@ -143,3 +287,4 @@ def seccion_exportacion(
             if pdfs.get("completo"):
                 st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
                                    "Informe_Completo.pdf", "application/pdf", key="dl_full")
+
