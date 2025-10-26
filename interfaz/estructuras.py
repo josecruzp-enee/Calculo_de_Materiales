@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import io
+import os
+import time
+import tempfile
 from typing import Optional, Tuple, List, Dict
 
 import pandas as pd
@@ -47,6 +50,24 @@ def _parsear_texto_a_df(texto: str, columnas: List[str]) -> pd.DataFrame:
             return pd.DataFrame(columns=columnas)
     return _normalizar_columnas(df, columnas)
 
+def _materializar_df_a_archivo(df: pd.DataFrame, etiqueta: str = "data") -> str:
+    """
+    Escribe el DF a un .xlsx temporal y devuelve la ruta ABSOLUTA.
+    Esto garantiza que app.py siempre reciba una ruta válida.
+    """
+    ts = int(time.time())
+    tmpdir = tempfile.gettempdir()
+    fname = f"estructuras_{etiqueta}_{ts}.xlsx"
+    ruta = os.path.join(tmpdir, fname)
+    try:
+        # Escribimos Excel; openpyxl suele estar disponible en Streamlit Cloud
+        df.to_excel(ruta, index=False)
+    except Exception:
+        # Fallback a CSV si fallara openpyxl
+        ruta = os.path.join(tmpdir, f"estructuras_{etiqueta}_{ts}.csv")
+        df.to_csv(ruta, index=False)
+    return ruta
+
 # =============================================================================
 # Modo: Excel
 # =============================================================================
@@ -60,10 +81,11 @@ def cargar_desde_excel() -> Tuple[pd.DataFrame | None, str | None]:
         df = pd.read_excel(archivo)
     except Exception as e:
         st.error(f"Error leyendo el Excel: {e}")
-        return None, nombre
+        return None, None
     df = _normalizar_columnas(df, COLUMNAS_BASE)
+    ruta_tmp = _materializar_df_a_archivo(df, "excel")
     st.success(f"✅ Cargadas {len(df)} filas desde {nombre}")
-    return df, nombre
+    return df, ruta_tmp
 
 # =============================================================================
 # Modo: Pegar tabla (CSV/TSV)
@@ -74,8 +96,12 @@ def pegar_tabla() -> Tuple[pd.DataFrame | None, str | None]:
     if not texto_pegado:
         return None, None
     df = _parsear_texto_a_df(texto_pegado, COLUMNAS_BASE)
+    if df is None or df.empty:
+        st.warning("No se detectaron filas válidas en el texto.")
+        return None, None
+    ruta_tmp = _materializar_df_a_archivo(df, "pega")
     st.success(f"✅ Tabla cargada con {len(df)} filas")
-    return df, "PEGA/TEXTO"
+    return df, ruta_tmp
 
 # =============================================================================
 # Modo: Desplegables (Listas PRO) con MT/BT
@@ -84,7 +110,7 @@ def pegar_tabla() -> Tuple[pd.DataFrame | None, str | None]:
 def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
     """
     Intenta cargar opciones desde modulo.desplegables.cargar_opciones().
-    Estructura esperada por categoría:
+    Estructura por categoría:
       {"valores": [cod1, cod2, ...], "etiquetas": {cod1: "cod1 – desc", ...}}
     Si no existe el módulo, retorna un fallback mínimo.
     """
@@ -226,6 +252,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     """
     UI PRO con desplegables (MT/BT, Primario/Secundario) + cantidad.
     Consolida por Punto y guarda en st.session_state["df_puntos"].
+    Devuelve (df, ruta_tmp_xlsx) cuando hay datos.
     """
     _ensure_df_sesion()
     _ensure_punto_en_edicion()
@@ -357,7 +384,9 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 
     df_final = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
     if isinstance(df_final, pd.DataFrame) and not df_final.empty:
-        return _normalizar_columnas(df_final, COLUMNAS_BASE), "UI/LISTAS"
+        df_final = _normalizar_columnas(df_final, COLUMNAS_BASE)
+        ruta_tmp = _materializar_df_a_archivo(df_final, "ui")
+        return df_final, ruta_tmp
     return None, None
 
 # =============================================================================
@@ -367,9 +396,9 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, str | None]:
     """
     Devuelve siempre una tupla (df_estructuras, ruta_estructuras) según el modo:
-      - "Excel"  -> carga desde file_uploader
-      - "Pegar"  -> parsea texto CSV/TSV
-      - otro     -> UI de Desplegables (Listas PRO, compatible con MT/BT)
+      - "Excel"  -> carga desde file_uploader y materializa a archivo temporal
+      - "Pegar"  -> parsea texto CSV/TSV y materializa a archivo temporal
+      - otro     -> UI de Desplegables (MT/BT) y materializa a archivo temporal
     """
     modo = (modo_carga or "").strip().lower()
 
