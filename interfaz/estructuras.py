@@ -6,7 +6,7 @@ import io
 import os
 import time
 import tempfile
-from typing import Optional, Tuple, List, Dict
+from typing import Tuple, List, Dict
 
 import pandas as pd
 import streamlit as st
@@ -30,9 +30,11 @@ def _normalizar_columnas(df: pd.DataFrame, columnas: List[str]) -> pd.DataFrame:
     for c in columnas:
         if c not in df.columns:
             df[c] = ""
-    return df[columnas]
+    # Mantener el orden esperado por la app
+    return df[[c for c in columnas if c in df.columns]]
 
 def _parsear_texto_a_df(texto: str, columnas: List[str]) -> pd.DataFrame:
+    """Convierte texto pegado (CSV/TSV/; o | o whitespace) a DataFrame."""
     txt = (texto or "").strip()
     if not txt:
         return pd.DataFrame(columns=columnas)
@@ -52,20 +54,27 @@ def _parsear_texto_a_df(texto: str, columnas: List[str]) -> pd.DataFrame:
 
 def _materializar_df_a_archivo(df: pd.DataFrame, etiqueta: str = "data") -> str:
     """
-    Escribe el DF a un .xlsx temporal y devuelve la ruta ABSOLUTA.
-    Esto garantiza que app.py siempre reciba una ruta válida.
+    Escribe el DF a un .xlsx temporal con hoja EXACTA 'estructuras' y
+    devuelve la ruta ABSOLUTA. Así el motor de reportes siempre encuentra la hoja.
     """
     ts = int(time.time())
     tmpdir = tempfile.gettempdir()
-    fname = f"estructuras_{etiqueta}_{ts}.xlsx"
-    ruta = os.path.join(tmpdir, fname)
+    ruta = os.path.join(tmpdir, f"estructuras_{etiqueta}_{ts}.xlsx")
+
+    # Intentar con openpyxl y, si no, con xlsxwriter
+    writer = None
     try:
-        # Escribimos Excel; openpyxl suele estar disponible en Streamlit Cloud
-        df.to_excel(ruta, index=False)
+        writer = pd.ExcelWriter(ruta, engine="openpyxl")
     except Exception:
-        # Fallback a CSV si fallara openpyxl
-        ruta = os.path.join(tmpdir, f"estructuras_{etiqueta}_{ts}.csv")
-        df.to_csv(ruta, index=False)
+        try:
+            writer = pd.ExcelWriter(ruta, engine="xlsxwriter")
+        except Exception as e:
+            st.error("No se pudo crear el Excel temporal. Instala 'openpyxl' o 'xlsxwriter'.")
+            raise e
+
+    with writer:
+        df.to_excel(writer, sheet_name="estructuras", index=False)
+
     return ruta
 
 # =============================================================================
@@ -117,7 +126,7 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
     try:
         from modulo.desplegables import cargar_opciones  # type: ignore
         opciones = cargar_opciones()
-        # Normalización suave
+        # Normalización suave de claves esperadas
         for key in ["Poste", "Primaria", "Primario", "Secundaria", "Secundario", "MT", "BT",
                     "Retenidas", "Conexiones a tierra", "Transformadores", "Transformador"]:
             opciones.setdefault(key, {"valores": [], "etiquetas": {}})
@@ -125,7 +134,7 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
             opciones[key].setdefault("etiquetas", {})
         return opciones
     except Exception:
-        # Fallback simple
+        # Fallback simple para que la UI funcione aunque no exista el módulo
         return {
             "Poste": {"valores": ["PC-40", "PM-35"], "etiquetas": {
                 "PC-40": "PC-40 – Poste de Concreto de 40 Pies.",
@@ -310,7 +319,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     punto = st.session_state["punto_en_edicion"]
     st.markdown(f"### ✏️ Editando {punto}")
 
-    # MT/BT y variantes + Primario/Secundario
+    # MT/BT y variantes + Primario/Secundario (robusto a nombres)
     vals_poste, lab_poste = _pick_vals_labels(opciones, ["Poste"], ["poste"])
 
     vals_pri, lab_pri = _pick_vals_labels(
@@ -396,9 +405,9 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, str | None]:
     """
     Devuelve siempre una tupla (df_estructuras, ruta_estructuras) según el modo:
-      - "Excel"  -> carga desde file_uploader y materializa a archivo temporal
-      - "Pegar"  -> parsea texto CSV/TSV y materializa a archivo temporal
-      - otro     -> UI de Desplegables (MT/BT) y materializa a archivo temporal
+      - "Excel"  -> carga desde file_uploader y materializa a archivo temporal (hoja 'estructuras')
+      - "Pegar"  -> parsea texto CSV/TSV y materializa a archivo temporal (hoja 'estructuras')
+      - otro     -> UI de Desplegables (MT/BT) y materializa a archivo temporal (hoja 'estructuras')
     """
     modo = (modo_carga or "").strip().lower()
 
