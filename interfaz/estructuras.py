@@ -138,7 +138,8 @@ def _consolidado_a_fila(punto: str) -> dict:
 def listas_desplegables():
     """
     UI de edición por Punto con UNA FILA HORIZONTAL:
-    [Poste ▼][Primario ▼][Secundario ▼][Retenidas ▼][Tierra ▼][Trafo ▼][ 1 ][➕ Agregar todo]
+    [Poste ▼][Primario ▼][Secundario ▼][Retenidas ▼][Tierra ▼][Trafo ▼][➕ Agregar todo]
+    - Sin cantidad: siempre agrega 1 unidad por cada selección hecha.
     """
     from modulo.desplegables import cargar_opciones
     opciones = cargar_opciones()
@@ -146,6 +147,22 @@ def listas_desplegables():
     st.subheader("3. 🏗️ Estructuras del Proyecto")
 
     _init_punto_state()
+
+    # --- Fix robusto para evitar "Editando None" ---
+    if not st.session_state.get("punto_en_edicion"):
+        df_tmp = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
+        if not df_tmp.empty:
+            st.session_state["punto_en_edicion"] = df_tmp["Punto"].iloc[0]
+        else:
+            st.session_state["punto_en_edicion"] = "Punto 1"
+            if "puntos_data" not in st.session_state:
+                st.session_state["puntos_data"] = {}
+            if "Punto 1" not in st.session_state["puntos_data"]:
+                st.session_state["puntos_data"]["Punto 1"] = {
+                    "Poste": {}, "Primario": {}, "Secundario": {},
+                    "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
+                }
+
     df_actual = st.session_state["df_puntos"]
 
     # ---------- Barra superior ----------
@@ -169,6 +186,7 @@ def listas_desplegables():
             p_sel = st.selectbox("📍 Ir a punto:", df_actual["Punto"].unique(), key="sel_goto_punto")
             if st.button("✏️ Editar", key="btn_editar_punto"):
                 st.session_state["punto_en_edicion"] = p_sel
+                # OJO: opción A (fila limpia). Solo cambiamos el punto; no precargamos selects.
                 resetear_desplegables()
 
     with colC:
@@ -201,9 +219,9 @@ def listas_desplegables():
     val_ct,    lab_ct    = _opciones_categoria(opciones, "Conexiones a tierra")
     val_tr,    lab_tr    = _opciones_categoria(opciones, "Transformadores")
 
-    # ===== FILA ÚNICA =====
+    # ===== FILA ÚNICA (sin cantidad) =====
     st.markdown("#### ➕ Agregar estructuras a este punto")
-    cols = st.columns([2,2,2,2,2,2,1,1])
+    cols = st.columns([2,2,2,2,2,2,1])  # 6 selects + botón
 
     with cols[0]:
         poste_sel = st.selectbox("Poste", [""] + val_poste, format_func=lambda x: lab_poste.get(x, x), key="poste_sel")
@@ -217,19 +235,19 @@ def listas_desplegables():
         tierra_sel = st.selectbox("Tierra", [""] + val_ct, format_func=lambda x: lab_ct.get(x, x), key="tierra_sel")
     with cols[5]:
         tr_sel = st.selectbox("Transformador", [""] + val_tr, format_func=lambda x: lab_tr.get(x, x), key="tr_sel")
+
     with cols[6]:
-        cant = st.number_input("Cant.", min_value=1, step=1, value=1, key="cant_sel")
-
-    with cols[7]:
         if st.button("➕ Agregar todo", type="primary", key="add_all"):
-            if poste_sel:  add_item("Poste", poste_sel, cant)
-            if prim_sel:   add_item("Primario", prim_sel, cant)
-            if sec_sel:    add_item("Secundario", sec_sel, cant)
-            if ret_sel:    add_item("Retenidas", ret_sel, cant)
-            if tierra_sel: add_item("Conexiones a tierra", tierra_sel, cant)
-            if tr_sel:     add_item("Transformadores", tr_sel, cant)
+            # Siempre agrega 1 por cada selección hecha
+            if poste_sel:  add_item("Poste", poste_sel, 1)
+            if prim_sel:   add_item("Primario", prim_sel, 1)
+            if sec_sel:    add_item("Secundario", sec_sel, 1)
+            if ret_sel:    add_item("Retenidas", ret_sel, 1)
+            if tierra_sel: add_item("Conexiones a tierra", tierra_sel, 1)
+            if tr_sel:     add_item("Transformadores", tr_sel, 1)
 
-            for k in ["poste_sel", "prim_sel", "sec_sel", "ret_sel", "tierra_sel", "tr_sel", "cant_sel"]:
+            # Reset seguro (solo los selects)
+            for k in ["poste_sel", "prim_sel", "sec_sel", "ret_sel", "tierra_sel", "tr_sel"]:
                 st.session_state.pop(k, None)
 
             st.success("✅ ¡Se agregó la fila completa!")
@@ -257,6 +275,7 @@ def listas_desplegables():
         st.dataframe(df_all, use_container_width=True, hide_index=True)
 
     return df_all
+
 
 
 
