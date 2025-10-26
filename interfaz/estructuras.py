@@ -78,41 +78,74 @@ def _parse_item(piece: str) -> tuple[str, int]:
         return _norm_code_value(m.group(2)), int(m.group(1))
     return _norm_code_value(piece), 1
 
+import pandas as pd
+
 def _expand_wide_to_long(df_ancho: pd.DataFrame) -> pd.DataFrame:
     """
-    ANCHO -> LARGO para el motor de reportes.
-    Devuelve columnas: Punto, codigodeestructura, cantidad
+    Convierte el DataFrame ancho de estructuras a formato largo
+    con columnas planas: Punto, codigodeestructura, cantidad.
     """
-    df = _normalizar_columnas(df_ancho, COLUMNAS_BASE).copy()
-    cat_cols = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
-    rows = []
-
-    for _, r in df.iterrows():
-        punto = str(r.get("Punto", "")).strip()
-        for col in cat_cols:
-            val = r.get(col, "")
-            # 🧹 Asegurar que sea string plano
-            if isinstance(val, (list, tuple)):
-                val = ", ".join(map(str, val))
-            if not isinstance(val, str):
-                val = str(val)
-
-            for piece in _split_cell_items(val):
-                code, qty = _parse_item(piece)
-                if code:
-                    rows.append({
-                        "Punto": punto,
-                        "codigodeestructura": code,
-                        "cantidad": int(qty),
-                    })
-
-    # 🧩 Asegurar DataFrame limpio y plano
-    if not rows:
+    if df_ancho is None or df_ancho.empty:
         return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
 
-    df_out = pd.DataFrame(rows, columns=["Punto", "codigodeestructura", "cantidad"])
-    df_out = df_out.astype({"Punto": "string", "codigodeestructura": "string", "cantidad": "int"})
-    return df_out
+    # Asegurar columnas esperadas
+    columnas_validas = ["Punto", "Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
+    for c in columnas_validas:
+        if c not in df_ancho.columns:
+            df_ancho[c] = ""
+
+    registros = []
+    for _, fila in df_ancho.iterrows():
+        punto = str(fila.get("Punto", "")).strip()
+
+        for col in columnas_validas[1:]:  # Omitir "Punto"
+            valor = fila.get(col, "")
+            if isinstance(valor, (list, tuple)):
+                valor = ", ".join(map(str, valor))
+            if pd.isna(valor):
+                continue
+            valor = str(valor).strip()
+
+            # Dividir por coma o salto de línea
+            for parte in valor.replace("\n", ",").split(","):
+                parte = parte.strip()
+                if not parte:
+                    continue
+
+                # Separar código y cantidad
+                if " " in parte:
+                    partes = parte.rsplit(" ", 1)
+                    cod = partes[0].strip()
+                    try:
+                        cant = int(partes[1])
+                    except ValueError:
+                        cant = 1
+                else:
+                    cod = parte
+                    cant = 1
+
+                if cod:
+                    registros.append({
+                        "Punto": punto,
+                        "codigodeestructura": str(cod),
+                        "cantidad": cant
+                    })
+
+    if not registros:
+        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+
+    df_largo = pd.DataFrame(registros)
+    # 🔹 Asegurar que todo sea plano y 1D
+    df_largo = df_largo.astype({
+        "Punto": "string",
+        "codigodeestructura": "string",
+        "cantidad": "int"
+    })
+
+    # Eliminar filas con valores vacíos
+    df_largo = df_largo.dropna(subset=["Punto", "codigodeestructura"]).reset_index(drop=True)
+
+    return df_largo
 
 
 def _materializar_df_a_archivo(df_ancho: pd.DataFrame, etiqueta: str = "data") -> str:
