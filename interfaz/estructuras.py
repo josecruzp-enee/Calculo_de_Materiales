@@ -450,6 +450,9 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 # =============================================================================
 # Función pública: llamada por app.py
 # =============================================================================
+# =============================================================================
+# Función pública: llamada por app.py
+# =============================================================================
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, str | None]:
     """
     Devuelve (df_estructuras_largo, ruta_estructuras_xlsx) según el modo:
@@ -468,5 +471,20 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, s
     if res is None or not isinstance(res, tuple):
         # Siempre devuelve una tupla para evitar errores en app.py
         return None, None
+
+    # --- 🧩 DEBUG: verificar DataFrame antes de enviarlo a exportación ---
+    try:
+        if isinstance(res, tuple) and isinstance(res[0], pd.DataFrame):
+            df_dbg = res[0]
+            st.markdown("### 🧪 DEBUG: vista previa de df_expandido")
+            st.dataframe(df_dbg.head(10), use_container_width=True)
+            st.write("**Columnas:**", list(df_dbg.columns))
+            st.write("**Tipos de datos:**")
+            st.write(df_dbg.dtypes)
+            st.write("**Forma:**", df_dbg.shape)
+    except Exception as e:
+        st.error(f"⚠️ Error en debug de seccion_entrada_estructuras: {e}")
+
     return res
+
 
