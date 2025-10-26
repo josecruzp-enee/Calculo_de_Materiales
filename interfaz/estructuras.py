@@ -8,10 +8,6 @@ import re
 import time
 import tempfile
 from typing import Tuple, List, Dict
-import re
-import numpy as np
-import pandas as pd
-import streamlit as st
 
 import pandas as pd
 import streamlit as st
@@ -82,75 +78,26 @@ def _parse_item(piece: str) -> tuple[str, int]:
         return _norm_code_value(m.group(2)), int(m.group(1))
     return _norm_code_value(piece), 1
 
-import pandas as pd
-
 def _expand_wide_to_long(df_ancho: pd.DataFrame) -> pd.DataFrame:
     """
-    Convierte el DataFrame ancho de estructuras a formato largo
-    con columnas planas: Punto, codigodeestructura, cantidad.
+    ANCHO -> LARGO para el motor de reportes.
+    Devuelve columnas: Punto, codigodeestructura, cantidad
     """
-    if df_ancho is None or df_ancho.empty:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
-
-    # Asegurar columnas esperadas
-    columnas_validas = ["Punto", "Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
-    for c in columnas_validas:
-        if c not in df_ancho.columns:
-            df_ancho[c] = ""
-
-    registros = []
-    for _, fila in df_ancho.iterrows():
-        punto = str(fila.get("Punto", "")).strip()
-
-        for col in columnas_validas[1:]:  # Omitir "Punto"
-            valor = fila.get(col, "")
-            if isinstance(valor, (list, tuple)):
-                valor = ", ".join(map(str, valor))
-            if pd.isna(valor):
-                continue
-            valor = str(valor).strip()
-
-            # Dividir por coma o salto de línea
-            for parte in valor.replace("\n", ",").split(","):
-                parte = parte.strip()
-                if not parte:
-                    continue
-
-                # Separar código y cantidad
-                if " " in parte:
-                    partes = parte.rsplit(" ", 1)
-                    cod = partes[0].strip()
-                    try:
-                        cant = int(partes[1])
-                    except ValueError:
-                        cant = 1
-                else:
-                    cod = parte
-                    cant = 1
-
-                if cod:
-                    registros.append({
+    df = _normalizar_columnas(df_ancho, COLUMNAS_BASE).copy()
+    cat_cols = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
+    rows = []
+    for _, r in df.iterrows():
+        punto = str(r.get("Punto", "")).strip()
+        for col in cat_cols:
+            for piece in _split_cell_items(str(r.get(col, "") or "")):
+                code, qty = _parse_item(piece)
+                if code:
+                    rows.append({
                         "Punto": punto,
-                        "codigodeestructura": str(cod),
-                        "cantidad": cant
+                        "codigodeestructura": code,   # EXACTO como lo exige el generador
+                        "cantidad": int(qty),
                     })
-
-    if not registros:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
-
-    df_largo = pd.DataFrame(registros)
-    # 🔹 Asegurar que todo sea plano y 1D
-    df_largo = df_largo.astype({
-        "Punto": "string",
-        "codigodeestructura": "string",
-        "cantidad": "int"
-    })
-
-    # Eliminar filas con valores vacíos
-    df_largo = df_largo.dropna(subset=["Punto", "codigodeestructura"]).reset_index(drop=True)
-
-    return df_largo
-
+    return pd.DataFrame(rows, columns=["Punto", "codigodeestructura", "cantidad"])
 
 def _materializar_df_a_archivo(df_ancho: pd.DataFrame, etiqueta: str = "data") -> str:
     """
@@ -346,34 +293,22 @@ def _render_cat_str(punto: str, categoria: str) -> str:
 def _fila_categoria_ui(label: str, valores: list[str], etiquetas: dict, key_prefix: str):
     st.markdown(f"**{label}**")
     c1, c2, c3 = st.columns([7, 1.1, 1.9])
-
     with c1:
-        # 🔹 Agregar una opción vacía al inicio del desplegable
-        opciones = [""] + valores
-        etiquetas_mod = {"": "— Seleccione —"}
-        etiquetas_mod.update(etiquetas)
-
         sel = st.selectbox(
-            "", opciones, index=0,
+            "", valores, index=0 if valores else None,
             key=f"{key_prefix}_{label}_sel",
             label_visibility="collapsed",
-            format_func=lambda x: etiquetas_mod.get(x, x),
+            format_func=lambda x: etiquetas.get(x, x),
         )
-
     with c2:
         qty = st.number_input(
             " ", min_value=1, max_value=99, step=1, value=1,
             key=f"{key_prefix}_{label}_qty", label_visibility="collapsed"
         )
-
     with c3:
         if st.button("➕ Agregar", key=f"{key_prefix}_{label}_add"):
-            if sel and sel.strip():  # Solo agregar si se seleccionó algo válido
-                _add_item(label, sel, qty)
-                st.success(f"Añadido: {qty}× {etiquetas_mod.get(sel, sel)}")
-            else:
-                st.warning("⚠️ Selecciona un elemento antes de agregar.")
-
+            _add_item(label, sel, qty)
+            st.success(f"Añadido: {qty}× {etiquetas.get(sel, sel)}")
 
 def _consolidado_a_fila(punto: str) -> Dict[str, str]:
     return {
@@ -527,4 +462,4 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[pd.DataFrame | None, s
         return cargar_desde_excel()
     if modo == "pegar":
         return pegar_tabla()
-    return listas_desplegables()
+    return 
