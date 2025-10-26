@@ -109,6 +109,7 @@ def _consolidado_a_fila(p: str) -> dict:
 def _barra_puntos(df_actual):
     colA, colB, colC, colD = st.columns([1.2, 1.2, 1.8, 1.2])
 
+    # ✅ Crear nuevo punto
     with colA:
         if st.button("🆕 Crear nuevo Punto"):
             existentes = df_actual["Punto"].unique().tolist() if not df_actual.empty else []
@@ -120,31 +121,55 @@ def _barra_puntos(df_actual):
                 "Poste": {}, "Primario": {}, "Secundario": {},
                 "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
             }
+
+            # Limpiar selects
+            for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
+                st.session_state.pop(k, None)
+
             st.success(f"✏️ {nuevo} listo para editar")
             resetear_desplegables()
+            st.rerun()
 
+    # ✅ Ir a punto (editar)
     with colB:
         if not df_actual.empty:
             p_sel = st.selectbox("📍 Ir a punto:", df_actual["Punto"].unique(), key="sel_goto")
+
             if st.button("✏️ Editar", key="btn_edit"):
                 st.session_state["punto_en_edicion"] = p_sel
-                resetear_desplegables()
 
+                # ✅ Limpiar selects al editar el punto
+                for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
+                    st.session_state.pop(k, None)
+
+                resetear_desplegables()
+                st.rerun()
+
+    # ✅ Borrar punto
     with colC:
         if not df_actual.empty:
             p_del = st.selectbox("❌ Borrar punto:", df_actual["Punto"].unique(), key="sel_del")
+
             if st.button("Borrar", key="btn_del"):
                 st.session_state["df_puntos"] = df_actual[df_actual["Punto"] != p_del].reset_index(drop=True)
                 st.session_state["puntos_data"].pop(p_del, None)
-                st.success("✅ Se eliminó")
+                st.success(f"✅ Se eliminó {p_del}")
+                st.rerun()
 
+    # ✅ Limpiar todo
     with colD:
-        if st.button("🧹 Limpiar todo"):
+        if st.button("🧹 Limpiar todo", key="btn_clear_all"):
             st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
             st.session_state["puntos_data"].clear()
             st.session_state["punto_en_edicion"] = "Punto 1"
             _init_punto_state()
+
+            # También limpiamos selects
+            for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
+                st.session_state.pop(k, None)
+
             st.success("✅ Todo limpio")
+            st.rerun()
 
 
 def _fila_agregar(opciones):
