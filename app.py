@@ -102,15 +102,21 @@ def _barra_nav_botones(seccion_activa: str) -> None:
 def main() -> None:
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
 
+    # ==========================================================
     # Encabezado institucional / estado global de la app
+    # ==========================================================
     renderizar_encabezado()
     inicializar_estado()
 
+    # ==========================================================
     # Navegación
+    # ==========================================================
     seccion = _nav_estado_actual()
     _barra_nav_botones(seccion)
 
-    # ---------- Render condicional (solo UNA sección visible) ----------
+    # ==========================================================
+    # Render condicional (solo UNA sección visible a la vez)
+    # ==========================================================
     if seccion == "datos":
         seccion_datos_proyecto()
 
@@ -124,7 +130,7 @@ def main() -> None:
         st.session_state["modo_carga_seleccionado"] = modo
 
     elif seccion == "estructuras":
-        # Lee el modo elegido previamente, o aplica el default sin crear widgets nuevos
+        # Lee el modo elegido previamente o aplica el default
         modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
         df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
         st.session_state["df_estructuras_compacto"] = df_estructuras
@@ -135,24 +141,33 @@ def main() -> None:
 
     elif seccion == "final":
         df_e = st.session_state.get("df_estructuras_compacto")
-        if df_e is None:
-            st.info("Carga primero las estructuras en la sección ‘Estructuras’.")
+        if df_e is None or not hasattr(df_e, "empty") or df_e.empty:
+            st.info("⚠️ Carga primero las estructuras en la sección ‘Estructuras’.")
         else:
             seccion_finalizar_calculo(df_e)
 
     elif seccion == "exportar":
         df_e = st.session_state.get("df_estructuras_compacto")
         ruta_e = st.session_state.get("ruta_estructuras_compacto")
-        seccion_exportacion(
-            df=df_e,
-            modo_carga=st.session_state.get("modo_carga_seleccionado"),
-            ruta_estructuras=ruta_e,
-            ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
-        )
+
+        # 🔒 Validación robusta antes de exportar
+        if df_e is None or not hasattr(df_e, "empty") or df_e.empty:
+            st.warning("⚠️ Primero completa la sección ‘Estructuras’ antes de exportar.")
+            st.info("Ve a la pestaña **Estructuras**, carga o genera tus datos, y luego vuelve aquí.")
+        else:
+            seccion_exportacion(
+                df=df_e,
+                modo_carga=st.session_state.get("modo_carga_seleccionado"),
+                ruta_estructuras=ruta_e,
+                ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
+            )
 
     elif seccion == "mapa_kml":
         seccion_mapa_kmz()
 
 
+# ==========================================================
+# Punto de entrada
+# ==========================================================
 if __name__ == "__main__":
     main()
