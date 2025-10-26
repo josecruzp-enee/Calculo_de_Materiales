@@ -254,3 +254,4 @@ def seccion_entrada_estructuras(modo_carga: str):
         df = listas_desplegables()
 
     return df, ruta
+
