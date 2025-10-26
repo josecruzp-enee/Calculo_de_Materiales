@@ -293,22 +293,34 @@ def _render_cat_str(punto: str, categoria: str) -> str:
 def _fila_categoria_ui(label: str, valores: list[str], etiquetas: dict, key_prefix: str):
     st.markdown(f"**{label}**")
     c1, c2, c3 = st.columns([7, 1.1, 1.9])
+
     with c1:
+        # 🔹 Agregar una opción vacía al inicio del desplegable
+        opciones = [""] + valores
+        etiquetas_mod = {"": "— Seleccione —"}
+        etiquetas_mod.update(etiquetas)
+
         sel = st.selectbox(
-            "", valores, index=0 if valores else None,
+            "", opciones, index=0,
             key=f"{key_prefix}_{label}_sel",
             label_visibility="collapsed",
-            format_func=lambda x: etiquetas.get(x, x),
+            format_func=lambda x: etiquetas_mod.get(x, x),
         )
+
     with c2:
         qty = st.number_input(
             " ", min_value=1, max_value=99, step=1, value=1,
             key=f"{key_prefix}_{label}_qty", label_visibility="collapsed"
         )
+
     with c3:
         if st.button("➕ Agregar", key=f"{key_prefix}_{label}_add"):
-            _add_item(label, sel, qty)
-            st.success(f"Añadido: {qty}× {etiquetas.get(sel, sel)}")
+            if sel and sel.strip():  # Solo agregar si se seleccionó algo válido
+                _add_item(label, sel, qty)
+                st.success(f"Añadido: {qty}× {etiquetas_mod.get(sel, sel)}")
+            else:
+                st.warning("⚠️ Selecciona un elemento antes de agregar.")
+
 
 def _consolidado_a_fila(punto: str) -> Dict[str, str]:
     return {
