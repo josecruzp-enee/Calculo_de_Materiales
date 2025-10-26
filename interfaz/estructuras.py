@@ -45,7 +45,7 @@ def _init_punto_state():
     if "df_puntos" not in st.session_state:
         st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
 
-    if "punto_en_edicion" not in st.session_state or not st.session_state["punto_en_edicion"]:
+    if "punto_en_edicion" not in st.session_state:
         df = st.session_state["df_puntos"]
         st.session_state["punto_en_edicion"] = df["Punto"].iloc[0] if not df.empty else "Punto 1"
 
@@ -99,7 +99,7 @@ def _consolidado_a_fila(p: str) -> dict:
 
 
 # ==============================
-# UI: Barra superior
+# Barra de control
 # ==============================
 def _barra_puntos(df_actual):
     colA, colB, colC, colD = st.columns([1.2, 1.2, 1.8, 1.2])
@@ -116,22 +116,18 @@ def _barra_puntos(df_actual):
                 "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
             }
 
-            for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
-                st.session_state.pop(k, None)
-
             st.success(f"✏️ {nuevo} listo para editar")
-            st.rerun()
+            st.session_state["limpiar_selects"] = True
+            st.session_state["cambio_punto"] = True
 
     with colB:
         if not df_actual.empty:
             p_sel = st.selectbox("📍 Ir a punto:", df_actual["Punto"].unique(), key="sel_goto")
             if st.button("✏️ Editar", key="btn_edit"):
                 st.session_state["punto_en_edicion"] = p_sel
+                st.session_state["limpiar_selects"] = True
+                st.session_state["cambio_punto"] = True
 
-                for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
-                    st.session_state.pop(k, None)
-
-                st.rerun()
 
     with colC:
         if not df_actual.empty:
@@ -139,8 +135,10 @@ def _barra_puntos(df_actual):
             if st.button("Borrar", key="btn_del"):
                 st.session_state["df_puntos"] = df_actual[df_actual["Punto"] != p_del].reset_index(drop=True)
                 st.session_state["puntos_data"].pop(p_del, None)
-                st.success("✅ Se eliminó")
-                st.rerun()
+                st.success("✅ Se eliminó el punto")
+                st.session_state["limpiar_selects"] = True
+                st.session_state["cambio_punto"] = True
+
 
     with colD:
         if st.button("🧹 Limpiar todo", key="btn_clear_all"):
@@ -148,41 +146,31 @@ def _barra_puntos(df_actual):
             st.session_state["puntos_data"].clear()
             st.session_state["punto_en_edicion"] = "Punto 1"
             _init_punto_state()
-
-            for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
-                st.session_state.pop(k, None)
-
             st.success("✅ Todo limpio")
-            st.rerun()
+            st.session_state["limpiar_selects"] = True
+            st.session_state["cambio_punto"] = True
 
 
 # ==============================
-# UI: Agregar fila
+# Agregar estructuras
 # ==============================
 def _fila_agregar(opciones):
     cats = {
-        "Poste":              _opciones_categoria(opciones, "Poste"),
-        "Primario":           _opciones_categoria(opciones, "Primario"),
-        "Secundario":         _opciones_categoria(opciones, "Secundario"),
-        "Retenidas":          _opciones_categoria(opciones, "Retenidas"),
+        "Poste": _opciones_categoria(opciones, "Poste"),
+        "Primario": _opciones_categoria(opciones, "Primario"),
+        "Secundario": _opciones_categoria(opciones, "Secundario"),
+        "Retenidas": _opciones_categoria(opciones, "Retenidas"),
         "Conexiones a tierra": _opciones_categoria(opciones, "Conexiones a tierra"),
-        "Transformadores":     _opciones_categoria(opciones, "Transformadores"),
+        "Transformadores": _opciones_categoria(opciones, "Transformadores"),
     }
 
-    cols = st.columns([2, 2, 2, 2, 2, 2, 1])
+    cols = st.columns([2,2,2,2,2,2,1])
     keys = ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]
 
-    # ✅ Crea los selectbox SIN escribir en session_state manualmente
     for i, (cat, (vals, labs)) in enumerate(cats.items()):
         with cols[i]:
-            st.selectbox(
-                cat,
-                [""] + vals,
-                format_func=lambda x, labs=labs: labs.get(x, x),
-                key=keys[i]
-            )
+            st.selectbox(cat, [""] + vals, format_func=lambda x, labs=labs: labs.get(x, x), key=keys[i])
 
-    # ✅ Botón ➕ Agregar — limpia selects después
     with cols[6]:
         if st.button("➕", type="primary"):
             for i, cat in enumerate(cats.keys()):
@@ -190,44 +178,33 @@ def _fila_agregar(opciones):
                 if sel:
                     add_item(cat, sel, 1)
 
-            # ✅ Limpiar inmediatamente los selects
-            for k in keys:
-                if k in st.session_state:
-                    del st.session_state[k]
-
-            # ✅ Recargar la interfaz para reflejar la limpieza
-            st.experimental_rerun()
+            st.success("✅ Estructuras agregadas")
+            st.session_state["limpiar_selects"] = True
 
 
 # ==============================
-# UI: Guardar y tabla
+# Guardar punto
 # ==============================
 def _vista_guardar():
     p = st.session_state["punto_en_edicion"]
-    data_row = _consolidado_a_fila(p)
+    fila = _consolidado_a_fila(p)
 
-    st.dataframe(pd.DataFrame([data_row]), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame([fila]), hide_index=True, use_container_width=True)
 
-    if st.button("💾 Guardar punto", type="primary", key="btn_guardar"):
+    if st.button("💾 Guardar punto", type="primary"):
         df = st.session_state["df_puntos"]
         df = df[df["Punto"] != p]
-        st.session_state["df_puntos"] = pd.concat([df, pd.DataFrame([data_row])], ignore_index=True)
-        st.success("✅ Guardado!")
+        st.session_state["df_puntos"] = pd.concat([df, pd.DataFrame([fila])], ignore_index=True)
 
-        # ✅ Limpiar para seguir agregando
-        st.session_state["puntos_data"][p] = {
-            "Poste": {}, "Primario": {}, "Secundario": {},
-            "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}
-        }
+        st.success("✅ Punto guardado")
+        st.session_state["puntos_data"][p] = {"Poste": {}, "Primario": {}, "Secundario": {},
+                                             "Retenidas": {}, "Conexiones a tierra": {}, "Transformadores": {}}
+        st.session_state["limpiar_selects"] = True
 
-        for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
-            st.session_state.pop(k, None)
-
-        st.rerun()
 
     df_all = st.session_state["df_puntos"]
     if not df_all.empty:
-        st.dataframe(df_all, use_container_width=True, hide_index=True)
+        st.dataframe(df_all, hide_index=True, use_container_width=True)
 
 
 # ==============================
@@ -245,11 +222,16 @@ def listas_desplegables():
     _barra_puntos(df_actual)
     st.markdown("---")
 
-    p = st.session_state["punto_en_edicion"]
-    st.markdown(f"### ✏️ Editando {p}")
+    st.markdown(f"### ✏️ Editando {st.session_state['punto_en_edicion']}")
     st.markdown("#### ➕ Agregar estructuras a este punto")
 
     _fila_agregar(opciones)
+
+    # ✅ Limpieza de selects en un punto SEGURO
+    if st.session_state.get("limpiar_selects", False):
+        for k in ["poste_sel","prim_sel","sec_sel","ret_sel","tierra_sel","tr_sel"]:
+            st.session_state[k] = ""
+        st.session_state["limpiar_selects"] = False
 
     st.markdown("---")
 
