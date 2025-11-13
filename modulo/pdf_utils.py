@@ -55,141 +55,34 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     def float_safe(x, d=0.0):
         try:
             return float(x)
-        except Exception:
+        except:
             return d
 
     def formato_tension(vll):
-        """Convierte 34.5 → '19.92 L-N / 34.5 L-L kV' """
         try:
             vll = float(vll)
             vln = round(vll / sqrt(3), 2)
             return f"{vln} L-N / {vll} L-L kV"
-        except Exception:
+        except:
             return str(vll)
 
     elems = []
     elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
     elems.append(Spacer(1, 12))
 
-    # ------------------ DATOS BASE ------------------
-    # Si algún día quieres usar texto manual, aquí está:
-    descripcion_manual = (datos_proyecto.get("descripcion_proyecto") or "").strip()
-
-    tension_valor = (
-        datos_proyecto.get("nivel_de_tension")
-        or datos_proyecto.get("tension")
-        or ""
-    )
+    # ==== DATOS DEL PROYECTO ====
+    descripcion_manual = datos_proyecto.get("descripcion_proyecto", "").strip()
+    tension_valor = datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension") or ""
     nivel_tension_fmt = formato_tension(tension_valor)
-
     cables = datos_proyecto.get("cables_proyecto", []) or []
+
     primarios = [c for c in cables if str(c.get("Tipo", "")).upper() == "MT"]
     secundarios = [c for c in cables if str(c.get("Tipo", "")).upper() in ("BT", "HP", "N")]
     retenidas = [c for c in cables if str(c.get("Tipo", "")).upper() == "RETENIDA"]
 
-    # ------------------ LÍNEAS NUMERADAS ------------------
-    lineas = []
+    # ==== 1) TABLA PRIMERO ====
 
-    # 1) POSTES
-    if df_estructuras is not None and not df_estructuras.empty:
-        postes = df_estructuras[
-            df_estructuras["codigodeestructura"].str.contains("PC|PT", case=False, na=False)
-        ]
-        if not postes.empty:
-            resumen = {}
-            for _, r in postes.iterrows():
-                cod = str(r["codigodeestructura"]).strip()
-                cant = int(r["Cantidad"])
-                resumen[cod] = resumen.get(cod, 0) + cant
-
-            partes = []
-            for cod, cant in resumen.items():
-                sufijo = "′" if cod.upper().startswith(("PC", "PT")) else ""
-                partes.append(f"{cant} {cod}{sufijo}")
-
-            total = sum(resumen.values())
-            lineas.append(
-                f"Hincado de {', '.join(partes)}, para un total de {total} poste(s)."
-            )
-
-    # 2) RED PRIMARIA (LP)
-    for c in primarios:
-        long_m = float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
-        fase = str(c.get("Configuración", "")).strip()
-        calibre = str(c.get("Calibre", "")).strip()
-        if long_m > 0 and calibre:
-            lineas.append(
-                f"Construcción de {long_m:.0f} m de LP, {nivel_tension_fmt}, {fase}, conductor {calibre}."
-            )
-
-    # 3) RED SECUNDARIA (LS)
-    for c in secundarios:
-        long_m = float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
-        fase = str(c.get("Configuración", "")).strip()
-        calibre = str(c.get("Calibre", "")).strip()
-        if long_m > 0 and calibre:
-            lineas.append(
-                f"Construcción de {long_m:.0f} m de LS, 120/240 V, {fase}, conductor {calibre}."
-            )
-
-    # 4) CABLE DE RETENIDAS
-    if retenidas:
-        total_ret = 0.0
-        calibres_ret = set()
-        for c in retenidas:
-            total_ret += float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
-            calibres_ret.add(str(c.get("Calibre", "")).strip())
-        if total_ret > 0:
-            lineas.append(
-                f"Instalación de {total_ret:.0f} m de cable de retenidas ({', '.join(sorted(calibres_ret))})."
-            )
-
-    # 5) TRANSFORMADORES
-    if df_mat is not None and not df_mat.empty:
-        transf = df_mat[df_mat["Materiales"].str.contains("Transformador", case=False, na=False)]
-        if not transf.empty:
-            total_t = transf["Cantidad"].sum()
-            capacidades = ", ".join(sorted(set(
-                transf["Materiales"].str.extract(r"(\d+\.?\d*)")[0].dropna().tolist()
-            )))
-            lineas.append(
-                f"Instalación de {int(total_t)} transformador(es) de {capacidades} kVA."
-            )
-
-    # 6) LUMINARIAS
-    if df_mat is not None and not df_mat.empty:
-        lums = df_mat[df_mat["Materiales"].str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)]
-        if not lums.empty:
-            total_l = lums["Cantidad"].sum()
-            lineas.append(f"Instalación de {int(total_l)} luminaria(s) de alumbrado público.")
-
-    # ------------------ TEXTO FINAL ------------------
-    # Lista numerada
-    descripcion_lista = "<br/>".join(
-        f"{i+1}. {l}" for i, l in enumerate(lineas)
-    )
-
-    # ⚠ Aquí forzamos: si hay lista, usamos SOLO la lista (con el título).
-    if descripcion_lista:
-        descripcion_total = (
-            "<b>Descripción general del Proyecto:</b><br/>" +
-            descripcion_lista
-        )
-    else:
-        # Si por alguna razón no hay nada auto, usamos lo manual.
-        descripcion_total = descripcion_manual
-
-    elems.append(
-        Paragraph(f"<b>Descripción del Proyecto:</b><br/>{descripcion_total}", styleN)
-    )
-    elems.append(Spacer(1, 12))
-
-    # ------------------ TABLA INFORMACIÓN ------------------
-    calibre_primario = (
-        datos_proyecto.get("calibre_primario")
-        or datos_proyecto.get("calibre_mt")
-        or ""
-    )
+    calibre_primario = datos_proyecto.get("calibre_primario") or datos_proyecto.get("calibre_mt", "")
     calibre_secundario = datos_proyecto.get("calibre_secundario", "")
     calibre_neutro = datos_proyecto.get("calibre_neutro", "")
     calibre_piloto = datos_proyecto.get("calibre_piloto", "")
@@ -209,19 +102,82 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
         ["Empresa / Área:", datos_proyecto.get("empresa", "N/A")],
     ]
 
-    table = Table(data, colWidths=[180, 300])
-    table.setStyle(TableStyle([
+    tabla = Table(data, colWidths=[180, 300])
+    tabla.setStyle(TableStyle([
         ("GRID", (0,0), (-1,-1), 0.5, colors.black),
         ("BACKGROUND", (0,0), (0,-1), colors.lightgrey),
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
         ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
     ]))
 
-    elems.append(table)
-    elems.append(Spacer(1, 24))
-    elems.append(PageBreak())
-    return elems
+    elems.append(tabla)
+    elems.append(Spacer(1, 20))
 
+    # ==== 2) DESCRIPCIÓN DESPUÉS ====
+
+    lineas = []
+
+    # Postes
+    if df_estructuras is not None and not df_estructuras.empty:
+        postes = df_estructuras[
+            df_estructuras["codigodeestructura"].str.contains("PC|PT", case=False, na=False)
+        ]
+        if not postes.empty:
+            resumen = {}
+            for _, r in postes.iterrows():
+                cod = r["codigodeestructura"]
+                cant = int(r["Cantidad"])
+                resumen[cod] = resumen.get(cod, 0) + cant
+
+            partes = [f"{v} {k}" for k, v in resumen.items()]
+            total = sum(resumen.values())
+            lineas.append(f"Hincado de {', '.join(partes)} (Total: {total} postes).")
+
+    # Red Primaria
+    for c in primarios:
+        long_m = float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
+        fase = str(c.get("Configuración", "")).strip()
+        calibre = str(c.get("Calibre", "")).strip()
+        if long_m > 0 and calibre:
+            lineas.append(
+                f"Construcción de {long_m:.0f} m de LP, {nivel_tension_fmt}, {fase}, conductor {calibre}."
+            )
+
+    # Red Secundaria
+    for c in secundarios:
+        long_m = float_safe(c.get("Total Cable (m)", 0))
+        fase = str(c.get("Configuración", "")).strip()
+        calibre = str(c.get("Calibre", "")).strip()
+        if long_m > 0 and calibre:
+            lineas.append(
+                f"Construcción de {long_m:.0f} m de LS, 120/240 V, {fase}, conductor {calibre}."
+            )
+
+    # Transformadores
+    if df_mat is not None and not df_mat.empty:
+        transf = df_mat[df_mat["Materiales"].str.contains("Transformador", case=False, na=False)]
+        if not transf.empty:
+            total_t = transf["Cantidad"].sum()
+            capacidades = ", ".join(sorted(set(
+                transf["Materiales"].str.extract(r"(\d+\.?\d*)")[0].dropna().tolist()
+            )))
+            lineas.append(
+                f"Instalación de {int(total_t)} transformador(es) de {capacidades} kVA."
+            )
+
+    descripcion_auto = "<br/>".join([f"{i+1}. {l}" for i, l in enumerate(lineas)])
+
+    descripcion_final = descripcion_auto if not descripcion_manual else (
+        descripcion_manual + "<br/><br/>" + descripcion_auto
+    )
+
+    elems.append(Paragraph("<b>Descripción del Proyecto:</b>", styleN))
+    elems.append(Spacer(1, 6))
+    elems.append(Paragraph(descripcion_final, styleN))
+    elems.append(Spacer(1, 18))
+    elems.append(PageBreak())
+
+    return elems
 
 
 
@@ -543,6 +499,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
