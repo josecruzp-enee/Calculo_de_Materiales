@@ -543,20 +543,3 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
