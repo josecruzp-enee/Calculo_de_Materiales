@@ -50,22 +50,28 @@ def formatear_material(nombre):
     return texto
 
 # === Hoja de información del proyecto ===
+# === Hoja de información del proyecto ===
 def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     elems = []
     elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
     elems.append(Spacer(1, 12))
 
-    # --------- Datos base ---------
+    # --------- Datos base escritos por el usuario ---------
     descripcion = datos_proyecto.get("descripcion_proyecto", "").strip()
 
-    # Nivel de tensión que vamos a usar en todo
+    # --------- Nivel de tensión ---------
+    # Valor "crudo" L-L (ej: 34.5 o 13.8)
     v_ll_raw = datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension")
 
+    # Para descripción: solo el valor L-L
+    tension_ll_texto = str(v_ll_raw or "")
+
+    # Para tabla: formato L-N / L-L
     try:
         v_ll = float(v_ll_raw)
-        v_ln = round(v_ll / 1.7320508075688772, 2)   # sqrt(3)
-        nivel_de_tension = f"{v_ln} L-N / {v_ll} L-L KV"
-    except:
+        v_ln = v_ll / 1.7320508075688772  # ≈ sqrt(3)
+        nivel_de_tension = f"{v_ln:.2f} L-N / {v_ll:g} L-L kV"
+    except Exception:
         nivel_de_tension = str(v_ll_raw or "")
 
     # Lista de cables
@@ -91,7 +97,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
         if long_m > 0 and calibre:
             texto_partes.append(
                 f"construcción de <b>{long_m:.0f} m</b> de red primaria <b>{fase}</b> "
-                f"con conductor <b>{calibre}</b> a <b>{nivel_de_tension} kV</b>"
+                f"con conductor <b>{calibre}</b> a <b>{tension_ll_texto} kV</b>"
             )
 
     # --- BT / HP / N → red secundaria ---
@@ -225,6 +231,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     elems.append(Spacer(1, 24))
     elems.append(PageBreak())
     return elems
+
 
 
 
@@ -546,4 +553,5 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
