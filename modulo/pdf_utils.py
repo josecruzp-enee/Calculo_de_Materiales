@@ -55,7 +55,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
     elems.append(Spacer(1, 12))
 
-    # === Descripción escrita por el usuario ===
+    # --------- Datos base ---------
     descripcion = datos_proyecto.get("descripcion_proyecto", "").strip()
 
     # Nivel de tensión que vamos a usar en todo
@@ -64,21 +64,23 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
         or datos_proyecto.get("tension")
         or ""
     )
+
+    # Lista de cables
     cables = datos_proyecto.get("cables_proyecto", []) or []
+
+    # ============================
+    #  DESCRIPCIÓN AUTOMÁTICA
+    # ============================
     texto_partes = []
 
-    # ------------------------------
-    #  CABLES: adaptar a MT / BT / N / HP / Retenida
-    # ------------------------------
     def _float_safe(x, default=0.0):
         try:
             return float(x)
         except Exception:
             return default
 
-    # MT → red primaria
+    # --- MT → red primaria ---
     primarios = [c for c in cables if str(c.get("Tipo", "")).upper() == "MT"]
-
     for c in primarios:
         long_m = _float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
         fase = str(c.get("Configuración", "")).strip()
@@ -86,15 +88,14 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
         if long_m > 0 and calibre:
             texto_partes.append(
                 f"construcción de <b>{long_m:.0f} m</b> de red primaria <b>{fase}</b> "
-                f"con conductor <b>{calibre}</b> a <b>{tension} kV</b>"
+                f"con conductor <b>{calibre}</b> a <b>{nivel_de_tension} kV</b>"
             )
 
-    # BT / HP / N → red secundaria / baja tensión
+    # --- BT / HP / N → red secundaria ---
     secundarios = [
         c for c in cables
         if str(c.get("Tipo", "")).upper() in ("BT", "HP", "N")
     ]
-
     for c in secundarios:
         long_m = _float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
         fase = str(c.get("Configuración", "")).strip()
@@ -105,7 +106,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
                 f"con conductor <b>{calibre}</b>, tensión <b>120/240 V</b>"
             )
 
-    # Retenidas (si quieres que salgan en la descripción)
+    # --- Retenidas ---
     retenidas = [c for c in cables if str(c.get("Tipo", "")).upper() == "RETENIDA"]
     for c in retenidas:
         long_m = _float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
@@ -148,22 +149,57 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
                 f"hincado de <b>{int(total_postes)}</b> poste(s) tipo <b>{tipos}</b>"
             )
 
-    # --- Unir descripción automática ---
+    # Unir descripción automática
     descripcion_auto = ""
     if texto_partes:
         descripcion_auto = "Construcción de " + "; ".join(texto_partes) + "."
 
-    # --- Combinar descripción escrita + automática ---
+    # Combinar descripción escrita + automática
     descripcion_total = descripcion_auto if not descripcion else descripcion + "<br/><br/>" + descripcion_auto
 
     elems.append(Paragraph(f"<b>Descripción del Proyecto:</b> {descripcion_total}", styleN))
     elems.append(Spacer(1, 12))
 
-    # === Tabla de información general ===
+    # ============================
+    #  TABLA: NIVEL Y CALIBRES
+    # ============================
+
+    # Calibre primario – prioridad: campo directo → calibre_mt → primer MT
+    calibre_primario = (
+        datos_proyecto.get("calibre_primario")
+        or datos_proyecto.get("calibre_mt")
+        or ""
+    )
+    if not calibre_primario and cables:
+        mt = [c for c in cables if str(c.get("Tipo", "")).upper() == "MT"]
+        if mt:
+            calibre_primario = str(mt[0].get("Calibre", "")).strip()
+
+    # Calibre secundario – BT/HP
+    calibre_secundario = datos_proyecto.get("calibre_secundario", "")
+    if not calibre_secundario and cables:
+        bt = [c for c in cables if str(c.get("Tipo", "")).upper() in ("BT", "HP")]
+        if bt:
+            calibre_secundario = str(bt[0].get("Calibre", "")).strip()
+
+    # Calibre neutro – N
+    calibre_neutro = datos_proyecto.get("calibre_neutro", "")
+    if not calibre_neutro and cables:
+        n = [c for c in cables if str(c.get("Tipo", "")).upper() == "N"]
+        if n:
+            calibre_neutro = str(n[0].get("Calibre", "")).strip()
+
+    # Calibre de retenidas
+    calibre_retenidas = datos_proyecto.get("calibre_retenidas", "")
+    if not calibre_retenidas and cables:
+        r = [c for c in cables if str(c.get("Tipo", "")).upper() == "RETENIDA"]
+        if r:
+            calibre_retenidas = str(r[0].get("Calibre", "")).strip()
+
     data = [
         ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
         ["Código / Expediente:", datos_proyecto.get("codigo_proyecto", "")],
-        ["Nivel de Tensión (KV):", nivel_de_tension],
+        ["Nivel de Tensión (kV):", nivel_de_tension],
         ["Calibre Primario:", calibre_primario],
         ["Calibre Secundario:", calibre_secundario],
         ["Calibre Neutro:", calibre_neutro],
@@ -186,6 +222,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     elems.append(Spacer(1, 24))
     elems.append(PageBreak())
     return elems
+
 
 
 
@@ -506,6 +543,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
