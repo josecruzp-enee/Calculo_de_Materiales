@@ -159,13 +159,13 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     data = [
         ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
         ["Código / Expediente:", datos_proyecto.get("codigo_proyecto", "")],
-        ["Nivel de Tensión (kV):", datos_proyecto.get("nivel_de_tension", "")],
-        ["Calibre Primario:", datos_proyecto.get("calibre_primario", "")],
-        ["Calibre Secundario:", datos_proyecto.get("calibre_secundario", "")],
-        ["Calibre Neutro:", datos_proyecto.get("calibre_neutro", "")],
+        ["Nivel de Tensión (kV):", nivel_tension],
+        ["Calibre Primario:", calibre_primario],
+        ["Calibre Secundario:", calibre_secundario],
+        ["Calibre Neutro:", calibre_neutro],
         ["Calibre Piloto:", datos_proyecto.get("calibre_piloto", "")],
-        ["Calibre Cable de Retenidas:", datos_proyecto.get("calibre_retenidas", "")],
-        ["Fecha de Informe:", datetime.today().strftime("%d/%m/%Y")],
+        ["Calibre Cable de Retenidas:", calibre_retenidas],
+        ["Fecha de Informe:", datos_proyecto.get("fecha_informe", datetime.today().strftime("%d/%m/%Y"))],
         ["Responsable / Diseñador:", datos_proyecto.get("responsable", "N/A")],
         ["Empresa / Área:", datos_proyecto.get("empresa", "N/A")],
     ]
@@ -502,6 +502,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
