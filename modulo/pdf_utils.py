@@ -55,15 +55,16 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     def float_safe(x, d=0.0):
         try:
             return float(x)
-        except:
+        except Exception:
             return d
 
     def formato_tension(vll):
+        """34.5 -> '19.92 L-N / 34.5 L-L kV'."""
         try:
             vll = float(vll)
             vln = round(vll / sqrt(3), 2)
             return f"{vln} L-N / {vll} L-L kV"
-        except:
+        except Exception:
             return str(vll)
 
     elems = []
@@ -81,7 +82,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     retenidas = [c for c in cables if str(c.get("Tipo", "")).upper() == "RETENIDA"]
 
     # ==== 1) TABLA PRIMERO ====
-
     calibre_primario = datos_proyecto.get("calibre_primario") or datos_proyecto.get("calibre_mt", "")
     calibre_secundario = datos_proyecto.get("calibre_secundario", "")
     calibre_neutro = datos_proyecto.get("calibre_neutro", "")
@@ -104,17 +104,16 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
 
     tabla = Table(data, colWidths=[180, 300])
     tabla.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (0,-1), colors.lightgrey),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
     ]))
 
     elems.append(tabla)
-    elems.append(Spacer(1, 20))
+    elems.append(Spacer(1, 18))
 
-    # ==== 2) DESCRIPCIÓN DESPUÉS ====
-
+    # ==== 2) DESCRIPCIÓN GENERAL (DESPUÉS DE LA TABLA) ====
     lineas = []
 
     # Postes
@@ -165,21 +164,28 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
                 f"Instalación de {int(total_t)} transformador(es) de {capacidades} kVA."
             )
 
+    # Luminarias (opcional, si quieres)
+    if df_mat is not None and not df_mat.empty:
+        lums = df_mat[df_mat["Materiales"].str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)]
+        if not lums.empty:
+            total_l = lums["Cantidad"].sum()
+            lineas.append(f"Instalación de {int(total_l)} luminaria(s) de alumbrado público.")
+
+    # Lista numerada
     descripcion_auto = "<br/>".join([f"{i+1}. {l}" for i, l in enumerate(lineas)])
 
-    descripcion_final = descripcion_auto if not descripcion_manual else (
-        descripcion_manual + "<br/><br/>" + descripcion_auto
-    )
+    if descripcion_manual:
+        cuerpo_desc = descripcion_manual + "<br/><br/>" + descripcion_auto
+    else:
+        cuerpo_desc = descripcion_auto
 
-    elems.append(Paragraph("<b>Descripción del Proyecto:</b>", styleN))
+    elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
     elems.append(Spacer(1, 6))
-    elems.append(Paragraph(descripcion_final, styleN))
+    elems.append(Paragraph(cuerpo_desc, styleN))
     elems.append(Spacer(1, 18))
     elems.append(PageBreak())
 
     return elems
-
-
 
 
 # === Generar PDF de materiales globales ===
@@ -499,6 +505,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
