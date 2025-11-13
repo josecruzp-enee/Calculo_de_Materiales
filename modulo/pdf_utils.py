@@ -59,11 +59,14 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     descripcion = datos_proyecto.get("descripcion_proyecto", "").strip()
 
     # Nivel de tensión que vamos a usar en todo
-    nivel_de_tension = (
-        datos_proyecto.get("nivel_de_tension")
-        or datos_proyecto.get("tension")
-        or ""
-    )
+    v_ll_raw = datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension")
+
+    try:
+        v_ll = float(v_ll_raw)
+        v_ln = round(v_ll / 1.7320508075688772, 2)   # sqrt(3)
+        nivel_de_tension = f"{v_ln} L-N / {v_ll} L-L KV"
+    except:
+        nivel_de_tension = str(v_ll_raw or "")
 
     # Lista de cables
     cables = datos_proyecto.get("cables_proyecto", []) or []
@@ -543,3 +546,4 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
