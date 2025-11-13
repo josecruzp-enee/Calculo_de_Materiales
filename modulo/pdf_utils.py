@@ -72,7 +72,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             calibre = c.get("Calibre", "")
             texto_partes.append(
                 f"construcción de <b>{long_m:.0f} m</b> de red primaria <b>{fase}</b> "
-                f"con conductor <b>{calibre}</b> a <b>{tension} kV</b>"
+                f"con conductor <b>{calibre}</b> a <b>{tension} KV</b>"
             )
 
     # --- Red secundaria ---
@@ -93,7 +93,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
         if not transf.empty:
             total_transf = transf["Cantidad"].sum()
             capacidades = ", ".join(sorted(set(transf["Materiales"].str.extract(r"(\d+\.?\d*)")[0].dropna().tolist())))
-            texto_partes.append(f"instalación de <b>{int(total_transf)}</b> transformador(es) de <b>{capacidades} kVA</b>")
+            texto_partes.append(f"instalación de <b>{int(total_transf)}</b> transformador(es) de <b>{capacidades} KVA</b>")
 
     # --- Luminarias ---
     if df_mat is not None and not df_mat.empty:
@@ -125,11 +125,11 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     data = [
         ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
         ["Código / Expediente:", datos_proyecto.get("codigo_proyecto", "")],
-        ["Nivel de Tensión (kV):", datos_proyecto.get("nivel_de_tension", "")],
-        ["Calibre Primario:", datos_proyecto.get("calibre_primario", "")],
-        ["Calibre Secundario:", datos_proyecto.get("calibre_secundario", "")],
+        ["Nivel de Tensión (KV):", datos_proyecto.get("nivel_de_tension", "")],
+        ["Calibre Red de Media Tensión:", datos_proyecto.get("calibre_primario", "")],
+        ["Calibre Red de Baja Tensión:", datos_proyecto.get("calibre_secundario", "")],
         ["Calibre Neutro:", datos_proyecto.get("calibre_neutro", "")],
-        ["Calibre Piloto:", datos_proyecto.get("calibre_piloto", "")],
+        ["Calibre Hilo Piloto:", datos_proyecto.get("calibre_piloto", "")],
         ["Calibre Cable de Retenidas:", datos_proyecto.get("calibre_retenidas", "")],
         ["Fecha de Informe:", datetime.today().strftime("%d/%m/%Y")],
         ["Responsable / Diseñador:", datos_proyecto.get("responsable", "N/A")],
@@ -467,6 +467,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
