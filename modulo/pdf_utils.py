@@ -59,7 +59,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     descripcion = datos_proyecto.get("descripcion_proyecto", "").strip()
 
     # Extraer datos generales
-    tension = datos_proyecto.get("nivel_tension", "")
+    tension = datos_proyecto.get("nivel_de_tension", "")
     cables = datos_proyecto.get("cables_proyecto", []) or []
     texto_partes = []
 
@@ -159,7 +159,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     data = [
         ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
         ["Código / Expediente:", datos_proyecto.get("codigo_proyecto", "")],
-        ["Nivel de Tensión (kV):", nivel_tension],
+        ["Nivel de Tensión (KV):", nivel_de_tension],
         ["Calibre Primario:", calibre_primario],
         ["Calibre Secundario:", calibre_secundario],
         ["Calibre Neutro:", calibre_neutro],
@@ -502,6 +502,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
