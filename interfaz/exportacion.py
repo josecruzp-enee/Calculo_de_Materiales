@@ -216,7 +216,7 @@ def seccion_exportacion(
         try:
             v_ll = float(v_ll)
             v_ln = v_ll / _np.sqrt(3)
-            return f"{v_ln:.2f} L-N / {v_ll:g} L-L kV"
+            return f"{v_ln:.1f} L-N / {v_ll:g} L-L kV"
         except Exception:
             return str(v_ll)
 
