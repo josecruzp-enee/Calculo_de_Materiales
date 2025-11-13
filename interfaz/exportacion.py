@@ -208,8 +208,22 @@ def seccion_exportacion(
 
     st.subheader("6. 📂 Exportación de Reportes")
 
+    # -------------------------------------------------------------------------
+    # Función local para formatear la tensión (L-N / L-L)
+    # -------------------------------------------------------------------------
+    def _formato_tension(v_ll):
+        """Convierte 13.8 -> '7.96 L-N / 13.8 L-L kV', 34.5 -> '19.90 L-N / 34.5 L-L kV'."""
+        try:
+            v_ll = float(v_ll)
+            v_ln = v_ll / _np.sqrt(3)
+            return f"{v_ln:.2f} L-N / {v_ll:g} L-L kV"
+        except Exception:
+            return str(v_ll)
+
     # 1) Sincronizar datos de cables a datos_proyecto (con defaults suaves)
     if "cables_proyecto" in st.session_state:
+        # Asegurar que datos_proyecto exista
+        st.session_state.setdefault("datos_proyecto", {})
         st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
 
         datos_cables = st.session_state["cables_proyecto"]
@@ -218,16 +232,34 @@ def seccion_exportacion(
         elif not isinstance(datos_cables, dict):
             datos_cables = {}
 
-        tension = datos_cables.get("tension") or datos_cables.get("nivel_de_tension") or 13.8
+        # Preferir la tensión del proyecto; si no, alguna que venga de cables; si no, 13.8
+        datos_dp = st.session_state.get("datos_proyecto", {})
+        tension_ll = (
+            datos_dp.get("nivel_de_tension")
+            or datos_dp.get("tension")
+            or datos_cables.get("nivel_de_tension")
+            or datos_cables.get("tension")
+            or 13.8
+        )
+
+        # Guardar en datos_proyecto (crudo, para que generar_pdfs lo formatee si quiere)
+        st.session_state["datos_proyecto"]["tension"] = tension_ll
+        st.session_state["datos_proyecto"]["nivel_de_tension"] = tension_ll
+
+        # Formatear para mostrar en la UI
+        tension_fmt = _formato_tension(tension_ll)
+
+        # Calibre MT
         calibre_mt = (
             datos_cables.get("calibre_mt")
             or datos_cables.get("conductor_mt")
             or datos_cables.get("Calibre")
             or "1/0 ASCR"
         )
-        st.session_state["datos_proyecto"]["tension"] = tension
         st.session_state["datos_proyecto"]["calibre_mt"] = calibre_mt
-        st.info(f"🔧 Nivel de tensión: {tension} kV  |  Calibre MT: {calibre_mt}")
+
+        # Mensaje en pantalla
+        st.info(f"🔧 Nivel de Tensión: **{tension_fmt}**  |  Calibre MT: **{calibre_mt}**")
 
     # 2) Expandir estructuras (ANCHO → LARGO si hace falta)
     df_expandido = _expandir_estructuras(df)
@@ -240,7 +272,9 @@ def seccion_exportacion(
 
     # 3) Materiales adicionales → DataFrame
     if st.session_state.get("materiales_extra"):
-        st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(st.session_state["materiales_extra"])
+        st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(
+            st.session_state["materiales_extra"]
+        )
     else:
         st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(
             columns=["Materiales", "Unidad", "Cantidad"]
@@ -273,18 +307,43 @@ def seccion_exportacion(
         st.markdown("### 📥 Descarga de Reportes Generados")
         if isinstance(pdfs, dict):
             if pdfs.get("materiales"):
-                st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"],
-                                   "Resumen_Materiales.pdf", "application/pdf", key="dl_mat")
+                st.download_button(
+                    "📄 Descargar PDF de Materiales",
+                    pdfs["materiales"],
+                    "Resumen_Materiales.pdf",
+                    "application/pdf",
+                    key="dl_mat",
+                )
             if pdfs.get("estructuras_global"):
-                st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"],
-                                   "Resumen_Estructuras.pdf", "application/pdf", key="dl_estr_glob")
+                st.download_button(
+                    "📄 Descargar PDF de Estructuras (Global)",
+                    pdfs["estructuras_global"],
+                    "Resumen_Estructuras.pdf",
+                    "application/pdf",
+                    key="dl_estr_glob",
+                )
             if pdfs.get("estructuras_por_punto"):
-                st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"],
-                                   "Estructuras_Por_Punto.pdf", "application/pdf", key="dl_estr_punto")
+                st.download_button(
+                    "📄 Descargar PDF de Estructuras por Punto",
+                    pdfs["estructuras_por_punto"],
+                    "Estructuras_Por_Punto.pdf",
+                    "application/pdf",
+                    key="dl_estr_punto",
+                )
             if pdfs.get("materiales_por_punto"):
-                st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"],
-                                   "Materiales_Por_Punto.pdf", "application/pdf", key="dl_mat_punto")
+                st.download_button(
+                    "📄 Descargar PDF de Materiales por Punto",
+                    pdfs["materiales_por_punto"],
+                    "Materiales_Por_Punto.pdf",
+                    "application/pdf",
+                    key="dl_mat_punto",
+                )
             if pdfs.get("completo"):
-                st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
-                                   "Informe_Completo.pdf", "application/pdf", key="dl_full")
+                st.download_button(
+                    "📄 Descargar Informe Completo",
+                    pdfs["completo"],
+                    "Informe_Completo.pdf",
+                    "application/pdf",
+                    key="dl_full",
+                )
 
