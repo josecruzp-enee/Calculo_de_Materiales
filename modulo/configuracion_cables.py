@@ -34,13 +34,27 @@ def get_calibres_union() -> List[str]:
     cal = get_calibres()
     return list(dict.fromkeys(c for lista in cal.values() for c in lista))
 
-def conductores_de(cfg: str) -> int:
+def conductores_de(tipo: str, cfg: str) -> int:
+    t = (tipo or "").strip().upper()
     c = (cfg or "").strip().upper()
+
+    # --- HILO PILOTO ---
+    # Si lo modelas como fila HP (opción B), normalmente usa el neutro existente:
+    # 1F+N => 1 conductor adicional (solo piloto)
+    if t == "HP":
+        if c in ("1F+N", "1F"):   # 120V con N existente
+            return 1
+        if c in ("2F",):          # si HP es par dedicado (dos hilos piloto)
+            return 2
+        return 1
+
+    # --- RESTO (BT/MT/N/Retenida) ---
     if c in ("ÚNICA", "N", "1F"): return 1
     if c in ("1F+N", "2F"):       return 2
     if c in ("3F", "2F+N"):       return 3
-    if c == "2F+HP+N":            return 4
+    if c in ("2F+HP+N", "2F+N+HP"): return 4
     return 1
+
 
 # ----------------- Estado y helpers -----------------
 COLS_OFICIALES = ["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]
@@ -111,7 +125,7 @@ def _validar_y_calcular(df_in: pd.DataFrame):
             "Configuración": cfg,
             "Calibre": cal,
             "Longitud (m)": L,
-            "Total Cable (m)": L * conductores_de(cfg),
+            "Total Cable (m)": L * conductores_de(tipo, cfg),
         })
 
     df_out = pd.DataFrame(rows, columns=COLS_OFICIALES)
