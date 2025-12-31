@@ -11,9 +11,9 @@ def get_tipos() -> List[str]:
 
 def get_calibres() -> Dict[str, List[str]]:
     return {
-        "MT": ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR", "266.8 MCM", "336 MCM"],
+        "MT": ["2 ACSR", "1/0 ACSR", "2/0 ACSR", "3/0 ACSR", "4/0 ACSR", "266.8 MCM", "336 MCM"],
         "BT": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
-        "N":  ["2 ASCR", "1/0 ASCR", "2/0 ASCR", "3/0 ASCR", "4/0 ASCR"],
+        "N":  ["2 ACSR", "1/0 ACSR", "2/0 ACSR", "3/0 ACSR", "4/0 ACSR"],
         "HP": ["2 WP", "1/0 WP", "2/0 WP"],
         "Retenida": ["1/4", "5/8", "3/4"],
     }
@@ -64,10 +64,11 @@ def _init_state() -> None:
         buf["__DEL__"] = False
         st.session_state["cables_buffer_df"] = buf
 
-def _validar_y_calcular(df_in: pd.DataFrame) -> pd.DataFrame:
+def _validar_y_calcular(df_in: pd.DataFrame):
     cfgs = get_configs_por_tipo()
     cal_por_tipo = get_calibres()
 
+    # quitar eliminados
     if "__DEL__" in df_in.columns:
         mask = df_in["__DEL__"].fillna(False)
         if mask.dtype != bool:
@@ -75,20 +76,30 @@ def _validar_y_calcular(df_in: pd.DataFrame) -> pd.DataFrame:
         df_in = df_in[~mask].drop(columns="__DEL__", errors="ignore")
 
     rows = []
-    for _, row in df_in.fillna("").iterrows():
-        if not str(row.get("Tipo", "")).strip():
+    errores = []
+
+    for i, row in df_in.fillna("").reset_index(drop=True).iterrows():
+        tipo = str(row.get("Tipo", "")).strip()
+        if not tipo:
             continue
-        tipo = str(row["Tipo"]).strip()
+
+        cfg = str(row.get("Configuración", "")).strip()
+        cal = str(row.get("Calibre", "")).strip()
 
         cfg_ok = cfgs.get(tipo, ["Única"])
-        cfg = str(row.get("Configuración") or cfg_ok[0]).strip()
-        if cfg not in cfg_ok:
-            cfg = cfg_ok[0]
-
         cal_ok = cal_por_tipo.get(tipo, get_calibres_union())
-        cal = str(row.get("Calibre") or (cal_ok[0] if cal_ok else "")).strip()
+
+        # defaults si vienen vacíos
+        if not cfg:
+            cfg = cfg_ok[0]
+        if not cal:
+            cal = cal_ok[0] if cal_ok else ""
+
+        # VALIDACIÓN (sin pisar)
+        if cfg not in cfg_ok:
+            errores.append(f"Fila {i+1}: Tipo={tipo} no permite Configuración='{cfg}'. Opciones: {cfg_ok}")
         if cal_ok and cal not in cal_ok:
-            cal = cal_ok[0]
+            errores.append(f"Fila {i+1}: Tipo={tipo} no permite Calibre='{cal}'. Opciones: {cal_ok}")
 
         try:
             L = float(row.get("Longitud (m)", 0) or 0)
@@ -103,7 +114,9 @@ def _validar_y_calcular(df_in: pd.DataFrame) -> pd.DataFrame:
             "Total Cable (m)": L * conductores_de(cfg),
         })
 
-    return pd.DataFrame(rows, columns=COLS_OFICIALES)
+    df_out = pd.DataFrame(rows, columns=COLS_OFICIALES)
+    return df_out, errores
+
 
 def _persistir_oficial(df: pd.DataFrame) -> None:
     st.session_state["cables_proyecto_df"] = df.copy()
@@ -185,16 +198,26 @@ def seccion_cables():
             hide_index=True,
             column_order=["__DEL__", "Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"],
             column_config={
-                "__DEL__": st.column_config.CheckboxColumn("Eliminar", width="small",
-                                                           help="Marca y pulsa Guardar para borrar"),
-                "Tipo": st.column_config.SelectboxColumn("Tipo", options=get_tipos(), required=False, width="small"),
-                "Configuración": st.column_config.SelectboxColumn("Configuración", options=get_configs_union(),
-                                                                  required=False, width="small"),
-                "Calibre": st.column_config.SelectboxColumn("Calibre", options=get_calibres_union(),
-                                                            required=False, width="medium"),
-                "Longitud (m)": st.column_config.NumberColumn("Longitud (m)", min_value=0.0, step=10.0, format="%.2f"),
-                "Total Cable (m)": st.column_config.NumberColumn("Total Cable (m)", disabled=True, format="%.2f",
-                                                                 help="Longitud × Nº de conductores"),
+                "__DEL__": st.column_config.CheckboxColumn(
+                    "Eliminar", width="small",
+                    help="Marca y pulsa Guardar para borrar"
+                ),
+                "Tipo": st.column_config.SelectboxColumn(
+                    "Tipo", options=get_tipos(), required=False, width="small"
+                ),
+                "Configuración": st.column_config.SelectboxColumn(
+                    "Configuración", options=get_configs_union(), required=False, width="small"
+                ),
+                "Calibre": st.column_config.SelectboxColumn(
+                    "Calibre", options=get_calibres_union(), required=False, width="medium"
+                ),
+                "Longitud (m)": st.column_config.NumberColumn(
+                    "Longitud (m)", min_value=0.0, step=10.0, format="%.2f"
+                ),
+                "Total Cable (m)": st.column_config.NumberColumn(
+                    "Total Cable (m)", disabled=True, format="%.2f",
+                    help="Longitud × Nº de conductores"
+                ),
             },
         )
         c1, c2 = st.columns([1, 1])
@@ -202,11 +225,18 @@ def seccion_cables():
         descartar = c2.form_submit_button("↩️ Descartar cambios", use_container_width=True)
 
     if guardar:
-        df_editor = _editor_df_actual()                 # <- robusto
-        df_validado = _validar_y_calcular(df_editor)    # normaliza y calcula totales
+        df_editor = _editor_df_actual()
+        df_validado, errores = _validar_y_calcular(df_editor)
+
+        if errores:
+            st.error("❌ Hay combinaciones inválidas. Corrige antes de guardar:")
+            for e in errores:
+                st.write("• " + e)
+            st.stop()
+
         _persistir_oficial(df_validado)
 
-        # sincr. buffer y limpiar checkboxes
+        # sincronizar buffer y limpiar checkboxes
         buf = _ensure_columns(st.session_state["cables_proyecto_df"], with_del=True).copy()
         buf["__DEL__"] = False
         st.session_state["cables_buffer_df"] = buf
