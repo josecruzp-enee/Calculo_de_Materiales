@@ -41,7 +41,7 @@ def cargar_opciones():
         "Secundaria": "Secundario",
         "Retenidas": "Retenidas",
         "Conexiones a tierra": "Conexiones a tierra",
-        # ✅ IMPORTANTE: incluir protección (con y sin tilde)
+        # incluir protección (con y sin tilde)
         "Protección": "Protección",
         "Proteccion": "Protección",
         "Transformadores": "Transformadores",
@@ -212,7 +212,7 @@ def crear_desplegables(opciones):
 
         # --- Mezclar catálogo: Conexiones a tierra + Protección ---
         cat_tierra = opciones.get("Conexiones a tierra", {"valores": [], "etiquetas": {}})
-        cat_prot = opciones.get("Protección", {"valores": [], "etiquetas": {}})
+        cat_prot   = opciones.get("Protección", {"valores": [], "etiquetas": {}})
 
         # Merge sin duplicados, preservando etiquetas
         valores_mix = []
@@ -241,8 +241,12 @@ def crear_desplegables(opciones):
                 "Secundario", opciones.get("Secundario"), "cnt_sec",
                 valores_previos.get("Secundario", "")
             )
+
+            # ✅ CLAVE NUEVA para que Streamlit NO reuse el widget viejo
             c_tierra = _picker_con_cantidad(
-                "Conexiones a tierra / Protección", cat_tierra_prot, "cnt_tierra",
+                "Conexiones a tierra / Protección",
+                cat_tierra_prot,
+                "cnt_tierra_prot",  # 👈 antes era "cnt_tierra"
                 valores_previos.get("Conexiones a tierra", "")
             )
 
