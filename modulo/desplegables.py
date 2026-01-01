@@ -242,7 +242,6 @@ def crear_desplegables(opciones):
                 valores_previos.get("Secundario", "")
             )
 
-            # ✅ CLAVE NUEVA para que Streamlit NO reuse el widget viejo
             c_tierra = _picker_con_cantidad(
                 "Conexiones a tierra / Protección",
                 cat_tierra_prot,
@@ -269,12 +268,10 @@ def crear_desplegables(opciones):
         seleccion["Primario"] = _counter_to_str(c_pri)
         seleccion["Secundario"] = _counter_to_str(c_sec)
         seleccion["Retenidas"] = _counter_to_str(c_ret)
-
-        # 🔒 Clave se mantiene igual para compatibilidad con df_puntos/PDFs
         seleccion["Conexiones a tierra"] = _counter_to_str(c_tierra)
-
         seleccion["Transformadores"] = _counter_to_str(c_trf)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
