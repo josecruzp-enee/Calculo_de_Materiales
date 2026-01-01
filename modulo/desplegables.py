@@ -20,14 +20,18 @@ def cargar_opciones():
     desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
 
     opciones = {}
-    for clasificacion in df[clas_col].dropna().unique():
-        subset = df[df[clas_col] == clasificacion]
-        codigos = subset[cod_col].dropna().astype(str).tolist()
+    for clasificacion in df[clas_col].dropna().astype(str).unique():
+        clasificacion = clasificacion.strip()
+        subset = df[df[clas_col].astype(str).str.strip() == clasificacion]
+
+        codigos = subset[cod_col].dropna().astype(str).str.strip().tolist()
+
         etiquetas = {
-            str(row[cod_col]): f"{row[cod_col]} – {row[desc_col]}"
+            str(row[cod_col]).strip(): f"{str(row[cod_col]).strip()} – {str(row[desc_col]).strip() if pd.notna(row[desc_col]) else ''}"
             for _, row in subset.iterrows()
             if pd.notna(row[cod_col])
         }
+
         opciones[clasificacion] = {"valores": codigos, "etiquetas": etiquetas}
 
     # normaliza nombres a los usados en tu UI
@@ -37,11 +41,17 @@ def cargar_opciones():
         "Secundaria": "Secundario",
         "Retenidas": "Retenidas",
         "Conexiones a tierra": "Conexiones a tierra",
+        # ✅ IMPORTANTE: incluir protección (con y sin tilde)
+        "Protección": "Protección",
+        "Proteccion": "Protección",
         "Transformadores": "Transformadores",
     }
+
     normalizado = {}
     for k, v in opciones.items():
-        normalizado[mapping.get(k, k)] = v
+        kk = mapping.get(k, k)
+        normalizado[kk] = v
+
     return normalizado
 
 
@@ -118,7 +128,7 @@ def _render_lista(contador: Counter, datos: dict, state_key: str):
     for cod, n in sorted(contador.items()):
         col1, col2, col3, col4 = st.columns([7, 2, 1, 1])
         with col1:
-            desc = datos["etiquetas"].get(cod, cod)
+            desc = datos.get("etiquetas", {}).get(cod, cod)
             st.markdown(
                 f"<div class='row'><strong>{cod}</strong> – "
                 f"<span class='muted'>{_short(desc)}</span></div>",
@@ -143,7 +153,7 @@ def _picker_con_cantidad(label: str, datos: dict, state_key: str, valores_previo
     Línea compacta: Select | Cantidad | ➕ Agregar
     + lista seleccionada con píldoras y acciones.
     """
-    if not datos:
+    if not datos or not datos.get("valores"):
         st.info(f"No hay opciones para {label}.")
         return Counter()
 
@@ -161,7 +171,7 @@ def _picker_con_cantidad(label: str, datos: dict, state_key: str, valores_previo
         codigo = st.selectbox(
             label,
             options=datos["valores"],
-            format_func=lambda x: datos["etiquetas"].get(x, x),
+            format_func=lambda x: datos.get("etiquetas", {}).get(x, x),
             key=f"{state_key}_sel",
         )
     with cols[1]:
@@ -173,7 +183,7 @@ def _picker_con_cantidad(label: str, datos: dict, state_key: str, valores_previo
         )
     with cols[2]:
         if st.button("➕ Agregar", key=f"{state_key}_add", type="primary"):
-            contador[codigo] += qty
+            contador[str(codigo).strip().upper()] += int(qty)
 
     _render_lista(contador, datos, state_key)
 
@@ -202,11 +212,7 @@ def crear_desplegables(opciones):
 
         # --- Mezclar catálogo: Conexiones a tierra + Protección ---
         cat_tierra = opciones.get("Conexiones a tierra", {"valores": [], "etiquetas": {}})
-        cat_prot = (
-            opciones.get("Protección")
-            or opciones.get("Proteccion")
-            or {"valores": [], "etiquetas": {}}
-        )
+        cat_prot = opciones.get("Protección", {"valores": [], "etiquetas": {}})
 
         # Merge sin duplicados, preservando etiquetas
         valores_mix = []
@@ -225,44 +231,33 @@ def crear_desplegables(opciones):
 
         # Estructura en dos columnas (como tu layout)
         col_izq, col_der = st.columns(2)
+
         with col_izq:
             c_poste = _picker_con_cantidad(
-                "Poste",
-                opciones.get("Poste"),
-                "cnt_poste",
-                valores_previos.get("Poste", ""),
+                "Poste", opciones.get("Poste"), "cnt_poste",
+                valores_previos.get("Poste", "")
             )
             c_sec = _picker_con_cantidad(
-                "Secundario",
-                opciones.get("Secundario"),
-                "cnt_sec",
-                valores_previos.get("Secundario", ""),
+                "Secundario", opciones.get("Secundario"), "cnt_sec",
+                valores_previos.get("Secundario", "")
             )
             c_tierra = _picker_con_cantidad(
-                "Conexiones a tierra / Protección",
-                cat_tierra_prot,
-                "cnt_tierra",
-                valores_previos.get("Conexiones a tierra", ""),
+                "Conexiones a tierra / Protección", cat_tierra_prot, "cnt_tierra",
+                valores_previos.get("Conexiones a tierra", "")
             )
 
         with col_der:
             c_pri = _picker_con_cantidad(
-                "Primario",
-                opciones.get("Primario"),
-                "cnt_pri",
-                valores_previos.get("Primario", ""),
+                "Primario", opciones.get("Primario"), "cnt_pri",
+                valores_previos.get("Primario", "")
             )
             c_ret = _picker_con_cantidad(
-                "Retenidas",
-                opciones.get("Retenidas"),
-                "cnt_ret",
-                valores_previos.get("Retenidas", ""),
+                "Retenidas", opciones.get("Retenidas"), "cnt_ret",
+                valores_previos.get("Retenidas", "")
             )
             c_trf = _picker_con_cantidad(
-                "Transformadores",
-                opciones.get("Transformadores"),
-                "cnt_trf",
-                valores_previos.get("Transformadores", ""),
+                "Transformadores", opciones.get("Transformadores"), "cnt_trf",
+                valores_previos.get("Transformadores", "")
             )
 
         # Salida final en el formato que ya consume tu app
