@@ -414,26 +414,56 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     punto = st.session_state["punto_en_edicion"]
     st.markdown(f"### ✏️ Editando {punto}")
 
+    # ====== Catálogos base ======
     vals_poste, lab_poste = _pick_vals_labels(opciones, ["Poste"], ["poste"])
-    vals_pri, lab_pri = _pick_vals_labels(opciones,
+    vals_pri, lab_pri = _pick_vals_labels(
+        opciones,
         prefer=["Primario", "Primaria", "MT", "Media Tensión", "Media Tension"],
-        fuzzy=["primar", "media", "mt"]
+        fuzzy=["primar", "media", "mt"],
     )
-    vals_sec, lab_sec = _pick_vals_labels(opciones,
+    vals_sec, lab_sec = _pick_vals_labels(
+        opciones,
         prefer=["Secundario", "Secundaria", "BT", "Baja Tensión", "Baja Tension"],
-        fuzzy=["secund", "baja", "bt"]
+        fuzzy=["secund", "baja", "bt"],
     )
     vals_ret, lab_ret = _pick_vals_labels(opciones, ["Retenidas"], ["reten"])
-    vals_ct,  lab_ct  = _pick_vals_labels(opciones, ["Conexiones a tierra", "Tierra"], ["tierra"])
-    vals_tr,  lab_tr  = _pick_vals_labels(opciones, ["Transformadores", "Transformador"], ["trafo", "transfor"])
+    vals_ct, lab_ct = _pick_vals_labels(opciones, ["Conexiones a tierra", "Tierra"], ["tierra"])
+    vals_tr, lab_tr = _pick_vals_labels(opciones, ["Transformadores", "Transformador"], ["trafo", "transfor"])
 
+    # ====== ✅ MEZCLA: Conexiones a tierra + Protección ======
+    vals_prot, lab_prot = _pick_vals_labels(opciones, ["Protección", "Proteccion"], ["protec"])
+
+    mix_vals = []
+    seen = set()
+    for v in (vals_ct + vals_prot):
+        vv = str(v).strip()
+        if vv and vv not in seen:
+            seen.add(vv)
+            mix_vals.append(vv)
+
+    mix_labs = {}
+    mix_labs.update(lab_ct or {})
+    mix_labs.update(lab_prot or {})
+    if not mix_labs:
+        mix_labs = {c: c for c in mix_vals}
+
+    # ====== UI ======
     key_prefix = f"kp_{punto}"
-    _fila_categoria_ui("Poste",                 vals_poste, lab_poste, key_prefix)
-    _fila_categoria_ui("Primario",              vals_pri,   lab_pri,   key_prefix)
-    _fila_categoria_ui("Secundario",            vals_sec,   lab_sec,   key_prefix)
-    _fila_categoria_ui("Retenidas",             vals_ret,   lab_ret,   key_prefix)
-    _fila_categoria_ui("Conexiones a tierra",   vals_ct,    lab_ct,    key_prefix)
-    _fila_categoria_ui("Transformadores",       vals_tr,    lab_tr,    key_prefix)
+    _fila_categoria_ui("Poste",           vals_poste, lab_poste, key_prefix)
+    _fila_categoria_ui("Primario",        vals_pri,   lab_pri,   key_prefix)
+    _fila_categoria_ui("Secundario",      vals_sec,   lab_sec,   key_prefix)
+    _fila_categoria_ui("Retenidas",       vals_ret,   lab_ret,   key_prefix)
+
+    # 👉 Aquí está el cambio real: muestra mezclado, guarda en "Conexiones a tierra"
+    _fila_categoria_ui(
+        cat_key="Conexiones a tierra",
+        valores=mix_vals,
+        etiquetas=mix_labs,
+        key_prefix=key_prefix,
+        display_label="Conexiones a tierra / Protección",
+    )
+
+    _fila_categoria_ui("Transformadores", vals_tr,    lab_tr,    key_prefix)
 
     st.markdown("---")
     st.markdown("#### 📑 Vista consolidada del punto")
@@ -443,7 +473,11 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     st.markdown("##### ✂️ Editar seleccionados")
     cols = st.columns(3)
     with cols[0]:
-        cat = st.selectbox("Categoría", ["Poste","Primario","Secundario","Retenidas","Conexiones a tierra","Transformadores"], key="chip_cat")
+        cat = st.selectbox(
+            "Categoría",
+            ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"],
+            key="chip_cat",
+        )
     with cols[1]:
         codes = list(st.session_state["puntos_data"][punto][cat].keys())
         code = st.selectbox("Código", codes, key="chip_code")
@@ -483,9 +517,8 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 
     return None, None
 
-# =============================================================================
-# Función pública: llamada por app.py
-# =============================================================================
+
+
 # =============================================================================
 # Función pública: llamada por app.py
 # =============================================================================
