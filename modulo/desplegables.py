@@ -186,7 +186,7 @@ def crear_desplegables(opciones):
     """
     Devuelve un dict igual al que ya guardas en df_puntos:
       {'Poste': '2x PC-40', 'Primario': 'A-I-5', ...}
-      
+    """
     with st.container():  # scope para el CSS local
         st.markdown("<div class='xpicker'>", unsafe_allow_html=True)
 
@@ -202,9 +202,11 @@ def crear_desplegables(opciones):
 
         # --- Mezclar catálogo: Conexiones a tierra + Protección ---
         cat_tierra = opciones.get("Conexiones a tierra", {"valores": [], "etiquetas": {}})
-        cat_prot   = (opciones.get("Protección")
-                      or opciones.get("Proteccion")
-                      or {"valores": [], "etiquetas": {}})
+        cat_prot = (
+            opciones.get("Protección")
+            or opciones.get("Proteccion")
+            or {"valores": [], "etiquetas": {}}
+        )
 
         # Merge sin duplicados, preservando etiquetas
         valores_mix = []
@@ -228,19 +230,19 @@ def crear_desplegables(opciones):
                 "Poste",
                 opciones.get("Poste"),
                 "cnt_poste",
-                valores_previos.get("Poste", "")
+                valores_previos.get("Poste", ""),
             )
             c_sec = _picker_con_cantidad(
                 "Secundario",
                 opciones.get("Secundario"),
                 "cnt_sec",
-                valores_previos.get("Secundario", "")
+                valores_previos.get("Secundario", ""),
             )
             c_tierra = _picker_con_cantidad(
                 "Conexiones a tierra / Protección",
                 cat_tierra_prot,
                 "cnt_tierra",
-                valores_previos.get("Conexiones a tierra", "")
+                valores_previos.get("Conexiones a tierra", ""),
             )
 
         with col_der:
@@ -248,34 +250,32 @@ def crear_desplegables(opciones):
                 "Primario",
                 opciones.get("Primario"),
                 "cnt_pri",
-                valores_previos.get("Primario", "")
+                valores_previos.get("Primario", ""),
             )
             c_ret = _picker_con_cantidad(
                 "Retenidas",
                 opciones.get("Retenidas"),
                 "cnt_ret",
-                valores_previos.get("Retenidas", "")
+                valores_previos.get("Retenidas", ""),
             )
             c_trf = _picker_con_cantidad(
                 "Transformadores",
                 opciones.get("Transformadores"),
                 "cnt_trf",
-                valores_previos.get("Transformadores", "")
+                valores_previos.get("Transformadores", ""),
             )
 
         # Salida final en el formato que ya consume tu app
-        seleccion["Poste"]               = _counter_to_str(c_poste)
-        seleccion["Primario"]            = _counter_to_str(c_pri)
-        seleccion["Secundario"]          = _counter_to_str(c_sec)
-        seleccion["Retenidas"]           = _counter_to_str(c_ret)
+        seleccion["Poste"] = _counter_to_str(c_poste)
+        seleccion["Primario"] = _counter_to_str(c_pri)
+        seleccion["Secundario"] = _counter_to_str(c_sec)
+        seleccion["Retenidas"] = _counter_to_str(c_ret)
 
         # 🔒 Clave se mantiene igual para compatibilidad con df_puntos/PDFs
         seleccion["Conexiones a tierra"] = _counter_to_str(c_tierra)
 
-        seleccion["Transformadores"]     = _counter_to_str(c_trf)
+        seleccion["Transformadores"] = _counter_to_str(c_trf)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
-
-
