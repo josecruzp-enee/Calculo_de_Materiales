@@ -315,25 +315,36 @@ def _render_cat_str(punto: str, categoria: str) -> str:
         parts.append(f"{n}× {code}" if n > 1 else code)
     return ", ".join(parts)
 
-def _fila_categoria_ui(label: str, valores: list[str], etiquetas: dict, key_prefix: str):
+def _fila_categoria_ui(cat_key: str, valores: list[str], etiquetas: dict, key_prefix: str, display_label: str | None = None):
+    """
+    cat_key: categoría REAL donde se guarda (ej: 'Conexiones a tierra')
+    display_label: texto que se muestra en la UI (ej: 'Conexiones a tierra / Protección')
+    """
+    label = display_label or cat_key
     st.markdown(f"**{label}**")
+
     c1, c2, c3 = st.columns([7, 1.1, 1.9])
     with c1:
         sel = st.selectbox(
-            "", valores, index=0 if valores else None,
-            key=f"{key_prefix}_{label}_sel",
+            "",
+            valores,
+            index=0 if valores else None,
+            key=f"{key_prefix}_{cat_key}_sel",
             label_visibility="collapsed",
             format_func=lambda x: etiquetas.get(x, x),
         )
     with c2:
         qty = st.number_input(
-            " ", min_value=1, max_value=99, step=1, value=1,
-            key=f"{key_prefix}_{label}_qty", label_visibility="collapsed"
+            " ",
+            min_value=1, max_value=99, step=1, value=1,
+            key=f"{key_prefix}_{cat_key}_qty",
+            label_visibility="collapsed",
         )
     with c3:
-        if st.button("➕ Agregar", key=f"{key_prefix}_{label}_add"):
-            _add_item(label, sel, qty)
+        if st.button("➕ Agregar", key=f"{key_prefix}_{cat_key}_add"):
+            _add_item(cat_key, sel, qty)   # ✅ guarda en la categoría real
             st.success(f"Añadido: {qty}× {etiquetas.get(sel, sel)}")
+
 
 def _consolidado_a_fila(punto: str) -> Dict[str, str]:
     return {
