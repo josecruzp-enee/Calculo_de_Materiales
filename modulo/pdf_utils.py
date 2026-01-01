@@ -19,6 +19,8 @@ import os
 import re
 import pandas as pd
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+
 
 # --- Importación de tabla de cables ---
 from modulo.configuracion_cables import tabla_cables_pdf
@@ -366,6 +368,51 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+
+def _tabla_estructuras_por_punto(punto: str, df_p: pd.DataFrame, doc_width: float):
+    st_hdr = ParagraphStyle("hdr", parent=styles["Normal"], fontName="Helvetica-Bold",
+                            fontSize=9, leading=10, alignment=TA_CENTER)
+
+    st_code = ParagraphStyle("code", parent=styles["Normal"], fontName="Helvetica",
+                             fontSize=8, leading=9, alignment=TA_LEFT)
+
+    st_desc = ParagraphStyle("desc", parent=styles["Normal"], fontName="Helvetica",
+                             fontSize=8, leading=9, alignment=TA_LEFT, wordWrap="CJK")
+    st_desc.splitLongWords = 1
+
+    st_qty = ParagraphStyle("qty", parent=styles["Normal"], fontName="Helvetica",
+                            fontSize=8, leading=9, alignment=TA_CENTER)
+
+    w1 = doc_width * 0.20
+    w2 = doc_width * 0.65
+    w3 = doc_width * 0.15
+
+    data = [
+        [Paragraph("Estructura", st_hdr),
+         Paragraph("Descripción", st_hdr),
+         Paragraph("Cantidad", st_hdr)]
+    ]
+
+    for _, row in df_p.iterrows():
+        data.append([
+            Paragraph(str(row.get("codigodeestructura","")), st_code),
+            Paragraph(str(row.get("Descripcion","")), st_desc),
+            Paragraph(str(row.get("Cantidad","")), st_qty),
+        ])
+
+    t = Table(data, colWidths=[w1, w2, w3], repeatRows=1, hAlign="LEFT")
+    t.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.lightblue),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("LEFTPADDING",  (0,0), (-1,-1), 6),
+        ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ("TOPPADDING",   (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 4),
+    ]))
+
+    return t
 
 
 # === PDF completo consolidado ===
@@ -449,29 +496,23 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
         ]))
         elems.append(tabla_estruct)
 
-    # === Estructuras por punto ===
+# === Estructuras por punto ===
     if not df_estructuras_por_punto.empty:
         elems.append(PageBreak())
         elems.append(Paragraph("<b>Estructuras por Punto</b>", styles["Heading2"]))
+
         for p in sorted(df_estructuras_por_punto["Punto"].unique(),
                         key=lambda x: int(re.sub(r'\D', '', str(x)) or 0)):
+
             elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading3"]))
+
             df_p = df_estructuras_por_punto[df_estructuras_por_punto["Punto"] == p]
-            data = [["Estructura", "Descripción", "Cantidad"]]
-            for _, row in df_p.iterrows():
-                data.append([
-                    str(row["codigodeestructura"]),
-                    str(row["Descripcion"]),
-                    str(row["Cantidad"])
-                ])
-            tabla_p = Table(data, colWidths=[1.5*inch, 4*inch, 1*inch])
-            tabla_p.setStyle(TableStyle([
-                ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-                ("BACKGROUND", (0,0), (-1,0), colors.lightblue),
-                ("ALIGN", (2,1), (2,-1), "CENTER")
-            ]))
+
+            tabla_p = _tabla_estructuras_por_punto(f"Punto {p}", df_p, doc.width)
             elems.append(tabla_p)
             elems.append(Spacer(1, 0.2*inch))
+
+
 
     # === Materiales por punto ===
     if not df_mat_por_punto.empty:
@@ -505,6 +546,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
