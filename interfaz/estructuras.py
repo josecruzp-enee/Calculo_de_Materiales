@@ -454,12 +454,12 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     _fila_categoria_ui("Secundario",      vals_sec,   lab_sec,   key_prefix)
     _fila_categoria_ui("Retenidas",       vals_ret,   lab_ret,   key_prefix)
 
-    # 👉 Aquí está el cambio real: muestra mezclado, guarda en "Conexiones a tierra"
+    
     _fila_categoria_ui(
         cat_key="Conexiones a tierra",
         valores=mix_vals,
         etiquetas=mix_labs,
-        key_prefix=key_prefix,
+        key_prefix=key_prefix + "_ctp",
         display_label="Conexiones a tierra / Protección",
     )
 
