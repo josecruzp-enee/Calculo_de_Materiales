@@ -186,7 +186,7 @@ def crear_desplegables(opciones):
     """
     Devuelve un dict igual al que ya guardas en df_puntos:
       {'Poste': '2x PC-40', 'Primario': 'A-I-5', ...}
-    """
+      
     with st.container():  # scope para el CSS local
         st.markdown("<div class='xpicker'>", unsafe_allow_html=True)
 
@@ -196,30 +196,86 @@ def crear_desplegables(opciones):
 
         # Valores previos si se está editando
         valores_previos = {}
-        if not df_actual.empty and punto_actual in df_actual.get("Punto", pd.Series(dtype=str)).values:
+        if (not df_actual.empty) and (punto_actual in df_actual.get("Punto", pd.Series(dtype=str)).values):
             fila = df_actual[df_actual["Punto"] == punto_actual].iloc[0].to_dict()
             valores_previos = {k: v for k, v in fila.items() if k != "Punto"}
+
+        # --- Mezclar catálogo: Conexiones a tierra + Protección ---
+        cat_tierra = opciones.get("Conexiones a tierra", {"valores": [], "etiquetas": {}})
+        cat_prot   = (opciones.get("Protección")
+                      or opciones.get("Proteccion")
+                      or {"valores": [], "etiquetas": {}})
+
+        # Merge sin duplicados, preservando etiquetas
+        valores_mix = []
+        vistos = set()
+        for v in (cat_tierra.get("valores", []) + cat_prot.get("valores", [])):
+            vv = str(v).strip()
+            if vv and vv not in vistos:
+                vistos.add(vv)
+                valores_mix.append(vv)
+
+        etiquetas_mix = {}
+        etiquetas_mix.update(cat_tierra.get("etiquetas", {}) or {})
+        etiquetas_mix.update(cat_prot.get("etiquetas", {}) or {})
+
+        cat_tierra_prot = {"valores": valores_mix, "etiquetas": etiquetas_mix}
 
         # Estructura en dos columnas (como tu layout)
         col_izq, col_der = st.columns(2)
         with col_izq:
-            c_poste = _picker_con_cantidad("Poste", opciones.get("Poste"), "cnt_poste", valores_previos.get("Poste", ""))
-            c_sec   = _picker_con_cantidad("Secundario", opciones.get("Secundario"), "cnt_sec", valores_previos.get("Secundario", ""))
-            c_tierra= _picker_con_cantidad("Conexiones a tierra", opciones.get("Conexiones a tierra"), "cnt_tierra", valores_previos.get("Conexiones a tierra", ""))
+            c_poste = _picker_con_cantidad(
+                "Poste",
+                opciones.get("Poste"),
+                "cnt_poste",
+                valores_previos.get("Poste", "")
+            )
+            c_sec = _picker_con_cantidad(
+                "Secundario",
+                opciones.get("Secundario"),
+                "cnt_sec",
+                valores_previos.get("Secundario", "")
+            )
+            c_tierra = _picker_con_cantidad(
+                "Conexiones a tierra / Protección",
+                cat_tierra_prot,
+                "cnt_tierra",
+                valores_previos.get("Conexiones a tierra", "")
+            )
 
         with col_der:
-            c_pri   = _picker_con_cantidad("Primario", opciones.get("Primario"), "cnt_pri", valores_previos.get("Primario", ""))
-            c_ret   = _picker_con_cantidad("Retenidas", opciones.get("Retenidas"), "cnt_ret", valores_previos.get("Retenidas", ""))
-            c_trf   = _picker_con_cantidad("Transformadores", opciones.get("Transformadores"), "cnt_trf", valores_previos.get("Transformadores", ""))
+            c_pri = _picker_con_cantidad(
+                "Primario",
+                opciones.get("Primario"),
+                "cnt_pri",
+                valores_previos.get("Primario", "")
+            )
+            c_ret = _picker_con_cantidad(
+                "Retenidas",
+                opciones.get("Retenidas"),
+                "cnt_ret",
+                valores_previos.get("Retenidas", "")
+            )
+            c_trf = _picker_con_cantidad(
+                "Transformadores",
+                opciones.get("Transformadores"),
+                "cnt_trf",
+                valores_previos.get("Transformadores", "")
+            )
 
         # Salida final en el formato que ya consume tu app
         seleccion["Poste"]               = _counter_to_str(c_poste)
         seleccion["Primario"]            = _counter_to_str(c_pri)
         seleccion["Secundario"]          = _counter_to_str(c_sec)
         seleccion["Retenidas"]           = _counter_to_str(c_ret)
+
+        # 🔒 Clave se mantiene igual para compatibilidad con df_puntos/PDFs
         seleccion["Conexiones a tierra"] = _counter_to_str(c_tierra)
+
         seleccion["Transformadores"]     = _counter_to_str(c_trf)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
+
