@@ -16,7 +16,7 @@ from modulo.procesar_materiales import procesar_materiales
 _RE_SPLIT = re.compile(r"[+,;\n\r]+")   # incluye saltos de línea
 _RE_SANIT = re.compile(r"[^A-Z0-9\-\.]")
 
-COLUMNAS_ESTRUCTURAS = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
+COLUMNAS_ESTRUCTURAS = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores","Luminarias"]
 
 # =============================================================================
 # Utils de saneo 1-D (blindaje definitivo para groupby)
