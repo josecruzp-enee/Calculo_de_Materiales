@@ -10,7 +10,7 @@ from modulo.estilos_app import aplicar_estilos
 # ====== Constantes compartidas ======
 COLUMNAS_BASE = [
     "Punto", "Poste", "Primario", "Secundario",
-    "Retenidas", "Conexiones a tierra", "Transformadores"
+    "Retenidas", "Conexiones a tierra", "Transformadores","Luminarias"
 ]
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # raíz del repo
