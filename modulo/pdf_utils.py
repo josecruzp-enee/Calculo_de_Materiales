@@ -79,6 +79,46 @@ def formatear_material(nombre):
     return texto
 
 
+# ==========================================================
+# ✅ NUEVO: Calibres desde tabla de Cables (sin longitudes)
+# ==========================================================
+def _dedupe_keep_order(vals):
+    seen = set()
+    out = []
+    for v in vals:
+        k = str(v).strip().upper()
+        if not k:
+            continue
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(str(v).strip())
+    return out
+
+
+def _calibres_por_tipo(cables, tipo_buscar: str) -> str:
+    """
+    Devuelve calibres únicos separados por coma para un tipo de cable:
+      MT, BT, N, HP, RETENIDA
+    Lee claves flexibles: "Tipo"/"tipo" y "Calibre"/"calibre".
+    """
+    t = (tipo_buscar or "").strip().upper()
+    if not cables:
+        return ""
+
+    calibres = []
+    for c in cables:
+        tipo = str(c.get("Tipo", c.get("tipo", ""))).strip().upper()
+        if tipo != t:
+            continue
+        cal = str(c.get("Calibre", c.get("calibre", ""))).strip()
+        if cal:
+            calibres.append(cal)
+
+    calibres = _dedupe_keep_order(calibres)
+    return ", ".join(calibres)
+
+
 def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     from math import sqrt
 
@@ -105,17 +145,32 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     descripcion_manual = datos_proyecto.get("descripcion_proyecto", "").strip()
     tension_valor = datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension") or ""
     nivel_tension_fmt = formato_tension(tension_valor)
+
+    # ✅ Fuente real: lo que guardaste desde la sección de cables
     cables = datos_proyecto.get("cables_proyecto", []) or []
 
+    # Se siguen usando para la descripción automática (con longitudes)
     primarios = [c for c in cables if str(c.get("Tipo", "")).upper() == "MT"]
     secundarios = [c for c in cables if str(c.get("Tipo", "")).upper() in ("BT", "HP", "N")]
     retenidas = [c for c in cables if str(c.get("Tipo", "")).upper() == "RETENIDA"]
 
-    calibre_primario = datos_proyecto.get("calibre_primario") or datos_proyecto.get("calibre_mt", "")
-    calibre_secundario = datos_proyecto.get("calibre_secundario", "")
-    calibre_neutro = datos_proyecto.get("calibre_neutro", "")
-    calibre_piloto = datos_proyecto.get("calibre_piloto", "")
-    calibre_retenidas = datos_proyecto.get("calibre_retenidas", "")
+    # ==========================================================
+    # ✅ AQUÍ EL CAMBIO IMPORTANTE:
+    # Calibres para la tabla de información = calibres seleccionados en Cables
+    # (sin longitudes)
+    # ==========================================================
+    calibre_primario_tab = _calibres_por_tipo(cables, "MT")
+    calibre_secundario_tab = _calibres_por_tipo(cables, "BT")
+    calibre_neutro_tab = _calibres_por_tipo(cables, "N")
+    calibre_piloto_tab = _calibres_por_tipo(cables, "HP")
+    calibre_retenidas_tab = _calibres_por_tipo(cables, "RETENIDA")
+
+    # Fallback si aún no hay cables guardados
+    calibre_primario = calibre_primario_tab or datos_proyecto.get("calibre_primario") or datos_proyecto.get("calibre_mt", "")
+    calibre_secundario = calibre_secundario_tab or datos_proyecto.get("calibre_secundario", "")
+    calibre_neutro = calibre_neutro_tab or datos_proyecto.get("calibre_neutro", "")
+    calibre_piloto = calibre_piloto_tab or datos_proyecto.get("calibre_piloto", "")
+    calibre_retenidas = calibre_retenidas_tab or datos_proyecto.get("calibre_retenidas", "")
 
     data = [
         ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
@@ -205,9 +260,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     elems.append(Spacer(1, 6))
     elems.append(Paragraph(cuerpo_desc, styleN))
     elems.append(Spacer(1, 18))
-
-    # ✅ Deja que el PDF completo controle los saltos
-    # safe_page_break(elems)
 
     return elems
 
@@ -338,7 +390,7 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
     if df_extra is None or df_extra.empty:
         return elems
 
-    safe_page_break(elems)  # ✅ evita páginas en blanco por doble PageBreak
+    safe_page_break(elems)
     elems.append(Paragraph("<b>Materiales Adicionales</b>", styles["Heading2"]))
     elems.append(Spacer(1, 12))
 
@@ -358,7 +410,6 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
 
 # === Generar PDF de Materiales por Punto ===
 def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
-    """Genera un PDF con materiales agrupados por punto."""
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -464,7 +515,6 @@ def _tabla_estructuras_por_punto(punto: str, df_p: pd.DataFrame, doc_width: floa
     return t
 
 
-# === PDF completo consolidado ===
 def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_mat_por_punto, datos_proyecto):
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
@@ -474,13 +524,9 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
 
     elems = []
 
-    # === Hoja de información del proyecto ===
     elems = extend_flowables(elems, hoja_info_proyecto(datos_proyecto, df_estructuras, df_mat))
-
-    # ✅ Forzar que el Resumen de Materiales empiece en hoja aparte
     safe_page_break(elems)
 
-    # === Resumen global de materiales ===
     elems.append(Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"]))
 
     df_agr = (
@@ -516,13 +562,9 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     elems.append(tabla)
     safe_page_break(elems)
 
-    # === Materiales adicionales ===
     elems = agregar_tabla_materiales_adicionales(elems, datos_proyecto)
-
-    # === Tabla de cables ===
     elems = extend_flowables(elems, tabla_cables_pdf(datos_proyecto))
 
-    # === Resumen de estructuras global ===
     if not df_estructuras.empty:
         safe_page_break(elems)
         elems.append(Paragraph("<b>Resumen de Estructuras</b>", styles["Heading2"]))
@@ -544,7 +586,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
         ]))
         elems.append(tabla_estruct)
 
-    # === Estructuras por punto ===
     if not df_estructuras_por_punto.empty:
         safe_page_break(elems)
         elems.append(Paragraph("<b>Estructuras por Punto</b>", styles["Heading2"]))
@@ -567,7 +608,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
             elems.append(tabla_p)
             elems.append(Spacer(1, 0.2 * inch))
 
-    # === Materiales por punto ===
     if not df_mat_por_punto.empty:
         safe_page_break(elems)
         elems.append(Paragraph("<b>Materiales por Punto</b>", styles["Heading2"]))
@@ -606,11 +646,9 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
             elems.append(tabla_m)
             elems.append(Spacer(1, 0.2 * inch))
 
-    # ✅ Evita página en blanco final por PageBreak sobrante
     strip_trailing_pagebreaks(elems)
 
     doc.build(elems)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
