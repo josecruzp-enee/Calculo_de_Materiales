@@ -48,6 +48,7 @@ COLUMNAS_BASE: List[str] = [
     "Retenidas",
     "Conexiones a tierra",
     "Transformadores",
+    "Luminarias",
 ]
 
 # =============================================================================
@@ -109,7 +110,7 @@ def _expand_wide_to_long(df_ancho: pd.DataFrame) -> pd.DataFrame:
     Devuelve columnas: Punto, codigodeestructura, cantidad
     """
     df = _normalizar_columnas(df_ancho, COLUMNAS_BASE).copy()
-    cat_cols = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"]
+    cat_cols = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores","Luminarias"]
     rows = []
     for _, r in df.iterrows():
         punto = str(r.get("Punto", "")).strip()
@@ -230,7 +231,7 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
         opciones = cargar_opciones()
         # Normalización suave de claves esperadas
         for key in ["Poste", "Primaria", "Primario", "Secundaria", "Secundario", "MT", "BT",
-                    "Retenidas", "Conexiones a tierra", "Transformadores", "Transformador"]:
+                    "Retenidas", "Conexiones a tierra", "Transformadores", "Transformador", "Luminarias"]:
             opciones.setdefault(key, {"valores": [], "etiquetas": {}})
             opciones[key].setdefault("valores", [])
             opciones[key].setdefault("etiquetas", {})
@@ -244,6 +245,7 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
             "Retenidas": {"valores": ["R-1 (E)", "R-4 (D)", "R-5T (E)"], "etiquetas": {}},
             "Conexiones a tierra": {"valores": ["CT-N (P)", "CT-N (E)"], "etiquetas": {}},
             "Transformadores": {"valores": ["TD (P)", "25 kVA", "50 kVA"], "etiquetas": {}},
+            "Luminarias": {"valores": [ "LL-1"], "etiquetas": {}}{},
         }
 
 def _pick_vals_labels(opciones: dict, prefer: list[str], fuzzy: list[str] | None = None):
@@ -288,6 +290,7 @@ def _ensure_consolidado():
             "Retenidas": {},
             "Conexiones a tierra": {},
             "Transformadores": {},
+            "Luminarias": {},
         }
 
 def _add_item(cat: str, code: str, qty: int):
@@ -355,6 +358,7 @@ def _consolidado_a_fila(punto: str) -> Dict[str, str]:
         "Retenidas": _render_cat_str(punto, "Retenidas"),
         "Conexiones a tierra": _render_cat_str(punto, "Conexiones a tierra"),
         "Transformadores": _render_cat_str(punto, "Transformadores"),
+        "Luminarias": _render_cat_str(punto, "Luminarias"),
     }
 
 def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
@@ -429,6 +433,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     vals_ret, lab_ret = _pick_vals_labels(opciones, ["Retenidas"], ["reten"])
     vals_ct, lab_ct = _pick_vals_labels(opciones, ["Conexiones a tierra", "Tierra"], ["tierra"])
     vals_tr, lab_tr = _pick_vals_labels(opciones, ["Transformadores", "Transformador"], ["trafo", "transfor"])
+    vals_lum, lab_lum = _pick_vals_labels(opciones, prefer=["Luminarias", "Luminaria"], fuzzy=["lumin"])
 
     # ====== ✅ MEZCLA: Conexiones a tierra + Protección ======
     vals_prot, lab_prot = _pick_vals_labels(opciones, ["Protección", "Proteccion"], ["protec"])
@@ -453,8 +458,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     _fila_categoria_ui("Primario",        vals_pri,   lab_pri,   key_prefix)
     _fila_categoria_ui("Secundario",      vals_sec,   lab_sec,   key_prefix)
     _fila_categoria_ui("Retenidas",       vals_ret,   lab_ret,   key_prefix)
-
-    
+    _fila_categoria_ui("Luminarias", vals_lum, lab_lum, key_prefix)
     _fila_categoria_ui(
         cat_key="Conexiones a tierra",
         valores=mix_vals,
@@ -475,7 +479,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     with cols[0]:
         cat = st.selectbox(
             "Categoría",
-            ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores"],
+            ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores", "Luminarias"],
             key="chip_cat",
         )
     with cols[1]:
