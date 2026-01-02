@@ -61,7 +61,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             return d
 
     def formato_tension(vll):
-        """34.5 -> '19.92 L-N / 34.5 L-L kV'."""
+        """34.5 -> '19.9 L-N / 34.5 L-L kV'."""
         try:
             vll = float(vll)
             vln = round(vll / sqrt(3), 2)
@@ -268,7 +268,9 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
 
     for p in puntos:
         # 🔹 Evitar duplicar la palabra "Punto" en el encabezado
-        num = str(p).replace("Punto", "").strip()
+        s = str(p).strip()
+        m = re.search(r'(\d+)', s)
+        num = m.group(1) if m else s
 
         elems.append(Spacer(1, 6))  # pequeño espacio antes de cada punto
         elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading2"]))
@@ -335,11 +337,20 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     elems.append(Paragraph(f"<b>Materiales por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]))
     elems.append(Spacer(1, 12))
 
-    # Asegurar que los puntos estén ordenados correctamente
-    puntos = sorted(df_por_punto["Punto"].unique(), key=lambda x: int(re.search(r'\d+', str(x)).group()))
+    # ✅ Ordenar puntos de forma robusta (sin reventar si algún valor no trae números)
+    puntos = sorted(
+        df_por_punto["Punto"].unique(),
+        key=lambda x: int(re.search(r'\d+', str(x)).group(0)) if re.search(r'\d+', str(x)) else 0
+    )
 
     for p in puntos:
-        elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading2"]))
+        # ✅ Evitar "Punto Punto 1" extrayendo el número del punto
+        s = str(p).strip()
+        m = re.search(r'(\d+)', s)
+        num = str(int(m.group(1))) if m else s  # int() quita ceros a la izquierda
+
+        elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading2"]))
+
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         df_agrupado = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
@@ -353,22 +364,21 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
 
         tabla = Table(data, colWidths=[4*inch, 1*inch, 1*inch])
         tabla.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-            ("BACKGROUND", (0,0), (-1,0), colors.darkgreen),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-            ("ALIGN", (1,1), (-1,-1), "CENTER"),
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("FONTSIZE", (0,0), (-1,-1), 9),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkgreen),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
         ]))
 
         elems.append(tabla)
-        elems.append(Spacer(1, 0.2*inch))
+        elems.append(Spacer(1, 0.2 * inch))
 
     doc.build(elems)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 def _tabla_estructuras_por_punto(punto: str, df_p: pd.DataFrame, doc_width: float):
     st_hdr = ParagraphStyle("hdr", parent=styles["Normal"], fontName="Helvetica-Bold",
@@ -441,7 +451,11 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     # === Resumen global de materiales ===
     elems.append(Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"]))
 
-    df_agr = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum() if not df_mat.empty else pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+    df_agr = (
+        df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+        if not df_mat.empty
+        else pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+    )
 
     # === Agregar los cables del proyecto al resumen de materiales ===
     if "cables_proyecto" in datos_proyecto and datos_proyecto["cables_proyecto"]:
@@ -456,9 +470,11 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     # === Tabla de resumen de materiales ===
     data = [["Material", "Unidad", "Cantidad"]]
     for _, r in df_agr.iterrows():
-        data.append([Paragraph(formatear_material(r["Materiales"]), styleN),
-                     r["Unidad"],
-                     f"{r['Cantidad']:.2f}"])
+        data.append([
+            Paragraph(formatear_material(r["Materiales"]), styleN),
+            r["Unidad"],
+            f"{r['Cantidad']:.2f}"
+        ])
 
     tabla = Table(data, colWidths=[4*inch, 1*inch, 1*inch])
     tabla.setStyle(TableStyle([
@@ -496,34 +512,52 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
         ]))
         elems.append(tabla_estruct)
 
-# === Estructuras por punto ===
+    # === Estructuras por punto ===
     if not df_estructuras_por_punto.empty:
         elems.append(PageBreak())
         elems.append(Paragraph("<b>Estructuras por Punto</b>", styles["Heading2"]))
 
-        for p in sorted(df_estructuras_por_punto["Punto"].unique(),
-                        key=lambda x: int(re.sub(r'\D', '', str(x)) or 0)):
+        puntos = sorted(
+            df_estructuras_por_punto["Punto"].unique(),
+            key=lambda x: int(re.sub(r"\D", "", str(x)) or 0)
+        )
 
-            elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading3"]))
+        for p in puntos:
+            s = str(p).strip()
+            m = re.search(r"(\d+)", s)
+            num = str(int(m.group(1))) if m else s  # quita ceros a la izquierda
+
+            # ✅ Evita "Punto Punto ..."
+            elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading3"]))
 
             df_p = df_estructuras_por_punto[df_estructuras_por_punto["Punto"] == p]
 
-            tabla_p = _tabla_estructuras_por_punto(f"Punto {p}", df_p, doc.width)
+            # ✅ No vuelvas a concatenar "Punto" aquí
+            tabla_p = _tabla_estructuras_por_punto(num, df_p, doc.width)
             elems.append(tabla_p)
-            elems.append(Spacer(1, 0.2*inch))
-
-
+            elems.append(Spacer(1, 0.2 * inch))
 
     # === Materiales por punto ===
     if not df_mat_por_punto.empty:
         elems.append(PageBreak())
         elems.append(Paragraph("<b>Materiales por Punto</b>", styles["Heading2"]))
-        puntos = sorted(df_mat_por_punto["Punto"].unique(),
-                        key=lambda x: int(re.search(r'\d+', str(x)).group()))
+
+        puntos = sorted(
+            df_mat_por_punto["Punto"].unique(),
+            key=lambda x: int(re.search(r"\d+", str(x)).group(0)) if re.search(r"\d+", str(x)) else 0
+        )
+
         for p in puntos:
-            elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading3"]))
+            s = str(p).strip()
+            m = re.search(r"(\d+)", s)
+            num = str(int(m.group(1))) if m else s  # quita ceros a la izquierda
+
+            # ✅ Evita "Punto Punto ..."
+            elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading3"]))
+
             df_p = df_mat_por_punto[df_mat_por_punto["Punto"] == p]
             df_agr_p = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
             data = [["Material", "Unidad", "Cantidad"]]
             for _, r in df_agr_p.iterrows():
                 data.append([
@@ -531,6 +565,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
                     str(r["Unidad"]),
                     f"{r['Cantidad']:.2f}"
                 ])
+
             tabla_m = Table(data, colWidths=[4*inch, 1*inch, 1*inch])
             tabla_m.setStyle(TableStyle([
                 ("GRID", (0,0), (-1,-1), 0.5, colors.black),
@@ -538,14 +573,16 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
                 ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
                 ("ALIGN", (1,1), (-1,-1), "CENTER")
             ]))
+
             elems.append(tabla_m)
-            elems.append(Spacer(1, 0.2*inch))
+            elems.append(Spacer(1, 0.2 * inch))
 
     # === Construcción final del PDF ===
     doc.build(elems)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
