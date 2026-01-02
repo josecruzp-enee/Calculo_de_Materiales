@@ -41,10 +41,10 @@ def cargar_opciones():
         "Secundaria": "Secundario",
         "Retenidas": "Retenidas",
         "Conexiones a tierra": "Conexiones a tierra",
-        # incluir protección (con y sin tilde)
         "Protección": "Protección",
         "Proteccion": "Protección",
         "Transformadores": "Transformadores",
+        "Luminarias": "Luminarias",
     }
 
     normalizado = {}
@@ -263,6 +263,11 @@ def crear_desplegables(opciones):
                 valores_previos.get("Transformadores", "")
             )
 
+            c_lum = _picker_con_cantidad(
+                "Luminarias", opciones.get("Luminarias"), "cnt_lum",
+                valores_previos.get("Luminarias", "")
+            )
+
         # Salida final en el formato que ya consume tu app
         seleccion["Poste"] = _counter_to_str(c_poste)
         seleccion["Primario"] = _counter_to_str(c_pri)
@@ -270,8 +275,10 @@ def crear_desplegables(opciones):
         seleccion["Retenidas"] = _counter_to_str(c_ret)
         seleccion["Conexiones a tierra"] = _counter_to_str(c_tierra)
         seleccion["Transformadores"] = _counter_to_str(c_trf)
+        seleccion["Luminarias"] = _counter_to_str(c_lum)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
 
