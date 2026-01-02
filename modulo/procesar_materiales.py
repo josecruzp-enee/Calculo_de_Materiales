@@ -48,43 +48,45 @@ def normalizar_datos_proyecto(datos_proyecto: dict) -> dict:
 
 
 def limpiar_df_estructuras(df_estructuras: pd.DataFrame, log) -> pd.DataFrame:
-    """Limpieza básica y homologación de columnas."""
     filas_antes = len(df_estructuras)
     df = df_estructuras.dropna(how="all").copy()
 
-    # Homologar nombre "Punto"
     if "Punto" not in df.columns and "punto" in df.columns:
         df.rename(columns={"punto": "Punto"}, inplace=True)
 
-    # Filtrar filas sin código
-    if "codigodeestructura" in df.columns:
-        df = df[df["codigodeestructura"].notna()]
-
-    filas_despues = len(df)
-    log(f"🧹 Filas eliminadas: {filas_antes - filas_despues}")
-
-    # Validar columnas mínimas
     for col in ("Punto", "codigodeestructura"):
         if col not in df.columns:
             raise ValueError(f"Falta columna requerida: '{col}'. Columnas: {df.columns.tolist()}")
 
-    # Evitar duplicados exactos por (Punto, codigodeestructura) antes de explotar comas
-    df = df.drop_duplicates(subset=["Punto", "codigodeestructura"])
+    df["Punto"] = df["Punto"].astype(str).str.strip()
+    df["codigodeestructura"] = df["codigodeestructura"].astype(str).str.strip()
 
+    # ✅ Si no viene cantidad, asumir 1
+    if "cantidad" not in df.columns:
+        df["cantidad"] = 1
+    df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce").fillna(1).astype(int)
+    df.loc[df["cantidad"] < 1, "cantidad"] = 1
+
+    # ✅ En vez de drop_duplicates: agrupar y sumar
+    df = (
+        df.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
+          .sum()
+    )
+
+    filas_despues = len(df)
+    log(f"🧹 Filas eliminadas: {filas_antes - filas_despues}")
     return df
 
 
+
 def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convierte celdas tipo:
-    "B-III-6, B-I-4B" -> 2 filas.
-    También limpia TS-50 KVA -> TS-50.
-    """
-    tmp = df[["Punto", "codigodeestructura"]].copy()
+    tmp = df[["Punto", "codigodeestructura", "cantidad"]].copy()
+
     tmp["Punto"] = tmp["Punto"].astype(str).str.strip()
     tmp["codigodeestructura"] = tmp["codigodeestructura"].astype(str).str.strip()
+    tmp["cantidad"] = pd.to_numeric(tmp["cantidad"], errors="coerce").fillna(1).astype(int)
+    tmp.loc[tmp["cantidad"] < 1, "cantidad"] = 1
 
-    # Separar SOLO por coma/;
     tmp["codigodeestructura"] = tmp["codigodeestructura"].str.replace(";", ",", regex=False)
     tmp["codigodeestructura"] = tmp["codigodeestructura"].str.split(",")
     tmp = tmp.explode("codigodeestructura")
@@ -92,39 +94,56 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
     tmp["codigodeestructura"] = tmp["codigodeestructura"].astype(str).str.strip().str.upper()
     tmp = tmp[tmp["codigodeestructura"] != ""]
 
-    # TS-50 KVA -> TS-50 (porque tu Excel tiene TS-50 como hoja/código)
     tmp["codigodeestructura"] = tmp["codigodeestructura"].str.replace(r"\s+KVA\b", "", regex=True).str.strip()
     tmp = tmp[tmp["codigodeestructura"] != "KVA"]
 
-    # Quitar duplicados por (Punto, código) después de explotar
-    tmp = tmp.drop_duplicates(subset=["Punto", "codigodeestructura"])
+    # ✅ Si después del split quedan repetidos, se SUMA cantidad
+    tmp = (
+        tmp.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
+           .sum()
+    )
 
     return tmp
 
 
+
 def construir_estructuras_por_punto_y_conteo(df_unicas: pd.DataFrame, log):
-    """
-    Construye:
-    - estructuras_por_punto: dict {Punto: [codigos...]}
-    - conteo: dict {codigo: cantidad_total_en_proyecto}
-    Desde el DF real (robusto).
-    """
     tmp = explotar_codigos_por_coma(df_unicas)
 
+    # ✅ estructuras_por_punto ahora lleva "Nx CODIGO" cuando aplique
+    def _lista_codigos(grp: pd.DataFrame):
+        out = []
+        for _, r in grp.iterrows():
+            c = int(r["cantidad"])
+            cod = str(r["codigodeestructura"]).strip().upper()
+            if c > 1:
+                out.append(f"{c}x {cod}")
+            else:
+                out.append(cod)
+        return out
+
     estructuras_por_punto = (
-        tmp.groupby("Punto")["codigodeestructura"]
-           .apply(lambda s: list(dict.fromkeys(s.tolist())))
+        tmp.sort_values(["Punto", "codigodeestructura"])
+           .groupby("Punto", as_index=False)
+           .apply(_lista_codigos)
+    )
+    # groupby.apply devuelve serie con multiindex; lo acomodamos:
+    estructuras_por_punto = estructuras_por_punto.reset_index().set_index("Punto")[0].to_dict()
+
+    # ✅ conteo global = suma de cantidad
+    conteo = (
+        tmp.groupby("codigodeestructura")["cantidad"]
+           .sum()
            .to_dict()
     )
 
-    conteo = tmp["codigodeestructura"].value_counts().to_dict()
-
-    log("✅ estructuras_por_punto (desde DF):")
+    log("✅ estructuras_por_punto (con cantidad):")
     log(estructuras_por_punto)
-    log("✅ conteo global (desde DF):")
+    log("✅ conteo global (sumando cantidad):")
     log(conteo)
 
     return estructuras_por_punto, conteo, tmp
+
 
 
 def cargar_indice_normalizado(archivo_materiales, log) -> pd.DataFrame:
@@ -163,9 +182,6 @@ def construir_df_estructuras_resumen(df_indice: pd.DataFrame, conteo: dict, log)
 
 
 def construir_df_estructuras_por_punto(tmp_explotado: pd.DataFrame, df_indice: pd.DataFrame, log) -> pd.DataFrame:
-    """
-    Crea DF por punto usando merge con índice (más robusto que loc en bucle).
-    """
     df_pp = tmp_explotado.merge(
         df_indice[["codigodeestructura", "Descripcion"]],
         on="codigodeestructura",
@@ -173,11 +189,10 @@ def construir_df_estructuras_por_punto(tmp_explotado: pd.DataFrame, df_indice: p
     )
     df_pp["Descripcion"] = df_pp["Descripcion"].fillna("NO ENCONTRADA")
 
-    # En caso futuro: si el mismo código puede repetirse en un punto, aquí se contaría
-    df_pp["Cantidad"] = 1
+    # ✅ cantidad real
+    df_pp.rename(columns={"cantidad": "Cantidad"}, inplace=True)
 
     df_pp = df_pp[["Punto", "codigodeestructura", "Descripcion", "Cantidad"]].copy()
-
     log("df_estructuras_por_punto:\n" + str(df_pp.head(30)))
     return df_pp
 
@@ -355,3 +370,4 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
+
