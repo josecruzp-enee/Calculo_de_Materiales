@@ -245,7 +245,7 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
             "Retenidas": {"valores": ["R-1 (E)", "R-4 (D)", "R-5T (E)"], "etiquetas": {}},
             "Conexiones a tierra": {"valores": ["CT-N (P)", "CT-N (E)"], "etiquetas": {}},
             "Transformadores": {"valores": ["TD (P)", "25 kVA", "50 kVA"], "etiquetas": {}},
-            "Luminarias": {"valores": [ "LL-1"], "etiquetas": {}}{},
+            "Luminarias": {"valores": ["LL-1"], "etiquetas": {}},
         }
 
 def _pick_vals_labels(opciones: dict, prefer: list[str], fuzzy: list[str] | None = None):
