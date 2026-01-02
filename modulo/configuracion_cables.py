@@ -20,8 +20,8 @@ def get_tipos() -> List[str]:
 
 def get_calibres() -> Dict[str, List[str]]:
     return {
-        "MT": ["2 ACSR", "1/0 ACSR", "2/0 ACSR", "3/0 ACSR", "4/0 ACSR", "266.8 MCM", "336 MCM"],
-        "BT": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
+        "MT": ["1/0 ACSR", "2/0 ACSR", "3/0 ACSR", "4/0 ACSR", "266.8 MCM", "336 MCM"],
+        "BT": ["3/0 WP","2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
         "N":  ["2 ACSR", "1/0 ACSR", "2/0 ACSR", "3/0 ACSR", "4/0 ACSR"],
         "HP": ["2 WP", "1/0 WP", "2/0 WP"],
         "Retenida": ["1/4", "5/8", "3/4"],
@@ -39,7 +39,7 @@ def get_configs_por_tipo() -> Dict[str, List[str]]:
         "MT": ["1F", "2F", "3F"],
         "BT": ["2F"],
         "N":  ["N"],
-        "HP": ["1F+N"],     # hilo piloto (1 conductor)
+        "HP": ["1F"],     # hilo piloto (1 conductor)
         "Retenida": ["Única"],
     }
 
