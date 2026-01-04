@@ -5,21 +5,20 @@ Generación de informes PDF del cálculo de materiales y estructuras
 Autor: José Nikol Cruz
 """
 
-from reportlab.platypus import (
-    BaseDocTemplate, PageTemplate, Frame,
-    Paragraph, Spacer, Table, TableStyle, PageBreak
-)
+from reportlab.platypus import (BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Table, TableStyle, PageBreak)
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
-
 from datetime import datetime
 from io import BytesIO
 import os
 import re
 import pandas as pd
+from io import BytesIO
+from xml.sax.saxutils import escape
+
 
 # --- Importación de tabla de cables ---
 from modulo.configuracion_cables import tabla_cables_pdf
@@ -308,8 +307,15 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
+    # --- helper: texto seguro para Paragraph (evita errores y permite cortes) ---
+    def _safe_para(texto):
+        t = "" if pd.isna(texto) else str(texto)
+        t = escape(t)                 # evita que <, &, etc. rompan el Paragraph
+        t = t.replace("-", "-\u200b") # permite corte en guiones si la palabra es larga
+        return t
+
     elems = [
-        Paragraph(f"<b>Resumen de Estructuras - Proyecto: {nombre_proy}</b>", styles["Title"]),
+        Paragraph(f"<b>Resumen de Estructuras - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
         Spacer(1, 12)
     ]
 
@@ -327,6 +333,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         fontSize=8, leading=9, alignment=TA_LEFT, wordWrap="CJK"
     )
     st_desc.splitLongWords = 1
+    st_desc.spaceShrinkage = 0.05
+
     st_qty = ParagraphStyle(
         "qty_est", parent=styles["Normal"], fontName="Helvetica",
         fontSize=8, leading=9, alignment=TA_CENTER
@@ -345,9 +353,9 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
 
     for _, row in df_estructuras.iterrows():
         data.append([
-            Paragraph(str(row.get("codigodeestructura", "")), st_code),
-            Paragraph(str(row.get("Descripcion", "")), st_desc),
-            Paragraph(str(row.get("Cantidad", "")), st_qty),
+            Paragraph(_safe_para(row.get("codigodeestructura", "")), st_code),
+            Paragraph(_safe_para(row.get("Descripcion", "")), st_desc),
+            Paragraph(_safe_para(row.get("Cantidad", "")), st_qty),
         ])
 
     tabla = Table(data, colWidths=[w1, w2, w3], repeatRows=1, hAlign="LEFT")
@@ -355,13 +363,17 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (2, 1), (2, -1), "CENTER"),
 
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        # ✅ refuerzo de wrap en columna descripción
+        ("WORDWRAP", (1, 1), (1, -1), "CJK"),
+
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
 
     elems.append(tabla)
@@ -690,4 +702,5 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
