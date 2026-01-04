@@ -312,20 +312,58 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         Paragraph(f"<b>Resumen de Estructuras - Proyecto: {nombre_proy}</b>", styles["Title"]),
         Spacer(1, 12)
     ]
-    data = [["Estructura", "Descripción", "Cantidad"]]
+
+    # ---- estilos para envolver texto ----
+    st_hdr = ParagraphStyle(
+        "hdr_est", parent=styles["Normal"], fontName="Helvetica-Bold",
+        fontSize=9, leading=10, alignment=TA_CENTER
+    )
+    st_code = ParagraphStyle(
+        "code_est", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=8, leading=9, alignment=TA_LEFT
+    )
+    st_desc = ParagraphStyle(
+        "desc_est", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=8, leading=9, alignment=TA_LEFT, wordWrap="CJK"
+    )
+    st_desc.splitLongWords = 1
+    st_qty = ParagraphStyle(
+        "qty_est", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=8, leading=9, alignment=TA_CENTER
+    )
+
+    # ✅ anchos proporcionales al ancho real del documento
+    w1 = doc.width * 0.18
+    w2 = doc.width * 0.67
+    w3 = doc.width * 0.15
+
+    data = [[
+        Paragraph("Estructura", st_hdr),
+        Paragraph("Descripción", st_hdr),
+        Paragraph("Cantidad", st_hdr),
+    ]]
+
     for _, row in df_estructuras.iterrows():
         data.append([
-            str(row.get("codigodeestructura", "")),
-            str(row.get("Descripcion", "")),
-            str(row.get("Cantidad", ""))
+            Paragraph(str(row.get("codigodeestructura", "")), st_code),
+            Paragraph(str(row.get("Descripcion", "")), st_desc),
+            Paragraph(str(row.get("Cantidad", "")), st_qty),
         ])
 
-    tabla = Table(data, colWidths=[1.5 * inch, 4 * inch, 1 * inch])
+    tabla = Table(data, colWidths=[w1, w2, w3], repeatRows=1, hAlign="LEFT")
     tabla.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke)
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (2, 1), (2, -1), "CENTER"),
+
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
+
     elems.append(tabla)
 
     doc.build(elems)
@@ -652,3 +690,4 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
