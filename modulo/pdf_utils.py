@@ -16,9 +16,7 @@ from io import BytesIO
 import os
 import re
 import pandas as pd
-from io import BytesIO
 from xml.sax.saxutils import escape
-
 
 # --- Importación de tabla de cables ---
 from modulo.configuracion_cables import tabla_cables_pdf
@@ -29,6 +27,19 @@ styleN = ParagraphStyle(name="Normal9", parent=styles["Normal"], fontSize=9, lea
 styleH = styles["Heading1"]
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+
+
+# ==========================================================
+# ✅ FIX: formatear_material (IDENTIDAD)
+# ==========================================================
+def formatear_material(nombre):
+    """
+    Ya NO formatea (porque tu catálogo base ya está normalizado).
+    Solo convierte a texto seguro para Paragraph.
+    """
+    if nombre is None or (isinstance(nombre, float) and pd.isna(nombre)):
+        return ""
+    return escape(str(nombre).strip())
 
 
 # ==========================
@@ -137,26 +148,18 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     tension_valor = datos_proyecto.get("nivel_de_tension") or datos_proyecto.get("tension") or ""
     nivel_tension_fmt = formato_tension(tension_valor)
 
-    # ✅ Fuente real: lo que guardaste desde la sección de cables
     cables = datos_proyecto.get("cables_proyecto", []) or []
 
-    # Se siguen usando para la descripción automática (con longitudes)
     primarios = [c for c in cables if str(c.get("Tipo", "")).upper() == "MT"]
     secundarios = [c for c in cables if str(c.get("Tipo", "")).upper() in ("BT", "HP", "N")]
     retenidas = [c for c in cables if str(c.get("Tipo", "")).upper() == "RETENIDA"]
 
-    # ==========================================================
-    # ✅ AQUÍ EL CAMBIO IMPORTANTE:
-    # Calibres para la tabla de información = calibres seleccionados en Cables
-    # (sin longitudes)
-    # ==========================================================
     calibre_primario_tab = _calibres_por_tipo(cables, "MT")
     calibre_secundario_tab = _calibres_por_tipo(cables, "BT")
     calibre_neutro_tab = _calibres_por_tipo(cables, "N")
     calibre_piloto_tab = _calibres_por_tipo(cables, "HP")
     calibre_retenidas_tab = _calibres_por_tipo(cables, "RETENIDA")
 
-    # Fallback si aún no hay cables guardados
     calibre_primario = calibre_primario_tab or datos_proyecto.get("calibre_primario") or datos_proyecto.get("calibre_mt", "")
     calibre_secundario = calibre_secundario_tab or datos_proyecto.get("calibre_secundario", "")
     calibre_neutro = calibre_neutro_tab or datos_proyecto.get("calibre_neutro", "")
@@ -191,7 +194,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     # ==== DESCRIPCIÓN GENERAL ====
     lineas = []
 
-    # Postes
     if df_estructuras is not None and not df_estructuras.empty:
         postes = df_estructuras[
             df_estructuras["codigodeestructura"].str.contains("PC|PT", case=False, na=False)
@@ -207,7 +209,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             total = sum(resumen.values())
             lineas.append(f"Hincado de {', '.join(partes)} (Total: {total} postes).")
 
-    # Red Primaria
     for c in primarios:
         long_m = float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
         fase = str(c.get("Configuración", "")).strip()
@@ -217,7 +218,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
                 f"Construcción de {long_m:.0f} m de LP, {nivel_tension_fmt}, {fase}, conductor {calibre}."
             )
 
-    # Red Secundaria
     for c in secundarios:
         long_m = float_safe(c.get("Total Cable (m)", 0))
         fase = str(c.get("Configuración", "")).strip()
@@ -227,7 +227,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
                 f"Construcción de {long_m:.0f} m de LS, 120/240 V, {fase}, conductor {calibre}."
             )
 
-    # Transformadores
     if df_mat is not None and not df_mat.empty:
         transf = df_mat[df_mat["Materiales"].str.contains("Transformador", case=False, na=False)]
         if not transf.empty:
@@ -237,7 +236,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             )))
             lineas.append(f"Instalación de {int(total_t)} transformador(es) de {capacidades} kVA.")
 
-    # Luminarias
     if df_mat is not None and not df_mat.empty:
         lums = df_mat[df_mat["Materiales"].str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)]
         if not lums.empty:
@@ -264,7 +262,7 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     doc.addPageTemplates([template])
 
     elems = [
-        Paragraph(f"<b>Resumen de Materiales - Proyecto: {nombre_proy}</b>", styles["Title"]),
+        Paragraph(f"<b>Resumen de Materiales - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
         Spacer(1, 12)
     ]
 
@@ -273,8 +271,8 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     for _, row in df_agrupado.iterrows():
         data.append([
             Paragraph(formatear_material(row["Materiales"]), styleN),
-            str(row["Unidad"]),
-            f"{row['Cantidad']:.2f}"
+            escape(str(row["Unidad"])),
+            f"{float(row['Cantidad']):.2f}"
         ])
 
     tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
@@ -299,11 +297,10 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
-    # --- helper: texto seguro para Paragraph (evita errores y permite cortes) ---
     def _safe_para(texto):
         t = "" if pd.isna(texto) else str(texto)
-        t = escape(t)                 # evita que <, &, etc. rompan el Paragraph
-        t = t.replace("-", "-\u200b") # permite corte en guiones si la palabra es larga
+        t = escape(t)
+        t = t.replace("-", "-\u200b")
         return t
 
     elems = [
@@ -311,7 +308,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         Spacer(1, 12)
     ]
 
-    # ---- estilos para envolver texto ----
     st_hdr = ParagraphStyle(
         "hdr_est", parent=styles["Normal"], fontName="Helvetica-Bold",
         fontSize=9, leading=10, alignment=TA_CENTER
@@ -332,7 +328,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         fontSize=8, leading=9, alignment=TA_CENTER
     )
 
-    # ✅ anchos proporcionales al ancho real del documento
     w1 = doc.width * 0.18
     w2 = doc.width * 0.67
     w3 = doc.width * 0.15
@@ -355,13 +350,9 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (2, 1), (2, -1), "CENTER"),
-
-        # ✅ refuerzo de wrap en columna descripción
         ("WORDWRAP", (1, 1), (1, -1), "CJK"),
-
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING", (0, 0), (-1, -1), 2),
@@ -385,7 +376,7 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
     doc.addPageTemplates([template])
 
     elems = [
-        Paragraph(f"<b>Estructuras por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]),
+        Paragraph(f"<b>Estructuras por Punto - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
         Spacer(1, 12)
     ]
 
@@ -397,16 +388,16 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
         num = m.group(1) if m else s
 
         elems.append(Spacer(1, 6))
-        elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading2"]))
+        elems.append(Paragraph(f"<b>Punto {escape(str(num))}</b>", styles["Heading2"]))
 
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         data = [["Estructura", "Descripción", "Cantidad"]]
 
         for _, row in df_p.iterrows():
             data.append([
-                str(row["codigodeestructura"]),
-                str(row["Descripcion"]),
-                str(row["Cantidad"])
+                escape(str(row.get("codigodeestructura", ""))),
+                escape(str(row.get("Descripcion", ""))),
+                escape(str(row.get("Cantidad", "")))
             ])
 
         tabla = Table(data, colWidths=[1.5 * inch, 4 * inch, 1 * inch])
@@ -438,7 +429,11 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
 
     data_extra = [["Material", "Unidad", "Cantidad"]]
     for _, row in df_extra.iterrows():
-        data_extra.append([row["Materiales"], row["Unidad"], f"{row['Cantidad']:.2f}"])
+        data_extra.append([
+            escape(str(row.get("Materiales", ""))),
+            escape(str(row.get("Unidad", ""))),
+            f"{float(row.get('Cantidad', 0)):.2f}"
+        ])
 
     tabla = Table(data_extra, colWidths=[4 * inch, 1 * inch, 1 * inch])
     tabla.setStyle(TableStyle([
@@ -460,7 +455,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
     doc.addPageTemplates([template])
 
     elems = []
-    elems.append(Paragraph(f"<b>Materiales por Punto - Proyecto: {nombre_proy}</b>", styles["Title"]))
+    elems.append(Paragraph(f"<b>Materiales por Punto - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]))
     elems.append(Spacer(1, 12))
 
     puntos = sorted(
@@ -473,7 +468,7 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
         m = re.search(r"(\d+)", s)
         num = str(int(m.group(1))) if m else s
 
-        elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading2"]))
+        elems.append(Paragraph(f"<b>Punto {escape(str(num))}</b>", styles["Heading2"]))
 
         df_p = df_por_punto[df_por_punto["Punto"] == p]
         df_agrupado = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
@@ -482,8 +477,8 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
         for _, row in df_agrupado.iterrows():
             data.append([
                 Paragraph(formatear_material(row["Materiales"]), styleN),
-                str(row["Unidad"]),
-                f"{round(row['Cantidad'], 2):.2f}"
+                escape(str(row["Unidad"])),
+                f"{float(row['Cantidad']):.2f}"
             ])
 
         tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
@@ -539,9 +534,9 @@ def _tabla_estructuras_por_punto(punto: str, df_p: pd.DataFrame, doc_width: floa
 
     for _, row in df_p.iterrows():
         data.append([
-            Paragraph(str(row.get("codigodeestructura", "")), st_code),
-            Paragraph(str(row.get("Descripcion", "")), st_desc),
-            Paragraph(str(row.get("Cantidad", "")), st_qty),
+            Paragraph(escape(str(row.get("codigodeestructura", ""))), st_code),
+            Paragraph(escape(str(row.get("Descripcion", ""))), st_desc),
+            Paragraph(escape(str(row.get("Cantidad", ""))), st_qty),
         ])
 
     t = Table(data, colWidths=[w1, w2, w3], repeatRows=1, hAlign="LEFT")
@@ -591,8 +586,8 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     for _, r in df_agr.iterrows():
         data.append([
             Paragraph(formatear_material(r["Materiales"]), styleN),
-            r["Unidad"],
-            f"{r['Cantidad']:.2f}"
+            escape(str(r["Unidad"])),
+            f"{float(r['Cantidad']):.2f}"
         ])
 
     tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
@@ -614,9 +609,9 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
         data_estruct = [["Estructura", "Descripción", "Cantidad"]]
         for _, row in df_estructuras.iterrows():
             data_estruct.append([
-                str(row.get("codigodeestructura", "")),
-                str(row.get("Descripcion", "")),
-                str(row.get("Cantidad", ""))
+                escape(str(row.get("codigodeestructura", ""))),
+                escape(str(row.get("Descripcion", ""))),
+                escape(str(row.get("Cantidad", "")))
             ])
 
         tabla_estruct = Table(data_estruct, colWidths=[1.5 * inch, 4 * inch, 1 * inch])
@@ -642,7 +637,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
             m = re.search(r"(\d+)", s)
             num = str(int(m.group(1))) if m else s
 
-            elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading3"]))
+            elems.append(Paragraph(f"<b>Punto {escape(str(num))}</b>", styles["Heading3"]))
 
             df_p = df_estructuras_por_punto[df_estructuras_por_punto["Punto"] == p]
             tabla_p = _tabla_estructuras_por_punto(num, df_p, doc.width)
@@ -664,7 +659,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
             m = re.search(r"(\d+)", s)
             num = str(int(m.group(1))) if m else s
 
-            elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading3"]))
+            elems.append(Paragraph(f"<b>Punto {escape(str(num))}</b>", styles["Heading3"]))
 
             df_p = df_mat_por_punto[df_mat_por_punto["Punto"] == p]
             df_agr_p = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
@@ -673,8 +668,8 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
             for _, r in df_agr_p.iterrows():
                 data.append([
                     Paragraph(formatear_material(r["Materiales"]), styleN),
-                    str(r["Unidad"]),
-                    f"{r['Cantidad']:.2f}"
+                    escape(str(r["Unidad"])),
+                    f"{float(r['Cantidad']):.2f}"
                 ])
 
             tabla_m = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
@@ -694,6 +689,3 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-
-
