@@ -42,7 +42,7 @@ def normalizar_datos_proyecto(datos_proyecto: dict) -> dict:
 
     return datos_proyecto
 
-
+"""
 def normalizar_texto_material(s: str) -> str:
     """
     Normaliza el nombre del material para que el groupby sume bien:
@@ -50,7 +50,7 @@ def normalizar_texto_material(s: str) -> str:
     - colapsa espacios
     - unifica variantes típicas (Ø = vs Ø=)
     - NO convierte a UPPER forzoso (si no quieres), pero yo lo recomiendo
-    """
+    
     if s is None:
         return ""
     x = str(s).strip()
@@ -60,7 +60,7 @@ def normalizar_texto_material(s: str) -> str:
     # unificar comillas y x
     x = x.replace("”", '"').replace("“", '"').replace("’", "'")
     return x.upper()
-
+    """
 
 # ==========================================================
 # Limpieza de DF estructuras (LARGO)
@@ -470,3 +470,4 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
+
