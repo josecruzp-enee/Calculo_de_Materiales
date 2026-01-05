@@ -42,25 +42,6 @@ def normalizar_datos_proyecto(datos_proyecto: dict) -> dict:
 
     return datos_proyecto
 
-"""
-def normalizar_texto_material(s: str) -> str:
-    """
-    Normaliza el nombre del material para que el groupby sume bien:
-    - strip
-    - colapsa espacios
-    - unifica variantes típicas (Ø = vs Ø=)
-    - NO convierte a UPPER forzoso (si no quieres), pero yo lo recomiendo
-    
-    if s is None:
-        return ""
-    x = str(s).strip()
-    x = re.sub(r"\s+", " ", x)
-    # unificar Ø = y Ø=
-    x = x.replace("Ø = ", "Ø=").replace("Ø= ", "Ø=").replace("Ø =", "Ø=")
-    # unificar comillas y x
-    x = x.replace("”", '"').replace("“", '"').replace("’", "'")
-    return x.upper()
-    """
 
 # ==========================================================
 # Limpieza de DF estructuras (LARGO)
@@ -113,7 +94,7 @@ def _normalizar_codigo_basico(code: str) -> str:
       - uppercase
       - strip
       - quita sufijos tipo "(E)" "(P)" "(R)"
-      - colapsa espacios
+      - colapsa espacios (solo para códigos)
       - normaliza TS (quita espacios antes de KVA)
     """
     if code is None:
@@ -123,9 +104,8 @@ def _normalizar_codigo_basico(code: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     s = s.upper()
 
-    # Normalizar transformadores tipo "TS-50 KVA" -> "TS-50KVA" (tu Excel tiene TS-50KVA)
+    # Normalizar transformadores tipo "TS-50 KVA" -> "TS-50KVA"
     s = re.sub(r"\bTS-?\s*(\d+(\.\d+)?)\s*KVA\b", lambda m: f"TS-{m.group(1)}KVA", s)
-    # Por si viene "TS-50 KVA" sin coincidir exacto:
     s = s.replace(" TS-", "TS-").replace(" KVA", "KVA")
     return s
 
@@ -261,6 +241,7 @@ def calcular_materiales_por_punto_con_cantidad(
 
     ✅ Multiplica por la cantidad real en el punto.
     ✅ Aplica reemplazo de conectores según calibre de la estructura.
+    ✅ NO normaliza nombres de materiales (ya vienen uniformes por lista desplegable).
     """
     resumen = []
     cache_hojas = {}
@@ -320,7 +301,6 @@ def calcular_materiales_por_punto_con_cantidad(
                 tabla_conectores=tabla_conectores_mt,
             )
 
-            dfp["Materiales"] = dfp["Materiales"].map(normalizar_texto_material)
             dfp["Unidad"] = dfp["Unidad"].astype(str).str.strip()
             dfp["Punto"] = punto
 
@@ -338,6 +318,10 @@ def calcular_materiales_por_punto_con_cantidad(
 
 
 def integrar_materiales_extra(df_resumen: pd.DataFrame, datos_proyecto: dict, log):
+    """
+    Integra materiales extra desde session_state.
+    ✅ NO normaliza nombres (ya vienen uniformes).
+    """
     try:
         import streamlit as st  # noqa
         materiales_extra = st.session_state.get("materiales_extra", [])
@@ -346,9 +330,10 @@ def integrar_materiales_extra(df_resumen: pd.DataFrame, datos_proyecto: dict, lo
 
     if materiales_extra:
         df_extra = pd.DataFrame(materiales_extra)
-        df_extra["Materiales"] = df_extra["Materiales"].map(normalizar_texto_material)
+
         df_out = pd.concat([df_resumen, df_extra], ignore_index=True)
         df_out = df_out.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
         datos_proyecto["materiales_extra"] = df_extra
         log(f"✅ Se integraron {len(df_extra)} materiales adicionales manuales")
         return df_out, datos_proyecto
@@ -410,13 +395,12 @@ def procesar_materiales(
     for e, cantidad in conteo.items():
         calibre_actual = determinar_calibre_por_estructura(e, datos_proyecto)
 
-        # OJO: aquí dependes de que core.materiales_estructuras multiplique bien por cantidad.
         df_mat = calcular_materiales_estructura(
             archivo_materiales, e, cantidad, tension, calibre_actual, tabla_conectores_mt
         )
 
         if df_mat is not None and not df_mat.empty:
-            df_mat["Materiales"] = df_mat["Materiales"].map(normalizar_texto_material)
+            # ✅ NO normaliza nombres de materiales
             df_mat["Unidad"] = df_mat["Unidad"].astype(str).str.strip()
             df_lista.append(df_mat)
 
@@ -470,4 +454,3 @@ def procesar_materiales(
         "materiales_por_punto": pdf_materiales_por_punto,
         "completo": pdf_informe_completo,
     }
-
