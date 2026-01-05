@@ -70,14 +70,6 @@ def fondo_pagina(canvas, doc):
         print(f"⚠️ Error aplicando fondo: {e}")
 
 
-# === Formateo de materiales ===
-def formatear_material(nombre):
-    texto = str(nombre).strip().title()
-    texto = re.sub(r"\bN[º°]?\s*(\d+)", r"N°\1", texto, flags=re.IGNORECASE)
-    texto = texto.replace(" X ", " x ")
-    return texto
-
-
 # ==========================================================
 # ✅ NUEVO: Calibres desde tabla de Cables (sin longitudes)
 # ==========================================================
@@ -702,5 +694,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
