@@ -109,7 +109,7 @@ def cargar_catalogo_materiales(archivo_materiales):
         if "DESCRIPCIÓN  DE  MATERIAL" in df.columns:
             df = df.rename(columns={"DESCRIPCIÓN  DE  MATERIAL": "Descripcion"})
         elif "DESCRIPCIÓN DE MATERIAL" in df.columns:
-            df = df.rename(columns={"DESCRIPCIÓN DE MATERIAL": "Descripcion"})
+            df = df.rename(columns={"DESCRIPCIÓN DE MATERIALES": "Descripcion"})
         elif "DESCRIPCION DE MATERIAL" in df.columns:
             df = df.rename(columns={"DESCRIPCION DE MATERIAL": "Descripcion"})
         if "UNIDAD" in df.columns:
@@ -131,6 +131,7 @@ def cargar_adicionales(archivo_estructuras):
     except:
         pass
     return pd.DataFrame(columns=['Materiales', 'Unidad', 'Cantidad'])
+
 
 
 
