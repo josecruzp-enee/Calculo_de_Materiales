@@ -90,6 +90,9 @@ def cargar_indice(archivo_materiales):
         return pd.DataFrame(columns=["codigodeestructura", "descripcion"])
 
 
+import pandas as pd
+import re
+
 def cargar_catalogo_materiales(archivo_materiales):
     """
     Carga la hoja 'Materiales' desde el archivo base.
@@ -100,28 +103,71 @@ def cargar_catalogo_materiales(archivo_materiales):
     """
     try:
         df = pd.read_excel(archivo_materiales, sheet_name="Materiales")
-        # Normalizar nombres de columnas
-        df.columns = df.columns.str.strip().str.upper()
 
-        # Renombrar columnas conocidas
+        # Normalizar encabezados: strip + upper
+        df.columns = df.columns.astype(str).str.strip().str.upper()
+
+        # Helper para colapsar espacios SOLO en nombres de columnas (no toca datos)
+        def _col_norm(s: str) -> str:
+            return re.sub(r"\s+", " ", str(s).strip().upper())
+
+        # Mapa de columnas por nombre "normalizado"
+        col_map = {_col_norm(c): c for c in df.columns}
+
+        # --- Código ---
         if "CÓDIGO" in df.columns:
             df = df.rename(columns={"CÓDIGO": "Codigo"})
-        if "DESCRIPCIÓN  DE  MATERIAL" in df.columns:
-            df = df.rename(columns={"DESCRIPCIÓN  DE  MATERIAL": "Descripcion"})
-        elif "DESCRIPCIÓN DE MATERIAL" in df.columns:
-            df = df.rename(columns={"DESCRIPCIÓN DE MATERIALES": "Descripcion"})
-        elif "DESCRIPCION DE MATERIAL" in df.columns:
-            df = df.rename(columns={"DESCRIPCION DE MATERIAL": "Descripcion"})
+        elif "CODIGO" in df.columns:
+            df = df.rename(columns={"CODIGO": "Codigo"})
+
+        # --- Descripción (soporta singular/plural, con/sin tilde, con espacios raros) ---
+        posibles_desc = [
+            "DESCRIPCIÓN DE MATERIALES",
+            "DESCRIPCION DE MATERIALES",
+            "DESCRIPCIÓN DE MATERIAL",
+            "DESCRIPCION DE MATERIAL",
+            "DESCRIPCIÓN  DE  MATERIAL",
+            "DESCRIPCION  DE  MATERIAL",
+            "DESCRIPCIÓN  DE  MATERIALES",
+            "DESCRIPCION  DE  MATERIALES",
+        ]
+
+        for key in posibles_desc:
+            k = _col_norm(key)
+            if k in col_map:
+                df = df.rename(columns={col_map[k]: "Descripcion"})
+                break
+
+        # --- Unidad ---
         if "UNIDAD" in df.columns:
             df = df.rename(columns={"UNIDAD": "Unidad"})
+        elif "UND" in df.columns:
+            df = df.rename(columns={"UND": "Unidad"})
+
+        # Asegurar columnas aunque no existan
+        if "Descripcion" not in df.columns:
+            df["Descripcion"] = ""
+        if "Unidad" not in df.columns:
+            df["Unidad"] = ""
+        if "Codigo" not in df.columns:
+            df["Codigo"] = ""
 
         # Mantener solo columnas que interesan
-        cols = [c for c in ["Codigo", "Descripcion", "Unidad"] if c in df.columns]
-        return df[cols].dropna().reset_index(drop=True)
+        df = df[["Codigo", "Descripcion", "Unidad"]].copy()
+
+        # Limpieza ligera (sin “normalizar” textos)
+        df["Descripcion"] = df["Descripcion"].fillna("").astype(str).str.strip()
+        df["Unidad"] = df["Unidad"].fillna("").astype(str).str.strip()
+        df["Codigo"] = df["Codigo"].fillna("").astype(str).str.strip()
+
+        # ❗ No borres por Unidad/Codigo vacíos: solo requiere Descripcion
+        df = df[df["Descripcion"] != ""].reset_index(drop=True)
+
+        return df
 
     except Exception as e:
         print(f"⚠️ Error cargando hoja 'Materiales': {e}")
-        return pd.DataFrame(columns=["Descripcion", "Unidad"])
+        return pd.DataFrame(columns=["Codigo", "Descripcion", "Unidad"])
 
 def cargar_adicionales(archivo_estructuras):
     try:
@@ -131,6 +177,7 @@ def cargar_adicionales(archivo_estructuras):
     except:
         pass
     return pd.DataFrame(columns=['Materiales', 'Unidad', 'Cantidad'])
+
 
 
 
