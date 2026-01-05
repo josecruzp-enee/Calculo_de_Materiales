@@ -16,16 +16,19 @@ def _sin_acentos(s: str) -> str:
         if unicodedata.category(c) != "Mn"
     )
 
+
 def _norm_col(col: str) -> str:
     s = _sin_acentos(str(col)).lower().strip()
     s = re.sub(r"\s+", " ", s)
     return s
+
 
 def normalizar_columnas_catalogo(catalogo_df: pd.DataFrame) -> pd.DataFrame:
     """
     Renombra columnas del catálogo para que existan siempre:
       - Descripcion
       - Unidad
+
     Soporta encabezados como:
       'DESCRIPCIÓN DE MATERIALES', 'DESCRIPCIÓN', 'DESCRIPCION', etc.
     """
@@ -38,11 +41,11 @@ def normalizar_columnas_catalogo(catalogo_df: pd.DataFrame) -> pd.DataFrame:
     for c in df.columns:
         cn = _norm_col(c)
 
-        # Descripción
+        # Descripción (incluye 'descripcion de materiales')
         if "descripcion" in cn:
             rename[c] = "Descripcion"
 
-        # Unidad
+        # Unidad (Unidad, UND, U, etc.)
         elif cn.startswith("unidad") or cn in ("und", "u"):
             rename[c] = "Unidad"
 
@@ -54,13 +57,16 @@ def normalizar_columnas_catalogo(catalogo_df: pd.DataFrame) -> pd.DataFrame:
     if "Unidad" not in df.columns:
         df["Unidad"] = ""
 
-    # Limpieza ligera
-    df["Descripcion"] = df["Descripcion"].astype(str).fillna("").str.strip()
-    df["Unidad"] = df["Unidad"].astype(str).fillna("").str.strip()
+    # Limpieza ligera (mejor fillna antes de astype)
+    df["Descripcion"] = df["Descripcion"].fillna("").astype(str).str.strip()
+    df["Unidad"] = df["Unidad"].fillna("").astype(str).str.strip()
 
     return df
 
 
+# ==========================================================
+# Consolidación de materiales extra
+# ==========================================================
 def _consolidar_materiales(lista):
     """Une duplicados por (Materiales, Unidad) sumando cantidades."""
     if not lista:
@@ -76,6 +82,9 @@ def _consolidar_materiales(lista):
     return df.to_dict(orient="records")
 
 
+# ==========================================================
+# UI sección: Adicionar Material
+# ==========================================================
 def seccion_adicionar_material():
     st.subheader("4. 🧰 Adicionar Material")
     st.markdown("Agrega materiales adicionales al proyecto que no estén asociados a estructuras específicas.")
@@ -90,13 +99,20 @@ def seccion_adicionar_material():
         st.warning("⚠️ No se pudo cargar el catálogo de materiales.")
         return
 
-    # ✅ Normaliza encabezados (aquí estaba el KeyError)
+    # ✅ Normaliza encabezados (evita KeyError aunque se llame 'DESCRIPCIÓN DE MATERIALES')
     catalogo_df = normalizar_columnas_catalogo(catalogo_df)
 
+    # Construir etiqueta visible en selectbox
     catalogo_df["Etiqueta"] = catalogo_df.apply(
         lambda x: f"{x.get('Descripcion','')} – {x.get('Unidad','')}".strip().rstrip(" –"),
         axis=1
     )
+
+    # (Opcional) Filtrar etiquetas vacías para que no te salga solo "– C/U"
+    # Si quieres verlas, comenta estas 2 líneas:
+    catalogo_df = catalogo_df[catalogo_df["Etiqueta"].str.strip() != ""]
+    catalogo_df = catalogo_df[catalogo_df["Etiqueta"].str.strip() != "–"]
+
     opciones_materiales = [""] + catalogo_df["Etiqueta"].tolist()
 
     # --- Form para agregar ---
@@ -107,11 +123,17 @@ def seccion_adicionar_material():
                 "🔧 Selecciona el Material",
                 options=opciones_materiales,
                 index=0,
-                placeholder="Ejemplo: ABRAZADERA ... – C/U",
+                placeholder="Ejemplo: Abrazadera ... – C/U",
                 key="sel_material_extra"
             )
         with col2:
-            cantidad = st.number_input("🔢 Cantidad", min_value=1, step=1, value=1, key="num_cantidad_extra")
+            cantidad = st.number_input(
+                "🔢 Cantidad",
+                min_value=1,
+                step=1,
+                value=1,
+                key="num_cantidad_extra"
+            )
 
         agregar = st.form_submit_button("➕ Agregar Material", use_container_width=True)
 
@@ -126,7 +148,8 @@ def seccion_adicionar_material():
             "Unidad": unidad,
             "Cantidad": int(cantidad)
         })
-        # Consolidar duplicados inmediatamente para que la tabla se vea limpia
+
+        # Consolidar duplicados inmediatamente
         st.session_state["materiales_extra"] = _consolidar_materiales(st.session_state["materiales_extra"])
         st.success(f"✅ Material agregado: {material} ({cantidad} {unidad})")
 
@@ -137,7 +160,6 @@ def seccion_adicionar_material():
         return
 
     df_view = pd.DataFrame(lista).copy()
-    # columna de borrar
     df_view.insert(0, "__DEL__", False)
 
     st.markdown("### 📋 Materiales adicionales añadidos")
@@ -165,11 +187,11 @@ def seccion_adicionar_material():
         st.rerun()
 
     if guardar:
-        # 1) Aplica eliminaciones
+        # 1) Aplicar eliminaciones
         if "__DEL__" in edited.columns:
             edited = edited.loc[~edited["__DEL__"].fillna(False)].drop(columns="__DEL__", errors="ignore")
 
-        # 2) Normaliza cantidades (>=0)
+        # 2) Normalizar cantidades (>0)
         if "Cantidad" in edited.columns:
             edited["Cantidad"] = pd.to_numeric(edited["Cantidad"], errors="coerce").fillna(0).astype(int)
             edited = edited[edited["Cantidad"] > 0]
