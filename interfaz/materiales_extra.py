@@ -1,7 +1,65 @@
 # -*- coding: utf-8 -*-
+import re
+import unicodedata
+
 import streamlit as st
 import pandas as pd
 from modulo.entradas import cargar_catalogo_materiales
+
+
+# ==========================================================
+# Normalización de columnas del catálogo
+# ==========================================================
+def _sin_acentos(s: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", str(s))
+        if unicodedata.category(c) != "Mn"
+    )
+
+def _norm_col(col: str) -> str:
+    s = _sin_acentos(str(col)).lower().strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+def normalizar_columnas_catalogo(catalogo_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Renombra columnas del catálogo para que existan siempre:
+      - Descripcion
+      - Unidad
+    Soporta encabezados como:
+      'DESCRIPCIÓN DE MATERIALES', 'DESCRIPCIÓN', 'DESCRIPCION', etc.
+    """
+    if catalogo_df is None or catalogo_df.empty:
+        return pd.DataFrame(columns=["Descripcion", "Unidad"])
+
+    df = catalogo_df.copy()
+    rename = {}
+
+    for c in df.columns:
+        cn = _norm_col(c)
+
+        # Descripción
+        if "descripcion" in cn:
+            rename[c] = "Descripcion"
+
+        # Unidad
+        elif cn.startswith("unidad") or cn in ("und", "u"):
+            rename[c] = "Unidad"
+
+    df = df.rename(columns=rename)
+
+    # Asegurar columnas
+    if "Descripcion" not in df.columns:
+        df["Descripcion"] = ""
+    if "Unidad" not in df.columns:
+        df["Unidad"] = ""
+
+    # Limpieza ligera
+    df["Descripcion"] = df["Descripcion"].astype(str).fillna("").str.strip()
+    df["Unidad"] = df["Unidad"].astype(str).fillna("").str.strip()
+
+    return df
+
 
 def _consolidar_materiales(lista):
     """Une duplicados por (Materiales, Unidad) sumando cantidades."""
@@ -11,9 +69,12 @@ def _consolidar_materiales(lista):
     if df.empty:
         return []
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0).astype(int)
-    df = (df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
-            .sort_values(["Materiales", "Unidad"]))
+    df = (
+        df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+          .sort_values(["Materiales", "Unidad"])
+    )
     return df.to_dict(orient="records")
+
 
 def seccion_adicionar_material():
     st.subheader("4. 🧰 Adicionar Material")
@@ -25,12 +86,15 @@ def seccion_adicionar_material():
 
     # Catálogo (para el selector)
     catalogo_df = cargar_catalogo_materiales(st.session_state.get("ruta_datos_materiales", None))
-    if catalogo_df.empty:
+    if catalogo_df is None or catalogo_df.empty:
         st.warning("⚠️ No se pudo cargar el catálogo de materiales.")
         return
 
+    # ✅ Normaliza encabezados (aquí estaba el KeyError)
+    catalogo_df = normalizar_columnas_catalogo(catalogo_df)
+
     catalogo_df["Etiqueta"] = catalogo_df.apply(
-        lambda x: f"{x['Descripcion']} – {x.get('Unidad','')}".strip().rstrip(" –"),
+        lambda x: f"{x.get('Descripcion','')} – {x.get('Unidad','')}".strip().rstrip(" –"),
         axis=1
     )
     opciones_materiales = [""] + catalogo_df["Etiqueta"].tolist()
@@ -91,7 +155,7 @@ def seccion_adicionar_material():
                 "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1, help="Puedes ajustar aquí"),
             },
         )
-        c1, c2, c3 = st.columns([1,1,2])
+        c1, c2, c3 = st.columns([1, 1, 2])
         guardar = c1.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
         limpiar = c2.form_submit_button("🗑️ Limpiar todo", use_container_width=True)
 
