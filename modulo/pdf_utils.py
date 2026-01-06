@@ -196,9 +196,13 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
 
     # --- Postes ---
     if df_estructuras is not None and not df_estructuras.empty:
-        postes = df_estructuras[
-            df_estructuras["codigodeestructura"].str.contains("PC|PT", case=False, na=False)
-        ]
+        if "codigodeestructura" in df_estructuras.columns:
+            postes = df_estructuras[
+                df_estructuras["codigodeestructura"].astype(str).str.contains("PC|PT", case=False, na=False)
+            ]
+        else:
+            postes = pd.DataFrame()
+
         if not postes.empty:
             resumen = {}
             for _, r in postes.iterrows():
@@ -241,44 +245,54 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             )
 
     # --- Transformadores (TS/TD/TT) ---
-    if df_mat is not None and not df_mat.empty:
-        s = df_mat["Materiales"].astype(str)
+    total_t = 0
+    capacidades = []
+    mult = {"TS": 1, "TD": 2, "TT": 3}
 
-        # Detecta: TS-37.5KVA, TS-37.5 KVA, TD-50KVA, TT-75 KVA, etc.
-        mask_tx = s.str.contains(
-            r"\b(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA\b",
-            case=False, na=False, regex=True
-        )
-        transf = df_mat[mask_tx].copy()
+    # 1) Buscar en ESTRUCTURAS (codigodeestructura)
+    if df_estructuras is not None and not df_estructuras.empty and "codigodeestructura" in df_estructuras.columns:
+        s = df_estructuras["codigodeestructura"].astype(str).str.upper().str.strip()
+        ext = s.str.extract(r"^(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA$", expand=True)
+        mask = ext[0].notna()
 
-        if not transf.empty:
-            transf["Cantidad"] = pd.to_numeric(transf["Cantidad"], errors="coerce").fillna(0)
+        if mask.any():
+            qty = pd.to_numeric(df_estructuras.loc[mask, "Cantidad"], errors="coerce").fillna(0)
+            pref = ext.loc[mask, 0]
+            kva = ext.loc[mask, 1]
 
-            # Clave normalizada (para que si viene repetido por 3F no se sume 3 veces)
-            ext = transf["Materiales"].astype(str).str.extract(
-                r"\b(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA\b",
-                flags=re.IGNORECASE
-            )
-            transf["_key"] = ext[0].str.upper() + "-" + ext[1] + " KVA"
+            total_t = int((qty * pref.map(mult)).sum())
+            capacidades = sorted({f"{p}-{k} KVA" for p, k in zip(pref, kva)})
 
-            # Tomar MAX por cada tipo/capacidad (evita triplicación)
-            bancos = transf.groupby("_key", as_index=False)["Cantidad"].max()
+    # 2) Fallback: buscar en MATERIALES (Materiales)
+    if total_t == 0 and df_mat is not None and not df_mat.empty and "Materiales" in df_mat.columns:
+        s = df_mat["Materiales"].astype(str).str.upper().str.strip()
+        ext = s.str.extract(r"\b(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA\b", expand=True)
+        mask = ext[0].notna()
 
-            mult = {"TS": 1, "TD": 2, "TT": 3}
+        if mask.any():
+            df_tx = df_mat.loc[mask].copy()
+            df_tx["Cantidad"] = pd.to_numeric(df_tx["Cantidad"], errors="coerce").fillna(0)
+
+            df_tx["_key"] = ext.loc[mask, 0] + "-" + ext.loc[mask, 1] + " KVA"
+            bancos = df_tx.groupby("_key", as_index=False)["Cantidad"].max()
 
             total_t = 0
             for _, r in bancos.iterrows():
-                pref = str(r["_key"]).split("-")[0].upper()  # TS / TD / TT
+                pref = str(r["_key"]).split("-")[0].upper()
                 total_t += float_safe(r["Cantidad"], 0) * mult.get(pref, 1)
 
-            capacidades = ", ".join(bancos["_key"].tolist())
-            lineas.append(f"Instalación de {int(total_t)} transformador(es) ({capacidades}).")
+            total_t = int(total_t)
+            capacidades = bancos["_key"].tolist()
+
+    if total_t > 0:
+        cap_txt = ", ".join(capacidades) if capacidades else ""
+        lineas.append(f"Instalación de {total_t} transformador(es) {f'({cap_txt})' if cap_txt else ''}.")
 
     # --- Luminarias ---
     if df_mat is not None and not df_mat.empty:
-        lums = df_mat[df_mat["Materiales"].str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)]
+        lums = df_mat[df_mat["Materiales"].astype(str).str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)]
         if not lums.empty:
-            total_l = lums["Cantidad"].sum()
+            total_l = pd.to_numeric(lums["Cantidad"], errors="coerce").fillna(0).sum()
             lineas.append(f"Instalación de {int(total_l)} luminaria(s) de alumbrado público.")
 
     descripcion_auto = "<br/>".join([f"{i + 1}. {l}" for i, l in enumerate(lineas)])
@@ -290,7 +304,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     elems.append(Spacer(1, 18))
 
     return elems
-
 
 
 
@@ -730,6 +743,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
