@@ -2,10 +2,6 @@
 """
 formularios.py
 Módulo de formularios para ingresar datos generales del proyecto.
-• Diseño compacto (dos columnas)
-• Persistencia verdadera en session_state
-• Sin “Resumen de datos del proyecto” (se eliminó)
-
 Autor: José Nikol Cruz
 """
 
@@ -40,11 +36,22 @@ def formulario_datos_proyecto() -> None:
         return dp.get(k, default)
 
     # Normalizar fecha guardada (si existiera como string)
-    fi_raw = _get("fecha_informe", str(date.today()))
-    try:
-        fi_default = datetime.strptime(fi_raw, "%Y-%m-%d").date()
-    except Exception:
-        fi_default = date.today()
+    fi_raw = _get("fecha_informe", "")
+
+    def _parse_fecha(s: str) -> date:
+        s = (s or "").strip()
+        if not s:
+            return date.today()
+
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
+            try:
+                return datetime.strptime(s, fmt).date()
+            except Exception:
+                pass
+
+        return date.today()
+
+    fi_default = _parse_fecha(fi_raw)
 
     # -------- Formulario (guarda sólo al submit) --------
     with st.form("form_datos_proyecto", clear_on_submit=False):
@@ -62,14 +69,14 @@ def formulario_datos_proyecto() -> None:
                 key="form_empresa",
             )
             # selectbox con índice a partir del valor guardado
-            opciones_tension = ["13.8", "34.5"]
-            nivel_actual = _get("nivel_de_tension", "13.8")
+            opciones_tension = ["7.96/13.8", "19.9/34.5"]
+            nivel_actual = _get("nivel_de_tension", "7.96/13.8")
             try:
                 idx_tension = opciones_tension.index(nivel_actual)
             except ValueError:
                 idx_tension = 0
             nivel_tension = st.selectbox(
-                "⚡ Nivel de Tensión (kV)",
+                "⚡ Nivel de Tensión (KV)",
                 opciones_tension,
                 index=idx_tension,
                 key="form_nivel_tension",
@@ -123,7 +130,7 @@ def mostrar_datos_formateados() -> None:
         with col1:
             st.write(f"**Nombre del Proyecto:** {dp.get('nombre_proyecto','')}")
             st.write(f"**Empresa / Área:** {dp.get('empresa','')}")
-            st.write(f"**Nivel de Tensión (kV):** {dp.get('nivel_de_tension','')}")
+            st.write(f"**Nivel de Tensión (KV):** {dp.get('nivel_de_tension','')}")
         with col2:
             st.write(f"**Código / Expediente:** {dp.get('codigo_proyecto','')}")
             st.write(f"**Responsable / Diseñador:** {dp.get('responsable','')}")
