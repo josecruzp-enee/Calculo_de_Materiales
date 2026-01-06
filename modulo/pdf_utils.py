@@ -131,11 +131,11 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             return d
 
     def formato_tension(vll):
-        """34.5 -> '19.9 L-N / 34.5 L-L kV'."""
+        """34.5 -> '19.9 L-N / 34.5 L-L KV'."""
         try:
             vll = float(vll)
-            vln = round(vll / sqrt(3), 2)
-            return f"{vln} L-N / {vll} L-L kV"
+            vln = round(vll / sqrt(3), 1)
+            return f"{vln} LN / {vll} LL KV"
         except Exception:
             return str(vll)
 
@@ -225,7 +225,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
 
         if long_desc > 0 and calibre:
             lineas.append(
-                f"Construcción de {long_desc:.0f} m de LP, {nivel_tension_fmt}, {fase}, conductor {calibre}."
+                f"Construcción de {long_desc:.0f} m de LP, {nivel_tension_fmt}, {fase}, {calibre}."
             )
 
     # --- Secundarios (LS) ---
@@ -241,7 +241,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
 
         if long_desc > 0 and calibre:
             lineas.append(
-                f"Construcción de {long_desc:.0f} m de LS, 120/240 V, {fase}, conductor {calibre}."
+                f"Construcción de {long_desc:.0f} m de LS, 120/240 V, {fase}, {calibre}."
             )
 
     # --- Transformadores ---
@@ -252,7 +252,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             capacidades = ", ".join(sorted(set(
                 transf["Materiales"].str.extract(r"(\d+\.?\d*)")[0].dropna().tolist()
             )))
-            lineas.append(f"Instalación de {int(total_t)} transformador(es) de {capacidades} kVA.")
+            lineas.append(f"Instalación de {int(total_t)} transformador(es) de {capacidades} KVA.")
 
     # --- Luminarias ---
     if df_mat is not None and not df_mat.empty:
@@ -709,5 +709,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
