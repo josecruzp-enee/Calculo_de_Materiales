@@ -210,22 +210,38 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             lineas.append(f"Hincado de {', '.join(partes)} (Total: {total} postes).")
 
     for c in primarios:
-        long_m = float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
-        fase = str(c.get("Configuración", "")).strip()
-        calibre = str(c.get("Calibre", "")).strip()
-        if long_m > 0 and calibre:
-            lineas.append(
-                f"Construcción de {long_m:.0f} m de LP, {nivel_tension_fmt}, {fase}, conductor {calibre}."
-            )
+    # Total de conductor (suma de fases) para cantidades
+    long_total = float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
+
+    fase = str(c.get("Configuración", "")).strip().upper()
+    calibre = str(c.get("Calibre", "")).strip()
+
+    # Longitud de tramo para la DESCRIPCIÓN (L)
+    m = re.search(r"(\d+)\s*F", fase)
+    n_fases = int(m.group(1)) if m else 1
+    long_desc = long_total / n_fases if n_fases > 1 else long_total
+
+    if long_desc > 0 and calibre:
+        lineas.append(
+            f"Construcción de {long_desc:.0f} m de LP, {nivel_tension_fmt}, {fase}, conductor {calibre}."
+        )
+
 
     for c in secundarios:
-        long_m = float_safe(c.get("Total Cable (m)", 0))
-        fase = str(c.get("Configuración", "")).strip()
-        calibre = str(c.get("Calibre", "")).strip()
-        if long_m > 0 and calibre:
-            lineas.append(
-                f"Construcción de {long_m:.0f} m de LS, 120/240 V, {fase}, conductor {calibre}."
-            )
+    long_total = float_safe(c.get("Total Cable (m)", 0))
+
+    fase = str(c.get("Configuración", "")).strip().upper()
+    calibre = str(c.get("Calibre", "")).strip()
+
+    m = re.search(r"(\d+)\s*F", fase)
+    n_fases = int(m.group(1)) if m else 1
+    long_desc = long_total / n_fases if n_fases > 1 else long_total
+
+    if long_desc > 0 and calibre:
+        lineas.append(
+            f"Construcción de {long_desc:.0f} m de LS, 120/240 V, {fase}, conductor {calibre}."
+        )
+  )
 
     if df_mat is not None and not df_mat.empty:
         transf = df_mat[df_mat["Materiales"].str.contains("Transformador", case=False, na=False)]
@@ -689,3 +705,4 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
