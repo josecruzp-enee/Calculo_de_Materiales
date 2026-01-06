@@ -242,8 +242,11 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
 
     # --- Transformadores (TS/TD/TT) ---
     if df_mat is not None and not df_mat.empty:
-        mask_tx = df_mat["Materiales"].astype(str).str.contains(
-            r"^\s*(TS|TD|TT)\s*-\s*\d+(?:\.\d+)?\s*KVA",
+        s = df_mat["Materiales"].astype(str)
+
+        # Detecta: TS-37.5KVA, TS-37.5 KVA, TD-50KVA, TT-75 KVA, etc.
+        mask_tx = s.str.contains(
+            r"\b(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA\b",
             case=False, na=False, regex=True
         )
         transf = df_mat[mask_tx].copy()
@@ -251,20 +254,25 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
         if not transf.empty:
             transf["Cantidad"] = pd.to_numeric(transf["Cantidad"], errors="coerce").fillna(0)
 
-            def _mult(material: str) -> int:
-                m = re.match(r"^\s*(TS|TD|TT)", str(material).strip().upper())
-                pref = m.group(1) if m else "TS"
-                return {"TS": 1, "TD": 2, "TT": 3}.get(pref, 1)
+            # Clave normalizada (para que si viene repetido por 3F no se sume 3 veces)
+            ext = transf["Materiales"].astype(str).str.extract(
+                r"\b(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA\b",
+                flags=re.IGNORECASE
+            )
+            transf["_key"] = ext[0].str.upper() + "-" + ext[1] + " KVA"
+
+            # Tomar MAX por cada tipo/capacidad (evita triplicación)
+            bancos = transf.groupby("_key", as_index=False)["Cantidad"].max()
+
+            mult = {"TS": 1, "TD": 2, "TT": 3}
 
             total_t = 0
-            for _, r in transf.iterrows():
-                total_t += float_safe(r["Cantidad"], 0) * _mult(r["Materiales"])
+            for _, r in bancos.iterrows():
+                pref = str(r["_key"]).split("-")[0].upper()  # TS / TD / TT
+                total_t += float_safe(r["Cantidad"], 0) * mult.get(pref, 1)
 
-            capacidades = ", ".join(sorted(set(
-                transf["Materiales"].astype(str).str.extract(r"(\d+(?:\.\d+)?)")[0].dropna().tolist()
-            )))
-
-            lineas.append(f"Instalación de {int(total_t)} transformador(es) de {capacidades} kVA.")
+            capacidades = ", ".join(bancos["_key"].tolist())
+            lineas.append(f"Instalación de {int(total_t)} transformador(es) ({capacidades}).")
 
     # --- Luminarias ---
     if df_mat is not None and not df_mat.empty:
@@ -722,6 +730,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
