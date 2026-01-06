@@ -131,7 +131,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             return d
 
     def formato_tension(vll):
-        """34.5 -> '19.9 L-N / 34.5 L-L KV'."""
+        """34.5 -> '19.9 LN / 34.5 LL KV'."""
         try:
             vll = float(vll)
             vln = round(vll / sqrt(3), 1)
@@ -212,13 +212,10 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
 
     # --- Primarios (LP) ---
     for c in primarios:
-        # Total de conductor (suma de fases) para cantidades
         long_total = float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
-
         fase = str(c.get("Configuración", "")).strip().upper()
         calibre = str(c.get("Calibre", "")).strip()
 
-        # Longitud de tramo para la DESCRIPCIÓN (L)
         m = re.search(r"(\d+)\s*F", fase)
         n_fases = int(m.group(1)) if m else 1
         long_desc = (long_total / n_fases) if n_fases > 1 else long_total
@@ -231,7 +228,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     # --- Secundarios (LS) ---
     for c in secundarios:
         long_total = float_safe(c.get("Total Cable (m)", 0))
-
         fase = str(c.get("Configuración", "")).strip().upper()
         calibre = str(c.get("Calibre", "")).strip()
 
@@ -244,15 +240,31 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
                 f"Construcción de {long_desc:.0f} m de LS, 120/240 V, {fase}, {calibre}."
             )
 
-    # --- Transformadores ---
+    # --- Transformadores (TS/TD/TT) ---
     if df_mat is not None and not df_mat.empty:
-        transf = df_mat[df_mat["Materiales"].str.contains("Transformador", case=False, na=False)]
+        mask_tx = df_mat["Materiales"].astype(str).str.contains(
+            r"^\s*(TS|TD|TT)\s*-\s*\d+(?:\.\d+)?\s*KVA",
+            case=False, na=False, regex=True
+        )
+        transf = df_mat[mask_tx].copy()
+
         if not transf.empty:
-            total_t = transf["Cantidad"].sum()
+            transf["Cantidad"] = pd.to_numeric(transf["Cantidad"], errors="coerce").fillna(0)
+
+            def _mult(material: str) -> int:
+                m = re.match(r"^\s*(TS|TD|TT)", str(material).strip().upper())
+                pref = m.group(1) if m else "TS"
+                return {"TS": 1, "TD": 2, "TT": 3}.get(pref, 1)
+
+            total_t = 0
+            for _, r in transf.iterrows():
+                total_t += float_safe(r["Cantidad"], 0) * _mult(r["Materiales"])
+
             capacidades = ", ".join(sorted(set(
-                transf["Materiales"].str.extract(r"(\d+\.?\d*)")[0].dropna().tolist()
+                transf["Materiales"].astype(str).str.extract(r"(\d+(?:\.\d+)?)")[0].dropna().tolist()
             )))
-            lineas.append(f"Instalación de {int(total_t)} transformador(es) de {capacidades} KVA.")
+
+            lineas.append(f"Instalación de {int(total_t)} transformador(es) de {capacidades} kVA.")
 
     # --- Luminarias ---
     if df_mat is not None and not df_mat.empty:
@@ -270,6 +282,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     elems.append(Spacer(1, 18))
 
     return elems
+
 
 
 
@@ -709,6 +722,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
