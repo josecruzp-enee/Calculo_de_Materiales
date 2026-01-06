@@ -1,39 +1,145 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import re
 import streamlit as st
 import pandas as pd
 from typing import List, Dict, Tuple
 
 
-# ----------------- Catálogos -----------------
+# =========================
+# Catálogo oficial (TU LISTA)
+# =========================
+CABLES_OFICIALES = {
+    # Retenidas (acerado)
+    ("RETENIDA", "1/4"):  'Cable Acerado 1/4"',
+    ("RETENIDA", "5/16"): 'Cable Acerado 5/16"',
+    ("RETENIDA", "3/8"):  'Cable Acerado 3/8"',
+
+    # BT forrado WP (Quince/Fig/Peach)
+    ("BT", "2 WP"):     "Cable de Aluminio Forrado WP # 2 AWG Peach",
+    ("BT", "1/0 WP"):   "Cable de Aluminio Forrado WP # 1/0 AWG Quince",
+    ("BT", "3/0 WP"):   "Cable de Aluminio Forrado WP # 3/0 AWG Fig",
+    ("BT", "266.8 MCM"): "Cable de Aluminio Forrado 266.8 MCM Mulberry",
+
+    # HP Hilo Piloto
+    ("HP", "2 WP"):   "Cable de Aluminio Forrado WP # 2 AWG Peach",
+    ("HP", "1/0 WP"): "Cable de Aluminio Forrado WP # 1/0 AWG Quince",
+
+    # Neutro (ACSR)
+    ("N", "2 ACSR"):    "Cable de Aluminio ACSR # 2 AWG Sparrow",
+    ("N", "1/0 ACSR"):  "Cable de Aluminio ACSR # 1/0 AWG Raven",
+    ("N", "2/0 ACSR"):  "Cable de Aluminio ACSR # 2/0 AWG Quail",
+    ("N", "3/0 ACSR"):  "Cable de Aluminio ACSR # 3/0 AWG Pigeon",
+    ("N", "4/0 ACSR"):  "Cable de Aluminio ACSR # 4/0 AWG Penguin",
+
+    # Media Tensión
+    ("MT", "1/0 ACSR"):   "Cable de Aluminio ACSR # 1/0 AWG Raven",
+    ("MT", "2/0 ACSR"):   "Cable de Aluminio ACSR # 2/0 AWG Quail",
+    ("MT", "3/0 ACSR"):   "Cable de Aluminio ACSR # 3/0 AWG Pigeon",
+    ("MT", "4/0 ACSR"):   "Cable de Aluminio ACSR # 4/0 AWG Penguin",
+    ("MT", "266.8 MCM"):  "Cable de Aluminio ACSR # 266.8 MCM Partridge",
+    ("MT", "477 MCM"):    "Cable de Aluminio ACSR # 477 MCM Flicker",
+    ("MT", "556 MCM ACSR"): "Cable de Aluminio ACSR # 556 MCM Dove",
+    ("MT", "556 MCM AAC"):  "Cable de Aluminio AAC # 556 MCM Dahlia",
+}
+
+# ========= Helpers de normalización y mapeo =========
+def _norm_txt(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"\s+", " ", s)  # quita dobles espacios
+    return s
+
+def _norm_key(s: str) -> str:
+    return _norm_txt(s).upper()
+
+# Mapeo inverso: descripción oficial -> calibre corto
+DESC_A_CAL = {}
+for (tipo, cal), desc in CABLES_OFICIALES.items():
+    DESC_A_CAL[(_norm_key(tipo), _norm_key(desc))] = cal
+
+def calibre_corto_desde_seleccion(tipo: str, cal_o_desc: str) -> str:
+    """
+    Si el usuario selecciona una descripción oficial, la convierte a calibre corto.
+    Si ya viene corto, la deja igual.
+    """
+    t = _norm_key(tipo)
+    v = _norm_key(cal_o_desc)
+    return DESC_A_CAL.get((t, v), cal_o_desc)
+
+def descripcion_oficial(tipo: str, calibre_corto: str, cal_original: str) -> str:
+    """
+    Devuelve la descripción oficial del catálogo si existe.
+    - Si el usuario eligió descripción, respétala.
+    - Si eligió calibre corto, busca el oficial por (tipo, calibre).
+    """
+    t = (tipo or "").strip().upper()
+    # si parece descripción oficial (coincide exacto con alguna del catálogo), usarla
+    for (tt, _cal), desc in CABLES_OFICIALES.items():
+        if _norm_key(tt) == _norm_key(t) and _norm_key(desc) == _norm_key(cal_original):
+            return _norm_txt(desc)
+
+    # si no, buscar por calibre corto
+    key = (t, (calibre_corto or "").strip())
+    return _norm_txt(CABLES_OFICIALES.get(key, cal_original))
+
+
+# ----------------- Catálogos para UI -----------------
 def get_tipos() -> List[str]:
     return ["MT", "BT", "N", "HP", "Retenida"]
 
 
 def get_calibres() -> Dict[str, List[str]]:
     return {
-        "MT": ["2 ACSR", "1/0 ACSR", "2/0 ACSR", "3/0 ACSR", "4/0 ACSR", "266.8 MCM", "336 MCM"],
-        "BT": ["2 WP", "1/0 WP", "2/0 WP", "3/0 WP", "4/0 WP"],
-        "N":  ["2 ACSR", "1/0 ACSR", "2/0 ACSR", "3/0 ACSR", "4/0 ACSR"],
-        "HP": ["2 WP", "1/0 WP", "2/0 WP"],
-        "Retenida": ["1/4", "5/8", "3/4"],
+        "MT": [
+            CABLES_OFICIALES[("MT", "1/0 ACSR")],
+            CABLES_OFICIALES[("MT", "2/0 ACSR")],
+            CABLES_OFICIALES[("MT", "3/0 ACSR")],
+            CABLES_OFICIALES[("MT", "4/0 ACSR")],
+            CABLES_OFICIALES[("MT", "266.8 MCM")],
+            CABLES_OFICIALES[("MT", "477 MCM")],
+            CABLES_OFICIALES[("MT", "556 MCM ACSR")],
+            CABLES_OFICIALES[("MT", "556 MCM AAC")],
+        ],
+
+        "BT": [
+            CABLES_OFICIALES[("BT", "2 WP")],
+            CABLES_OFICIALES[("BT", "1/0 WP")],
+            CABLES_OFICIALES[("BT", "3/0 WP")],
+            CABLES_OFICIALES[("BT", "266.8 MCM")],
+        ],
+
+        "N": [
+            CABLES_OFICIALES[("N", "2 ACSR")],
+            CABLES_OFICIALES[("N", "1/0 ACSR")],
+            CABLES_OFICIALES[("N", "2/0 ACSR")],
+            CABLES_OFICIALES[("N", "3/0 ACSR")],
+            CABLES_OFICIALES[("N", "4/0 ACSR")],
+        ],
+
+        "HP": [
+            CABLES_OFICIALES[("HP", "2 WP")],
+            CABLES_OFICIALES[("HP", "1/0 WP")],
+        ],
+
+        "Retenida": [
+            CABLES_OFICIALES[("RETENIDA", "1/4")],
+            CABLES_OFICIALES[("RETENIDA", "5/16")],
+            CABLES_OFICIALES[("RETENIDA", "3/8")],
+        ],
     }
 
-
 def get_configs_por_tipo() -> Dict[str, List[str]]:
-    # ✅ BT fases, N neutro, HP piloto en filas separadas con calibres diferentes
     return {
         "MT": ["1F", "2F", "3F"],
         "BT": ["1F", "2F"],
         "N":  ["N"],
-        "HP": ["1F"],      # ✅ HP SIEMPRE 1 conductor
+        "HP": ["1F", "2F"],
         "Retenida": ["Única"],
     }
 
 
 def get_configs_union() -> List[str]:
-    # unión para data_editor, validación al guardar
     return ["Única", "N", "1F", "2F", "3F"]
 
 
@@ -46,28 +152,36 @@ def conductores_de(tipo: str, cfg: str) -> int:
     t = (tipo or "").strip().upper()
     c = (cfg or "").strip().upper()
 
+    # Si no hay configuración, que "se note" (0 conductores)
+    if not c:
+        return 0
+
     if t == "MT":
         if c == "1F": return 1
         if c == "2F": return 2
         if c == "3F": return 3
-        return 1
+        return 0  # <- inválida
 
     if t == "BT":
         if c == "1F": return 1
         if c == "2F": return 2
-        return 1
+        return 0
 
     if t == "N":
-        return 1
+        # para neutro normalmente esperás "N"
+        return 1 if c == "N" else 0
 
     if t == "HP":
-        # ✅ Hilo piloto = 1 conductor SIEMPRE
-        return 1
+        if c == "1F": return 1
+        if c == "2F": return 2
+        return 0
 
     if t == "RETENIDA":
-        return 1
+        # normalmente "Única"
+        return 1 if c == "ÚNICA" else 0
 
-    return 1
+    return 0
+
 
 
 # ----------------- Estado y helpers -----------------
@@ -130,18 +244,18 @@ def _editor_df_actual() -> pd.DataFrame:
     return base
 
 
-def _validar_y_calcular(df_in: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+def _validar_y_calcular(df_in: pd.DataFrame) -> Tuple[pd.DataFrame, List[str], List[str]]:
     cfgs = get_configs_por_tipo()
     cal_por_tipo = get_calibres()
 
-    # quitar eliminados
     if "__DEL__" in df_in.columns:
         mask = df_in["__DEL__"].fillna(False)
         if mask.dtype != bool:
             mask = mask.astype(bool, copy=False)
         df_in = df_in[~mask].drop(columns="__DEL__", errors="ignore")
 
-    warnings = []
+    warnings: List[str] = []
+    errors: List[str] = []
     rows = []
 
     for i, row in df_in.fillna("").reset_index(drop=True).iterrows():
@@ -150,48 +264,54 @@ def _validar_y_calcular(df_in: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
             continue
 
         cfg = str(row.get("Configuración", "")).strip()
-        cal = str(row.get("Calibre", "")).strip()
-
-        cfg_ok = cfgs.get(tipo, ["Única"])
+        cal_sel = str(row.get("Calibre", "")).strip()  # descripción oficial
+        cfg_ok = cfgs.get(tipo, [])
         cal_ok = cal_por_tipo.get(tipo, get_calibres_union())
 
-        # defaults
+        # -------------------------
+        # VALIDACIONES "sin defaults"
+        # -------------------------
         if not cfg:
-            cfg = cfg_ok[0]
-        if not cal:
-            cal = cal_ok[0] if cal_ok else ""
+            errors.append(f"Fila {i+1}: Falta Configuración para Tipo={tipo}.")
+        elif cfg_ok and cfg not in cfg_ok:
+            errors.append(f"Fila {i+1}: Configuración inválida '{cfg}' para Tipo={tipo}.")
+            cfg = ""  # que quede vacío para que se note
 
-        # auto-corrección
-        if cfg not in cfg_ok:
-            warnings.append(
-                f"Fila {i+1}: Tipo={tipo} no permite Configuración='{cfg}'. Se ajustó a '{cfg_ok[0]}'."
-            )
-            cfg = cfg_ok[0]
+        if not cal_sel:
+            errors.append(f"Fila {i+1}: Falta Calibre para Tipo={tipo}.")
+        elif cal_ok and cal_sel not in cal_ok:
+            errors.append(f"Fila {i+1}: Calibre inválido '{cal_sel}' para Tipo={tipo}.")
+            cal_sel = ""  # que quede vacío para que se note
 
-        if cal_ok and cal not in cal_ok:
-            warnings.append(
-                f"Fila {i+1}: Tipo={tipo} no permite Calibre='{cal}'. Se ajustó a '{cal_ok[0]}'."
-            )
-            cal = cal_ok[0]
-
+        # Longitud
         try:
             L = float(row.get("Longitud (m)", 0) or 0)
         except Exception:
             L = 0.0
+            warnings.append(f"Fila {i+1}: Longitud inválida. Se tomó 0.00 m.")
 
+        # Conductores y total (si cfg vacío => 0)
         ncond = conductores_de(tipo, cfg)
-        total = L * ncond
+        if cfg and ncond == 0:
+            errors.append(f"Fila {i+1}: No se pudo determinar Nº conductores (Tipo={tipo}, Config={cfg}).")
+
+        total = float(L) * float(ncond)
+
+        # Convertir selección a "corto" (si cal_sel vacío, quedará vacío y no pasa nada)
+        cal_corto = calibre_corto_desde_seleccion(tipo, cal_sel) if cal_sel else ""
 
         rows.append({
             "Tipo": tipo,
             "Configuración": cfg,
-            "Calibre": cal,
+            "Calibre": cal_sel,
             "Longitud (m)": float(L),
             "Total Cable (m)": float(total),
+            "DescripcionMaterial": descripcion_oficial(tipo, cal_corto, cal_sel) if cal_sel else "",
+            "CalibreCorto": cal_corto,
         })
 
-    df_out = pd.DataFrame(rows, columns=COLS_OFICIALES)
-    return df_out, warnings
+    df_out = pd.DataFrame(rows)
+    return df_out, warnings, errors
 
 
 def _persistir_oficial(df: pd.DataFrame) -> None:
@@ -205,9 +325,7 @@ def _persistir_oficial(df: pd.DataFrame) -> None:
 def _resumen_por_calibre(df: pd.DataFrame) -> str:
     if df.empty:
         return "0.00 m"
-    g = (df.groupby("Calibre", dropna=True)["Total Cable (m)"]
-           .sum()
-           .sort_values(ascending=False))
+    g = (df.groupby("Calibre", dropna=True)["Total Cable (m)"].sum().sort_values(ascending=False))
     piezas = [f"{v:,.2f} m de {k}" for k, v in g.items()]
     return " + ".join(piezas)
 
@@ -237,8 +355,7 @@ def seccion_cables():
             column_order=["__DEL__", "Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"],
             column_config={
                 "__DEL__": st.column_config.CheckboxColumn(
-                    "Eliminar", width="small",
-                    help="Marca y pulsa Guardar para borrar"
+                    "Eliminar", width="small", help="Marca y pulsa Guardar para borrar"
                 ),
                 "Tipo": st.column_config.SelectboxColumn(
                     "Tipo", options=get_tipos(), required=False, width="small"
@@ -247,14 +364,16 @@ def seccion_cables():
                     "Configuración", options=get_configs_union(), required=False, width="small"
                 ),
                 "Calibre": st.column_config.SelectboxColumn(
-                    "Calibre", options=get_calibres_union(), required=False, width="medium"
+                    "Calibre", options=get_calibres_union(), required=False, width="large"
                 ),
                 "Longitud (m)": st.column_config.NumberColumn(
                     "Longitud (m)", min_value=0.0, step=10.0, format="%.2f"
                 ),
                 "Total Cable (m)": st.column_config.NumberColumn(
-                    "Total Cable (m)", disabled=True, format="%.2f",
-                    help="Longitud × Nº de conductores (HP siempre 1)"
+                    "Total Cable (m)",
+                    disabled=True,
+                    format="%.2f",
+                    help="Longitud × Nº de conductores (si Configuración está vacía o inválida, Total será 0)",
                 ),
             },
         )
@@ -262,23 +381,32 @@ def seccion_cables():
         guardar = c1.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True)
         descartar = c2.form_submit_button("↩️ Descartar cambios", use_container_width=True)
 
+    # ----------------- Acciones -----------------
     if guardar:
         df_editor = _editor_df_actual()
-        df_validado, warnings = _validar_y_calcular(df_editor)
+
+        # ✅ OJO: ahora _validar_y_calcular debe devolver (df, warnings, errors)
+        df_validado, warnings, errors = _validar_y_calcular(df_editor)
 
         if warnings:
-            st.warning("Se ajustaron combinaciones inválidas automáticamente:")
+            st.warning("Avisos:")
             for w in warnings:
                 st.write("• " + w)
 
-        _persistir_oficial(df_validado)
+        if errors:
+            st.error("❌ No se guardó porque faltan datos o hay valores inválidos:")
+            for e in errors:
+                st.write("• " + e)
+        else:
+            _persistir_oficial(df_validado)
 
-        buf = _ensure_columns(st.session_state["cables_proyecto_df"], with_del=True).copy()
-        buf["__DEL__"] = False
-        st.session_state["cables_buffer_df"] = buf
+            # refrescar buffer desde oficial
+            buf = _ensure_columns(st.session_state["cables_proyecto_df"], with_del=True).copy()
+            buf["__DEL__"] = False
+            st.session_state["cables_buffer_df"] = buf
 
-        st.session_state["toast_cables_ok"] = True
-        st.rerun()
+            st.session_state["toast_cables_ok"] = True
+            st.rerun()
 
     elif descartar:
         buf = _ensure_columns(st.session_state["cables_proyecto_df"], with_del=True).copy()
@@ -288,6 +416,7 @@ def seccion_cables():
         st.session_state["toast_cables_reset"] = True
         st.rerun()
 
+    # ----------------- Vista de guardado -----------------
     st.markdown("---")
 
     df_out = st.session_state["cables_proyecto_df"].copy()
@@ -311,6 +440,7 @@ def seccion_cables():
         st.markdown(f"**📏 Total Global de Cable:** {_resumen_por_calibre(df_out)}")
 
     return st.session_state.get("cables_proyecto", [])
+
 
 
 # =========================
@@ -379,7 +509,7 @@ def tabla_cables_pdf(datos_proyecto):
             f"{float(row['Total Cable (m)']):.2f}",
         ])
 
-    tabla = Table(data, colWidths=[1.1 * inch, 1.2 * inch, 1.6 * inch, 1.2 * inch, 1.5 * inch])
+    tabla = Table(data, colWidths=[1.1 * inch, 1.2 * inch, 1.9 * inch, 1.2 * inch, 1.5 * inch])
     tabla.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
