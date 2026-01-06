@@ -131,11 +131,17 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             return d
 
     def formato_tension(vll):
-        """34.5 -> '19.9 LN / 34.5 LL KV'."""
+        """Ej: 13.8 -> '7.9 LN / 13.8 LL KV' (LN truncado a 1 decimal)."""
+        from math import sqrt, floor
+
         try:
             vll = float(vll)
-            vln = round(vll / sqrt(3), 1)
-            return f"{vln} LN / {vll} LL KV"
+            vln = vll / sqrt(3)
+
+            # TRUNCAR (no redondear) a 1 decimal:
+            vln = floor(vln * 10) / 10
+
+            return f"{vln:.1f} LN / {vll:.1f} LL KV"
         except Exception:
             return str(vll)
 
@@ -743,9 +749,3 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-
-
-
-
-
