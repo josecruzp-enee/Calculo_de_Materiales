@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+"""
+procesar_materiales.py
+Cálculo de materiales globales y por punto + generación de PDFs.
+FIX PRINCIPAL:
+- Normaliza la tensión a kV L-L numérica aunque venga como texto ("7.9 LN / 13.8 LL KV")
+- Encuentra la columna de tensión en hojas por match directo o numérico
+- Ya NO oculta errores en materiales por punto (log explícito)
+"""
+
 import re
 import pandas as pd
 
@@ -43,6 +52,55 @@ def normalizar_datos_proyecto(datos_proyecto: dict) -> dict:
     return datos_proyecto
 
 
+def extraer_tension_ll_kv(x):
+    """
+    Devuelve la tensión L-L (kV) como float.
+    Acepta:
+      - 13.8
+      - "13.8"
+      - "7.9 LN / 13.8 LL KV"
+      - "19.9 L-N / 34.5 L-L kV"
+    Regla: toma el número mayor (usualmente L-L).
+    """
+    if x is None:
+        return None
+    nums = re.findall(r"\d+(?:\.\d+)?", str(x))
+    if not nums:
+        return None
+    vals = [float(n) for n in nums]
+    return max(vals) if vals else None
+
+
+def encontrar_col_tension(cols, tension_ll: float):
+    """
+    Encuentra la columna de tensión en una hoja de materiales.
+
+    Estrategia:
+      1) Match directo por substring (ej: "13.8" dentro del header)
+      2) Match numérico: extrae números del header y compara por tolerancia
+    """
+    if tension_ll is None:
+        return None
+
+    # 1) Match directo
+    t_str = f"{float(tension_ll)}".rstrip("0").rstrip(".")
+    for c in cols:
+        if t_str and t_str in str(c):
+            return c
+
+    # 2) Match numérico
+    for c in cols:
+        nums = re.findall(r"\d+(?:\.\d+)?", str(c))
+        for n in nums:
+            try:
+                if abs(float(n) - float(tension_ll)) < 1e-6:
+                    return c
+            except Exception:
+                pass
+
+    return None
+
+
 # ==========================================================
 # Limpieza de DF estructuras (LARGO)
 # ==========================================================
@@ -80,7 +138,7 @@ def limpiar_df_estructuras(df_estructuras: pd.DataFrame, log) -> pd.DataFrame:
 
     df = (
         df.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
-          .sum()
+        .sum()
     )
 
     filas_despues = len(df)
@@ -133,7 +191,7 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
 
     tmp = (
         tmp.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
-           .sum()
+        .sum()
     )
     return tmp
 
@@ -149,8 +207,8 @@ def construir_estructuras_por_punto_y_conteo(df_unicas: pd.DataFrame, log):
 
     conteo = (
         tmp.groupby("codigodeestructura")["cantidad"]
-           .sum()
-           .to_dict()
+        .sum()
+        .to_dict()
     )
 
     estructuras_por_punto = {}
@@ -231,9 +289,10 @@ def construir_df_estructuras_por_punto(tmp_explotado: pd.DataFrame, df_indice: p
 def calcular_materiales_por_punto_con_cantidad(
     archivo_materiales,
     tmp_explotado: pd.DataFrame,
-    tension: float,
+    tension_ll: float,
     tabla_conectores_mt: pd.DataFrame,
     datos_proyecto: dict,
+    log=print,
 ):
     """
     Calcula materiales por punto usando tmp_explotado que YA trae:
@@ -241,7 +300,8 @@ def calcular_materiales_por_punto_con_cantidad(
 
     ✅ Multiplica por la cantidad real en el punto.
     ✅ Aplica reemplazo de conectores según calibre de la estructura.
-    ✅ NO normaliza nombres de materiales (ya vienen uniformes por lista desplegable).
+    ✅ Encuentra columna por tensión LL numérica (aunque la validación devuelva texto).
+    ✅ No oculta errores.
     """
     resumen = []
     cache_hojas = {}
@@ -277,8 +337,9 @@ def calcular_materiales_por_punto_con_cantidad(
             if "Materiales" not in df.columns:
                 continue
 
-            col_tension = next((c for c in df.columns if str(tension) in str(c)), None)
+            col_tension = encontrar_col_tension(df.columns, tension_ll)
             if not col_tension:
+                log(f"⚠️ No encontré columna de tensión {tension_ll} en hoja {codigo}. Columnas: {list(df.columns)}")
                 continue
 
             df_work = df.copy()
@@ -306,8 +367,8 @@ def calcular_materiales_por_punto_con_cantidad(
 
             resumen.append(dfp[["Punto", "Materiales", "Unidad", "Cantidad"]])
 
-        except Exception:
-            pass
+        except Exception as e:
+            log(f"❌ Error en Punto={punto} Estructura={codigo}: {type(e).__name__}: {e}")
 
     if not resumen:
         return pd.DataFrame(columns=["Punto", "Materiales", "Unidad", "Cantidad"])
@@ -365,12 +426,24 @@ def procesar_materiales(
 
     datos_proyecto = normalizar_datos_proyecto(datos_proyecto)
 
-    tension, calibre_mt = validar_datos_proyecto(datos_proyecto)
-    log(f"Tensión: {tension}   Calibre MT: {calibre_mt}")
+    tension_raw, calibre_mt = validar_datos_proyecto(datos_proyecto)
+    log(f"Tensión (raw): {tension_raw}   Calibre MT: {calibre_mt}")
+
+    # ✅ FIX: convertir a tensión LL numérica SIEMPRE
+    tension_ll = (
+        extraer_tension_ll_kv(tension_raw)
+        or extraer_tension_ll_kv(datos_proyecto.get("nivel_de_tension"))
+        or extraer_tension_ll_kv(datos_proyecto.get("tension"))
+    )
+    if tension_ll is None:
+        raise ValueError(f"No pude interpretar la tensión. Recibí: {tension_raw!r}")
+
+    log(f"✅ Tensión normalizada (LL kV): {tension_ll}")
 
     log("⚙️ DEBUG VALIDAR DATOS PROYECTO")
-    log(f"➡️ tension = {tension}")
-    log(f"➡️ calibre_mt = {calibre_mt}")
+    log(f"➡️ tension_raw = {tension_raw}")
+    log(f"➡️ tension_ll  = {tension_ll}")
+    log(f"➡️ calibre_mt  = {calibre_mt}")
     log(f"➡️ datos_proyecto = {datos_proyecto}")
 
     log("🔍 Limpieza inicial de estructuras...")
@@ -396,7 +469,7 @@ def procesar_materiales(
         calibre_actual = determinar_calibre_por_estructura(e, datos_proyecto)
 
         df_mat = calcular_materiales_estructura(
-            archivo_materiales, e, cantidad, tension, calibre_actual, tabla_conectores_mt
+            archivo_materiales, e, cantidad, tension_ll, calibre_actual, tabla_conectores_mt
         )
 
         if df_mat is not None and not df_mat.empty:
@@ -418,10 +491,11 @@ def procesar_materiales(
 
     # === Materiales por punto (respeta cantidad + conectores) ===
     df_resumen_por_punto = calcular_materiales_por_punto_con_cantidad(
-        archivo_materiales, tmp_explotado, tension, tabla_conectores_mt, datos_proyecto
+        archivo_materiales, tmp_explotado, tension_ll, tabla_conectores_mt, datos_proyecto, log=log
     )
     log("df_resumen_por_punto:\n" + str(df_resumen_por_punto.head(30)))
 
+    # materiales extra (manuales)
     df_resumen, datos_proyecto = integrar_materiales_extra(df_resumen, datos_proyecto, log)
 
     from modulo.pdf_utils import (
