@@ -487,22 +487,66 @@ def agregar_tabla_materiales_adicionales(elems, datos_proyecto):
     elems.append(Paragraph("<b>Materiales Adicionales</b>", styles["Heading2"]))
     elems.append(Spacer(1, 12))
 
-    data_extra = [["Material", "Unidad", "Cantidad"]]
+    # ✅ Estilo para que el texto envuelva y NO se desborde
+    st_mat = ParagraphStyle(
+        "mat_wrap",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=9,
+        alignment=TA_LEFT,
+        wordWrap="CJK",
+    )
+    st_mat.splitLongWords = 1
+
+    st_mid = ParagraphStyle(
+        "mid",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=9,
+        alignment=TA_CENTER,
+    )
+
+    data_extra = [[
+        Paragraph("<b>Material</b>", st_mid),
+        Paragraph("<b>Unidad</b>", st_mid),
+        Paragraph("<b>Cantidad</b>", st_mid),
+    ]]
+
     for _, row in df_extra.iterrows():
+        mat = escape(str(row.get("Materiales", "")).strip())
+        uni = escape(str(row.get("Unidad", "")).strip())
+        cant = float(row.get("Cantidad", 0) or 0)
+
         data_extra.append([
-            escape(str(row.get("Materiales", ""))),
-            escape(str(row.get("Unidad", ""))),
-            f"{float(row.get('Cantidad', 0)):.2f}"
+            Paragraph(mat, st_mat),          # ✅ wrap
+            Paragraph(uni, st_mid),
+            Paragraph(f"{cant:.2f}", st_mid),
         ])
 
     tabla = Table(data_extra, colWidths=[4 * inch, 1 * inch, 1 * inch])
     tabla.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.orange),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke)
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+
+        # ✅ padding para que se vea bonito y no “choque”
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+
+        # ✅ wrap explícito en la columna Material
+        ("WORDWRAP", (0, 1), (0, -1), "CJK"),
     ]))
+
     elems.append(tabla)
     return elems
+
 
 
 # === Generar PDF de Materiales por Punto ===
@@ -749,3 +793,4 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
