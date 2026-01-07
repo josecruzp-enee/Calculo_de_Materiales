@@ -449,10 +449,14 @@ def seccion_cables():
 def tabla_cables_pdf(datos_proyecto):
     elems = []
     try:
+        import streamlit as st
+        import pandas as pd
         from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
         from reportlab.lib import colors
-        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER
         from reportlab.lib.units import inch
+        from xml.sax.saxutils import escape
     except Exception:
         return elems
 
@@ -495,35 +499,88 @@ def tabla_cables_pdf(datos_proyecto):
     styleH = styles["Heading2"]
     styleN = styles["Normal"]
 
+    # ✅ estilos con wrap
+    st_hdr = ParagraphStyle(
+        "hdr_cables",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        leading=10,
+        alignment=TA_CENTER,
+        textColor=colors.whitesmoke,
+    )
+
+    st_cell = ParagraphStyle(
+        "cell_cables",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=9,
+        alignment=TA_CENTER,
+        wordWrap="CJK",
+    )
+    st_cell.splitLongWords = 1
+
+    st_cell_left = ParagraphStyle(
+        "cell_cables_left",
+        parent=st_cell,
+        alignment=0,  # TA_LEFT sin importar enums
+    )
+
     elems.append(Spacer(1, 0.20 * inch))
     elems.append(Paragraph("⚡ Configuración y Calibres de Conductores", styleH))
     elems.append(Spacer(1, 0.10 * inch))
 
-    data = [["Tipo", "Configuración", "Calibre", "Longitud (m)", "Total Cable (m)"]]
+    data = [[
+        Paragraph("Tipo", st_hdr),
+        Paragraph("Configuración", st_hdr),
+        Paragraph("Calibre", st_hdr),
+        Paragraph("Longitud (m)", st_hdr),
+        Paragraph("Total Cable (m)", st_hdr),
+    ]]
+
     for _, row in df.iterrows():
+        tipo = escape(str(row["Tipo"]).strip())
+        conf = escape(str(row["Configuración"]).strip())
+        cal  = escape(str(row["Calibre"]).strip())
+
         data.append([
-            str(row["Tipo"]),
-            str(row["Configuración"]),
-            str(row["Calibre"]),
-            f"{float(row['Longitud (m)']):.2f}",
-            f"{float(row['Total Cable (m)']):.2f}",
+            Paragraph(tipo, st_cell),
+            Paragraph(conf, st_cell),
+            Paragraph(cal, st_cell_left),  # ✅ calibre suele ser largo: mejor alinearlo a la izquierda
+            Paragraph(f"{float(row['Longitud (m)']):.2f}", st_cell),
+            Paragraph(f"{float(row['Total Cable (m)']):.2f}", st_cell),
         ])
 
-    tabla = Table(data, colWidths=[1.1 * inch, 1.2 * inch, 1.9 * inch, 1.2 * inch, 1.5 * inch])
+    tabla = Table(
+        data,
+        colWidths=[1.0 * inch, 1.0 * inch, 2.4 * inch, 1.0 * inch, 1.3 * inch],
+        repeatRows=1
+    )
+
     tabla.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
+
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 3),
+
+        # ✅ wrap fuerte en Calibre
+        ("WORDWRAP", (2, 1), (2, -1), "CJK"),
     ]))
+
     elems.append(tabla)
 
     total_global = float(df["Total Cable (m)"].sum())
     elems.append(Spacer(1, 0.15 * inch))
     elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
     elems.append(Spacer(1, 0.20 * inch))
+
+    return elems
 
     return elems
