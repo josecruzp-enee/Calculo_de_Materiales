@@ -84,10 +84,11 @@ def float_safe(x, d: float = 0.0) -> float:
 
 def _safe_para(texto: object) -> str:
     """Texto seguro para Paragraph + cortes suaves para tokens largos."""
-    t = "" if pd.isna(texto) else str(texto)
+    t = normalizar_texto_pdf(texto)
     t = escape(t)
     t = t.replace("-", "-\u200b").replace("/", "/\u200b").replace("_", "_\u200b")
     return t
+
 
 
 # ==========================================================
@@ -282,29 +283,36 @@ def _desc_luminarias(df_mat: pd.DataFrame) -> list[str]:
     if df_mat is None or df_mat.empty or "Materiales" not in df_mat.columns:
         return lineas
 
+    # 1) Primero intentar SOLO luminarias tipo LL-
     lums = df_mat[
-        df_mat["Materiales"].astype(str).str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)
+        df_mat["Materiales"].astype(str).str.contains(r"\bLL-\s*\d", case=False, na=False)
     ].copy()
+
+    # 2) Si no hay LL-, entonces fallback al filtro general
+    if lums.empty:
+        lums = df_mat[
+            df_mat["Materiales"].astype(str).str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)
+        ].copy()
 
     if lums.empty:
         return lineas
 
-    lums["Cantidad"] = pd.to_numeric(lums["Cantidad"], errors="coerce").fillna(0)
+    lums["Cantidad"] = pd.to_numeric(lums.get("Cantidad", 0), errors="coerce").fillna(0)
 
     def pot(txt):
-        s = str(txt).upper().replace("–", "-")
+        s = normalizar_texto_pdf(txt).upper()
 
-        # Caso 28A50W (ej: LL-1-28A50W)
+        # LL-1-28A50 W  (o 28A50W)
         m = re.search(r"(\d+)\s*A\s*(\d+)\s*W", s)
         if m:
             return f"{m.group(1)}-{m.group(2)} W"
 
-        # Caso 28-50W
+        # 28-50 W
         m = re.search(r"(\d+)\s*-\s*(\d+)\s*W", s)
         if m:
             return f"{m.group(1)}-{m.group(2)} W"
 
-        # Caso 100W
+        # 100 W
         m = re.search(r"(\d+)\s*W", s)
         if m:
             return f"{m.group(1)} W"
@@ -313,17 +321,23 @@ def _desc_luminarias(df_mat: pd.DataFrame) -> list[str]:
 
     resumen = (
         lums.assign(Pot=lums["Materiales"].map(pot))
-        .groupby("Pot")["Cantidad"]
-        .sum()
-        .round()
-        .astype(int)
-        .sort_index()
+            .groupby("Pot")["Cantidad"].sum()
+            .round().astype(int)
     )
 
     total = int(resumen.sum())
-    det = " y ".join([f"{v} de {k}" for k, v in resumen.items()])
+
+    # Orden más natural (28-50 primero, 100 después)
+    def _k(x):
+        m = re.search(r"(\d+)", str(x))
+        return int(m.group(1)) if m else 999999
+
+    items = sorted(resumen.items(), key=lambda kv: _k(kv[0]))
+    det = " y ".join([f"{v} de {k}" for k, v in items])
+
     lineas.append(f"Instalación de {total} luminaria(s) de alumbrado público ({det}).")
     return lineas
+
 
 
 def construir_descripcion_general(
@@ -833,3 +847,4 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
