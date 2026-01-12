@@ -81,6 +81,28 @@ def float_safe(x, d: float = 0.0) -> float:
     except Exception:
         return d
 
+def normalizar_texto_pdf(txt: object) -> str:
+    """
+    Normaliza texto para que ReportLab/Helvetica no dibuje 'cuadritos'.
+    El problema típico es el guion EN DASH '–' (y otros) que viene desde Excel.
+    """
+    if txt is None or (isinstance(txt, float) and pd.isna(txt)):
+        return ""
+
+    s = str(txt)
+
+    # dashes raros -> "-"
+    s = (s.replace("–", "-")
+           .replace("—", "-")
+           .replace("−", "-")
+           .replace("‐", "-")
+           .replace("-", "-"))
+
+    # espacios raros
+    s = s.replace("\u00A0", " ")
+
+    return s.strip()
+
 
 def _safe_para(texto: object) -> str:
     """Texto seguro para Paragraph + cortes suaves para tokens largos."""
@@ -847,4 +869,5 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
