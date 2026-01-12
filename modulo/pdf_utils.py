@@ -367,6 +367,7 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
+
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
@@ -374,12 +375,15 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     def _safe_para(texto):
         t = "" if pd.isna(texto) else str(texto)
         t = escape(t)
+        # ayuda a cortar códigos largos
         t = t.replace("-", "-\u200b")
+        # corta también por / y _
+        t = t.replace("/", "/\u200b").replace("_", "_\u200b")
         return t
 
     elems = [
         Paragraph(f"<b>Resumen de Estructuras - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
-        Spacer(1, 12)
+        Spacer(1, 10),
     ]
 
     st_hdr = ParagraphStyle(
@@ -402,9 +406,12 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         fontSize=8, leading=9, alignment=TA_CENTER
     )
 
-    w1 = doc.width * 0.18
-    w2 = doc.width * 0.67
-    w3 = doc.width * 0.15
+    # --- margen de seguridad para evitar "salirse" por fondo/márgenes ---
+    ancho_util = doc.width * 0.98
+
+    w1 = ancho_util * 0.18
+    w2 = ancho_util * 0.67
+    w3 = ancho_util * 0.15
 
     data = [[
         Paragraph("Estructura", st_hdr),
@@ -419,26 +426,42 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
             Paragraph(_safe_para(row.get("Cantidad", "")), st_qty),
         ])
 
-    tabla = Table(data, colWidths=[w1, w2, w3], repeatRows=1, hAlign="LEFT")
+    tabla = Table(
+        data,
+        colWidths=[w1, w2, w3],
+        repeatRows=1,
+        hAlign="CENTER"  # <- en vez de LEFT
+    )
+
     tabla.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (2, 1), (2, -1), "CENTER"),
-        ("WORDWRAP", (1, 1), (1, -1), "CJK"),
+
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING", (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+
+        # coherencia tipográfica dentro de la tabla
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("LEADING", (0, 0), (-1, -1), 9),
     ]))
 
     elems.append(tabla)
+
+    # Si aun así querés "forzar" que NUNCA se salga, podés envolver:
+    # from reportlab.platypus import KeepInFrame
+    # elems.append(KeepInFrame(doc.width, doc.height, [tabla], mode="shrink"))
 
     doc.build(elems)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 # === Generar estructuras por punto ===
@@ -807,5 +830,6 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
