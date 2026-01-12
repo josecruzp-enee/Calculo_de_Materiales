@@ -294,12 +294,26 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
         cap_txt = ", ".join(capacidades) if capacidades else ""
         lineas.append(f"Instalación de {total_t} transformador(es) {f'({cap_txt})' if cap_txt else ''}.")
 
+    import re
+
     # --- Luminarias ---
     if df_mat is not None and not df_mat.empty:
-        lums = df_mat[df_mat["Materiales"].astype(str).str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)]
+        lums = df_mat[df_mat["Materiales"].astype(str).str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)].copy()
+
         if not lums.empty:
-            total_l = pd.to_numeric(lums["Cantidad"], errors="coerce").fillna(0).sum()
-            lineas.append(f"Instalación de {int(total_l)} luminaria(s) de alumbrado público.")
+            lums["Cantidad"] = pd.to_numeric(lums["Cantidad"], errors="coerce").fillna(0)
+
+            def pot(txt):
+                s = str(txt).upper()
+                m = re.search(r"(\d+\s*[-–]\s*\d+)\s*W", s) or re.search(r"(\d+)\s*W", s)
+                return (m.group(1).replace(" ", "") + " W") if m else "SIN POTENCIA"
+
+            resumen = (lums.assign(Pot=lums["Materiales"].map(pot))
+                      .groupby("Pot")["Cantidad"].sum().round().astype(int))
+
+            det = " y ".join([f"{v} de {k}" for k, v in resumen.items()])
+            lineas.append(f"Instalación de luminaria(s) de alumbrado público: {det}.")
+
 
     descripcion_auto = "<br/>".join([f"{i + 1}. {l}" for i, l in enumerate(lineas)])
     cuerpo_desc = (descripcion_manual + "<br/><br/>" + descripcion_auto) if descripcion_manual else descripcion_auto
@@ -793,4 +807,5 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
