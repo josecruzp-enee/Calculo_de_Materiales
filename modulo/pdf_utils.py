@@ -297,22 +297,54 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     import re
 
     # --- Luminarias ---
-    if df_mat is not None and not df_mat.empty:
-        lums = df_mat[df_mat["Materiales"].astype(str).str.contains("Lámpara|Lampara|Alumbrado", case=False, na=False)].copy()
+    import re
 
-        if not lums.empty:
-            lums["Cantidad"] = pd.to_numeric(lums["Cantidad"], errors="coerce").fillna(0)
+if df_mat is not None and not df_mat.empty:
+    lums = df_mat[
+        df_mat["Materiales"].astype(str).str.contains(
+            "Lámpara|Lampara|Alumbrado", case=False, na=False
+        )
+    ].copy()
 
-            def pot(txt):
-                s = str(txt).upper()
-                m = re.search(r"(\d+\s*[-–]\s*\d+)\s*W", s) or re.search(r"(\d+)\s*W", s)
-                return (m.group(1).replace(" ", "") + " W") if m else "SIN POTENCIA"
+    if not lums.empty:
+        lums["Cantidad"] = pd.to_numeric(lums["Cantidad"], errors="coerce").fillna(0)
 
-            resumen = (lums.assign(Pot=lums["Materiales"].map(pot))
-                      .groupby("Pot")["Cantidad"].sum().round().astype(int))
+        def pot(txt):
+            s = str(txt).upper().replace("–", "-")
 
-            det = " y ".join([f"{v} de {k}" for k, v in resumen.items()])
-            lineas.append(f"Instalación de luminaria(s) de alumbrado público: {det}.")
+            # Caso 28A50W (ej: LL-1-28A50W)
+            m = re.search(r"(\d+)\s*A\s*(\d+)\s*W", s)
+            if m:
+                return f"{m.group(1)}-{m.group(2)} W"
+
+            # Caso 28-50W
+            m = re.search(r"(\d+)\s*-\s*(\d+)\s*W", s)
+            if m:
+                return f"{m.group(1)}-{m.group(2)} W"
+
+            # Caso 100W
+            m = re.search(r"(\d+)\s*W", s)
+            if m:
+                return f"{m.group(1)} W"
+
+            return "SIN POTENCIA"
+
+        resumen = (
+            lums.assign(Pot=lums["Materiales"].map(pot))
+            .groupby("Pot")["Cantidad"]
+            .sum()
+            .round()
+            .astype(int)
+            .sort_index()
+        )
+
+        total = int(resumen.sum())
+        det = " y ".join([f"{v} de {k}" for k, v in resumen.items()])
+
+        lineas.append(
+            f"Instalación de {total} luminaria(s) de alumbrado público ({det})."
+        )
+
 
 
     descripcion_auto = "<br/>".join([f"{i + 1}. {l}" for i, l in enumerate(lineas)])
@@ -830,6 +862,7 @@ def generar_pdf_completo(df_mat, df_estructuras, df_estructuras_por_punto, df_ma
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
