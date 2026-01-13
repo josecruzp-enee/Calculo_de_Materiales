@@ -581,6 +581,64 @@ def _tabla_estructuras_por_punto(punto, df_p, doc_width):
     ]))
 
     return t
+# ==========================================================
+# PDF: MATERIALES POR PUNTO
+# ==========================================================
+def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
+    buffer = BytesIO()
+    doc = BaseDocTemplate(buffer, pagesize=letter)
+
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
+    template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
+    doc.addPageTemplates([template])
+
+    elems = [
+        Paragraph(f"<b>Materiales por Punto - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
+        Spacer(1, 12),
+    ]
+
+    if df_por_punto is None or df_por_punto.empty:
+        elems.append(Paragraph("No se encontraron materiales por punto.", styleN))
+        doc.build(elems)
+        return buffer.getvalue()
+
+    puntos = sorted(
+        df_por_punto["Punto"].unique(),
+        key=lambda x: int(re.search(r"\d+", str(x)).group(0)) if re.search(r"\d+", str(x)) else 0
+    )
+
+    for p in puntos:
+        m = re.search(r"(\d+)", str(p))
+        num = m.group(1) if m else str(p)
+
+        elems.append(Paragraph(f"<b>Punto {escape(num)}</b>", styles["Heading2"]))
+
+        df_p = df_por_punto[df_por_punto["Punto"] == p]
+        df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
+        data = [["Material", "Unidad", "Cantidad"]]
+        for _, r in df_agr.iterrows():
+            data.append([
+                Paragraph(formatear_material(r["Materiales"]), styleN),
+                escape(str(r["Unidad"])),
+                f"{float(r['Cantidad']):.2f}",
+            ])
+
+        tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
+        tabla.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkgreen),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+        ]))
+
+        elems.append(tabla)
+        elems.append(Spacer(1, 0.2 * inch))
+
+    doc.build(elems)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
 
 
 # ==========================================================
@@ -663,4 +721,5 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
