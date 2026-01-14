@@ -503,7 +503,7 @@ def _extraer_cables_desde_materiales(df_mat: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def tabla_cables_pdf(datos_proyecto, df_mat: pd.DataFrame | None = None):
+def tabla_cables_pdf(datos_proyecto):
     elems = []
     try:
         import streamlit as st
