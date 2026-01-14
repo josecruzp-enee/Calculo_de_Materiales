@@ -281,7 +281,7 @@ def hoja_info_proyecto(
             total_l, det_l = _extraer_luminarias_por_ll(df_mat)
             if total_l <= 0:
                 return None
-            det = " y ".join([f\"{v} de {k}\" for k, v in det_l.items()])
+            det = " y ".join([f"{v} de {k}" for k, v in det_l.items()])
             return f"Instalación de {total_l} luminaria(s) de alumbrado público ({det})."
 
         def _armar_cuerpo():
