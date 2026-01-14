@@ -210,7 +210,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     if df_estructuras is not None and not df_estructuras.empty:
         if "codigodeestructura" in df_estructuras.columns:
             postes = df_estructuras[
-                df_estructuras["codigodeestructura"].astype(str).str.contains("PC|PT", case=False, na=False)
+                df_estructuras["codigodeestructura"].astype(str).str.contains(r"\b(PC|PT)\b", case=False, na=False)
             ]
         else:
             postes = pd.DataFrame()
@@ -264,15 +264,18 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     # 1) Buscar en ESTRUCTURAS (codigodeestructura)
     if df_estructuras is not None and not df_estructuras.empty and "codigodeestructura" in df_estructuras.columns:
         s = df_estructuras["codigodeestructura"].astype(str).str.upper().str.strip()
+        # Acepta: TT-37.5KVA  / TT-37.5 KVA / TT - 37.5 KVA
         ext = s.str.extract(r"^(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA$", expand=True)
         mask = ext[0].notna()
 
         if mask.any():
             qty = pd.to_numeric(df_estructuras.loc[mask, "Cantidad"], errors="coerce").fillna(0)
             pref = ext.loc[mask, 0]
-            kva = ext.loc[mask, 1]
+            kva = pd.to_numeric(ext.loc[mask, 1], errors="coerce").fillna(0)
             total_t = int((qty * pref.map(mult)).sum())
-            capacidades = sorted({f"{p}-{k} KVA" for p, k in zip(pref, kva)})
+
+            # Lista de capacidades detectadas (ej: TT-37.5 KVA)
+            capacidades = sorted({f"{p}-{k:g} KVA" for p, k in zip(pref, kva)})
 
     # 2) Fallback: buscar en MATERIALES (Materiales)
     if total_t == 0 and df_mat is not None and not df_mat.empty and "Materiales" in df_mat.columns:
@@ -302,47 +305,71 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
         cap_txt = ", ".join(capacidades) if capacidades else ""
         lineas.append(f"Instalación de {total_t} transformador(es) {f'({cap_txt})' if cap_txt else ''}.")
 
-    # --- Luminarias (CORREGIDO para que no truene) ---
-    # Requisitos mínimos: df_mat no vacío y que exista la columna Materiales
+    # --- Luminarias (POR CÓDIGO LL-... NO POR PALABRAS) ---
+    # Regla: LL-1-50W => 1 lámpara de 50W (y así)
     if df_mat is not None and not df_mat.empty and "Materiales" in df_mat.columns:
-        # Cantidad puede venir como 'Cantidad' o 'CANTIDAD' según tu pipeline, tratamos ambos.
-        col_cant = "Cantidad" if "Cantidad" in df_mat.columns else ("CANTIDAD" if "CANTIDAD" in df_mat.columns else None)
 
-        lums = df_mat[
-            df_mat["Materiales"].astype(str).str.contains(r"Lámpara|Lampara|Alumbrado", case=False, na=False)
-        ].copy()
+        col_cant = "Cantidad" if "Cantidad" in df_mat.columns else ("CANTIDAD" if "CANTIDAD" in df_mat.columns else None)
+        if col_cant is None:
+            # si no hay columna cantidad, no podemos sumar con seguridad
+            col_cant = "Cantidad"
+            df_mat = df_mat.copy()
+            df_mat[col_cant] = 0
+
+        s_mat = df_mat["Materiales"].astype(str)
+
+        # Acepta:
+        # LL-1-50W
+        # LL-2-100W
+        # LL-1-28A50W  (interpreta potencia = 50W)
+        # LL-1-28-50W  (interpreta potencia = 28-50W)
+        pat_ll = r"\bLL\s*-\s*\d+\s*-\s*(?:\d+\s*A\s*)?\d+(?:\s*-\s*\d+)?\s*W\b"
+        lums = df_mat[s_mat.str.contains(pat_ll, case=False, na=False)].copy()
 
         if not lums.empty:
-            if col_cant:
-                lums[col_cant] = pd.to_numeric(lums[col_cant], errors="coerce").fillna(0)
-            else:
-                # si no hay cantidad, no podemos sumar -> 0
-                lums["Cantidad"] = 0
-                col_cant = "Cantidad"
+            lums[col_cant] = pd.to_numeric(lums[col_cant], errors="coerce").fillna(0)
 
-            def pot(txt):
+            def parse_ll(txt):
+                """
+                Devuelve (n_lamparas, etiqueta_potencia)
+                - LL-1-50W -> (1, '50 W')
+                - LL-1-28A50W -> (1, '50 W')
+                - LL-1-28-50W -> (1, '28-50 W')
+                """
                 s = str(txt).upper().replace("–", "-")
+                # Normalizar espacios
+                s = re.sub(r"\s+", "", s)
 
-                # Caso 28A50W (ej: LL-1-28A50W)
-                m = re.search(r"(\d+)\s*A\s*(\d+)\s*W", s)
+                # Capturar N
+                m_n = re.search(r"LL-(\d+)-", s)
+                n = int(m_n.group(1)) if m_n else 1
+
+                # Caso 28A50W -> potencia 50
+                m = re.search(r"LL-\d+-(\d+)A(\d+)W", s)
                 if m:
-                    return f"{m.group(1)}-{m.group(2)} W"
+                    return n, f"{m.group(2)} W"
 
-                # Caso 28-50W
-                m = re.search(r"(\d+)\s*-\s*(\d+)\s*W", s)
+                # Caso 28-50W -> rango
+                m = re.search(r"LL-\d+-(\d+)-(\d+)W", s)
                 if m:
-                    return f"{m.group(1)}-{m.group(2)} W"
+                    return n, f"{m.group(1)}-{m.group(2)} W"
 
-                # Caso 100W
-                m = re.search(r"(\d+)\s*W", s)
+                # Caso 50W -> simple
+                m = re.search(r"LL-\d+-(\d+)W", s)
                 if m:
-                    return f"{m.group(1)} W"
+                    return n, f"{m.group(1)} W"
 
-                return "SIN POTENCIA"
+                return n, "SIN POTENCIA"
+
+            parsed = lums["Materiales"].map(parse_ll)
+            lums["_n"] = parsed.map(lambda x: x[0])
+            lums["_pot"] = parsed.map(lambda x: x[1])
+
+            # Cantidad real de luminarias = Cantidad(fila) * N del código
+            lums["_qty_real"] = lums[col_cant].astype(float) * lums["_n"].astype(float)
 
             resumen = (
-                lums.assign(Pot=lums["Materiales"].map(pot))
-                    .groupby("Pot")[col_cant]
+                lums.groupby("_pot", as_index=True)["_qty_real"]
                     .sum()
                     .round()
                     .astype(int)
@@ -350,8 +377,9 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
             )
 
             total = int(resumen.sum())
-            det = " y ".join([f"{v} de {k}" for k, v in resumen.items()])
-            lineas.append(f"Instalación de {total} luminaria(s) de alumbrado público ({det}).")
+            if total > 0:
+                det = " y ".join([f"{v} de {k}" for k, v in resumen.items()])
+                lineas.append(f"Instalación de {total} luminaria(s) de alumbrado público ({det}).")
 
     # ==== Párrafo final ====
     descripcion_auto = "<br/>".join([f"{i + 1}. {l}" for i, l in enumerate(lineas)])
@@ -363,6 +391,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
     elems.append(Spacer(1, 18))
 
     return elems
+
 
 # ==========================================================
 # PDF: RESUMEN DE MATERIALES (GLOBAL)
@@ -852,3 +881,4 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
