@@ -2,13 +2,14 @@
 # interfaz/exportacion.py
 
 import re
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict
 
 import numpy as _np
 import pandas as pd
 import streamlit as st
 
-from modulo.procesar_materiales import procesar_materiales
+from servicios.calculo_materiales import calcular_materiales
+from exportadores.pdf_exportador import generar_pdfs
 
 # =============================================================================
 # Regex precompiladas
@@ -16,7 +17,10 @@ from modulo.procesar_materiales import procesar_materiales
 _RE_SPLIT = re.compile(r"[+,;\n\r]+")   # incluye saltos de línea
 _RE_SANIT = re.compile(r"[^A-Z0-9\-\.]")
 
-COLUMNAS_ESTRUCTURAS = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores","Luminarias"]
+COLUMNAS_ESTRUCTURAS = [
+    "Poste", "Primario", "Secundario", "Retenidas",
+    "Conexiones a tierra", "Transformadores", "Luminarias"
+]
 
 # =============================================================================
 # Utils de saneo 1-D (blindaje definitivo para groupby)
@@ -75,12 +79,6 @@ def coerce_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
     """
     Devuelve SIEMPRE un DataFrame NUEVO y 1-D con columnas EXACTAS:
     ['Punto','codigodeestructura','cantidad'] listo para groupby.
-    - flatten + dedup de nombres
-    - asegura columnas mínimas
-    - scalariza celdas
-    - limpia sufijos de códigos '(...)' al final
-    - cantidad → int (si no existe, usa 1 por fila)
-    - reconstrucción desde arrays 1-D
     """
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
@@ -88,17 +86,17 @@ def coerce_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
     df = _flatten_columns(df)
     df = _dedup_columns(df).copy()
 
-    # Asegura columnas requeridas; si 'cantidad' no existe, la creamos = 1
+    # Asegura columnas requeridas
     if "Punto" not in df.columns:
         df["Punto"] = ""
+
     if "codigodeestructura" not in df.columns:
-        # si no existe, intenta derivarla de 'Estructura'
         if "Estructura" in df.columns:
             df["codigodeestructura"] = df["Estructura"]
         else:
             df["codigodeestructura"] = ""
+
     if "cantidad" not in df.columns:
-        # si hay 'Cantidad', úsala; si no, será 1
         if "Cantidad" in df.columns:
             df["cantidad"] = df["Cantidad"]
         else:
@@ -106,19 +104,18 @@ def coerce_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
 
     p = df["Punto"].map(_scalarize_cell).map(str).str.strip()
     c = df["codigodeestructura"].map(_scalarize_cell).map(str).str.strip()
-    # limpia sufijos "(E)" "(P)" "(R)" o cualquier paréntesis final
-    c = c.str.replace(r"\s*\([^)]*\)\s*$", "", regex=True).str.strip()
+    c = c.str.replace(r"\s*\([^)]*\)\s*$", "", regex=True).str.strip()  # quita "(E)" etc al final
     q = df["cantidad"].map(_to_int_safe).astype(int)
 
     mask = (c != "") & (q > 0)
     p, c, q = p[mask], c[mask], q[mask]
 
-    out = pd.DataFrame({
-        "Punto": _np.asarray(p.values, dtype=object),
-        "codigodeestructura": _np.asarray(c.values, dtype=object),
-        "cantidad": _np.asarray(q.values, dtype=_np.int64),
-    }, columns=["Punto", "codigodeestructura", "cantidad"])
-
+    out = pd.DataFrame(
+        {"Punto": _np.asarray(p.values, dtype=object),
+         "codigodeestructura": _np.asarray(c.values, dtype=object),
+         "cantidad": _np.asarray(q.values, dtype=_np.int64)},
+        columns=["Punto", "codigodeestructura", "cantidad"]
+    )
     return out.reset_index(drop=True)
 
 # =============================================================================
@@ -146,14 +143,11 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     Si no, crea df_expandido con una fila por (Punto, codigodeestructura) desde columnas ANCHO.
     """
     if "codigodeestructura" in df.columns:
-        # ya es LARGO o casi; devuelve copia para coerce posterior
         base = df.copy()
-        # si no hay 'cantidad', la agregamos en 1 para cada fila
         if "cantidad" not in base.columns:
             base["cantidad"] = 1
         return base
 
-    # Caso ANCHO → construir listado por fila
     df2 = df.copy()
     df2["Estructura"] = df2.apply(
         lambda fila: sum((_limpiar_listado(fila.get(c, "")) for c in COLUMNAS_ESTRUCTURAS), []),
@@ -168,13 +162,10 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     return df2[["Punto", "codigodeestructura", "cantidad"]]
 
 # =============================================================================
-# UI de conteo rápido y sección final
+# UI de conteo rápido
 # =============================================================================
 def _preview_conteo(df_expandido: pd.DataFrame) -> None:
-    # 🔒 Blindaje: garantizamos 1-D y columnas exactas
     df_expandido = coerce_expandido_para_groupby(df_expandido)
-
-    # Conteo por punto y código
     conteo = (
         df_expandido
         .groupby(["Punto", "codigodeestructura"], dropna=False)["cantidad"]
@@ -186,15 +177,63 @@ def _preview_conteo(df_expandido: pd.DataFrame) -> None:
     st.caption("Conteo rápido de estructuras por punto:")
     st.dataframe(conteo, use_container_width=True, hide_index=True)
 
+# =============================================================================
+# Sección FINALIZAR: aquí se calcula y se guarda en session_state
+# =============================================================================
 def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
-    if not df.empty:
-        st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
-        if st.button("✅ Finalizar Cálculo", key="btn_finalizar_calculo"):
-            st.session_state["calculo_finalizado"] = True
-            st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
+    st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
+
+    if df is None or df.empty:
+        st.info("⚠️ No hay estructuras cargadas.")
+        return
+
+    # Botón estable (form)
+    with st.form("form_finalizar_calculo"):
+        ejecutar = st.form_submit_button("✅ Finalizar Cálculo")
+
+    if not ejecutar:
+        # Mostrar estado
+        if st.session_state.get("resultados"):
+            st.success("✅ Ya hay resultados calculados. Puedes ir a Exportación.")
+        else:
+            st.caption("Presiona el botón para calcular materiales.")
+        return
+
+    try:
+        # Expandir + coerción 1-D
+        df_expandido = _expandir_estructuras(df)
+        df_expandido = coerce_expandido_para_groupby(df_expandido)
+
+        # sincronizar materiales extra
+        st.session_state.setdefault("datos_proyecto", {})
+        if st.session_state.get("materiales_extra"):
+            st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(st.session_state["materiales_extra"])
+        else:
+            st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+
+        ruta_materiales = st.session_state.get("ruta_datos_materiales")  # viene del app.py
+        if not ruta_materiales:
+            raise ValueError("No está definida la ruta del archivo de materiales (ruta_datos_materiales).")
+
+        resultados = calcular_materiales(
+            estructuras_df=df_expandido,
+            archivo_materiales=ruta_materiales,
+            datos_proyecto=st.session_state.get("datos_proyecto", {}),
+        )
+
+        st.session_state["resultados"] = resultados
+        st.session_state["calculo_finalizado"] = True
+
+        # invalidar PDFs viejos si existieran
+        st.session_state.pop("pdfs_generados", None)
+
+        st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
+    except Exception as e:
+        st.session_state["calculo_finalizado"] = False
+        st.error(f"❌ Error al calcular: {type(e).__name__}: {e}")
 
 # =============================================================================
-# Sección principal de exportación
+# Sección EXPORTACIÓN: aquí SOLO se generan PDFs desde resultados (NO recalcula)
 # =============================================================================
 def seccion_exportacion(
     df: pd.DataFrame,
@@ -202,148 +241,49 @@ def seccion_exportacion(
     ruta_estructuras: str | None,
     ruta_datos_materiales: str
 ) -> None:
-    """Exportación de reportes PDF/Excel. Sincroniza cables, expande estructuras y genera PDFs."""
-    if df.empty or not st.session_state.get("calculo_finalizado", False):
-        return
-
     st.subheader("6. 📂 Exportación de Reportes")
 
-    # -------------------------------------------------------------------------
-    # Función local para formatear la tensión (L-N / L-L)
-    # -------------------------------------------------------------------------
-    def _formato_tension(v_ll):
-        """Convierte 13.8 -> '7.96 L-N / 13.8 L-L kV', 34.5 -> '19.90 L-N / 34.5 L-L kV'."""
-        try:
-            v_ll = float(v_ll)
-            v_ln = v_ll / _np.sqrt(3)
-            return f"{v_ln:.1f} L-N / {v_ll:g} L-L kV"
-        except Exception:
-            return str(v_ll)
+    resultados = st.session_state.get("resultados")
+    if not resultados:
+        st.warning("⚠️ Primero ve a la sección **Finalizar** y ejecuta el cálculo.")
+        return
 
-    # 1) Sincronizar datos de cables a datos_proyecto (con defaults suaves)
-    if "cables_proyecto" in st.session_state:
-        # Asegurar que datos_proyecto exista
-        st.session_state.setdefault("datos_proyecto", {})
-        st.session_state["datos_proyecto"]["cables_proyecto"] = st.session_state["cables_proyecto"]
-
-        datos_cables = st.session_state["cables_proyecto"]
-        if isinstance(datos_cables, list) and len(datos_cables) > 0:
-            datos_cables = datos_cables[0]
-        elif not isinstance(datos_cables, dict):
-            datos_cables = {}
-
-        # Preferir la tensión del proyecto; si no, alguna que venga de cables; si no, 13.8
-        datos_dp = st.session_state.get("datos_proyecto", {})
-        tension_ll = (
-            datos_dp.get("nivel_de_tension")
-            or datos_dp.get("tension")
-            or datos_cables.get("nivel_de_tension")
-            or datos_cables.get("tension")
-            or 13.8
-        )
-
-        # Guardar en datos_proyecto (crudo, para que generar_pdfs lo formatee si quiere)
-        st.session_state["datos_proyecto"]["tension"] = tension_ll
-        st.session_state["datos_proyecto"]["nivel_de_tension"] = tension_ll
-
-        # Formatear para mostrar en la UI
-        tension_fmt = _formato_tension(tension_ll)
-
-        # Calibre MT
-        calibre_mt = (
-            datos_cables.get("calibre_mt")
-            or datos_cables.get("conductor_mt")
-            or datos_cables.get("Calibre")
-            or "1/0 ASCR"
-        )
-        st.session_state["datos_proyecto"]["calibre_mt"] = calibre_mt
-
-        # Mensaje en pantalla
-        st.info(f"🔧 Nivel de Tensión: **{tension_fmt}**  |  Calibre MT: **{calibre_mt}**")
-
-    # 2) Expandir estructuras (ANCHO → LARGO si hace falta)
-    df_expandido = _expandir_estructuras(df)
-
-    # 2.1) Coerción 1-D ANTES de cualquier uso
-    df_expandido = coerce_expandido_para_groupby(df_expandido)
-
-    # 2.2) Preview
+    # preview opcional de estructuras (sin recalcular)
+    df_expandido = coerce_expandido_para_groupby(_expandir_estructuras(df))
     _preview_conteo(df_expandido)
 
-    # 3) Materiales adicionales → DataFrame
-    if st.session_state.get("materiales_extra"):
-        st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(
-            st.session_state["materiales_extra"]
-        )
-    else:
-        st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(
-            columns=["Materiales", "Unidad", "Cantidad"]
-        )
+    with st.form("form_generar_pdfs"):
+        generar = st.form_submit_button("📥 Generar Reportes PDF")
 
-    # 4) Generar reportes
-    if st.button("📥 Generar Reportes PDF", key="btn_generar_pdfs"):
+    if generar:
         try:
             with st.spinner("⏳ Generando reportes, por favor espere..."):
-                resultados_pdf = procesar_materiales(
-                    archivo_estructuras=ruta_estructuras,
-                    archivo_materiales=ruta_datos_materiales,
-                    estructuras_df=df_expandido,  # ← ya limpio y 1-D
-                    datos_proyecto=st.session_state.get("datos_proyecto", {})
-                )
-
-            st.session_state["pdfs_generados"] = resultados_pdf
+                pdfs = generar_pdfs(resultados)
+            st.session_state["pdfs_generados"] = pdfs
             st.success("✅ Reportes generados correctamente")
-
-            if isinstance(resultados_pdf, dict):
-                st.info(f"📄 PDFs generados: {list(resultados_pdf.keys())}")
-            else:
-                st.warning("⚠️ El módulo procesar_materiales no devolvió un diccionario válido.")
         except Exception as e:
-            st.error(f"❌ Error al generar reportes: {e}")
+            st.error(f"❌ Error al generar PDFs: {type(e).__name__}: {e}")
+            return
 
-    # 5) Descarga
-    if "pdfs_generados" in st.session_state:
-        pdfs = st.session_state["pdfs_generados"]
-        st.markdown("### 📥 Descarga de Reportes Generados")
-        if isinstance(pdfs, dict):
-            if pdfs.get("materiales"):
-                st.download_button(
-                    "📄 Descargar PDF de Materiales",
-                    pdfs["materiales"],
-                    "Resumen_Materiales.pdf",
-                    "application/pdf",
-                    key="dl_mat",
-                )
-            if pdfs.get("estructuras_global"):
-                st.download_button(
-                    "📄 Descargar PDF de Estructuras (Global)",
-                    pdfs["estructuras_global"],
-                    "Resumen_Estructuras.pdf",
-                    "application/pdf",
-                    key="dl_estr_glob",
-                )
-            if pdfs.get("estructuras_por_punto"):
-                st.download_button(
-                    "📄 Descargar PDF de Estructuras por Punto",
-                    pdfs["estructuras_por_punto"],
-                    "Estructuras_Por_Punto.pdf",
-                    "application/pdf",
-                    key="dl_estr_punto",
-                )
-            if pdfs.get("materiales_por_punto"):
-                st.download_button(
-                    "📄 Descargar PDF de Materiales por Punto",
-                    pdfs["materiales_por_punto"],
-                    "Materiales_Por_Punto.pdf",
-                    "application/pdf",
-                    key="dl_mat_punto",
-                )
-            if pdfs.get("completo"):
-                st.download_button(
-                    "📄 Descargar Informe Completo",
-                    pdfs["completo"],
-                    "Informe_Completo.pdf",
-                    "application/pdf",
-                    key="dl_full",
-                )
+    pdfs = st.session_state.get("pdfs_generados")
+    if not pdfs:
+        st.info("Presiona **Generar Reportes PDF** para preparar las descargas.")
+        return
 
+    st.markdown("### 📥 Descarga de Reportes Generados")
+
+    if pdfs.get("materiales"):
+        st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"], "Resumen_Materiales.pdf",
+                           "application/pdf", key="dl_mat")
+    if pdfs.get("estructuras_global"):
+        st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"], "Resumen_Estructuras.pdf",
+                           "application/pdf", key="dl_estr_glob")
+    if pdfs.get("estructuras_por_punto"):
+        st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"], "Estructuras_Por_Punto.pdf",
+                           "application/pdf", key="dl_estr_punto")
+    if pdfs.get("materiales_por_punto"):
+        st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"], "Materiales_Por_Punto.pdf",
+                           "application/pdf", key="dl_mat_punto")
+    if pdfs.get("completo"):
+        st.download_button("📄 Descargar Informe Completo", pdfs["completo"], "Informe_Completo.pdf",
+                           "application/pdf", key="dl_full")
