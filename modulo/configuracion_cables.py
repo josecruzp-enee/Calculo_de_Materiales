@@ -641,11 +641,12 @@ def tabla_cables_pdf(datos_proyecto):
     elems.append(Spacer(1, 0.15 * inch))
     elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
     elems.append(Spacer(1, 0.20 * inch))
-
+    df_mat = st.session_state.get("df_mat")
+    
     # =========================
-    # 2) EXTRAS DESDE MATERIALES (df_mat)  ✅ NUEVO
+    # 2) EXTRAS DESDE MATERIALES (df_mat)  
     # =========================
-    # Si no lo pasan, intentamos tomarlo de session_state si existe.
+   
     if df_mat is None:
         df_mat = st.session_state.get("df_materiales")  # si tú lo guardas con otro nombre, cámbialo
 
