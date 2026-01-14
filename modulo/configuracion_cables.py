@@ -442,11 +442,68 @@ def seccion_cables():
     return st.session_state.get("cables_proyecto", [])
 
 
-
 # =========================
 # Soporte para PDFs (usado por modulo.pdf_utils)
 # =========================
-def tabla_cables_pdf(datos_proyecto):
+
+def _extraer_cables_desde_materiales(df_mat: pd.DataFrame) -> pd.DataFrame:
+    """
+    Busca en df_mat materiales que parezcan 'cable/alambre/conductor' y que vengan por longitud
+    (Pie, ft, m). Devuelve un DF resumido: Descripción, Unidad, Cantidad(Longitud).
+    """
+    if df_mat is None or not isinstance(df_mat, pd.DataFrame) or df_mat.empty:
+        return pd.DataFrame()
+
+    if "Materiales" not in df_mat.columns:
+        return pd.DataFrame()
+
+    # columnas
+    col_cant = "Cantidad" if "Cantidad" in df_mat.columns else ("CANTIDAD" if "CANTIDAD" in df_mat.columns else None)
+    col_unid = "Unidad" if "Unidad" in df_mat.columns else ("UNIDAD" if "UNIDAD" in df_mat.columns else None)
+    if col_cant is None or col_unid is None:
+        return pd.DataFrame()
+
+    df = df_mat.copy()
+    df["Materiales"] = df["Materiales"].astype(str).str.strip()
+    df[col_unid] = df[col_unid].astype(str).str.strip().str.upper()
+    df[col_cant] = pd.to_numeric(df[col_cant], errors="coerce").fillna(0.0)
+
+    # --- Filtro por unidad de longitud ---
+    # En tu Excel se ve "Pie"
+    unidades_long = {"PIE", "FT", "FEET", "M", "METRO", "METROS"}
+    mask_unidad = df[col_unid].isin(unidades_long)
+
+    # --- Filtro por texto (muy conservador, para no meter cosas raras) ---
+    # Puedes ampliar aquí si hace falta.
+    mask_texto = df["Materiales"].str.contains(r"\b(CABLE|ALAMBRE|CONDUCTOR|COPPERWELD)\b", case=False, na=False)
+
+    dfc = df[mask_unidad & mask_texto].copy()
+    dfc = dfc[dfc[col_cant] > 0]
+    if dfc.empty:
+        return pd.DataFrame()
+
+    def _unidad_norm(u: str) -> str:
+        u = (u or "").strip().upper()
+        if u in ("PIE", "FT", "FEET"):
+            return "Pie"
+        if u in ("M", "METRO", "METROS"):
+            return "m"
+        return u
+
+    dfc["Unidad_norm"] = dfc[col_unid].map(_unidad_norm)
+
+    out = (
+        dfc.groupby(["Materiales", "Unidad_norm"], as_index=False)[col_cant]
+           .sum()
+           .rename(columns={"Materiales": "Descripción", "Unidad_norm": "Unidad", col_cant: "Cantidad"})
+    )
+
+    # Ordena (opcional)
+    out = out.sort_values(["Unidad", "Descripción"], ascending=[True, True]).reset_index(drop=True)
+    return out
+
+
+def tabla_cables_pdf(datos_proyecto, df_mat: pd.DataFrame | None = None):
     elems = []
     try:
         import streamlit as st
@@ -460,6 +517,9 @@ def tabla_cables_pdf(datos_proyecto):
     except Exception:
         return elems
 
+    # =========================
+    # 1) TABLA PRINCIPAL (cables_proyecto)
+    # =========================
     fuente = None
     if isinstance(st.session_state.get("cables_proyecto"), list) and st.session_state["cables_proyecto"]:
         fuente = st.session_state["cables_proyecto"]
@@ -471,6 +531,8 @@ def tabla_cables_pdf(datos_proyecto):
             fuente = lista_dp
 
     if not fuente:
+        # Aun si no hay cables_proyecto, podríamos mostrar extras desde df_mat,
+        # pero mantengo tu lógica: si no hay tabla principal, no imprimimos sección.
         return elems
 
     df = pd.DataFrame(fuente).copy()
@@ -547,7 +609,7 @@ def tabla_cables_pdf(datos_proyecto):
         data.append([
             Paragraph(tipo, st_cell),
             Paragraph(conf, st_cell),
-            Paragraph(cal, st_cell_left),  # ✅ calibre suele ser largo: mejor alinearlo a la izquierda
+            Paragraph(cal, st_cell_left),
             Paragraph(f"{float(row['Longitud (m)']):.2f}", st_cell),
             Paragraph(f"{float(row['Total Cable (m)']):.2f}", st_cell),
         ])
@@ -570,7 +632,6 @@ def tabla_cables_pdf(datos_proyecto):
         ("TOPPADDING", (0, 0), (-1, -1), 3),
         ("BOTTOMPADDING", (0, 1), (-1, -1), 3),
 
-        # ✅ wrap fuerte en Calibre
         ("WORDWRAP", (2, 1), (2, -1), "CJK"),
     ]))
 
@@ -581,6 +642,72 @@ def tabla_cables_pdf(datos_proyecto):
     elems.append(Paragraph(f"🧮 <b>Total Global de Cable:</b> {total_global:,.2f} m", styleN))
     elems.append(Spacer(1, 0.20 * inch))
 
-    return elems
+    # =========================
+    # 2) EXTRAS DESDE MATERIALES (df_mat)  ✅ NUEVO
+    # =========================
+    # Si no lo pasan, intentamos tomarlo de session_state si existe.
+    if df_mat is None:
+        df_mat = st.session_state.get("df_materiales")  # si tú lo guardas con otro nombre, cámbialo
+
+    extras = _extraer_cables_desde_materiales(df_mat) if isinstance(df_mat, pd.DataFrame) else pd.DataFrame()
+
+    if not extras.empty:
+        # título
+        elems.append(Spacer(1, 0.10 * inch))
+        elems.append(Paragraph("🔌 Cables/Alambres detectados en materiales de estructuras", styles["Heading3"]))
+        elems.append(Spacer(1, 0.05 * inch))
+
+        hdr2 = ParagraphStyle(
+            "hdr_cables2",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=9,
+            alignment=TA_CENTER,
+            textColor=colors.whitesmoke,
+        )
+        cell2 = ParagraphStyle(
+            "cell_cables2",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=9,
+            alignment=TA_CENTER,
+            wordWrap="CJK",
+        )
+        cell2_left = ParagraphStyle("cell_cables2_left", parent=cell2, alignment=0)
+
+        data2 = [[
+            Paragraph("Descripción", hdr2),
+            Paragraph("Unidad", hdr2),
+            Paragraph("Cantidad", hdr2),
+        ]]
+
+        for _, r in extras.iterrows():
+            desc = escape(str(r.get("Descripción", "")).strip())
+            unid = escape(str(r.get("Unidad", "")).strip())
+            cant = float(r.get("Cantidad", 0) or 0)
+
+            data2.append([
+                Paragraph(desc, cell2_left),
+                Paragraph(unid, cell2),
+                Paragraph(f"{cant:,.2f}", cell2),
+            ])
+
+        tabla2 = Table(
+            data2,
+            colWidths=[3.9 * inch, 0.9 * inch, 0.9 * inch],
+            repeatRows=1
+        )
+        tabla2.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#444444")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elems.append(tabla2)
+        elems.append(Spacer(1, 0.15 * inch))
 
     return elems
+
