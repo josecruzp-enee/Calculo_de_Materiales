@@ -17,8 +17,17 @@ from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 
 
-def hoja_info_proyecto(datos_proyecto, df_estructuras=None, df_mat=None):
-    from math import sqrt, floor
+def hoja_info_proyecto(
+    datos_proyecto,
+    df_estructuras=None,
+    df_mat=None,
+    *,
+    styles=None,
+    styleN=None,
+    styleH=None,
+    _calibres_por_tipo=None
+):
+ 
 
     def float_safe(x, d=0.0):
         try:
