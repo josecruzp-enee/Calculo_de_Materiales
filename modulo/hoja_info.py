@@ -1,3 +1,21 @@
+# -*- coding: utf-8 -*-
+"""
+hoja_info.py
+Construcción de la Hoja de Información del Proyecto (sección PDF)
+Autor: José Nikol Cruz
+"""
+
+
+from __future__ import annotations
+
+import re
+from datetime import datetime
+from math import sqrt, floor
+import pandas as pd
+
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+
 def hoja_info_proyecto(
     datos_proyecto,
     df_estructuras=None,
