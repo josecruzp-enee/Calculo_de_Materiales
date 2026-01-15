@@ -63,17 +63,29 @@ def conductores_de(tipo: str, cfg: str) -> int:
 
     return 0
 
-def calibre_corto_desde_seleccion(calibre: str) -> str:
+def calibre_corto_desde_seleccion(tipo: str, calibre: str) -> str:
     """
-    Convierte selecciones tipo "1/0 ACSR" -> "1/0"
-    o "266.8 MCM" -> "266.8 MCM"
-    o "2 WP" -> "2 WP" (según tu criterio).
+    Compatibilidad con cables_logica.py: acepta (tipo, calibre_o_desc).
+
+    Convierte selecciones tipo:
+    - "1/0 ACSR" -> "1/0 ACSR"
+    - "266.8 MCM" -> "266.8 MCM"
+    - "2 WP" -> "2 WP"
     """
     s = _norm_txt(calibre)
     if not s:
         return ""
+
     parts = s.split()
-    # regla simple: devolver primeros 1-2 tokens si es MCM
+
+    # Si es MCM, devolver completo en mayúsculas
     if "MCM" in s.upper():
         return s.upper()
+
+    # Si trae 2 tokens (ej: "1/0 ACSR", "2 WP"), devolver ambos
+    if len(parts) >= 2:
+        return f"{parts[0].upper()} {parts[1].upper()}"
+
+    # Si solo trae 1 token, devolver ese
     return parts[0].upper()
+
