@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Optional, Tuple, Dict, List, Any
 import io
 import re
+import tempfile
 
 import pandas as pd
 import streamlit as st
@@ -37,7 +38,7 @@ RE_COD_P = re.compile(
     )
     \s*\(\s*[Pp]\s*\)
     """,
-    re.VERBOSE
+    re.VERBOSE,
 )
 
 RE_MULT = re.compile(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", flags=re.I)
@@ -49,7 +50,7 @@ def _limpiar(s: str) -> str:
 
 
 def _clasificar(code: str) -> Optional[str]:
-    c = code.strip().upper()
+    c = (code or "").strip().upper()
     if c.startswith(("PC-", "PM-", "PT-")):
         return "Poste"
     if c.startswith("A-"):
@@ -86,17 +87,21 @@ def _add(bucket: Dict[str, Dict[str, int]], col: str, raw_item: str) -> None:
 def _bucket_to_row(punto: int, bucket: Dict[str, Dict[str, int]]) -> Dict[str, str]:
     row = {c: "" for c in COLUMNAS_BASE}
     row["Punto"] = f"Punto {punto}"
+
     for col in COLUMNAS_BASE:
         if col == "Punto":
             continue
         d = bucket.get(col, {})
         if not d:
             continue
+
         parts: List[str] = []
         for code in sorted(d.keys()):
             qty = int(d[code])
             parts.append(f"{qty}x {code}" if qty > 1 else code)
+
         row[col] = " ".join(parts)
+
     return row
 
 
@@ -135,10 +140,9 @@ def _texto_entidad(e: Any) -> str:
 def extraer_estructuras_desde_dxf(doc: Any, capa_objetivo: str = "Estructuras") -> pd.DataFrame:
     """
     Lee MTEXT/TEXT del modelspace.
-    Se guía por el texto: detecta Punto y luego códigos (P) dentro del mismo bloque.
+    Detecta Punto dentro del mismo bloque y códigos (P) dentro del mismo bloque.
     """
     msp = doc.modelspace()
-
     bloques: Dict[int, Dict[str, Dict[str, int]]] = {}
 
     for e in msp:
@@ -146,7 +150,7 @@ def extraer_estructuras_desde_dxf(doc: Any, capa_objetivo: str = "Estructuras") 
         if et not in ("MTEXT", "TEXT"):
             continue
 
-        # filtro por capa (si tu dibujo viene bien ordenado, esto ayuda muchísimo)
+        # filtro por capa
         layer = (getattr(e.dxf, "layer", "") or "").strip()
         if capa_objetivo and layer.lower() != capa_objetivo.lower():
             continue
@@ -181,6 +185,29 @@ def extraer_estructuras_desde_dxf(doc: Any, capa_objetivo: str = "Estructuras") 
     return normalizar_columnas(df, COLUMNAS_BASE)
 
 
+def _leer_dxf_streamlit(archivo) -> Any:
+    """
+    Lee DXF desde Streamlit uploader.
+    Usa readfile(BytesIO) si funciona; si no, cae a archivo temporal.
+    """
+    import ezdxf  # type: ignore
+
+    data = archivo.getvalue()
+    # intento 1: BytesIO
+    try:
+        stream = io.BytesIO(data)
+        return ezdxf.readfile(stream)
+    except Exception:
+        pass
+
+    # intento 2: archivo temporal (100% estable en cloud)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
+
+    return ezdxf.readfile(tmp_path)
+
+
 def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     st.subheader("📐 Cargar estructuras desde DXF (ENEE)")
 
@@ -189,21 +216,25 @@ def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         return None, None
 
     try:
-        import ezdxf  # type: ignore
+        import ezdxf  # noqa: F401  # type: ignore
     except Exception:
         st.error("Falta dependencia: ezdxf. Agrega 'ezdxf' a requirements.txt")
         return None, None
 
-    # leer doc
+    # leer doc (arreglado)
     try:
-        bio = io.BytesIO(archivo.getvalue())
-        doc = ezdxf.read(bio)
+        doc = _leer_dxf_streamlit(archivo)
     except Exception as e:
         st.error(f"No pude leer el DXF: {e}")
         return None, None
 
     # capa objetivo (por si viene con otro nombre)
-    capa = st.text_input("Capa de estructuras (opcional)", value="Estructuras", help="Debe coincidir con el nombre de la capa en AutoCAD.")
+    capa = st.text_input(
+        "Capa de estructuras (opcional)",
+        value="Estructuras",
+        help="Debe coincidir con el nombre de la capa en AutoCAD.",
+        key="capa_estructuras_dxf",
+    )
 
     df_ancho = extraer_estructuras_desde_dxf(doc, capa_objetivo=capa.strip() if capa else "")
 
