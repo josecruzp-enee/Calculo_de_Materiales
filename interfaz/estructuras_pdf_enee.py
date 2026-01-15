@@ -85,22 +85,58 @@ def _clasificar_item(code: str) -> Optional[str]:
     return None
 
 
-def _agregar_en_bucket(bucket: Dict[str, List[str]], col: str, raw_item: str) -> None:
+def _agregar_en_bucket(bucket: Dict[str, Dict[str, int]], col: str, raw_item: str) -> None:
+    """
+    Regla:
+    - Por defecto, cada código cuenta 1 vez por Punto (dedupe).
+    - Si el texto trae 2x/3x/2×, se respeta ese multiplicador.
+    """
     item = _limpiar_item(raw_item)
     if not item:
         return
-    bucket[col].append(item)
+
+    # detectar multiplicador explícito al inicio: 2x CODE, 3× CODE
+    m = re.match(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", item, flags=re.I)
+    if m:
+        qty = int(m.group(1))
+        code = _limpiar_item(m.group(2))
+        if not code:
+            return
+        # si aparece varias veces, nos quedamos con el máximo (por seguridad)
+        bucket[col][code] = max(bucket[col].get(code, 0), qty)
+        return
+
+    # sin multiplicador: SOLO 1 por Punto
+    bucket[col][item] = 1
 
 
-def _bucket_to_row(punto: str, bucket: Dict[str, List[str]]) -> Dict[str, str]:
+
+def _bucket_to_row(punto: str, bucket: Dict[str, Dict[str, int]]) -> Dict[str, str]:
     row = {c: "" for c in COLUMNAS_BASE}
     row["Punto"] = punto
+
     for col in COLUMNAS_BASE:
         if col == "Punto":
             continue
-        vals = bucket.get(col, [])
-        row[col] = "\n".join([_limpiar_item(v) for v in vals if _limpiar_item(v)])
+
+        codes = bucket.get(col, {})
+        if not codes:
+            row[col] = ""
+            continue
+
+        # orden alfabético para consistencia
+        parts = []
+        for code in sorted(codes.keys()):
+            qty = int(codes.get(code, 1))
+            if qty > 1:
+                parts.append(f"{qty}x {code}")
+            else:
+                parts.append(code)
+
+        row[col] = " ".join(parts)
+
     return row
+
 
 
 def extraer_codigos_proyectados(linea: str) -> List[str]:
@@ -140,7 +176,7 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
         m = _RE_PUNTO.match(t)
         if m:
             punto_actual = _punto_label(m.group(1))
-            bloques.setdefault(punto_actual, {c: [] for c in COLUMNAS_BASE if c != "Punto"})
+            bloques.setdefault(punto_actual, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
             punto_cerrado = False  # ✅ reabrir bloque
             continue
 
@@ -148,7 +184,7 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
         m2 = _RE_PUNTO_EN_LINEA.search(t)
         if m2:
             punto_actual = _punto_label(m2.group(1))
-            bloques.setdefault(punto_actual, {c: [] for c in COLUMNAS_BASE if c != "Punto"})
+            bloques.setdefault(punto_actual, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
             punto_cerrado = False  # ✅ reabrir bloque
             # no hacemos continue; por si en esa misma línea viene texto útil
 
