@@ -26,14 +26,16 @@ _RE_PUNTO_EN_LINEA = re.compile(
 )
 _RE_XY_APOYO = re.compile(r"^\s*(X:|Y:|Apoyo:)\b", re.IGNORECASE)
 
-# ✅ Detecta CODIGO seguido por (P) en cualquier parte del texto.
-# Captura ejemplos típicos:
-#   "CT-N (P) 02 PC-40\" (E) CT-N" -> CT-N
-#   "B-II-4C (P) R-05T"           -> B-II-4C
-#   "A-I-4 (P)"                   -> A-I-4
-#   "PC-40\" (P)"                 -> PC-40"
+# ✅ Detecta (qty opcional) + CODIGO seguido por (P) en cualquier parte del texto.
+# Ejemplos:
+#   "CT-N (P) ..."          -> "CT-N"
+#   "2x LS-1 (P) ..."       -> "2x LS-1"
+#   "3× PT-30 (P)"          -> "3x PT-30"
 _RE_CODIGO_CON_P = re.compile(
     r"""
+    (?:
+        (?P<qty>\d+)\s*[x×]\s*     # 2x / 2× opcional
+    )?
     (?P<code>
         (?:PC|PM|PT)-[A-Z0-9"'\-]+
         |A-[A-Z0-9\-]+
@@ -61,9 +63,16 @@ def _limpiar_item(item: str) -> str:
     return s
 
 
+def _strip_qty_prefix(s: str) -> str:
+    """Quita prefijo '2x ' / '3× ' si existiera, para clasificar por código."""
+    s = (s or "").strip()
+    s = re.sub(r"^\s*\d+\s*[x×]\s*", "", s, flags=re.I)
+    return s.strip()
+
+
 # ✅ Compatible con Python 3.8/3.9
 def _clasificar_item(code: str) -> Optional[str]:
-    c = code.strip().upper()
+    c = _strip_qty_prefix(code).strip().upper()
 
     if c.startswith(("PC-", "PM-", "PT-")):
         return "Poste"
@@ -110,7 +119,6 @@ def _agregar_en_bucket(bucket: Dict[str, Dict[str, int]], col: str, raw_item: st
     bucket[col][item] = 1
 
 
-
 def _bucket_to_row(punto: str, bucket: Dict[str, Dict[str, int]]) -> Dict[str, str]:
     row = {c: "" for c in COLUMNAS_BASE}
     row["Punto"] = punto
@@ -138,19 +146,27 @@ def _bucket_to_row(punto: str, bucket: Dict[str, Dict[str, int]]) -> Dict[str, s
     return row
 
 
-
 def extraer_codigos_proyectados(linea: str) -> List[str]:
     """
-    Devuelve códigos que tengan (P) inmediatamente después, aunque estén en medio del texto.
+    Devuelve items proyectados del tipo:
+      - 'CODE' si no hay multiplicador
+      - '2x CODE' si hay multiplicador explícito
     """
     if not linea:
         return []
     t = " ".join((linea or "").split())
     out: List[str] = []
+
     for m in _RE_CODIGO_CON_P.finditer(t):
         cod = (m.group("code") or "").strip()
-        if cod:
+        qty = (m.group("qty") or "").strip()
+        if not cod:
+            continue
+        if qty:
+            out.append(f"{qty}x {cod}")
+        else:
             out.append(cod)
+
     return out
 
 
@@ -163,7 +179,9 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
 
     lines = [ln.rstrip() for ln in texto.splitlines()]
 
-    bloques: Dict[str, Dict[str, List[str]]] = {}
+    # ✅ coherente con bucket dict[str,int]
+    bloques: Dict[str, Dict[str, Dict[str, int]]] = {}
+
     punto_actual: Optional[str] = None
     punto_cerrado: bool = False  # ✅ evita “arrastre” después de X/Y/Apoyo
 
@@ -200,19 +218,19 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
             punto_cerrado = True
             continue
 
-        # ✅ SOLO códigos con (P)
+        # ✅ SOLO códigos con (P) (y con qty si venía 2x/3x)
         codigos_p = extraer_codigos_proyectados(t)
         if not codigos_p:
             continue
 
-        for code_sin in codigos_p:
-            code_sin = _limpiar_item(code_sin)
-            if not code_sin:
+        for item in codigos_p:
+            item = _limpiar_item(item)
+            if not item:
                 continue
 
-            col = _clasificar_item(code_sin)
+            col = _clasificar_item(item)
             if col:
-                _agregar_en_bucket(bloques[punto_actual], col, code_sin)
+                _agregar_en_bucket(bloques[punto_actual], col, item)
 
     rows = [_bucket_to_row(p, b) for p, b in bloques.items()]
     df = pd.DataFrame(rows, columns=COLUMNAS_BASE)
@@ -222,7 +240,6 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
         df = df[df[cols_no_punto].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
 
     return normalizar_columnas(df, COLUMNAS_BASE)
-
 
 
 # -----------------------------------------
@@ -261,6 +278,13 @@ def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
 
     ruta_tmp = materializar_df_a_archivo(df_ancho, "pdf")
     df_largo = expand_wide_to_long(df_ancho)
+
+    # ✅ consolidar por seguridad (evita duplicado por cualquier ruta rara)
+    if not df_largo.empty:
+        df_largo = (
+            df_largo.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
+            .sum()
+        )
 
     st.caption("🔎 Vista LARGA (lo que consume el motor)")
     st.dataframe(df_largo, use_container_width=True, hide_index=True)
