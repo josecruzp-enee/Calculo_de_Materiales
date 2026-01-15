@@ -15,7 +15,8 @@ from interfaz.estructuras_comunes import (
 )
 
 # ✅ PDF real (lee y extrae)
-from interfaz.estructuras_pdf import cargar_desde_pdf
+from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee
+
 
 # ✅ Desplegables (sin circular)
 from interfaz.estructuras_desplegables import listas_desplegables
