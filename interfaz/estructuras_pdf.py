@@ -167,10 +167,10 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
 # -----------------------------------------
 # UI Streamlit: modo PDF
 # -----------------------------------------
-def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+def cargar_desde_pdf() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     st.subheader("📄 Cargar estructuras desde PDF (ENEE)")
 
-    archivo_pdf = st.file_uploader("Sube el PDF del plano", type=["pdf"], key="upl_pdf_enee")
+    archivo_pdf = st.file_uploader("Sube el PDF del plano", type=["pdf"], key="upl_pdf")
     if not archivo_pdf:
         return None, None
 
