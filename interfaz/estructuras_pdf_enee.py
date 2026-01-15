@@ -20,6 +20,7 @@ from interfaz.estructuras_comunes import (
 # -----------------------------------------
 # Helpers de clasificación
 # -----------------------------------------
+
 # Punto en línea "limpia": P-11, P # 11, P 11, Punto 11, P11
 _RE_PUNTO_LINEA = re.compile(
     r"^\s*(?:P(?:UNTO)?\s*[-#]?\s*|P)\s*(\d+)\s*$",
@@ -31,6 +32,9 @@ _RE_PUNTO_EN_TEXTO = re.compile(
     r"(?:^|[\s,;])(?:P(?:UNTO)?\s*[-#]?\s*|P)\s*(\d+)(?=$|[\s,;:])",
     re.IGNORECASE
 )
+
+# Ancla estricta tipo "P # 21" (Plan A)
+_RE_ANCLA_P = re.compile(r"^\s*P\s*#\s*(\d+)\s*$", re.IGNORECASE)
 
 _RE_XY_APOYO = re.compile(r"^\s*(X:|Y:|Apoyo:)\b", re.IGNORECASE)
 
@@ -164,17 +168,14 @@ def _words_de_pdf(pdf) -> List[Dict[str, Any]]:
             words = page.extract_words() or []
 
         for w in words:
-            # normaliza campos útiles
             w2 = dict(w)
             w2["page_index"] = pi
-            # centro
             w2["cx"] = (float(w2.get("x0", 0.0)) + float(w2.get("x1", 0.0))) / 2.0
             w2["cy"] = (float(w2.get("top", 0.0)) + float(w2.get("bottom", 0.0))) / 2.0
             w2["text"] = (w2.get("text") or "").strip()
             if w2["text"]:
                 words_all.append(w2)
 
-    # orden por página, y, x
     words_all.sort(key=lambda a: (a["page_index"], float(a.get("top", 0.0)), float(a.get("x0", 0.0))))
     return words_all
 
@@ -199,7 +200,6 @@ def _reconstruir_lineas(words: List[Dict[str, Any]], y_tol: float = 2.5, x_gap: 
             current_page = pi
             continue
 
-        # nueva línea si cambia mucho y o cambia página
         if pi != current_page or current_y is None or abs(y - current_y) > y_tol:
             lines.append(current)
             current = [w]
@@ -232,7 +232,6 @@ def _reconstruir_lineas(words: List[Dict[str, Any]], y_tol: float = 2.5, x_gap: 
                 parts.append(txt)
             else:
                 gap = x0a - x1_prev
-                # si están muy cerca, sepárala con espacio (no pegado) para que "(P)" quede "(P)"
                 parts.append(txt if gap <= 0.5 else (" " + txt))
             x1_prev = float(a.get("x1", 0.0))
 
@@ -252,12 +251,12 @@ def _reconstruir_lineas(words: List[Dict[str, Any]], y_tol: float = 2.5, x_gap: 
 
 
 # ============================================================
-# 2) Parser por texto reconstruido (mejor que extract_text())
+# 2A) Parser secuencial por texto reconstruido
 # ============================================================
 def extraer_estructuras_desde_lineas(lineas: List[Dict[str, Any]]) -> pd.DataFrame:
     """
     Intenta construir puntos por "bloques" (punto + líneas siguientes hasta X/Y).
-    Funciona bien cuando el PDF conserva el bloque de texto del MTEXT.
+    OJO: depende del ORDEN en que vienen las líneas; por eso NO es el Plan A ideal.
     """
     if not lineas:
         return pd.DataFrame(columns=COLUMNAS_BASE)
@@ -271,7 +270,6 @@ def extraer_estructuras_desde_lineas(lineas: List[Dict[str, Any]]) -> pd.DataFra
         if not t:
             continue
 
-        # Punto línea
         m = _RE_PUNTO_LINEA.match(t)
         if m:
             punto_actual = _punto_label(m.group(1))
@@ -279,13 +277,11 @@ def extraer_estructuras_desde_lineas(lineas: List[Dict[str, Any]]) -> pd.DataFra
             punto_cerrado = False
             continue
 
-        # Punto dentro del texto
         m2 = _RE_PUNTO_EN_TEXTO.search(t)
         if m2:
             punto_actual = _punto_label(m2.group(1))
             bloques.setdefault(punto_actual, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
             punto_cerrado = False
-            # no continue: por si trae códigos en la misma línea
 
         if punto_actual is None:
             continue
@@ -318,6 +314,118 @@ def extraer_estructuras_desde_lineas(lineas: List[Dict[str, Any]]) -> pd.DataFra
 
 
 # ============================================================
+# 2B) PLAN A REAL: Parser por BLOQUES ESPACIALES
+# ============================================================
+def extraer_estructuras_por_bloques_espaciales(
+    lineas: List[Dict[str, Any]],
+    x_tol: float = 18.0,     # tolerancia horizontal para "misma columna"
+    y_min: float = 2.0,      # empieza un poquito debajo del ancla
+    y_max: float = 260.0,    # altura máxima del bloque hacia abajo
+    max_items: int = 14,     # seguridad: no leer infinito
+) -> pd.DataFrame:
+    """
+    Plan A verdadero:
+    - Detecta anclas "P # n" por coordenadas.
+    - Para cada ancla, toma SOLO las líneas debajo y alineadas en X (misma columna).
+    - Corta si encuentra otra ancla "P #".
+    NO depende del orden de lectura del PDF.
+    """
+    if not lineas:
+        return pd.DataFrame(columns=COLUMNAS_BASE)
+
+    # 1) detectar anclas "P # n"
+    anclas: List[Dict[str, Any]] = []
+    for ln in lineas:
+        t = (ln.get("text") or "").strip()
+        m = _RE_ANCLA_P.match(t)
+        if m:
+            anclas.append({
+                "page_index": int(ln["page_index"]),
+                "num": int(m.group(1)),
+                "cx": float(ln["cx"]),
+                "top": float(ln["top"]),
+            })
+
+    if not anclas:
+        return pd.DataFrame(columns=COLUMNAS_BASE)
+
+    anclas.sort(key=lambda a: (a["page_index"], a["top"], a["cx"]))
+
+    # indexar líneas por página
+    por_pagina: Dict[int, List[Dict[str, Any]]] = {}
+    for ln in lineas:
+        por_pagina.setdefault(int(ln["page_index"]), []).append(ln)
+
+    bloques: Dict[str, Dict[str, Dict[str, int]]] = {}
+
+    for a in anclas:
+        pi = a["page_index"]
+        num = a["num"]
+        x_anchor = a["cx"]
+        y_anchor = a["top"]
+
+        punto = f"Punto {num}"
+        bloques.setdefault(punto, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
+
+        candidatos = por_pagina.get(pi, [])
+
+        debajo: List[Dict[str, Any]] = []
+        for ln in candidatos:
+            y = float(ln["top"])
+            if y <= y_anchor + y_min:
+                continue
+            if y > y_anchor + y_max:
+                continue
+            if abs(float(ln["cx"]) - x_anchor) > x_tol:
+                continue
+            debajo.append(ln)
+
+        debajo.sort(key=lambda ln: float(ln["top"]))
+
+        leidos = 0
+        for ln in debajo:
+            if leidos >= max_items:
+                break
+
+            txt = (ln.get("text") or "").strip()
+            if not txt:
+                continue
+
+            # si aparece otra ancla, se terminó el bloque
+            if _RE_ANCLA_P.match(txt):
+                break
+
+            codigos_p = extraer_codigos_proyectados(txt)
+            if not codigos_p:
+                continue
+
+            for code in codigos_p:
+                code = _limpiar_item(code)
+                col = _clasificar_item(code)
+                if col:
+                    _agregar_en_bucket(bloques[punto], col, code)
+
+            leidos += 1
+
+    rows = [_bucket_to_row(p, b) for p, b in bloques.items()]
+    df = pd.DataFrame(rows, columns=COLUMNAS_BASE)
+
+    if not df.empty:
+        cols_no_punto = [c for c in COLUMNAS_BASE if c != "Punto"]
+        df = df[df[cols_no_punto].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
+
+    # ordenar por número
+    def _k(p: str) -> int:
+        m = re.search(r"(\d+)", p)
+        return int(m.group(1)) if m else 10**9
+
+    if not df.empty:
+        df = df.sort_values(by="Punto", key=lambda s: s.map(_k)).reset_index(drop=True)
+
+    return normalizar_columnas(df, COLUMNAS_BASE)
+
+
+# ============================================================
 # 3) Fallback: clustering espacial de códigos (P)
 # ============================================================
 def _dist(a: Dict[str, Any], b: Dict[str, Any]) -> float:
@@ -339,7 +447,6 @@ def _clusterizar_puntos(items: List[Dict[str, Any]], eps: float = 35.0) -> List[
         used[i] = True
         cluster = [items[i]]
 
-        # expansión tipo BFS
         q = [i]
         while q:
             j = q.pop()
@@ -355,17 +462,18 @@ def _clusterizar_puntos(items: List[Dict[str, Any]], eps: float = 35.0) -> List[
 
         clusters.append(cluster)
 
-    # ordena clusters de arriba-abajo / izquierda-derecha por centro
-    clusters.sort(key=lambda cl: (min(x["page_index"] for x in cl), sum(x["cy"] for x in cl)/len(cl), sum(x["cx"] for x in cl)/len(cl)))
+    clusters.sort(key=lambda cl: (
+        min(x["page_index"] for x in cl),
+        sum(x["cy"] for x in cl) / len(cl),
+        sum(x["cx"] for x in cl) / len(cl)
+    ))
     return clusters
 
 
 def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFrame:
     """
-    Extrae todos los códigos (P) con coordenadas, clusteriza por cercanía y crea "puntos".
-    Si se puede, asigna el número de punto buscando un texto "P-xx" cercano al cluster.
+    Último recurso. Puede mezclar si hay puntos cercanos en diagonal.
     """
-    # 1) recolecta ocurrencias de códigos (P)
     ocurrencias: List[Dict[str, Any]] = []
     puntos_texto: List[Dict[str, Any]] = []
 
@@ -374,7 +482,6 @@ def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFra
         if not t:
             continue
 
-        # detectores de "P-xx" cercanos (anclas)
         m = _RE_PUNTO_EN_TEXTO.search(t)
         if m:
             puntos_texto.append({
@@ -383,7 +490,6 @@ def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFra
                 "cx": ln["cx"], "cy": ln["cy"],
             })
 
-        # códigos (P)
         cods = extraer_codigos_proyectados(t)
         for c in cods:
             ocurrencias.append({
@@ -395,15 +501,12 @@ def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFra
     if not ocurrencias:
         return pd.DataFrame(columns=COLUMNAS_BASE)
 
-    # 2) clusteriza ocurrencias -> clusters = puntos
     clusters = _clusterizar_puntos(ocurrencias, eps=35.0)
 
-    # 3) arma bloques
     bloques: Dict[str, Dict[str, Dict[str, int]]] = {}
     punto_auto = 1
 
     for cl in clusters:
-        # intenta asignar número de punto por ancla más cercana
         cx = sum(x["cx"] for x in cl) / len(cl)
         cy = sum(x["cy"] for x in cl) / len(cl)
         pi = cl[0]["page_index"]
@@ -414,7 +517,7 @@ def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFra
             if p["page_index"] != pi:
                 continue
             d = math.hypot(float(p["cx"]) - cx, float(p["cy"]) - cy)
-            if d < mejor and d <= 120.0:  # radio razonable
+            if d < mejor and d <= 120.0:
                 mejor = d
                 candidato = int(p["num"])
 
@@ -439,7 +542,6 @@ def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFra
         cols_no_punto = [c for c in COLUMNAS_BASE if c != "Punto"]
         df = df[df[cols_no_punto].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
 
-    # orden numérico si es posible
     def _k(p: str) -> int:
         m = re.search(r"(\d+)", p)
         return int(m.group(1)) if m else 10**9
@@ -450,22 +552,34 @@ def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFra
 
 def extraer_estructuras_desde_pdf(pdf) -> pd.DataFrame:
     """
-    Estrategia:
+    Estrategia FINAL:
     1) Reconstruir líneas (extract_words)
-    2) Intentar parser por bloques (punto + hasta X/Y)
-    3) Si salen muy pocos puntos, usar clustering por cercanía (fallback)
+    2) Plan A REAL: bloques espaciales (ancla P # n + líneas debajo)
+    3) Si Plan A falla, intentar parser secuencial
+    4) Solo si todo falla, usar clustering
     """
     words = _words_de_pdf(pdf)
     lineas = _reconstruir_lineas(words, y_tol=2.5, x_gap=6.0)
 
+    # 1) Plan A real
+    dfA = extraer_estructuras_por_bloques_espaciales(
+        lineas,
+        x_tol=18.0,
+        y_min=2.0,
+        y_max=260.0,
+        max_items=14
+    )
+    if not dfA.empty and len(dfA) >= 3:
+        return dfA
+
+    # 2) Parser secuencial (por si el PDF viene raro pero igual ordenado)
     df1 = extraer_estructuras_desde_lineas(lineas)
+    if not df1.empty and len(df1) >= 3:
+        return df1
 
-    # Heurística: si detecta MUY pocos puntos, el PDF es SHX/fragmentado -> fallback
-    if df1.empty or len(df1) < 6:
-        df2 = extraer_estructuras_por_cercania(lineas)
-        return df2
-
-    return df1
+    # 3) Último recurso (puede mezclar)
+    df2 = extraer_estructuras_por_cercania(lineas)
+    return df2
 
 
 # -----------------------------------------
