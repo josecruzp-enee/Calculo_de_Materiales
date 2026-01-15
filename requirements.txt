@@ -13,3 +13,4 @@ simplekml
 folium
 streamlit-folium
 pdfplumber
+ezdxf
