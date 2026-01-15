@@ -12,7 +12,6 @@ Decisión de negocio:
 from __future__ import annotations
 
 import pandas as pd
-import re
 from typing import Dict, Tuple
 
 from .cables_normalizacion import _norm_key, _norm_txt, calibre_corto_desde_seleccion, conductores_de
@@ -31,7 +30,7 @@ CABLES_OFICIALES: Dict[Tuple[str, str], str] = {
     ("BT", "2 WP"):       "Cable de Aluminio Forrado WP # 2 AWG Peach",
     ("BT", "1/0 WP"):     "Cable de Aluminio Forrado WP # 1/0 AWG Quince",
     ("BT", "3/0 WP"):     "Cable de Aluminio Forrado WP # 3/0 AWG Fig",
-    ("BT", "266.8 MCM"):  "Cable de Aluminio Forrado 266.8 MCM Mulberry",  # ajustá si aplica
+    ("BT", "266.8 MCM"):  "Cable de Aluminio Forrado 266.8 MCM Mulberry",
 
     # MT ACSR (ejemplos)
     ("MT", "1/0 ACSR"):   "Cable de Aluminio ACSR # 1/0 AWG Raven",
@@ -56,15 +55,14 @@ def descripcion_oficial(tipo: str, calibre_o_desc: str) -> str:
     si pegó calibre corto, intenta mapear.
     """
     t = _norm_key(tipo)
-    c = _norm_txt(calibre_o_desc)
+    c_txt = _norm_txt(calibre_o_desc)
 
-    # 1) match directo (tipo, calibre)
-    k = (t, _norm_key(c))
+    # 1) match directo por (TIPO, CALIBRE)
+    k = (t, _norm_key(c_txt))
     if k in CABLES_OFICIALES:
         return CABLES_OFICIALES[k]
 
-    # 2) intentar convertir selección (descripción) -> calibre corto y volver a buscar
-    #    OJO: calibre_corto_desde_seleccion recibe (tipo, texto)
+    # 2) intentar convertir selección -> calibre corto (firma: (tipo, texto))
     cal_corto = calibre_corto_desde_seleccion(tipo, calibre_o_desc)
     k2 = (t, _norm_key(cal_corto))
     if k2 in CABLES_OFICIALES:
@@ -76,14 +74,14 @@ def descripcion_oficial(tipo: str, calibre_o_desc: str) -> str:
 
 def _resumen_por_calibre(df: pd.DataFrame) -> Dict[str, float]:
     """
-    Resumen simple: suma Longitud (m) por 'Tipo|Calibre'
+    Resumen simple: suma Longitud (m) por 'Tipo | Calibre'
     """
     if df is None or df.empty:
         return {}
 
     tmp = df.copy()
 
-    # Asegurar columnas como Series (no strings)
+    # Asegurar columnas
     if "Tipo" not in tmp.columns:
         tmp["Tipo"] = ""
     if "Calibre" not in tmp.columns:
@@ -100,7 +98,6 @@ def _resumen_por_calibre(df: pd.DataFrame) -> Dict[str, float]:
         key = f"{t} | {c}"
         out[key] = float(grp["Longitud"].sum())
     return out
-
 
 
 def _validar_y_calcular(df: pd.DataFrame) -> pd.DataFrame:
@@ -126,16 +123,26 @@ def _validar_y_calcular(df: pd.DataFrame) -> pd.DataFrame:
 
     out = df.copy()
 
-    out["Tipo"] = out.get("Tipo", "").astype(str).map(_norm_txt)
-    out["Calibre"] = out.get("Calibre", "").astype(str).map(_norm_txt)
-    out["Config"] = out.get("Config", "").astype(str).map(_norm_txt)
+    # Asegurar columnas (evita .get(...,"") que puede devolver string sin .astype)
+    if "Tipo" not in out.columns:
+        out["Tipo"] = ""
+    if "Calibre" not in out.columns:
+        out["Calibre"] = ""
+    if "Config" not in out.columns:
+        out["Config"] = ""
+    if "Longitud" not in out.columns:
+        out["Longitud"] = 0.0
 
-    out["Longitud"] = pd.to_numeric(out.get("Longitud", 0), errors="coerce").fillna(0.0)
+    # Normalización
+    out["Tipo"] = out["Tipo"].astype(str).map(_norm_txt)
+    out["Calibre"] = out["Calibre"].astype(str).map(_norm_txt)
+    out["Config"] = out["Config"].astype(str).map(_norm_txt)
+    out["Longitud"] = pd.to_numeric(out["Longitud"], errors="coerce").fillna(0.0)
 
-    # Filtrar filas vacías
+    # Filtrar filas sin datos mínimos
     out = out[(out["Tipo"].str.strip() != "") & (out["Calibre"].str.strip() != "")].copy()
 
-    # Conductores AUTOMÁTICO: depende de Tipo + Config
+    # Conductores automático: depende de Tipo + Config
     out["Conductores"] = [
         int(conductores_de(t, cfg)) for t, cfg in zip(out["Tipo"].tolist(), out["Config"].tolist())
     ]
@@ -167,7 +174,6 @@ def _extraer_cables_desde_materiales(df_materiales: pd.DataFrame) -> pd.DataFram
 
     s = df_materiales["Materiales"].astype(str)
     mask = s.str.contains(r"\b(CABLE|ALAMBRE|CONDUCTOR)\b", case=False, na=False)
-
     if not mask.any():
         return pd.DataFrame()
 
