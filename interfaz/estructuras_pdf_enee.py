@@ -14,8 +14,6 @@ from interfaz.estructuras_comunes import (
     normalizar_columnas,
     materializar_df_a_archivo,
     expand_wide_to_long,
-    split_cell_items,
-    es_proyectada,
 )
 
 # -----------------------------------------
@@ -24,6 +22,29 @@ from interfaz.estructuras_comunes import (
 _RE_PUNTO = re.compile(r"^\s*P\s*#\s*(\d+)\s*$", re.IGNORECASE)
 _RE_PUNTO_EN_LINEA = re.compile(r"\bP\s*#\s*(\d+)\b", re.IGNORECASE)  # por si viene con más texto
 _RE_XY_APOYO = re.compile(r"^\s*(X:|Y:|Apoyo:)\b", re.IGNORECASE)
+
+# ✅ Detecta CODIGO seguido por (P) en cualquier parte del texto.
+# Captura ejemplos típicos:
+#   "CT-N (P) 02 PC-40\" (E) CT-N" -> CT-N
+#   "B-II-4C (P) R-05T"           -> B-II-4C
+#   "A-I-4 (P)"                   -> A-I-4
+#   "PC-40\" (P)"                 -> PC-40"
+_RE_CODIGO_CON_P = re.compile(
+    r"""
+    (?P<code>
+        (?:PC|PM|PT)-[A-Z0-9"'\-]+
+        |A-[A-Z0-9\-]+
+        |B-[A-Z0-9\-]+
+        |CT-[A-Z0-9\-]+
+        |TS-[A-Z0-9\-]+
+        |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
+        |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
+        |R-\d+[A-Z0-9\-]*          # R-05T, R-2, etc.
+    )
+    \s*\(\s*[Pp]\s*\)
+    """,
+    re.VERBOSE
+)
 
 
 def _punto_label(num: str) -> str:
@@ -37,7 +58,7 @@ def _limpiar_item(item: str) -> str:
     return s
 
 
-# ✅ Compatible con Python 3.8/3.9 (sin "str | None")
+# ✅ Compatible con Python 3.8/3.9
 def _clasificar_item(code: str) -> Optional[str]:
     c = code.strip().upper()
 
@@ -48,7 +69,6 @@ def _clasificar_item(code: str) -> Optional[str]:
     if c.startswith("B-"):
         return "Secundario"
 
-    # ✅ OJO: plural "Retenidas"
     if re.match(r"^\d*\s*R[-\s]*\d+", c) or c.startswith("R-"):
         return "Retenidas"
 
@@ -80,6 +100,21 @@ def _bucket_to_row(punto: str, bucket: Dict[str, List[str]]) -> Dict[str, str]:
     return row
 
 
+def extraer_codigos_proyectados(linea: str) -> List[str]:
+    """
+    Devuelve códigos que tengan (P) inmediatamente después, aunque estén en medio del texto.
+    """
+    if not linea:
+        return []
+    t = " ".join((linea or "").split())
+    out: List[str] = []
+    for m in _RE_CODIGO_CON_P.finditer(t):
+        cod = (m.group("code") or "").strip()
+        if cod:
+            out.append(cod)
+    return out
+
+
 # -----------------------------------------
 # Parser principal (texto extraído del PDF)
 # -----------------------------------------
@@ -109,7 +144,7 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
         if m2:
             punto_actual = _punto_label(m2.group(1))
             bloques.setdefault(punto_actual, {c: [] for c in COLUMNAS_BASE if c != "Punto"})
-            # no hacemos continue; porque la misma línea puede tener basura (Apoyo) y la ignoramos abajo
+            # no hacemos continue; por si en esa misma línea viene texto útil
 
         if punto_actual is None:
             continue
@@ -120,16 +155,16 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
         if "APOYO:" in t.upper():
             continue
 
-        for piece in split_cell_items(t):
-            piece = _limpiar_item(piece)
-            if not piece:
+        # ✅ SOLO códigos con (P)
+        codigos_p = extraer_codigos_proyectados(t)
+        if not codigos_p:
+            continue
+
+        for code_sin in codigos_p:
+            code_sin = _limpiar_item(code_sin)
+            if not code_sin:
                 continue
 
-            # solo (P)
-            if not es_proyectada(piece):
-                continue
-
-            code_sin = re.sub(r"\(\s*p\s*\)\s*$", "", piece, flags=re.I).strip()
             col = _clasificar_item(code_sin)
             if col:
                 _agregar_en_bucket(bloques[punto_actual], col, code_sin)
