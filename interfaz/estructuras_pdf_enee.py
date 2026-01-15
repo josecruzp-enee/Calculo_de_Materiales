@@ -20,7 +20,10 @@ from interfaz.estructuras_comunes import (
 # Helpers de clasificación
 # -----------------------------------------
 _RE_PUNTO = re.compile(r"^\s*P\s*[-#]?\s*(\d+)\s*$", re.IGNORECASE)
-_RE_PUNTO_EN_LINEA = re.compile(r"\bP\s*[-#]?\s*(\d+)\b", re.IGNORECASE)
+_RE_PUNTO_EN_LINEA = re.compile(
+    r"(?:^|[\s,;])P\s*[-#]?\s*(\d+)(?=$|[\s,;:])",
+    re.IGNORECASE
+)
 _RE_XY_APOYO = re.compile(r"^\s*(X:|Y:|Apoyo:)\b", re.IGNORECASE)
 
 # ✅ Detecta CODIGO seguido por (P) en cualquier parte del texto.
@@ -126,33 +129,39 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
 
     bloques: Dict[str, Dict[str, List[str]]] = {}
     punto_actual: Optional[str] = None
+    punto_cerrado: bool = False  # ✅ evita “arrastre” después de X/Y/Apoyo
 
     for ln in lines:
         t = (ln or "").strip()
         if not t:
             continue
 
-        # 1) Punto en línea limpia
+        # 1) Punto en línea limpia (ej: "P-11" o "P # 11")
         m = _RE_PUNTO.match(t)
         if m:
             punto_actual = _punto_label(m.group(1))
             bloques.setdefault(punto_actual, {c: [] for c in COLUMNAS_BASE if c != "Punto"})
+            punto_cerrado = False  # ✅ reabrir bloque
             continue
 
-        # 2) Punto dentro de línea (ej: "P # 08 Apoyo: 4014499")
+        # 2) Punto dentro de línea (ej: "P-08 Apoyo: 4014499")
         m2 = _RE_PUNTO_EN_LINEA.search(t)
         if m2:
             punto_actual = _punto_label(m2.group(1))
             bloques.setdefault(punto_actual, {c: [] for c in COLUMNAS_BASE if c != "Punto"})
+            punto_cerrado = False  # ✅ reabrir bloque
             # no hacemos continue; por si en esa misma línea viene texto útil
 
         if punto_actual is None:
             continue
 
-        # cortar lectura si llegamos a X/Y/Apoyo
-        if _RE_XY_APOYO.match(t):
+        # ✅ Si ya llegamos a X/Y/Apoyo, NO aceptamos más estructuras para este punto
+        if punto_cerrado:
             continue
-        if "APOYO:" in t.upper():
+
+        # ✅ cerrar lectura del punto cuando aparezca X/Y/Apoyo
+        if _RE_XY_APOYO.match(t) or "APOYO:" in t.upper():
+            punto_cerrado = True
             continue
 
         # ✅ SOLO códigos con (P)
@@ -177,6 +186,7 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
         df = df[df[cols_no_punto].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
 
     return normalizar_columnas(df, COLUMNAS_BASE)
+
 
 
 # -----------------------------------------
