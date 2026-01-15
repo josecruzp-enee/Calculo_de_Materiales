@@ -463,7 +463,7 @@ def hoja_info_proyecto(
     df_estructuras=None,
     df_mat=None,
     *,
-    styles=None,  # (lo dejas por compatibilidad aunque no se use aquí)
+    styles=None,  # compatibilidad
     styleN=None,
     styleH=None,
     _calibres_por_tipo=None,
@@ -478,11 +478,28 @@ def hoja_info_proyecto(
     nivel_tension_fmt = _formato_tension(tension_valor)
 
     cables = datos_proyecto.get("cables_proyecto", []) or []
+
     primarios = [c for c in cables if str(c.get("Tipo", "")).upper() == "MT"]
-    secundarios = [c for c in cables if str(c.get("Tipo", "")).upper() in ("BT", "HP", "N")]
+    bt       = [c for c in cables if str(c.get("Tipo", "")).upper() == "BT"]
+    neutro   = [c for c in cables if str(c.get("Tipo", "")).upper() == "N"]
+    hp       = [c for c in cables if str(c.get("Tipo", "")).upper() == "HP"]
 
     elems: List = []
     elems.extend(build_header(styleH))
     elems.extend(build_tabla_datos(datos_proyecto, cables, nivel_tension_fmt, styleN, _calibres_por_tipo))
-    elems.extend(build_descripcion_general(datos_proyecto, df_estructuras, df_mat, nivel_tension_fmt, primarios, secundarios, styleN))
+
+    elems.extend(
+        build_descripcion_general(
+            datos_proyecto,
+            df_estructuras,
+            df_mat,
+            nivel_tension_fmt,
+            primarios,
+            bt,
+            neutro,
+            hp,
+            styleN,
+        )
+    )
     return elems
+
