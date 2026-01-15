@@ -18,6 +18,8 @@ from interfaz.estructuras_comunes import (
 
 # ✅ Desplegables (sin circular)
 from interfaz.estructuras_desplegables import listas_desplegables
+from interfaz.estructuras_dxf_enee import cargar_desde_dxf_enee
+from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee
 
 
 # =============================================================================
