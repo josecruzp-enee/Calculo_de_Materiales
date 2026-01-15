@@ -521,6 +521,23 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
 
     return None, None
 
+def cargar_desde_pdf_enee() -> Tuple[pd.DataFrame | None, str | None]:
+   
+    st.subheader("📄 Cargar estructuras desde PDF (ENEE)")
+
+    archivo_pdf = st.file_uploader(
+        "Sube el PDF del plano",
+        type=["pdf"],
+        key="upl_pdf_enee"
+    )
+    if not archivo_pdf:
+        return None, None
+
+    st.success(f"✅ PDF cargado: {archivo_pdf.name}")
+    st.write({"tamaño_bytes": archivo_pdf.size, "tipo": archivo_pdf.type})
+
+    # TODO: aquí irá el extractor real
+    return None, None
 
 
 # =============================================================================
