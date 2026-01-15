@@ -82,15 +82,25 @@ def _resumen_por_calibre(df: pd.DataFrame) -> Dict[str, float]:
         return {}
 
     tmp = df.copy()
-    tmp["Tipo"] = tmp.get("Tipo", "").astype(str).map(_norm_txt)
-    tmp["Calibre"] = tmp.get("Calibre", "").astype(str).map(_norm_txt)
-    tmp["Longitud"] = pd.to_numeric(tmp.get("Longitud", 0), errors="coerce").fillna(0.0)
+
+    # Asegurar columnas como Series (no strings)
+    if "Tipo" not in tmp.columns:
+        tmp["Tipo"] = ""
+    if "Calibre" not in tmp.columns:
+        tmp["Calibre"] = ""
+    if "Longitud" not in tmp.columns:
+        tmp["Longitud"] = 0.0
+
+    tmp["Tipo"] = tmp["Tipo"].astype(str).map(_norm_txt)
+    tmp["Calibre"] = tmp["Calibre"].astype(str).map(_norm_txt)
+    tmp["Longitud"] = pd.to_numeric(tmp["Longitud"], errors="coerce").fillna(0.0)
 
     out: Dict[str, float] = {}
     for (t, c), grp in tmp.groupby(["Tipo", "Calibre"]):
         key = f"{t} | {c}"
         out[key] = float(grp["Longitud"].sum())
     return out
+
 
 
 def _validar_y_calcular(df: pd.DataFrame) -> pd.DataFrame:
