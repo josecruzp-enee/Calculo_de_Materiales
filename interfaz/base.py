@@ -53,7 +53,7 @@ def seleccionar_modo_carga() -> str:
     """Muestra el selector de modo de carga y retorna la opción elegida."""
     modo = st.radio(
         "Selecciona modo de carga:",
-        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables", "Pdf", "dxf" ],
+        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables", "Pdf", "DXF (ENEE)" ],
         key="modo_carga_radio"
     )
     st.markdown("---")
