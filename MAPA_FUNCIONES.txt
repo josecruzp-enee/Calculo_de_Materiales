@@ -1,16 +1,20 @@
 MAPA AUTOMÁTICO DEL PROYECTO
-Generado: 2025-10-26 19:54:39
+Generado: 2026-01-13 02:28:38
 ====================================================================================================
 
 📄 app  (/workspaces/Calculo_de_Materiales/app.py)
 ----------------------------------------------------------------------------------------------------
 🔗 Imports:
-   interfaz.base, interfaz.cables, interfaz.datos_proyecto, interfaz.estructuras, interfaz.exportacion, interfaz.materiales_extra, streamlit
-⚙️  Funciones (1): main
-▶️ Llamadas toplevel: main
+   interfaz.base, interfaz.cables, interfaz.datos_proyecto, interfaz.estructuras, interfaz.exportacion, interfaz.mapa_kml, interfaz.materiales_extra, os, streamlit
+⚙️  Funciones (4): _barra_nav_botones, _ir_a, _nav_estado_actual, main
+🔑 st.session_state keys: df_estructuras_compacto, modo_carga_seleccionado, ruta_estructuras_compacto, sec
+▶️ Llamadas toplevel: dirname, join, main, setdefault
 🚀 En __main__ llama a: main
 📞 Llamadas por función:
-   - main → inicializar_estado, renderizar_encabezado, ruta_datos_materiales_por_defecto, seccion_adicionar_material, seccion_cables_proyecto, seccion_datos_proyecto, seccion_entrada_estructuras, seccion_exportacion, seccion_finalizar_calculo, seleccionar_modo_carga
+   - _barra_nav_botones → _ir_a, button, columns, enumerate, len, markdown
+   - _ir_a → rerun
+   - _nav_estado_actual → get, isinstance
+   - main → _barra_nav_botones, _nav_estado_actual, dataframe, get, hasattr, head, info, inicializar_estado, len, markdown, renderizar_encabezado, ruta_datos_materiales_por_defecto, seccion_adicionar_material, seccion_cables_proyecto, seccion_datos_proyecto, seccion_entrada_estructuras, seccion_exportacion, seccion_finalizar_calculo, seccion_mapa_kmz, seleccionar_modo_carga, set_page_config, subheader, tolist, warning, write
 
 📄 modulo.__init__  (/workspaces/Calculo_de_Materiales/modulo/__init__.py)
 ----------------------------------------------------------------------------------------------------
@@ -20,35 +24,52 @@ Generado: 2025-10-26 19:54:39
 📄 modulo.configuracion_cables  (/workspaces/Calculo_de_Materiales/modulo/configuracion_cables.py)
 ----------------------------------------------------------------------------------------------------
 🔗 Imports:
-   pandas, reportlab.lib, reportlab.lib.styles, reportlab.lib.units, reportlab.platypus, streamlit
-⚙️  Funciones (3): conductores_de, seccion_cables, tabla_cables_pdf
-🔑 st.session_state keys: cables_proyecto, cables_proyecto_df, datos_proyecto
-▶️ Llamadas toplevel: fromkeys, list, values
+   __future__, pandas, re, reportlab.lib, reportlab.lib.enums, reportlab.lib.styles, reportlab.lib.units, reportlab.platypus, streamlit, typing, xml.sax.saxutils
+⚙️  Funciones (18): _editor_df_actual, _ensure_columns, _init_state, _norm_key, _norm_txt, _persistir_oficial, _resumen_por_calibre, _validar_y_calcular, calibre_corto_desde_seleccion, conductores_de, descripcion_oficial, get_calibres, get_calibres_union, get_configs_por_tipo, get_configs_union, get_tipos, seccion_cables, tabla_cables_pdf
+🔑 st.session_state keys: cables_buffer_df, cables_editor, cables_proyecto, cables_proyecto_df, datos_proyecto, toast_cables_ok, toast_cables_reset
+▶️ Llamadas toplevel: _norm_key, items
 📞 Llamadas por función:
-   - conductores_de → isinstance, strip, upper
-   - seccion_cables → DataFrame, NumberColumn, SelectboxColumn, append, caption, conductores_de, copy, data_editor, fillna, float, get, hasattr, isinstance, iterrows, markdown, replace, setdefault, str, sum, to_dict
-   - tabla_cables_pdf → DataFrame, HexColor, Paragraph, Spacer, Table, TableStyle, append, dict, float, get, getSampleStyleSheet, iterrows, setStyle, str, sum
+   - _editor_df_actual → DataFrame, _ensure_columns, concat, copy, drop, get, get_loc, isinstance, items, len, reset_index
+   - _ensure_columns → DataFrame, Series, insert, isinstance
+   - _init_state → DataFrame, _ensure_columns, copy
+   - _norm_key → _norm_txt, upper
+   - _norm_txt → strip, sub
+   - _persistir_oficial → copy, setdefault, to_dict
+   - _resumen_por_calibre → groupby, items, join, sort_values, sum
+   - _validar_y_calcular → DataFrame, append, astype, calibre_corto_desde_seleccion, conductores_de, descripcion_oficial, drop, fillna, float, get, get_calibres, get_calibres_union, get_configs_por_tipo, iterrows, reset_index, str, strip
+   - calibre_corto_desde_seleccion → _norm_key, get
+   - conductores_de → strip, upper
+   - descripcion_oficial → _norm_key, _norm_txt, get, items, strip, upper
+   - get_calibres_union → fromkeys, get_calibres, list, values
+   - seccion_cables → CheckboxColumn, NumberColumn, SelectboxColumn, _editor_df_actual, _ensure_columns, _init_state, _persistir_oficial, _resumen_por_calibre, _validar_y_calcular, caption, columns, copy, data_editor, dataframe, error, form, form_submit_button, get, get_calibres_union, get_configs_union, get_tipos, info, insert, len, markdown, pop, range, reindex, rerun, success, warning, write
+   - tabla_cables_pdf → DataFrame, HexColor, Paragraph, ParagraphStyle, Spacer, Table, TableStyle, append, copy, escape, fillna, float, get, getSampleStyleSheet, isinstance, iterrows, list, rename, setStyle, str, strip, sum, to_dict, to_numeric
 
 📄 modulo.desplegables  (/workspaces/Calculo_de_Materiales/modulo/desplegables.py)
 ----------------------------------------------------------------------------------------------------
 🔗 Imports:
-   os, pandas, streamlit
-⚙️  Funciones (3): cargar_opciones, crear_desplegables, multiselect_con_etiquetas
-🔑 st.session_state keys: df_puntos, punto_en_edicion
+   collections, os, pandas, streamlit
+⚙️  Funciones (8): _counter_to_str, _parse_str_to_counter, _picker_con_cantidad, _render_lista, _scoped_css_once, _short, cargar_opciones, crear_desplegables
+🔑 st.session_state keys: _xpicker_css, df_puntos, punto_en_edicion
 ▶️ Llamadas toplevel: dirname, join
 📞 Llamadas por función:
-   - cargar_opciones → dropna, iterrows, notna, read_excel, strip, tolist, unique
-   - crear_desplegables → DataFrame, columns, get, items, multiselect_con_etiquetas, to_dict
-   - multiselect_con_etiquetas → get, join, multiselect, split, strip
+   - _counter_to_str → append, items, join
+   - _parse_str_to_counter → Counter, int, lower, max, replace, split, strip, upper
+   - _picker_con_cantidad → Counter, _parse_str_to_counter, _render_lista, _scoped_css_once, button, columns, get, info, int, number_input, selectbox, str, strip, upper
+   - _render_lista → _short, button, caption, columns, get, items, markdown, rerun, sorted
+   - _scoped_css_once → get, markdown
+   - _short → len
+   - cargar_opciones → astype, dropna, get, items, iterrows, notna, read_excel, str, strip, tolist, unique
+   - crear_desplegables → DataFrame, Series, _counter_to_str, _picker_con_cantidad, add, append, columns, container, get, items, markdown, set, str, strip, to_dict, update
 
 📄 modulo.entradas  (/workspaces/Calculo_de_Materiales/modulo/entradas.py)
 ----------------------------------------------------------------------------------------------------
 🔗 Imports:
    pandas, re
-⚙️  Funciones (7): cargar_adicionales, cargar_catalogo_materiales, cargar_datos_proyecto, cargar_estructuras_proyectadas, cargar_indice, cargar_materiales, extraer_estructuras_proyectadas
+⚙️  Funciones (8): _col_norm, cargar_adicionales, cargar_catalogo_materiales, cargar_datos_proyecto, cargar_estructuras_proyectadas, cargar_indice, cargar_materiales, extraer_estructuras_proyectadas
 📞 Llamadas por función:
+   - _col_norm → str, strip, sub, upper
    - cargar_adicionales → DataFrame, all, read_excel, rename
-   - cargar_catalogo_materiales → DataFrame, dropna, print, read_excel, rename, reset_index, strip, upper
+   - cargar_catalogo_materiales → DataFrame, _col_norm, astype, copy, fillna, print, read_excel, rename, reset_index, strip, upper
    - cargar_datos_proyecto → lower, read_excel, replace, str, strip
    - cargar_estructuras_proyectadas → read_excel
    - cargar_indice → DataFrame, lower, print, read_excel, rename, strip
@@ -58,13 +79,18 @@ Generado: 2025-10-26 19:54:39
 📄 modulo.estilos_app  (/workspaces/Calculo_de_Materiales/modulo/estilos_app.py)
 ----------------------------------------------------------------------------------------------------
 🔗 Imports:
-   base64, pathlib, streamlit
-⚙️  Funciones (3): _img_to_base64, _resolver_ruta_imagen, aplicar_estilos
+   __future__, base64, contextlib, json, pathlib, streamlit, typing
+⚙️  Funciones (8): _img_to_base64, _resolver_ruta_imagen, aplicar_estilos, big_primary_button, card, end_card, json_box, tabs
 ▶️ Llamadas toplevel: Path, resolve
 📞 Llamadas por función:
    - _img_to_base64 → b64encode, decode, is_file, open, read, warning
    - _resolver_ruta_imagen → is_file
-   - aplicar_estilos → _img_to_base64, _resolver_ruta_imagen, append, join, markdown
+   - aplicar_estilos → _img_to_base64, _resolver_ruta_imagen, append, join, markdown, set_page_config, str
+   - big_primary_button → button, columns
+   - card → container, end_card, markdown
+   - end_card → markdown
+   - json_box → card, code, dumps, end_card
+   - tabs → tabs
 
 📄 modulo.excel_utils  (/workspaces/Calculo_de_Materiales/modulo/excel_utils.py)
 ----------------------------------------------------------------------------------------------------
@@ -77,12 +103,16 @@ Generado: 2025-10-26 19:54:39
 📄 modulo.formularios  (/workspaces/Calculo_de_Materiales/modulo/formularios.py)
 ----------------------------------------------------------------------------------------------------
 🔗 Imports:
-   datetime, streamlit
-⚙️  Funciones (2): formulario_datos_proyecto, mostrar_datos_formateados
+   __future__, datetime, streamlit
+⚙️  Funciones (6): _ensure_estado, _get, _mezclar_sin_vacios, _parse_fecha, formulario_datos_proyecto, mostrar_datos_formateados
 🔑 st.session_state keys: datos_proyecto
 📞 Llamadas por función:
-   - formulario_datos_proyecto → columns, date_input, markdown, selectbox, str, success, text_input, today, write
-   - mostrar_datos_formateados → items, markdown, replace, title, warning, write
+   - _ensure_estado → setdefault
+   - _get → get
+   - _mezclar_sin_vacios → items
+   - _parse_fecha → date, strip, strptime, today
+   - formulario_datos_proyecto → _ensure_estado, _get, _mezclar_sin_vacios, _parse_fecha, columns, date_input, form, form_submit_button, get, index, markdown, selectbox, str, strip, success, text_input
+   - mostrar_datos_formateados → _ensure_estado, columns, expander, get, write
 
 📄 modulo.generar_pdfs  (/workspaces/Calculo_de_Materiales/modulo/generar_pdfs.py)
 ----------------------------------------------------------------------------------------------------
@@ -97,28 +127,55 @@ Generado: 2025-10-26 19:54:39
 📄 modulo.pdf_utils  (/workspaces/Calculo_de_Materiales/modulo/pdf_utils.py)
 ----------------------------------------------------------------------------------------------------
 🔗 Imports:
-   datetime, io, modulo.configuracion_cables, os, pandas, re, reportlab.lib, reportlab.lib.pagesizes, reportlab.lib.styles, reportlab.lib.units, reportlab.platypus
-⚙️  Funciones (9): agregar_tabla_materiales_adicionales, fondo_pagina, formatear_material, generar_pdf_completo, generar_pdf_estructuras_global, generar_pdf_estructuras_por_punto, generar_pdf_materiales, generar_pdf_materiales_por_punto, hoja_info_proyecto
+   __future__, datetime, io, math, modulo.configuracion_cables, os, pandas, re, reportlab.lib, reportlab.lib.enums, reportlab.lib.pagesizes, reportlab.lib.styles, reportlab.lib.units, reportlab.platypus, xml.sax.saxutils
+⚙️  Funciones (24): _calibres_por_tipo, _dedupe_keep_order, _formato_tension, _safe_para_desc, _safe_para_norm, agregar_tabla_materiales_adicionales, crear_doc, extend_flowables, float_safe, fondo_pagina, formatear_material, generar_pdf_completo, generar_pdf_estructuras_global, generar_pdf_estructuras_por_punto, generar_pdf_materiales, generar_pdf_materiales_por_punto, hoja_info_proyecto, normalizar_texto_pdf, pot, safe_page_break, strip_trailing_pagebreaks, tabla_estructuras_por_punto, tabla_resumen_estructuras, tabla_resumen_materiales
 ▶️ Llamadas toplevel: ParagraphStyle, dirname, getSampleStyleSheet
 📞 Llamadas por función:
-   - agregar_tabla_materiales_adicionales → PageBreak, Paragraph, Spacer, Table, TableStyle, append, get, iterrows, setStyle
+   - _calibres_por_tipo → _dedupe_keep_order, append, get, join, str, strip, upper
+   - _dedupe_keep_order → add, append, set, str, strip, upper
+   - _formato_tension → float, floor, sqrt, str
+   - _safe_para_desc → escape, isinstance, isna, replace, str, strip
+   - _safe_para_norm → escape, normalizar_texto_pdf, replace
+   - agregar_tabla_materiales_adicionales → Paragraph, ParagraphStyle, Spacer, Table, TableStyle, append, escape, float_safe, get, iterrows, safe_page_break, setStyle, str, strip
+   - crear_doc → BaseDocTemplate, Frame, PageTemplate, addPageTemplates
+   - extend_flowables → extend, isinstance
+   - float_safe → float
    - fondo_pagina → drawImage, exists, join, print, restoreState, saveState
-   - formatear_material → replace, str, strip, sub, title
-   - generar_pdf_completo → BaseDocTemplate, BytesIO, DataFrame, Frame, HexColor, PageBreak, PageTemplate, Paragraph, Spacer, Table, TableStyle, addPageTemplates, agregar_tabla_materiales_adicionales, append, build, close, extend, float, formatear_material, get, getvalue, group, groupby, hoja_info_proyecto, int, iterrows, len, search, setStyle, sorted, str, sub, sum, tabla_cables_pdf, unique
-   - generar_pdf_estructuras_global → BaseDocTemplate, BytesIO, Frame, HexColor, PageTemplate, Paragraph, Spacer, Table, TableStyle, addPageTemplates, append, build, close, get, getvalue, iterrows, setStyle, str
-   - generar_pdf_estructuras_por_punto → BaseDocTemplate, BytesIO, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, addPageTemplates, append, build, close, getvalue, int, iterrows, replace, setStyle, sorted, str, strip, sub, unique
-   - generar_pdf_materiales → BaseDocTemplate, BytesIO, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, addPageTemplates, append, build, close, formatear_material, getvalue, groupby, iterrows, setStyle, str, sum
-   - generar_pdf_materiales_por_punto → BaseDocTemplate, BytesIO, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle, addPageTemplates, append, build, close, formatear_material, getvalue, group, groupby, int, iterrows, round, search, setStyle, sorted, str, sum, unique
-   - hoja_info_proyecto → PageBreak, Paragraph, Spacer, Table, TableStyle, append, contains, dropna, extract, get, int, join, lower, set, setStyle, sorted, strftime, strip, sum, today, tolist
+   - formatear_material → escape, isinstance, isna, str, strip
+   - generar_pdf_completo → BytesIO, DataFrame, Paragraph, Spacer, agregar_tabla_materiales_adicionales, append, build, close, crear_doc, escape, extend_flowables, float_safe, get, getvalue, group, groupby, hoja_info_proyecto, int, len, safe_page_break, search, sorted, str, strip, strip_trailing_pagebreaks, sub, sum, tabla_cables_pdf, tabla_estructuras_por_punto, tabla_resumen_estructuras, tabla_resumen_materiales, unique
+   - generar_pdf_estructuras_global → BytesIO, Paragraph, Spacer, build, close, crear_doc, escape, getvalue, str, tabla_resumen_estructuras
+   - generar_pdf_estructuras_por_punto → BytesIO, Paragraph, Spacer, append, build, close, crear_doc, escape, getvalue, group, int, search, sorted, str, strip, sub, tabla_estructuras_por_punto, unique
+   - generar_pdf_materiales → BytesIO, Paragraph, Spacer, append, build, close, crear_doc, escape, getvalue, groupby, str, sum, tabla_resumen_materiales
+   - generar_pdf_materiales_por_punto → BytesIO, Paragraph, Spacer, append, build, close, crear_doc, escape, getvalue, group, groupby, int, search, sorted, str, strip, sum, tabla_resumen_materiales, unique
+   - hoja_info_proyecto → Paragraph, Spacer, Table, TableStyle, _calibres_por_tipo, _formato_tension, any, append, assign, astype, contains, copy, enumerate, extract, fillna, float_safe, get, group, groupby, int, items, iterrows, join, map, max, notna, round, search, setStyle, sorted, split, str, strftime, strip, sum, to_numeric, today, tolist, upper, values, zip
+   - normalizar_texto_pdf → isinstance, isna, replace, str, strip
+   - pot → group, normalizar_texto_pdf, search, upper
+   - safe_page_break → PageBreak, append, isinstance
+   - strip_trailing_pagebreaks → isinstance, pop
+   - tabla_estructuras_por_punto → Paragraph, ParagraphStyle, Table, TableStyle, _safe_para_desc, _safe_para_norm, append, get, iterrows, setStyle
+   - tabla_resumen_estructuras → HexColor, Paragraph, ParagraphStyle, Table, TableStyle, _safe_para_desc, _safe_para_norm, append, get, iterrows, setStyle
+   - tabla_resumen_materiales → Paragraph, Table, TableStyle, append, escape, float_safe, formatear_material, iterrows, setStyle, str
 
 📄 modulo.procesar_materiales  (/workspaces/Calculo_de_Materiales/modulo/procesar_materiales.py)
 ----------------------------------------------------------------------------------------------------
 🔗 Imports:
-   core.conectores_mt, core.materiales_estructuras, core.materiales_puntos, core.materiales_validacion, modulo.entradas, modulo.pdf_utils, pandas, streamlit
-⚙️  Funciones (1): procesar_materiales
+   core.conectores_mt, core.materiales_estructuras, core.materiales_validacion, modulo.entradas, modulo.pdf_utils, pandas, re, streamlit
+⚙️  Funciones (14): _normalizar_codigo_basico, calcular_materiales_por_punto_con_cantidad, cargar_indice_normalizado, construir_df_estructuras_por_punto, construir_df_estructuras_resumen, construir_estructuras_por_punto_y_conteo, encontrar_col_tension, explotar_codigos_por_coma, extraer_tension_ll_kv, get_logger, integrar_materiales_extra, limpiar_df_estructuras, normalizar_datos_proyecto, procesar_materiales
 🔑 st.session_state keys: materiales_extra
 📞 Llamadas por función:
-   - procesar_materiales → DataFrame, ExcelFile, ValueError, aplicar_reemplazos_conectores, append, astype, calcular_materiales_estructura, calcular_materiales_por_punto, cargar_conectores_mt, cargar_datos_proyecto, cargar_estructuras_proyectadas, cargar_indice, concat, copy, determinar_calibre_por_estructura, dict, drop_duplicates, dropna, extraer_conteo_estructuras, fillna, fromkeys, generar_pdf_completo, generar_pdf_estructuras_global, generar_pdf_estructuras_por_punto, generar_pdf_materiales, generar_pdf_materiales_por_punto, get, groupby, head, items, len, list, log, lower, map, notna, rename, reset_index, size, str, strip, sum, tolist, upper, validar_datos_proyecto, zip
+   - _normalizar_codigo_basico → group, replace, str, strip, sub, upper
+   - calcular_materiales_por_punto_con_cantidad → DataFrame, any, aplicar_reemplazos_conectores, append, astype, cargar_materiales, concat, contains, copy, determinar_calibre_por_estructura, encontrar_col_tension, fillna, float, get, groupby, int, iterrows, list, log, map, max, notna, rename, str, strip, sum, to_numeric, tolist, type, upper
+   - cargar_indice_normalizado → astype, cargar_indice, copy, fillna, head, log, lower, map, rename, str, strip, tolist
+   - construir_df_estructuras_por_punto → copy, fillna, head, log, merge, rename, str
+   - construir_df_estructuras_resumen → astype, copy, fillna, head, int, items, log, map, str, strip, upper
+   - construir_estructuras_por_punto_y_conteo → explotar_codigos_por_coma, extend, groupby, int, iterrows, log, max, str, strip, sum, to_dict, upper
+   - encontrar_col_tension → abs, findall, float, rstrip, str
+   - explotar_codigos_por_coma → astype, copy, explode, fillna, groupby, map, replace, split, strip, sum, to_numeric
+   - extraer_tension_ll_kv → findall, float, max, str
+   - integrar_materiales_extra → DataFrame, concat, get, groupby, len, log, sum
+   - limpiar_df_estructuras → ValueError, astype, copy, dropna, fillna, groupby, len, log, notna, rename, strip, sum, to_numeric, tolist
+   - normalizar_datos_proyecto → get, isinstance
+   - procesar_materiales → DataFrame, ExcelFile, ValueError, append, astype, calcular_materiales_estructura, calcular_materiales_por_punto_con_cantidad, cargar_conectores_mt, cargar_datos_proyecto, cargar_estructuras_proyectadas, cargar_indice_normalizado, concat, construir_df_estructuras_por_punto, construir_df_estructuras_resumen, construir_estructuras_por_punto_y_conteo, copy, determinar_calibre_por_estructura, extraer_tension_ll_kv, generar_pdf_completo, generar_pdf_estructuras_global, generar_pdf_estructuras_por_punto, generar_pdf_materiales, generar_pdf_materiales_por_punto, get, get_logger, groupby, head, integrar_materiales_extra, items, len, limpiar_df_estructuras, log, normalizar_datos_proyecto, str, strip, sum, validar_datos_proyecto
 
 📄 modulo.utils  (/workspaces/Calculo_de_Materiales/modulo/utils.py)
 ----------------------------------------------------------------------------------------------------
@@ -138,10 +195,49 @@ Generado: 2025-10-26 19:54:39
   - modulo.procesar_materiales → modulo.pdf_utils
 
 🕸️ Call graph inferido:
-  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables.conductores_de
-  - modulo.desplegables.crear_desplegables → modulo.desplegables.multiselect_con_etiquetas
+  - app._barra_nav_botones → app._ir_a
+  - app.main → app._barra_nav_botones
+  - app.main → app._nav_estado_actual
+  - modulo.configuracion_cables._editor_df_actual → modulo.configuracion_cables._ensure_columns
+  - modulo.configuracion_cables._init_state → modulo.configuracion_cables._ensure_columns
+  - modulo.configuracion_cables._norm_key → modulo.configuracion_cables._norm_txt
+  - modulo.configuracion_cables._validar_y_calcular → modulo.configuracion_cables.calibre_corto_desde_seleccion
+  - modulo.configuracion_cables._validar_y_calcular → modulo.configuracion_cables.conductores_de
+  - modulo.configuracion_cables._validar_y_calcular → modulo.configuracion_cables.descripcion_oficial
+  - modulo.configuracion_cables._validar_y_calcular → modulo.configuracion_cables.get_calibres
+  - modulo.configuracion_cables._validar_y_calcular → modulo.configuracion_cables.get_calibres_union
+  - modulo.configuracion_cables._validar_y_calcular → modulo.configuracion_cables.get_configs_por_tipo
+  - modulo.configuracion_cables.calibre_corto_desde_seleccion → modulo.configuracion_cables._norm_key
+  - modulo.configuracion_cables.descripcion_oficial → modulo.configuracion_cables._norm_key
+  - modulo.configuracion_cables.descripcion_oficial → modulo.configuracion_cables._norm_txt
+  - modulo.configuracion_cables.get_calibres_union → modulo.configuracion_cables.get_calibres
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables._editor_df_actual
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables._ensure_columns
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables._init_state
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables._persistir_oficial
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables._resumen_por_calibre
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables._validar_y_calcular
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables.get_calibres_union
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables.get_configs_union
+  - modulo.configuracion_cables.seccion_cables → modulo.configuracion_cables.get_tipos
+  - modulo.desplegables._picker_con_cantidad → modulo.desplegables._parse_str_to_counter
+  - modulo.desplegables._picker_con_cantidad → modulo.desplegables._render_lista
+  - modulo.desplegables._picker_con_cantidad → modulo.desplegables._scoped_css_once
+  - modulo.desplegables._render_lista → modulo.desplegables._short
+  - modulo.desplegables.crear_desplegables → modulo.desplegables._counter_to_str
+  - modulo.desplegables.crear_desplegables → modulo.desplegables._picker_con_cantidad
+  - modulo.entradas.cargar_catalogo_materiales → modulo.entradas._col_norm
   - modulo.estilos_app.aplicar_estilos → modulo.estilos_app._img_to_base64
   - modulo.estilos_app.aplicar_estilos → modulo.estilos_app._resolver_ruta_imagen
+  - modulo.estilos_app.card → modulo.estilos_app.end_card
+  - modulo.estilos_app.json_box → modulo.estilos_app.card
+  - modulo.estilos_app.json_box → modulo.estilos_app.end_card
+  - modulo.estilos_app.tabs → modulo.estilos_app.tabs
+  - modulo.formularios.formulario_datos_proyecto → modulo.formularios._ensure_estado
+  - modulo.formularios.formulario_datos_proyecto → modulo.formularios._get
+  - modulo.formularios.formulario_datos_proyecto → modulo.formularios._mezclar_sin_vacios
+  - modulo.formularios.formulario_datos_proyecto → modulo.formularios._parse_fecha
+  - modulo.formularios.mostrar_datos_formateados → modulo.formularios._ensure_estado
   - modulo.generar_pdfs.generar_pdfs → modulo.generar_pdfs.formato_tension
   - modulo.generar_pdfs.generar_pdfs → modulo.pdf_utils.generar_pdf_completo
   - modulo.generar_pdfs.generar_pdfs → modulo.pdf_utils.generar_pdf_estructuras_global
@@ -149,17 +245,57 @@ Generado: 2025-10-26 19:54:39
   - modulo.generar_pdfs.generar_pdfs → modulo.pdf_utils.generar_pdf_materiales
   - modulo.generar_pdfs.generar_pdfs → modulo.pdf_utils.generar_pdf_materiales_por_punto
   - modulo.generar_pdfs.generar_pdfs → modulo.procesar_materiales.procesar_materiales
+  - modulo.pdf_utils._calibres_por_tipo → modulo.pdf_utils._dedupe_keep_order
+  - modulo.pdf_utils._safe_para_norm → modulo.pdf_utils.normalizar_texto_pdf
+  - modulo.pdf_utils.agregar_tabla_materiales_adicionales → modulo.pdf_utils.float_safe
+  - modulo.pdf_utils.agregar_tabla_materiales_adicionales → modulo.pdf_utils.safe_page_break
   - modulo.pdf_utils.generar_pdf_completo → modulo.configuracion_cables.tabla_cables_pdf
   - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.agregar_tabla_materiales_adicionales
-  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.formatear_material
+  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.crear_doc
+  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.extend_flowables
+  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.float_safe
   - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.hoja_info_proyecto
-  - modulo.pdf_utils.generar_pdf_materiales → modulo.pdf_utils.formatear_material
-  - modulo.pdf_utils.generar_pdf_materiales_por_punto → modulo.pdf_utils.formatear_material
+  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.safe_page_break
+  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.strip_trailing_pagebreaks
+  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.tabla_estructuras_por_punto
+  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.tabla_resumen_estructuras
+  - modulo.pdf_utils.generar_pdf_completo → modulo.pdf_utils.tabla_resumen_materiales
+  - modulo.pdf_utils.generar_pdf_estructuras_global → modulo.pdf_utils.crear_doc
+  - modulo.pdf_utils.generar_pdf_estructuras_global → modulo.pdf_utils.tabla_resumen_estructuras
+  - modulo.pdf_utils.generar_pdf_estructuras_por_punto → modulo.pdf_utils.crear_doc
+  - modulo.pdf_utils.generar_pdf_estructuras_por_punto → modulo.pdf_utils.tabla_estructuras_por_punto
+  - modulo.pdf_utils.generar_pdf_materiales → modulo.pdf_utils.crear_doc
+  - modulo.pdf_utils.generar_pdf_materiales → modulo.pdf_utils.tabla_resumen_materiales
+  - modulo.pdf_utils.generar_pdf_materiales_por_punto → modulo.pdf_utils.crear_doc
+  - modulo.pdf_utils.generar_pdf_materiales_por_punto → modulo.pdf_utils.tabla_resumen_materiales
+  - modulo.pdf_utils.hoja_info_proyecto → modulo.pdf_utils._calibres_por_tipo
+  - modulo.pdf_utils.hoja_info_proyecto → modulo.pdf_utils._formato_tension
+  - modulo.pdf_utils.hoja_info_proyecto → modulo.pdf_utils.float_safe
+  - modulo.pdf_utils.pot → modulo.pdf_utils.normalizar_texto_pdf
+  - modulo.pdf_utils.tabla_estructuras_por_punto → modulo.pdf_utils._safe_para_desc
+  - modulo.pdf_utils.tabla_estructuras_por_punto → modulo.pdf_utils._safe_para_norm
+  - modulo.pdf_utils.tabla_resumen_estructuras → modulo.pdf_utils._safe_para_desc
+  - modulo.pdf_utils.tabla_resumen_estructuras → modulo.pdf_utils._safe_para_norm
+  - modulo.pdf_utils.tabla_resumen_materiales → modulo.pdf_utils.float_safe
+  - modulo.pdf_utils.tabla_resumen_materiales → modulo.pdf_utils.formatear_material
+  - modulo.procesar_materiales.calcular_materiales_por_punto_con_cantidad → modulo.entradas.cargar_materiales
+  - modulo.procesar_materiales.calcular_materiales_por_punto_con_cantidad → modulo.procesar_materiales.encontrar_col_tension
+  - modulo.procesar_materiales.cargar_indice_normalizado → modulo.entradas.cargar_indice
+  - modulo.procesar_materiales.construir_estructuras_por_punto_y_conteo → modulo.procesar_materiales.explotar_codigos_por_coma
   - modulo.procesar_materiales.procesar_materiales → modulo.entradas.cargar_datos_proyecto
   - modulo.procesar_materiales.procesar_materiales → modulo.entradas.cargar_estructuras_proyectadas
-  - modulo.procesar_materiales.procesar_materiales → modulo.entradas.cargar_indice
   - modulo.procesar_materiales.procesar_materiales → modulo.pdf_utils.generar_pdf_completo
   - modulo.procesar_materiales.procesar_materiales → modulo.pdf_utils.generar_pdf_estructuras_global
   - modulo.procesar_materiales.procesar_materiales → modulo.pdf_utils.generar_pdf_estructuras_por_punto
   - modulo.procesar_materiales.procesar_materiales → modulo.pdf_utils.generar_pdf_materiales
   - modulo.procesar_materiales.procesar_materiales → modulo.pdf_utils.generar_pdf_materiales_por_punto
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.calcular_materiales_por_punto_con_cantidad
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.cargar_indice_normalizado
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.construir_df_estructuras_por_punto
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.construir_df_estructuras_resumen
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.construir_estructuras_por_punto_y_conteo
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.extraer_tension_ll_kv
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.get_logger
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.integrar_materiales_extra
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.limpiar_df_estructuras
+  - modulo.procesar_materiales.procesar_materiales → modulo.procesar_materiales.normalizar_datos_proyecto
