@@ -105,6 +105,10 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
         "pdf": "pdf",
         "subir pdf (enee)": "pdf",
         "pdf (enee)": "pdf",
+
+        # ✅ DXF
+        "dxf": "dxf",
+        "dxf (enee)": "dxf",
     }
 
     modo = mapa.get(modo_raw, "desplegables")
@@ -118,8 +122,9 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
     if modo == "pdf":
         return cargar_desde_pdf_router()
 
-    if modo == "DXF (ENEE)":
+    if modo == "dxf":
         return cargar_desde_dxf_enee()
 
     # por defecto
     return listas_desplegables()
+
