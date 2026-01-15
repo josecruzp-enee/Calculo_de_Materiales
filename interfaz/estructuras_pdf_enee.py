@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Optional, Tuple, Dict, List
+from typing import Optional, Tuple, Dict, List, Any
 import re
 import io
 
@@ -16,26 +16,17 @@ from interfaz.estructuras_comunes import (
     expand_wide_to_long,
 )
 
-# -----------------------------------------
-# Helpers de clasificación
-# -----------------------------------------
-_RE_PUNTO = re.compile(r"^\s*P\s*[-#]?\s*(\d+)\s*$", re.IGNORECASE)
-_RE_PUNTO_EN_LINEA = re.compile(
-    r"(?:^|[\s,;])P\s*[-#]?\s*(\d+)(?=$|[\s,;:])",
-    re.IGNORECASE
-)
-_RE_XY_APOYO = re.compile(r"^\s*(X:|Y:|Apoyo:)\b", re.IGNORECASE)
+# =============================================================================
+# Regex y helpers
+# =============================================================================
 
-# ✅ Detecta (qty opcional) + CODIGO seguido por (P) en cualquier parte del texto.
-# Ejemplos:
-#   "CT-N (P) ..."          -> "CT-N"
-#   "2x LS-1 (P) ..."       -> "2x LS-1"
-#   "3× PT-30 (P)"          -> "3x PT-30"
+# Línea tipo: "P-11", "P # 11", "P 11", "PUNTO 11"
+_RE_LINEA_PUNTO = re.compile(r"^\s*(?:P|PUNTO)\s*[-#]?\s*(\d+)\s*$", re.IGNORECASE)
+
+# Para detectar códigos con (P) dentro del texto (ya reconstruido por líneas)
 _RE_CODIGO_CON_P = re.compile(
     r"""
-    (?:
-        (?P<qty>\d+)\s*[x×]\s*     # 2x / 2× opcional
-    )?
+    (?P<prefix_qty>\b\d+\s*[x×]\s*)?      # opcional: "2x " o "3× "
     (?P<code>
         (?:PC|PM|PT)-[A-Z0-9"'\-]+
         |A-[A-Z0-9\-]+
@@ -44,17 +35,19 @@ _RE_CODIGO_CON_P = re.compile(
         |TS-[A-Z0-9\-]+
         |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
         |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
-        |R-\d+[A-Z0-9\-]*          # R-05T, R-2, etc.
+        |R-\d+[A-Z0-9\-]*                 # R-05T, R-2, etc.
+        |CS-\d+[A-Z0-9\-]*                # CS-2 (P), por si aplica
     )
     \s*\(\s*[Pp]\s*\)
     """,
-    re.VERBOSE
+    re.VERBOSE,
 )
+
+_RE_XY_APOYO_LINE = re.compile(r"^\s*(X:|Y:|APOYO:)\b", re.IGNORECASE)
 
 
 def _punto_label(num: str) -> str:
-    n = int(num)
-    return f"Punto {n}"
+    return f"Punto {int(num)}"
 
 
 def _limpiar_item(item: str) -> str:
@@ -63,16 +56,8 @@ def _limpiar_item(item: str) -> str:
     return s
 
 
-def _strip_qty_prefix(s: str) -> str:
-    """Quita prefijo '2x ' / '3× ' si existiera, para clasificar por código."""
-    s = (s or "").strip()
-    s = re.sub(r"^\s*\d+\s*[x×]\s*", "", s, flags=re.I)
-    return s.strip()
-
-
-# ✅ Compatible con Python 3.8/3.9
 def _clasificar_item(code: str) -> Optional[str]:
-    c = _strip_qty_prefix(code).strip().upper()
+    c = code.strip().upper()
 
     if c.startswith(("PC-", "PM-", "PT-")):
         return "Poste"
@@ -80,10 +65,8 @@ def _clasificar_item(code: str) -> Optional[str]:
         return "Primario"
     if c.startswith("B-"):
         return "Secundario"
-
-    if re.match(r"^\d*\s*R[-\s]*\d+", c) or c.startswith("R-"):
+    if c.startswith("R-"):
         return "Retenidas"
-
     if c.startswith("CT-"):
         return "Conexiones a tierra"
     if c.startswith(("TS-", "TD", "TF", "TR", "TX")):
@@ -91,32 +74,22 @@ def _clasificar_item(code: str) -> Optional[str]:
     if c.startswith(("LL-", "LS-")):
         return "Luminarias"
 
+    # Si quieres soportar CS-2 (P) como “Otros”, tendrías que agregar columna.
+    # Por ahora lo ignoramos (o lo puedes mapear a "Conexiones a tierra" si te conviene).
     return None
 
 
-def _agregar_en_bucket(bucket: Dict[str, Dict[str, int]], col: str, raw_item: str) -> None:
+def _agregar_en_bucket(bucket: Dict[str, Dict[str, int]], col: str, code: str, qty: int) -> None:
     """
     Regla:
-    - Por defecto, cada código cuenta 1 vez por Punto (dedupe).
-    - Si el texto trae 2x/3x/2×, se respeta ese multiplicador.
+      - Si no hay multiplicador explícito, qty=1 y se dedupe por punto.
+      - Si hay 2x/3x, se respeta el máximo (no se suma para evitar inflado por duplicación del PDF).
     """
-    item = _limpiar_item(raw_item)
-    if not item:
+    code = _limpiar_item(code)
+    if not code:
         return
-
-    # detectar multiplicador explícito al inicio: 2x CODE, 3× CODE
-    m = re.match(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", item, flags=re.I)
-    if m:
-        qty = int(m.group(1))
-        code = _limpiar_item(m.group(2))
-        if not code:
-            return
-        # si aparece varias veces, nos quedamos con el máximo (por seguridad)
-        bucket[col][code] = max(bucket[col].get(code, 0), qty)
-        return
-
-    # sin multiplicador: SOLO 1 por Punto
-    bucket[col][item] = 1
+    prev = int(bucket[col].get(code, 0))
+    bucket[col][code] = max(prev, int(qty))
 
 
 def _bucket_to_row(punto: str, bucket: Dict[str, Dict[str, int]]) -> Dict[str, str]:
@@ -132,109 +105,223 @@ def _bucket_to_row(punto: str, bucket: Dict[str, Dict[str, int]]) -> Dict[str, s
             row[col] = ""
             continue
 
-        # orden alfabético para consistencia
         parts = []
         for code in sorted(codes.keys()):
             qty = int(codes.get(code, 1))
-            if qty > 1:
-                parts.append(f"{qty}x {code}")
-            else:
-                parts.append(code)
+            parts.append(f"{qty}x {code}" if qty > 1 else code)
 
+        # en ANCHO lo juntamos con espacio (más compacto y no “infla” con saltos)
         row[col] = " ".join(parts)
 
     return row
 
 
-def extraer_codigos_proyectados(linea: str) -> List[str]:
+# =============================================================================
+# Utilidades PDF -> words -> líneas -> bloques
+# =============================================================================
+
+def _cluster_lines(words: List[Dict[str, Any]], y_tol: float = 2.5) -> List[List[Dict[str, Any]]]:
     """
-    Devuelve items proyectados del tipo:
-      - 'CODE' si no hay multiplicador
-      - '2x CODE' si hay multiplicador explícito
+    Agrupa palabras en líneas usando 'top' con tolerancia.
+    Devuelve lista de líneas, cada línea es lista de words ordenados por x0.
     """
-    if not linea:
+    if not words:
         return []
-    t = " ".join((linea or "").split())
-    out: List[str] = []
 
-    for m in _RE_CODIGO_CON_P.finditer(t):
-        cod = (m.group("code") or "").strip()
-        qty = (m.group("qty") or "").strip()
-        if not cod:
+    # ordenar por y, luego x
+    ws = sorted(words, key=lambda w: (float(w.get("top", 0.0)), float(w.get("x0", 0.0))))
+
+    lines: List[List[Dict[str, Any]]] = []
+    current: List[Dict[str, Any]] = []
+    current_y: Optional[float] = None
+
+    for w in ws:
+        y = float(w.get("top", 0.0))
+        if current_y is None:
+            current_y = y
+            current = [w]
             continue
-        if qty:
-            out.append(f"{qty}x {cod}")
+
+        if abs(y - current_y) <= y_tol:
+            current.append(w)
         else:
-            out.append(cod)
+            current = sorted(current, key=lambda ww: float(ww.get("x0", 0.0)))
+            lines.append(current)
+            current_y = y
+            current = [w]
 
-    return out
+    if current:
+        current = sorted(current, key=lambda ww: float(ww.get("x0", 0.0)))
+        lines.append(current)
+
+    return lines
 
 
-# -----------------------------------------
-# Parser principal (texto extraído del PDF)
-# -----------------------------------------
-def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
-    if not texto or not texto.strip():
-        return pd.DataFrame(columns=COLUMNAS_BASE)
+def _line_text(line_words: List[Dict[str, Any]]) -> str:
+    return " ".join([str(w.get("text", "")).strip() for w in line_words if str(w.get("text", "")).strip()])
 
-    lines = [ln.rstrip() for ln in texto.splitlines()]
 
-    # ✅ coherente con bucket dict[str,int]
-    bloques: Dict[str, Dict[str, Dict[str, int]]] = {}
+def _detect_point_anchors(lines: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """
+    Detecta líneas que sean punto (P-XX / P # XX / P XX / PUNTO XX).
+    Retorna anclas con: num, top, x0.
+    """
+    anchors: List[Dict[str, Any]] = []
+    for lw in lines:
+        txt = _line_text(lw)
+        # normalizamos casos comunes: "P" "#" "11" -> "P # 11"
+        txt_norm = re.sub(r"\s+", " ", txt).strip()
 
-    punto_actual: Optional[str] = None
-    punto_cerrado: bool = False  # ✅ evita “arrastre” después de X/Y/Apoyo
+        m = _RE_LINEA_PUNTO.match(txt_norm)
+        if not m:
+            # a veces viene separado raro, intentamos compactar: "P- 11"
+            txt_norm2 = txt_norm.replace("P -", "P-").replace("P #", "P # ")
+            m = _RE_LINEA_PUNTO.match(txt_norm2)
 
-    for ln in lines:
-        t = (ln or "").strip()
+        if m:
+            num = m.group(1)
+            anchors.append({
+                "num": int(num),
+                "top": float(lw[0].get("top", 0.0)),
+                "x0": float(min(w.get("x0", 0.0) for w in lw)),
+                "x1": float(max(w.get("x1", 0.0) for w in lw)),
+            })
+
+    # ordenar por y (de arriba a abajo)
+    anchors.sort(key=lambda a: a["top"])
+    return anchors
+
+
+def _extract_block_lines_for_anchor(
+    all_words: List[Dict[str, Any]],
+    anchor: Dict[str, Any],
+    next_anchor_top: Optional[float],
+    x_pad_left: float = 8.0,
+    x_width: float = 190.0,
+    y_pad_top: float = 2.0,
+    y_pad_bottom: float = 2.0,
+) -> List[str]:
+    """
+    Devuelve líneas (texto) dentro del “bloque” del punto:
+      - x cerca de la columna del P
+      - y debajo del P hasta antes del siguiente P
+    """
+    ax0 = float(anchor["x0"])
+    atop = float(anchor["top"])
+
+    y_min = atop + y_pad_top
+    y_max = (float(next_anchor_top) - y_pad_bottom) if next_anchor_top is not None else (atop + 250.0)
+
+    x_min = ax0 - x_pad_left
+    x_max = ax0 + x_width
+
+    region = [
+        w for w in all_words
+        if (float(w.get("top", 0.0)) >= y_min and float(w.get("top", 0.0)) <= y_max)
+        and (float(w.get("x0", 0.0)) >= x_min and float(w.get("x0", 0.0)) <= x_max)
+    ]
+
+    # agrupar a líneas
+    lines = _cluster_lines(region, y_tol=2.5)
+    out_txt = []
+    for lw in lines:
+        t = _line_text(lw).strip()
         if not t:
             continue
+        # cortamos si aparece X/Y/Apoyo
+        if _RE_XY_APOYO_LINE.match(t):
+            break
+        out_txt.append(t)
+    return out_txt
 
-        # 1) Punto en línea limpia (ej: "P-11" o "P # 11")
-        m = _RE_PUNTO.match(t)
-        if m:
-            punto_actual = _punto_label(m.group(1))
-            bloques.setdefault(punto_actual, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
-            punto_cerrado = False  # ✅ reabrir bloque
-            continue
 
-        # 2) Punto dentro de línea (ej: "P-08 Apoyo: 4014499")
-        m2 = _RE_PUNTO_EN_LINEA.search(t)
-        if m2:
-            punto_actual = _punto_label(m2.group(1))
-            bloques.setdefault(punto_actual, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
-            punto_cerrado = False  # ✅ reabrir bloque
-            # no hacemos continue; por si en esa misma línea viene texto útil
+def _parse_codes_from_block_lines(block_lines: List[str]) -> Dict[str, Dict[str, int]]:
+    """
+    Convierte líneas del bloque a bucket por categoría:
+      {"Poste": {"PT-30":1}, "Secundario":{"B-II-4":1}, ...}
+    Solo toma códigos marcados (P). Respeta 2x/3x.
+    """
+    bucket: Dict[str, Dict[str, int]] = {c: {} for c in COLUMNAS_BASE if c != "Punto"}
 
-        if punto_actual is None:
-            continue
-
-        # ✅ Si ya llegamos a X/Y/Apoyo, NO aceptamos más estructuras para este punto
-        if punto_cerrado:
-            continue
-
-        # ✅ cerrar lectura del punto cuando aparezca X/Y/Apoyo
-        if _RE_XY_APOYO.match(t) or "APOYO:" in t.upper():
-            punto_cerrado = True
-            continue
-
-        # ✅ SOLO códigos con (P) (y con qty si venía 2x/3x)
-        codigos_p = extraer_codigos_proyectados(t)
-        if not codigos_p:
-            continue
-
-        for item in codigos_p:
-            item = _limpiar_item(item)
-            if not item:
+    for line in block_lines:
+        # buscamos todos los (P) en la línea
+        for m in _RE_CODIGO_CON_P.finditer(line):
+            code = _limpiar_item(m.group("code") or "")
+            if not code:
                 continue
 
-            col = _clasificar_item(item)
-            if col:
-                _agregar_en_bucket(bloques[punto_actual], col, item)
+            qty = 1
+            pref = (m.group("prefix_qty") or "").strip()
+            if pref:
+                mm = re.match(r"(\d+)\s*[x×]\s*", pref, flags=re.I)
+                if mm:
+                    qty = int(mm.group(1))
 
-    rows = [_bucket_to_row(p, b) for p, b in bloques.items()]
+            col = _clasificar_item(code)
+            if col:
+                _agregar_en_bucket(bucket, col, code, qty)
+
+    return bucket
+
+
+def extraer_estructuras_desde_pdf_por_bloques(pdf_bytes: bytes) -> pd.DataFrame:
+    """
+    Lee el PDF por words (coordenadas), detecta Puntos y arma bloques verticales.
+    Devuelve DF ANCHO con COLUMNAS_BASE.
+    """
+    try:
+        import pdfplumber  # type: ignore
+    except Exception:
+        st.error("Falta dependencia: pdfplumber. Agrega 'pdfplumber' a requirements.txt")
+        return pd.DataFrame(columns=COLUMNAS_BASE)
+
+    acumulado: Dict[int, Dict[str, Dict[str, int]]] = {}  # punto_num -> bucket
+
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            # words = texto con coordenadas
+            words = page.extract_words(
+                use_text_flow=True,
+                keep_blank_chars=False,
+            ) or []
+
+            if not words:
+                continue
+
+            # líneas de toda la página (solo para detectar anclas)
+            page_lines = _cluster_lines(words, y_tol=2.5)
+            anchors = _detect_point_anchors(page_lines)
+            if not anchors:
+                continue
+
+            for i, a in enumerate(anchors):
+                next_top = anchors[i + 1]["top"] if i + 1 < len(anchors) else None
+                block_lines = _extract_block_lines_for_anchor(words, a, next_top)
+
+                # bucket del bloque
+                bucket_block = _parse_codes_from_block_lines(block_lines)
+
+                # fusionamos al acumulado por punto sin duplicar
+                pnum = int(a["num"])
+                if pnum not in acumulado:
+                    acumulado[pnum] = bucket_block
+                else:
+                    # merge por máximo (evita inflado si el PDF repite el bloque)
+                    for col, codes in bucket_block.items():
+                        for code, qty in codes.items():
+                            prev = int(acumulado[pnum][col].get(code, 0))
+                            acumulado[pnum][col][code] = max(prev, int(qty))
+
+    # construir DF
+    rows = []
+    for pnum in sorted(acumulado.keys()):
+        punto = _punto_label(str(pnum))
+        row = _bucket_to_row(punto, acumulado[pnum])
+        rows.append(row)
+
     df = pd.DataFrame(rows, columns=COLUMNAS_BASE)
 
+    # eliminar filas vacías
     if not df.empty:
         cols_no_punto = [c for c in COLUMNAS_BASE if c != "Punto"]
         df = df[df[cols_no_punto].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
@@ -242,9 +329,10 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
     return normalizar_columnas(df, COLUMNAS_BASE)
 
 
-# -----------------------------------------
-# UI Streamlit: modo PDF
-# -----------------------------------------
+# =============================================================================
+# UI Streamlit
+# =============================================================================
+
 def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     st.subheader("📄 Cargar estructuras desde PDF (ENEE)")
 
@@ -252,23 +340,11 @@ def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     if not archivo_pdf:
         return None, None
 
-    try:
-        import pdfplumber  # type: ignore
-    except Exception:
-        st.error("Falta dependencia: pdfplumber. Agrega 'pdfplumber' a requirements.txt")
+    pdf_bytes = archivo_pdf.getvalue()
+    if not pdf_bytes:
         return None, None
 
-    texto_total: List[str] = []
-    with pdfplumber.open(io.BytesIO(archivo_pdf.getvalue())) as pdf:
-        for page in pdf.pages:
-            texto_total.append(page.extract_text() or "")
-
-    texto_total_str = "\n".join(texto_total).strip()
-    if not texto_total_str:
-        st.warning("No se detectó texto en el PDF. Si el plano es escaneado (imagen), tocaría OCR.")
-        return None, None
-
-    df_ancho = extraer_estructuras_desde_texto_pdf(texto_total_str)
+    df_ancho = extraer_estructuras_desde_pdf_por_bloques(pdf_bytes)
     if df_ancho.empty:
         st.warning("Se leyó el PDF, pero no se encontraron estructuras PROYECTADAS (P).")
         return None, None
@@ -278,13 +354,6 @@ def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
 
     ruta_tmp = materializar_df_a_archivo(df_ancho, "pdf")
     df_largo = expand_wide_to_long(df_ancho)
-
-    # ✅ consolidar por seguridad (evita duplicado por cualquier ruta rara)
-    if not df_largo.empty:
-        df_largo = (
-            df_largo.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
-            .sum()
-        )
 
     st.caption("🔎 Vista LARGA (lo que consume el motor)")
     st.dataframe(df_largo, use_container_width=True, hide_index=True)
