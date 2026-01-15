@@ -342,20 +342,37 @@ def build_descripcion_general(
     # -----------------------------
     # Helpers internos
     # -----------------------------
+    def _calibre_corto(txt: str) -> str:
+        """
+        Reduce descripciones largas:
+        'Cable de Aluminio ACSR # 1/0 AWG Raven' -> 'ACSR # 1/0 AWG Raven'
+        'Cable de Aluminio Forrado WP # 3/0 AWG Fig' -> 'WP # 3/0 AWG Fig'
+        """
+        s = str(txt or "").strip()
+
+        # quitar prefijos típicos
+        s = re.sub(r"(?i)^\s*cable\s+de\s+aluminio\s+forrado\s+", "", s)
+        s = re.sub(r"(?i)^\s*cable\s+de\s+aluminio\s+", "", s)
+        s = re.sub(r"(?i)^\s*cable\s+", "", s)
+
+        # normalizar espacios
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
     def _get_cfg(c: dict) -> str:
         return str(c.get("Configuración", c.get("Config", "")) or "").strip().upper()
 
     def _get_calibre(c: dict) -> str:
-        return str(c.get("Calibre", "") or "").strip()
+        return _calibre_corto(str(c.get("Calibre", "") or "").strip())
 
     def _get_total_m(c: dict) -> float:
-        # Preferimos Total Cable (m); si no existe, usamos Longitud (m)
+        # Preferimos Total Cable (m); si no existe, usamos Longitud (m) o Longitud
         return _float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", c.get("Longitud", 0.0))), 0.0)
 
     def _get_long_tramo(c: dict) -> float:
         """
         Convierte TotalCable(m) -> metros de tramo.
-        - Si cfg es 2F o 3F, dividimos entre nF (NO entre N/HP).
+        - Si cfg es 2F/3F, dividimos entre nF (NO entre N/HP).
         """
         total = _get_total_m(c)
         cfg = _get_cfg(c)
@@ -380,41 +397,6 @@ def build_descripcion_general(
                 return nf
         return 1
 
-    def _desglose_conductores(cables: list, tipos: tuple) -> str:
-        """
-        Devuelve texto tipo:
-        '2 x ACSR # 1/0 AWG Raven + 1 x ACSR # 2 AWG Sparrow'
-        """
-        conteo: Dict[str, int] = {}
-
-        for c in cables:
-            if str(c.get("Tipo", "")).upper() not in tipos:
-                continue
-
-            cal = _get_calibre(c)
-            if not cal:
-                continue
-
-            # Conductores (si existe) / fallback por configuración
-            n = c.get("Conductores", None)
-            try:
-                n = int(n)
-            except Exception:
-                # fallback: inferir por cfg
-                cfg = _get_cfg(c)
-                t = str(c.get("Tipo", "")).upper()
-                if t in ("MT", "BT", "HP"):
-                    n = _parse_n_fases(cfg)
-                elif t == "N":
-                    n = 1
-                else:
-                    n = 1
-
-            conteo[cal] = conteo.get(cal, 0) + max(0, n)
-
-        partes = [f"{v} x {k}" for k, v in conteo.items() if v > 0]
-        return " + ".join(partes)
-
     def _armar_linea(etiqueta: str, tension: str, cfg: str, desglose: str, long_m: float) -> Optional[str]:
         if long_m <= 0 or not desglose:
             return None
@@ -429,43 +411,78 @@ def build_descripcion_general(
         return ", ".join(partes) + "."
 
     # ==========================================================
-    # 1) LP (MT + N)
+    # 1) LP (MT + N) -> POR CADA CONFIG (1F/2F/3F)
+    #    - Longitud la define MT (tramo)
+    #    - Neutro se asume acompaña (1 conductor) si existe
     # ==========================================================
-    tramo_lp = _max_tramo(primarios)
-    nf_lp = _cfg_fases_desde_lista(primarios)
     hay_n = _max_tramo(neutro) > 0
+    cal_n = _get_calibre(neutro[0]) if neutro else ""
 
-    cfg_lp = f"{nf_lp}F" + ("+N" if hay_n else "")
-    desglose_lp = _desglose_conductores(primarios + neutro, ("MT", "N"))
+    # agrupar primarios por cfg (1F/2F/3F...)
+    prim_por_cfg: Dict[str, list] = {}
+    for c in primarios:
+        cfg = _get_cfg(c)  # "1F" "2F" "3F" ...
+        prim_por_cfg.setdefault(cfg, []).append(c)
 
-    l = _armar_linea("LP", nivel_tension_fmt, cfg_lp, desglose_lp, tramo_lp)
-    if l:
-        lineas.append(l)
+    for cfg_mt, lista_mt in prim_por_cfg.items():
+        if not cfg_mt:
+            continue
+
+        # tramo lo define MT (no neutro)
+        tramo_lp = _max_tramo(lista_mt)
+        nf_lp = _parse_n_fases(cfg_mt)
+
+        cfg_lp = f"{nf_lp}F" + ("+N" if (hay_n and cal_n) else "")
+
+        # desglose EXACTO (no sumar filas):
+        # fases MT = nf_lp x calibre MT (tomamos el primero; en MT normalmente es el mismo)
+        cal_mt = _get_calibre(lista_mt[0]) if lista_mt else ""
+        partes = []
+        if nf_lp > 0 and cal_mt:
+            partes.append(f"{nf_lp} x {cal_mt}")
+        if hay_n and cal_n:
+            partes.append(f"1 x {cal_n}")
+
+        desglose_lp = " + ".join(partes)
+
+        l = _armar_linea("LP", nivel_tension_fmt, cfg_lp, desglose_lp, tramo_lp)
+        if l:
+            lineas.append(l)
 
     # ==========================================================
     # 2) LS (BT + (HP si cubre) + N)
     #    - LS se expresa por la longitud de FASES BT (tramo_bt)
+    #    - HP se incluye en LS solo si HP >= BT
     # ==========================================================
     tramo_bt = _max_tramo(bt)
     nf_bt = _cfg_fases_desde_lista(bt)
     tramo_hp = _max_tramo(hp)
 
-    # ¿HP cubre todo el BT?
     hp_cubre_bt = (tramo_hp > 0) and (tramo_bt > 0) and (tramo_hp >= tramo_bt - 1e-6)
 
     cfg_ls = f"{nf_bt}F"
     if hp_cubre_bt:
         cfg_ls += "+HP"
-    if hay_n:
+    if hay_n and cal_n:
         cfg_ls += "+N"
 
-    # Desglose LS:
-    # - Si HP cubre BT, lo metemos en LS
-    # - Si NO cubre, NO lo metemos para no mentir (HP se reporta aparte)
-    desglose_ls = _desglose_conductores(
-        bt + (hp if hp_cubre_bt else []) + neutro,
-        ("BT", "HP", "N")
-    )
+    # desglose LS:
+    # - fases BT = nf_bt x calibre BT (primera fila; típico es único)
+    # - si HP cubre BT, sumamos 1 x calibre HP
+    # - neutro 1 x calibre N
+    partes_ls = []
+    cal_bt = _get_calibre(bt[0]) if bt else ""
+    if nf_bt > 0 and cal_bt and tramo_bt > 0:
+        partes_ls.append(f"{nf_bt} x {cal_bt}")
+
+    cal_hp = _get_calibre(hp[0]) if hp else ""
+    if hp_cubre_bt and cal_hp:
+        partes_ls.append(f"1 x {cal_hp}")
+
+    if hay_n and cal_n:
+        partes_ls.append(f"1 x {cal_n}")
+
+    desglose_ls = " + ".join(partes_ls)
 
     l = _armar_linea("LS", "120/240 V", cfg_ls, desglose_ls, tramo_bt)
     if l:
@@ -473,17 +490,21 @@ def build_descripcion_general(
 
     # ==========================================================
     # 3) HP extra (o todo HP si NO cubre BT)
+    #    - tensión: 120 V
     # ==========================================================
-    if tramo_hp > 0:
+    if tramo_hp > 0 and cal_hp:
         if hp_cubre_bt:
             hp_extra = max(0.0, tramo_hp - tramo_bt)
         else:
-            # si HP no cubre BT, reportamos TODO HP separado
             hp_extra = tramo_hp
 
         if hp_extra > 0:
-            cfg_hp = "HP" + ("+N" if hay_n else "")
-            desglose_hp = _desglose_conductores(hp + neutro, ("HP", "N"))
+            cfg_hp = "HP" + ("+N" if (hay_n and cal_n) else "")
+            partes_hp = [f"1 x {cal_hp}"]
+            if hay_n and cal_n:
+                partes_hp.append(f"1 x {cal_n}")
+            desglose_hp = " + ".join(partes_hp)
+
             l = _armar_linea("HP", "120 V", cfg_hp, desglose_hp, hp_extra)
             if l:
                 lineas.append(l)
@@ -515,7 +536,6 @@ def build_descripcion_general(
         Paragraph(cuerpo_desc, styleN),
         Spacer(1, 18),
     ]
-
 
 # ==========================================================
 # FUNCIÓN PÚBLICA (LA QUE LLAMA pdf_utils)
