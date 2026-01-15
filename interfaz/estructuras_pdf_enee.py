@@ -19,8 +19,8 @@ from interfaz.estructuras_comunes import (
 # -----------------------------------------
 # Helpers de clasificación
 # -----------------------------------------
-_RE_PUNTO = re.compile(r"^\s*P\s*#\s*(\d+)\s*$", re.IGNORECASE)
-_RE_PUNTO_EN_LINEA = re.compile(r"\bP\s*#\s*(\d+)\b", re.IGNORECASE)  # por si viene con más texto
+_RE_PUNTO = re.compile(r"^\s*P\s*[-#]?\s*(\d+)\s*$", re.IGNORECASE)
+_RE_PUNTO_EN_LINEA = re.compile(r"\bP\s*[-#]?\s*(\d+)\b", re.IGNORECASE)
 _RE_XY_APOYO = re.compile(r"^\s*(X:|Y:|Apoyo:)\b", re.IGNORECASE)
 
 # ✅ Detecta CODIGO seguido por (P) en cualquier parte del texto.
