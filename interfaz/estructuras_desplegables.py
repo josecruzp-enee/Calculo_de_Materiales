@@ -6,12 +6,12 @@ from typing import Tuple, Dict, List
 import pandas as pd
 import streamlit as st
 
-# Importamos lo común desde estructuras.py
-from interfaz.estructuras import (
+# ✅ Importamos lo común desde estructuras_comunes.py (NO desde estructuras.py)
+from interfaz.estructuras_comunes import (
     COLUMNAS_BASE,
-    _normalizar_columnas,
-    _materializar_df_a_archivo,
-    _expand_wide_to_long,
+    normalizar_columnas,
+    materializar_df_a_archivo,
+    expand_wide_to_long,
 )
 
 # =============================================================================
@@ -44,6 +44,7 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
             "Protección": {"valores": [], "etiquetas": {}},
         }
 
+
 def _pick_vals_labels(opciones: dict, prefer: List[str], fuzzy: List[str] | None = None):
     for k in prefer:
         blk = opciones.get(k)
@@ -65,14 +66,21 @@ def _pick_vals_labels(opciones: dict, prefer: List[str], fuzzy: List[str] | None
                     return vals, labs
     return [], {}
 
+
 def _ensure_df_sesion():
     if "df_puntos" not in st.session_state:
         st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
 
+
 def _ensure_punto():
     if "punto_en_edicion" not in st.session_state:
         df = st.session_state.get("df_puntos", pd.DataFrame())
-        st.session_state["punto_en_edicion"] = df["Punto"].iloc[0] if isinstance(df, pd.DataFrame) and not df.empty else "Punto 1"
+        st.session_state["punto_en_edicion"] = (
+            df["Punto"].iloc[0]
+            if isinstance(df, pd.DataFrame) and not df.empty
+            else "Punto 1"
+        )
+
 
 def _ensure_consolidado():
     if "puntos_data" not in st.session_state:
@@ -89,12 +97,14 @@ def _ensure_consolidado():
             "Luminarias": {},
         }
 
+
 def _add_item(cat: str, code: str, qty: int):
     if not code or qty <= 0:
         return
     p = st.session_state["punto_en_edicion"]
     bucket = st.session_state["puntos_data"][p][cat]
     bucket[code] = bucket.get(code, 0) + int(qty)
+
 
 def _remove_item(cat: str, code: str, all_qty: bool = False):
     p = st.session_state["punto_en_edicion"]
@@ -105,6 +115,7 @@ def _remove_item(cat: str, code: str, all_qty: bool = False):
         else:
             bucket[code] -= 1
 
+
 def _render_cat_str(punto: str, categoria: str) -> str:
     data = st.session_state["puntos_data"][punto][categoria]
     if not data:
@@ -114,7 +125,9 @@ def _render_cat_str(punto: str, categoria: str) -> str:
         parts.append(f"{n}× {code}" if n > 1 else code)
     return ", ".join(parts)
 
-def _fila_categoria_ui(cat_key: str, valores: list[str], etiquetas: dict, key_prefix: str, display_label: str | None = None):
+
+def _fila_categoria_ui(cat_key: str, valores: list[str], etiquetas: dict, key_prefix: str,
+                      display_label: str | None = None):
     label = display_label or cat_key
     st.markdown(f"**{label}**")
 
@@ -140,6 +153,7 @@ def _fila_categoria_ui(cat_key: str, valores: list[str], etiquetas: dict, key_pr
             _add_item(cat_key, sel, qty)
             st.success(f"Añadido: {qty}× {etiquetas.get(sel, sel)}")
 
+
 def _consolidado_a_fila(punto: str) -> Dict[str, str]:
     return {
         "Punto": punto,
@@ -151,6 +165,7 @@ def _consolidado_a_fila(punto: str) -> Dict[str, str]:
         "Transformadores": _render_cat_str(punto, "Transformadores"),
         "Luminarias": _render_cat_str(punto, "Luminarias"),
     }
+
 
 def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     """UI PRO con desplegables; guarda en sesión (ANCHO) y retorna (LARGO, ruta)."""
@@ -255,7 +270,11 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     st.markdown("##### ✂️ Editar seleccionados")
     cols = st.columns(3)
     with cols[0]:
-        cat = st.selectbox("Categoría", ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores", "Luminarias"], key="chip_cat")
+        cat = st.selectbox(
+            "Categoría",
+            ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Transformadores", "Luminarias"],
+            key="chip_cat",
+        )
     with cols[1]:
         codes = list(st.session_state["puntos_data"][punto][cat].keys())
         code = st.selectbox("Código", codes, key="chip_code")
@@ -281,9 +300,9 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
         st.dataframe(df_all_wide.sort_values(by="Punto"), use_container_width=True, hide_index=True)
 
     if isinstance(df_all_wide, pd.DataFrame) and not df_all_wide.empty:
-        df_all_wide = _normalizar_columnas(df_all_wide, COLUMNAS_BASE)
-        ruta_tmp = _materializar_df_a_archivo(df_all_wide, "ui")
-        df_largo = _expand_wide_to_long(df_all_wide)
+        df_all_wide = normalizar_columnas(df_all_wide, COLUMNAS_BASE)
+        ruta_tmp = materializar_df_a_archivo(df_all_wide, "ui")
+        df_largo = expand_wide_to_long(df_all_wide)
         return df_largo, ruta_tmp
 
     return None, None
