@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Tuple, Optional
+import traceback
+
 import pandas as pd
 import streamlit as st
 
@@ -13,10 +15,6 @@ from interfaz.estructuras_comunes import (
     materializar_df_a_archivo,
     parsear_texto_a_df,
 )
-
-# ✅ PDF real (lee y extrae)
-from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee
-
 
 # ✅ Desplegables (sin circular)
 from interfaz.estructuras_desplegables import listas_desplegables
@@ -71,6 +69,25 @@ def pegar_tabla() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
 
 
 # =============================================================================
+# Modo: PDF (ENEE) - import tardío para evitar caídas al iniciar
+# =============================================================================
+def cargar_desde_pdf_router() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    """
+    Import tardío para evitar que la app se caiga al arrancar por:
+    - errores de dependencias
+    - errores de sintaxis por versión de Python
+    - cambios en el módulo PDF
+    """
+    try:
+        from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee
+        return cargar_desde_pdf_enee()
+    except Exception:
+        st.error("❌ No se pudo cargar el lector PDF ENEE.")
+        st.code(traceback.format_exc())
+        return None, None
+
+
+# =============================================================================
 # Router público
 # =============================================================================
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
@@ -85,6 +102,7 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
         "desplegables": "desplegables",
         "pdf": "pdf",
         "subir pdf (enee)": "pdf",
+        "pdf (enee)": "pdf",
     }
 
     modo = mapa.get(modo_raw, "desplegables")
@@ -96,8 +114,7 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
         return pegar_tabla()
 
     if modo == "pdf":
-        # ✅ aquí ya lee y extrae
-        return cargar_desde_pdf_enee()
+        return cargar_desde_pdf_router()
 
     # por defecto
     return listas_desplegables()
