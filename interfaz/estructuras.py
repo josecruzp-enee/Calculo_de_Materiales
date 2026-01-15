@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Tuple, Optional
 import pandas as pd
 import streamlit as st
-from interfaz.estructuras_pdf import cargar_desde_pdf
 
 from interfaz.estructuras_comunes import (
     COLUMNAS_BASE,
@@ -15,9 +14,10 @@ from interfaz.estructuras_comunes import (
     parsear_texto_a_df,
 )
 
-# OJO: aquí sí podemos importar desplegables sin circular,
-# porque desplegables ya NO debe importar desde interfaz.estructuras,
-# sino desde interfaz.estructuras_comunes.
+# ✅ PDF real (lee y extrae)
+from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee
+
+# ✅ Desplegables (sin circular)
 from interfaz.estructuras_desplegables import listas_desplegables
 
 
@@ -70,30 +70,6 @@ def pegar_tabla() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
 
 
 # =============================================================================
-# Modo: PDF (stub por ahora)
-# =============================================================================
-def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
-    st.subheader("📄 Cargar estructuras desde PDF (ENEE)")
-
-    archivo_pdf = st.file_uploader("Sube el PDF del plano", type=["pdf"], key="upl_pdf_enee")
-    if not archivo_pdf:
-        return None, None
-
-    st.success(f"✅ PDF cargado: {archivo_pdf.name}")
-    st.write({"tamaño_bytes": archivo_pdf.size, "tipo": archivo_pdf.type})
-
-    # TODO: extractor real -> df_ancho -> df_largo + ruta_tmp
-    # Cuando lo tengas:
-    # df_ancho = ...
-    # df_ancho = normalizar_columnas(df_ancho, COLUMNAS_BASE)
-    # ruta_tmp = materializar_df_a_archivo(df_ancho, "pdf")
-    # df_largo = expand_wide_to_long(df_ancho)
-    # return df_largo, ruta_tmp
-
-    return None, None
-
-
-# =============================================================================
 # Router público
 # =============================================================================
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
@@ -119,6 +95,7 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
         return pegar_tabla()
 
     if modo == "pdf":
+        # ✅ aquí ya lee y extrae
         return cargar_desde_pdf_enee()
 
     # por defecto
