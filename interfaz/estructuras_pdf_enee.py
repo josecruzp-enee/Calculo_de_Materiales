@@ -18,7 +18,7 @@ from interfaz.estructuras_comunes import (
 )
 
 # -----------------------------------------
-# Helpers de clasificación
+# Regex / Helpers
 # -----------------------------------------
 
 # Punto en línea "limpia": P-11, P # 11, P 11, Punto 11, P11
@@ -27,19 +27,18 @@ _RE_PUNTO_LINEA = re.compile(
     re.IGNORECASE
 )
 
-# Punto dentro de una línea reconstruida (para no confundir con otras cosas)
+# Punto dentro de una línea reconstruida
 _RE_PUNTO_EN_TEXTO = re.compile(
     r"(?:^|[\s,;])(?:P(?:UNTO)?\s*[-#]?\s*|P)\s*(\d+)(?=$|[\s,;:])",
     re.IGNORECASE
 )
 
-# Ancla estricta tipo "P # 21" (Plan A)
+# Ancla estricta tipo "P # 21" (para Plan A v2)
 _RE_ANCLA_P = re.compile(r"^\s*P\s*#\s*(\d+)\s*$", re.IGNORECASE)
 
 _RE_XY_APOYO = re.compile(r"^\s*(X:|Y:|Apoyo:)\b", re.IGNORECASE)
 
 # Detecta CÓDIGO + (P) aunque (P) venga separado por espacios
-# Nota: si en SHX viene "A-I-4" "(P)" como dos words, la línea reconstruida lo deja "A-I-4 (P)"
 _RE_CODIGO_CON_P = re.compile(
     r"""
     (?P<code>
@@ -138,6 +137,9 @@ def _bucket_to_row(punto: str, bucket: Dict[str, Dict[str, int]]) -> Dict[str, s
 
 
 def extraer_codigos_proyectados(texto_linea: str) -> List[str]:
+    """
+    Retorna SOLO códigos que tengan (P) en la línea.
+    """
     if not texto_linea:
         return []
     t = " ".join((texto_linea or "").split())
@@ -160,7 +162,7 @@ def _words_de_pdf(pdf) -> List[Dict[str, Any]]:
     for pi, page in enumerate(pdf.pages):
         try:
             words = page.extract_words(
-                use_text_flow=True,
+                use_text_flow=True,            # a veces ayuda, pero NO dependemos del orden
                 keep_blank_chars=False,
                 extra_attrs=["fontname", "size"],
             ) or []
@@ -176,13 +178,14 @@ def _words_de_pdf(pdf) -> List[Dict[str, Any]]:
             if w2["text"]:
                 words_all.append(w2)
 
+    # orden por página, y, x (solo para reconstruir líneas)
     words_all.sort(key=lambda a: (a["page_index"], float(a.get("top", 0.0)), float(a.get("x0", 0.0))))
     return words_all
 
 
-def _reconstruir_lineas(words: List[Dict[str, Any]], y_tol: float = 2.5, x_gap: float = 6.0) -> List[Dict[str, Any]]:
+def _reconstruir_lineas(words: List[Dict[str, Any]], y_tol: float = 2.5) -> List[Dict[str, Any]]:
     """
-    Agrupa words en líneas por cercanía vertical (y_tol) y une texto si el gap horizontal es pequeño.
+    Agrupa words en líneas por cercanía vertical (y_tol).
     Retorna lista de dicts: {page_index, text, x0, x1, top, bottom, cx, cy}
     """
     lines: List[List[Dict[str, Any]]] = []
@@ -214,8 +217,6 @@ def _reconstruir_lineas(words: List[Dict[str, Any]], y_tol: float = 2.5, x_gap: 
     out: List[Dict[str, Any]] = []
     for group in lines:
         group.sort(key=lambda a: float(a.get("x0", 0.0)))
-        parts: List[str] = []
-        x1_prev: Optional[float] = None
 
         x0 = min(float(a.get("x0", 0.0)) for a in group)
         x1 = max(float(a.get("x1", 0.0)) for a in group)
@@ -223,6 +224,9 @@ def _reconstruir_lineas(words: List[Dict[str, Any]], y_tol: float = 2.5, x_gap: 
         bottom = max(float(a.get("bottom", 0.0)) for a in group)
         pi = int(group[0].get("page_index", 0))
 
+        # unir texto con espacios “naturales”
+        parts: List[str] = []
+        x1_prev: Optional[float] = None
         for a in group:
             txt = (a.get("text") or "").strip()
             if not txt:
@@ -251,12 +255,145 @@ def _reconstruir_lineas(words: List[Dict[str, Any]], y_tol: float = 2.5, x_gap: 
 
 
 # ============================================================
-# 2A) Parser secuencial por texto reconstruido
+# 2) PLAN A v2: Bloques rectangulares por ancla "P # n"
 # ============================================================
-def extraer_estructuras_desde_lineas(lineas: List[Dict[str, Any]]) -> pd.DataFrame:
+def extraer_estructuras_por_bloques_rectangulares(
+    lineas: List[Dict[str, Any]],
+    dx: float = 90.0,         # ancho extra a izquierda/derecha del ancla (ajustable)
+    dy: float = 220.0,        # alto hacia abajo desde el ancla (ajustable)
+    dy_min: float = 1.5,      # ignorar líneas exactamente en el ancla
+    max_items: int = 18,      # máximo de líneas útiles por bloque
+    cortar_si_ve_otro_p: bool = True,
+) -> pd.DataFrame:
     """
-    Intenta construir puntos por "bloques" (punto + líneas siguientes hasta X/Y).
-    OJO: depende del ORDEN en que vienen las líneas; por eso NO es el Plan A ideal.
+    Plan A v2:
+    - Encontrar anclas exactas 'P # n' con coordenadas.
+    - Definir un rectángulo alrededor de esa ancla (como la selección azul en Acrobat),
+      y capturar SOLO líneas dentro del rectángulo.
+    - Dentro del rectángulo, extraer SOLO códigos con (P).
+    - Opcional: cortar si aparece otra ancla 'P #' dentro del rectángulo (para evitar comerse vecino).
+    """
+    if not lineas:
+        return pd.DataFrame(columns=COLUMNAS_BASE)
+
+    # Index por página para buscar rápido
+    por_pagina: Dict[int, List[Dict[str, Any]]] = {}
+    for ln in lineas:
+        por_pagina.setdefault(int(ln["page_index"]), []).append(ln)
+
+    # Detectar anclas
+    anclas: List[Dict[str, Any]] = []
+    for ln in lineas:
+        t = (ln.get("text") or "").strip()
+        m = _RE_ANCLA_P.match(t)
+        if not m:
+            continue
+        anclas.append({
+            "page_index": int(ln["page_index"]),
+            "num": int(m.group(1)),
+            "x0": float(ln["x0"]),
+            "x1": float(ln["x1"]),
+            "top": float(ln["top"]),
+            "bottom": float(ln["bottom"]),
+        })
+
+    if not anclas:
+        return pd.DataFrame(columns=COLUMNAS_BASE)
+
+    # ordenar anclas de arriba-abajo
+    anclas.sort(key=lambda a: (a["page_index"], a["top"], a["x0"]))
+
+    bloques: Dict[str, Dict[str, Dict[str, int]]] = {}
+
+    for a in anclas:
+        pi = a["page_index"]
+        num = a["num"]
+
+        # Rectángulo del bloque (basado en el ancho real del texto del ancla)
+        rx0 = a["x0"] - dx
+        rx1 = a["x1"] + dx
+        ry0 = a["top"] + dy_min
+        ry1 = a["top"] + dy
+
+        punto = f"Punto {num}"
+        bloques.setdefault(punto, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
+
+        # candidatos dentro del rectángulo
+        cands = []
+        for ln in por_pagina.get(pi, []):
+            y = float(ln["top"])
+            if y < ry0 or y > ry1:
+                continue
+
+            # intersección horizontal (no solo centro)
+            x0 = float(ln["x0"])
+            x1 = float(ln["x1"])
+            if x1 < rx0 or x0 > rx1:
+                continue
+
+            cands.append(ln)
+
+        # ordenar por y (de arriba hacia abajo)
+        cands.sort(key=lambda ln: (float(ln["top"]), float(ln["x0"])))
+
+        leidos = 0
+        for ln in cands:
+            if leidos >= max_items:
+                break
+
+            txt = (ln.get("text") or "").strip()
+            if not txt:
+                continue
+
+            # cortar si detectamos otro P # dentro del mismo rectángulo (y debajo)
+            if cortar_si_ve_otro_p and _RE_ANCLA_P.match(txt):
+                # si es la misma ancla en la misma y, ignórala; si está más abajo, cortamos
+                if float(ln["top"]) > a["top"] + 3.0:
+                    break
+                else:
+                    continue
+
+            # Si sale algo tipo X:/Y:/Apoyo: cortamos (cuando exista en algunos planos)
+            if _RE_XY_APOYO.match(txt) or "APOYO:" in txt.upper():
+                break
+
+            codigos = extraer_codigos_proyectados(txt)
+            if not codigos:
+                continue
+
+            for code in codigos:
+                code = _limpiar_item(code)
+                col = _clasificar_item(code)
+                if col:
+                    _agregar_en_bucket(bloques[punto], col, code)
+
+            leidos += 1
+
+    rows = [_bucket_to_row(p, b) for p, b in bloques.items()]
+    df = pd.DataFrame(rows, columns=COLUMNAS_BASE)
+
+    # filtrar puntos vacíos
+    if not df.empty:
+        cols_no_punto = [c for c in COLUMNAS_BASE if c != "Punto"]
+        df = df[df[cols_no_punto].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
+
+    # ordenar por número
+    def _k(p: str) -> int:
+        m = re.search(r"(\d+)", p)
+        return int(m.group(1)) if m else 10**9
+
+    if not df.empty:
+        df = df.sort_values(by="Punto", key=lambda s: s.map(_k)).reset_index(drop=True)
+
+    return normalizar_columnas(df, COLUMNAS_BASE)
+
+
+# ============================================================
+# 3) Parser secuencial (fallback “suave”)
+# ============================================================
+def extraer_estructuras_desde_lineas_secuencial(lineas: List[Dict[str, Any]]) -> pd.DataFrame:
+    """
+    Fallback suave: depende del orden de lectura. Útil cuando el PDF viene bien ordenado.
     """
     if not lineas:
         return pd.DataFrame(columns=COLUMNAS_BASE)
@@ -285,7 +422,6 @@ def extraer_estructuras_desde_lineas(lineas: List[Dict[str, Any]]) -> pd.DataFra
 
         if punto_actual is None:
             continue
-
         if punto_cerrado:
             continue
 
@@ -314,119 +450,7 @@ def extraer_estructuras_desde_lineas(lineas: List[Dict[str, Any]]) -> pd.DataFra
 
 
 # ============================================================
-# 2B) PLAN A REAL: Parser por BLOQUES ESPACIALES
-# ============================================================
-def extraer_estructuras_por_bloques_espaciales(
-    lineas: List[Dict[str, Any]],
-    x_tol: float = 18.0,     # tolerancia horizontal para "misma columna"
-    y_min: float = 2.0,      # empieza un poquito debajo del ancla
-    y_max: float = 260.0,    # altura máxima del bloque hacia abajo
-    max_items: int = 14,     # seguridad: no leer infinito
-) -> pd.DataFrame:
-    """
-    Plan A verdadero:
-    - Detecta anclas "P # n" por coordenadas.
-    - Para cada ancla, toma SOLO las líneas debajo y alineadas en X (misma columna).
-    - Corta si encuentra otra ancla "P #".
-    NO depende del orden de lectura del PDF.
-    """
-    if not lineas:
-        return pd.DataFrame(columns=COLUMNAS_BASE)
-
-    # 1) detectar anclas "P # n"
-    anclas: List[Dict[str, Any]] = []
-    for ln in lineas:
-        t = (ln.get("text") or "").strip()
-        m = _RE_ANCLA_P.match(t)
-        if m:
-            anclas.append({
-                "page_index": int(ln["page_index"]),
-                "num": int(m.group(1)),
-                "cx": float(ln["cx"]),
-                "top": float(ln["top"]),
-            })
-
-    if not anclas:
-        return pd.DataFrame(columns=COLUMNAS_BASE)
-
-    anclas.sort(key=lambda a: (a["page_index"], a["top"], a["cx"]))
-
-    # indexar líneas por página
-    por_pagina: Dict[int, List[Dict[str, Any]]] = {}
-    for ln in lineas:
-        por_pagina.setdefault(int(ln["page_index"]), []).append(ln)
-
-    bloques: Dict[str, Dict[str, Dict[str, int]]] = {}
-
-    for a in anclas:
-        pi = a["page_index"]
-        num = a["num"]
-        x_anchor = a["cx"]
-        y_anchor = a["top"]
-
-        punto = f"Punto {num}"
-        bloques.setdefault(punto, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
-
-        candidatos = por_pagina.get(pi, [])
-
-        debajo: List[Dict[str, Any]] = []
-        for ln in candidatos:
-            y = float(ln["top"])
-            if y <= y_anchor + y_min:
-                continue
-            if y > y_anchor + y_max:
-                continue
-            if abs(float(ln["cx"]) - x_anchor) > x_tol:
-                continue
-            debajo.append(ln)
-
-        debajo.sort(key=lambda ln: float(ln["top"]))
-
-        leidos = 0
-        for ln in debajo:
-            if leidos >= max_items:
-                break
-
-            txt = (ln.get("text") or "").strip()
-            if not txt:
-                continue
-
-            # si aparece otra ancla, se terminó el bloque
-            if _RE_ANCLA_P.match(txt):
-                break
-
-            codigos_p = extraer_codigos_proyectados(txt)
-            if not codigos_p:
-                continue
-
-            for code in codigos_p:
-                code = _limpiar_item(code)
-                col = _clasificar_item(code)
-                if col:
-                    _agregar_en_bucket(bloques[punto], col, code)
-
-            leidos += 1
-
-    rows = [_bucket_to_row(p, b) for p, b in bloques.items()]
-    df = pd.DataFrame(rows, columns=COLUMNAS_BASE)
-
-    if not df.empty:
-        cols_no_punto = [c for c in COLUMNAS_BASE if c != "Punto"]
-        df = df[df[cols_no_punto].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
-
-    # ordenar por número
-    def _k(p: str) -> int:
-        m = re.search(r"(\d+)", p)
-        return int(m.group(1)) if m else 10**9
-
-    if not df.empty:
-        df = df.sort_values(by="Punto", key=lambda s: s.map(_k)).reset_index(drop=True)
-
-    return normalizar_columnas(df, COLUMNAS_BASE)
-
-
-# ============================================================
-# 3) Fallback: clustering espacial de códigos (P)
+# 4) Último recurso: clustering (solo si no hay anclas/bloques)
 # ============================================================
 def _dist(a: Dict[str, Any], b: Dict[str, Any]) -> float:
     dx = float(a["cx"]) - float(b["cx"])
@@ -434,10 +458,7 @@ def _dist(a: Dict[str, Any], b: Dict[str, Any]) -> float:
     return math.hypot(dx, dy)
 
 
-def _clusterizar_puntos(items: List[Dict[str, Any]], eps: float = 35.0) -> List[List[Dict[str, Any]]]:
-    """
-    Clustering simple (sin sklearn): une elementos si están a distancia <= eps.
-    """
+def _clusterizar(items: List[Dict[str, Any]], eps: float = 35.0) -> List[List[Dict[str, Any]]]:
     clusters: List[List[Dict[str, Any]]] = []
     used = [False] * len(items)
 
@@ -446,7 +467,6 @@ def _clusterizar_puntos(items: List[Dict[str, Any]], eps: float = 35.0) -> List[
             continue
         used[i] = True
         cluster = [items[i]]
-
         q = [i]
         while q:
             j = q.pop()
@@ -459,7 +479,6 @@ def _clusterizar_puntos(items: List[Dict[str, Any]], eps: float = 35.0) -> List[
                     used[k] = True
                     cluster.append(items[k])
                     q.append(k)
-
         clusters.append(cluster)
 
     clusters.sort(key=lambda cl: (
@@ -471,9 +490,6 @@ def _clusterizar_puntos(items: List[Dict[str, Any]], eps: float = 35.0) -> List[
 
 
 def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFrame:
-    """
-    Último recurso. Puede mezclar si hay puntos cercanos en diagonal.
-    """
     ocurrencias: List[Dict[str, Any]] = []
     puntos_texto: List[Dict[str, Any]] = []
 
@@ -501,7 +517,7 @@ def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFra
     if not ocurrencias:
         return pd.DataFrame(columns=COLUMNAS_BASE)
 
-    clusters = _clusterizar_puntos(ocurrencias, eps=35.0)
+    clusters = _clusterizar(ocurrencias, eps=35.0)
 
     bloques: Dict[str, Dict[str, Dict[str, int]]] = {}
     punto_auto = 1
@@ -550,36 +566,38 @@ def extraer_estructuras_por_cercania(lineas: List[Dict[str, Any]]) -> pd.DataFra
     return normalizar_columnas(df, COLUMNAS_BASE)
 
 
+# ============================================================
+# 5) Entrada principal: PDF -> DataFrame
+# ============================================================
 def extraer_estructuras_desde_pdf(pdf) -> pd.DataFrame:
     """
-    Estrategia FINAL:
-    1) Reconstruir líneas (extract_words)
-    2) Plan A REAL: bloques espaciales (ancla P # n + líneas debajo)
-    3) Si Plan A falla, intentar parser secuencial
-    4) Solo si todo falla, usar clustering
+    Orden de estrategias:
+    1) Plan A v2 (bloques rectangulares por ancla P # n)  <-- lo que corresponde a tu plano
+    2) Secuencial (fallback suave)
+    3) Cercanía (último recurso)
     """
     words = _words_de_pdf(pdf)
-    lineas = _reconstruir_lineas(words, y_tol=2.5, x_gap=6.0)
+    lineas = _reconstruir_lineas(words, y_tol=2.5)
 
-    # 1) Plan A real
-    dfA = extraer_estructuras_por_bloques_espaciales(
+    # PLAN A v2: bloque rectangular (ajusta dx/dy si hace falta)
+    dfA = extraer_estructuras_por_bloques_rectangulares(
         lineas,
-        x_tol=18.0,
-        y_min=2.0,
-        y_max=260.0,
-        max_items=14
+        dx=90.0,
+        dy=220.0,
+        dy_min=1.5,
+        max_items=18,
+        cortar_si_ve_otro_p=True,
     )
     if not dfA.empty and len(dfA) >= 3:
         return dfA
 
-    # 2) Parser secuencial (por si el PDF viene raro pero igual ordenado)
-    df1 = extraer_estructuras_desde_lineas(lineas)
-    if not df1.empty and len(df1) >= 3:
-        return df1
+    # Fallback suave
+    dfB = extraer_estructuras_desde_lineas_secuencial(lineas)
+    if not dfB.empty and len(dfB) >= 3:
+        return dfB
 
-    # 3) Último recurso (puede mezclar)
-    df2 = extraer_estructuras_por_cercania(lineas)
-    return df2
+    # Último recurso (puede mezclar)
+    return extraer_estructuras_por_cercania(lineas)
 
 
 # -----------------------------------------
