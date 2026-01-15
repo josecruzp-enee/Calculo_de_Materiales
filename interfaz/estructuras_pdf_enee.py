@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Optional, Tuple, Dict, List, Any
+from typing import Optional, Tuple, Dict, List
 import re
 import io
 
@@ -16,14 +16,12 @@ from interfaz.estructuras_comunes import (
     expand_wide_to_long,
 )
 
-# -----------------------------
-# Regex (tolerantes)
-# -----------------------------
-# Ancla de punto: "P # 12", "P-12", "P 12", "Punto 12"
-_RE_ANCLA = re.compile(r"^\s*(?:P(?:UNTO)?\s*)?[-#:]?\s*(\d+)\s*$", re.IGNORECASE)
+# -------------------------
+# Regex base
+# -------------------------
+RE_PUNTO = re.compile(r"^\s*(?:P(?:UNTO)?\s*)?[-#]?\s*(\d+)\s*$", re.IGNORECASE)
 
-# Solo códigos proyectados (P)
-_RE_COD_P = re.compile(
+RE_COD_P = re.compile(
     r"""
     (?P<code>
         (?:PC|PM|PT)-[A-Z0-9"'\-]+
@@ -37,10 +35,10 @@ _RE_COD_P = re.compile(
     )
     \s*\(\s*[Pp]\s*\)
     """,
-    re.VERBOSE,
+    re.VERBOSE
 )
 
-_RE_MULT = re.compile(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", flags=re.I)
+RE_MULT = re.compile(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", flags=re.I)
 
 
 def _limpiar(s: str) -> str:
@@ -49,7 +47,7 @@ def _limpiar(s: str) -> str:
 
 
 def _clasificar(code: str) -> Optional[str]:
-    c = code.upper().strip()
+    c = code.strip().upper()
     if c.startswith(("PC-", "PM-", "PT-")):
         return "Poste"
     if c.startswith("A-"):
@@ -67,184 +65,107 @@ def _clasificar(code: str) -> Optional[str]:
     return None
 
 
-def _add(bucket: Dict[str, Dict[str, int]], col: str, item: str) -> None:
-    item = _limpiar(item)
+def _add(bucket: Dict[str, Dict[str, int]], col: str, raw_item: str) -> None:
+    item = _limpiar(raw_item)
     if not item:
         return
-    m = _RE_MULT.match(item)
+
+    m = RE_MULT.match(item)
     if m:
         qty = int(m.group(1))
         code = _limpiar(m.group(2))
         if code:
             bucket[col][code] = max(bucket[col].get(code, 0), qty)
         return
+
     bucket[col][item] = max(bucket[col].get(item, 0), 1)
 
 
-def _bucket_row(punto: int, bucket: Dict[str, Dict[str, int]]) -> Dict[str, str]:
+def _bucket_to_row(punto: int, bucket: Dict[str, Dict[str, int]]) -> Dict[str, str]:
     row = {c: "" for c in COLUMNAS_BASE}
     row["Punto"] = f"Punto {punto}"
     for col in COLUMNAS_BASE:
         if col == "Punto":
             continue
-        codes = bucket.get(col, {})
-        if not codes:
+        d = bucket.get(col, {})
+        if not d:
             continue
         parts = []
-        for code in sorted(codes.keys()):
-            qty = int(codes[code])
+        for code in sorted(d.keys()):
+            qty = int(d[code])
             parts.append(f"{qty}x {code}" if qty > 1 else code)
         row[col] = " ".join(parts)
     return row
 
 
-def _extraer_codigos_P(texto: str) -> List[str]:
-    t = " ".join((texto or "").split())
-    return [m.group("code").strip() for m in _RE_COD_P.finditer(t) if m.group("code")]
+def _extraer_codigos_proyectados(linea: str) -> List[str]:
+    t = " ".join((linea or "").split())
+    return [m.group("code").strip() for m in RE_COD_P.finditer(t) if m.group("code")]
 
 
-def _words(pdf) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    for pi, page in enumerate(pdf.pages):
-        ws = page.extract_words(use_text_flow=False, keep_blank_chars=False) or []
-        for w in ws:
-            w = dict(w)
-            w["page_index"] = pi
-            w["text"] = (w.get("text") or "").strip()
-            if not w["text"]:
-                continue
-            out.append(w)
-    # orden base por página y por y, x
-    out.sort(key=lambda a: (a["page_index"], float(a.get("top", 0.0)), float(a.get("x0", 0.0))))
-    return out
-
-
-def _lineas(words: List[Dict[str, Any]], y_tol: float = 2.5) -> List[Dict[str, Any]]:
-    # agrupa palabras en líneas por cercanía vertical
-    lines: List[List[Dict[str, Any]]] = []
-    cur: List[Dict[str, Any]] = []
-    cur_y: Optional[float] = None
-    cur_p: Optional[int] = None
-
-    for w in words:
-        y = float(w.get("top", 0.0))
-        p = int(w.get("page_index", 0))
-        if not cur:
-            cur = [w]; cur_y = y; cur_p = p
-            continue
-        if p != cur_p or cur_y is None or abs(y - cur_y) > y_tol:
-            lines.append(cur)
-            cur = [w]; cur_y = y; cur_p = p
-        else:
-            cur.append(w)
-
-    if cur:
-        lines.append(cur)
-
-    out: List[Dict[str, Any]] = []
-    for g in lines:
-        g.sort(key=lambda a: float(a.get("x0", 0.0)))
-        text = " ".join([a["text"] for a in g if a.get("text")])
-        x0 = min(float(a.get("x0", 0.0)) for a in g)
-        x1 = max(float(a.get("x1", 0.0)) for a in g)
-        top = min(float(a.get("top", 0.0)) for a in g)
-        bottom = max(float(a.get("bottom", 0.0)) for a in g)
-        out.append({
-            "page_index": int(g[0].get("page_index", 0)),
-            "text": _limpiar(text),
-            "x0": x0, "x1": x1,
-            "top": top, "bottom": bottom,
-        })
-    return out
-
-
-def extraer_estructuras_pdf(pdf, dx: float = 85.0, dy: float = 230.0) -> pd.DataFrame:
-    """
-    Estrategia única:
-    - Detecta anclas de punto (tolerantes).
-    - Lee un rectángulo alrededor del ancla (como selección azul de Acrobat).
-    - Dentro, extrae códigos con (P).
-    """
-    ws = _words(pdf)
-    ls = _lineas(ws, y_tol=2.5)
-
-    # indexar por página
-    por_pagina: Dict[int, List[Dict[str, Any]]] = {}
-    for ln in ls:
-        por_pagina.setdefault(int(ln["page_index"]), []).append(ln)
-
-    anclas: List[Dict[str, Any]] = []
-    for ln in ls:
-        m = _RE_ANCLA.match(ln["text"])
-        if m:
-            anclas.append({
-                "page_index": int(ln["page_index"]),
-                "punto": int(m.group(1)),
-                "x0": float(ln["x0"]), "x1": float(ln["x1"]),
-                "top": float(ln["top"]),
-            })
-
-    if not anclas:
+# -------------------------
+# Parser textual por bloques
+# -------------------------
+def extraer_estructuras_desde_texto(texto: str) -> pd.DataFrame:
+    if not texto:
         return pd.DataFrame(columns=COLUMNAS_BASE)
 
-    anclas.sort(key=lambda a: (a["page_index"], a["top"], a["x0"]))
+    # normalizar líneas
+    raw_lines = [ln.strip() for ln in texto.splitlines()]
+    lines = [_limpiar(ln) for ln in raw_lines if _limpiar(ln)]
 
     bloques: Dict[int, Dict[str, Dict[str, int]]] = {}
+    punto_actual: Optional[int] = None
 
-    for a in anclas:
-        pi = a["page_index"]
-        punto = a["punto"]
-        rx0 = a["x0"] - dx
-        rx1 = a["x1"] + dx
-        ry0 = a["top"] + 1.5
-        ry1 = a["top"] + dy
+    for ln in lines:
+        # detectar "P # n" / "Punto n" / "P- n"
+        m = RE_PUNTO.match(ln)
+        if m and (ln.upper().startswith("P") or ln.upper().startswith("PUNTO") or ln.strip().startswith(("#", "-", "P"))):
+            punto_actual = int(m.group(1))
+            bloques.setdefault(punto_actual, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
+            continue
 
-        bucket = bloques.setdefault(punto, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
+        if punto_actual is None:
+            continue
 
-        cands = []
-        for ln in por_pagina.get(pi, []):
-            y = float(ln["top"])
-            if y < ry0 or y > ry1:
-                continue
-            x0, x1 = float(ln["x0"]), float(ln["x1"])
-            if x1 < rx0 or x0 > rx1:
-                continue
-            cands.append(ln)
+        # tomar solo líneas con códigos (P)
+        cods = _extraer_codigos_proyectados(ln)
+        if not cods:
+            continue
 
-        cands.sort(key=lambda ln: (float(ln["top"]), float(ln["x0"])))
+        for c in cods:
+            c = _limpiar(c)
+            col = _clasificar(c)
+            if col:
+                _add(bloques[punto_actual], col, c)
 
-        for ln in cands:
-            txt = ln["text"]
-            # corta si ve otra ancla abajo
-            m2 = _RE_ANCLA.match(txt)
-            if m2 and float(ln["top"]) > a["top"] + 3.0:
-                break
-
-            for code in _extraer_codigos_P(txt):
-                code = _limpiar(code)
-                col = _clasificar(code)
-                if col:
-                    _add(bucket, col, code)
-
-    rows = [_bucket_row(p, b) for p, b in bloques.items()]
+    rows = [_bucket_to_row(p, b) for p, b in sorted(bloques.items(), key=lambda x: x[0])]
     df = pd.DataFrame(rows, columns=COLUMNAS_BASE)
 
-    # filtrar vacíos
     if not df.empty:
         cols = [c for c in COLUMNAS_BASE if c != "Punto"]
         df = df[df[cols].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
 
-    # ordenar por número
-    def _k(s: str) -> int:
-        m = re.search(r"(\d+)", s)
-        return int(m.group(1)) if m else 10**9
-
-    if not df.empty:
-        df = df.sort_values(by="Punto", key=lambda s: s.map(_k)).reset_index(drop=True)
-
     return normalizar_columnas(df, COLUMNAS_BASE)
 
 
+def extraer_estructuras_desde_pdf_textual(pdf) -> pd.DataFrame:
+    # concatena texto de todas las páginas
+    partes: List[str] = []
+    for page in pdf.pages:
+        try:
+            t = page.extract_text() or ""
+        except Exception:
+            t = ""
+        if t.strip():
+            partes.append(t)
+    texto = "\n".join(partes)
+    return extraer_estructuras_desde_texto(texto)
+
+
+# -------------------------
+# UI Streamlit
+# -------------------------
 def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     st.subheader("📄 Cargar estructuras desde PDF (ENEE)")
 
@@ -259,7 +180,7 @@ def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         return None, None
 
     with pdfplumber.open(io.BytesIO(archivo_pdf.getvalue())) as pdf:
-        df_ancho = extraer_estructuras_pdf(pdf, dx=85.0, dy=230.0)
+        df_ancho = extraer_estructuras_desde_pdf_textual(pdf)
 
     if df_ancho.empty:
         st.warning("Se leyó el PDF, pero no se encontraron estructuras PROYECTADAS (P).")
