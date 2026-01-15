@@ -324,7 +324,9 @@ def build_descripcion_general(
     df_mat: Optional[pd.DataFrame],
     nivel_tension_fmt: str,
     primarios: list,
-    secundarios: list,
+    bt: list,
+    neutro: list,
+    hp: list,
     styleN,
 ) -> List:
     lineas: List[str] = []
@@ -335,25 +337,59 @@ def build_descripcion_general(
         partes = [f"{v} {k}" for k, v in resumen_postes.items()]
         lineas.append(f"Hincado de {', '.join(partes)} (Total: {total_postes} postes).")
 
-    # LP
-    for c in primarios:
-        long_total = _float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
-        fase = str(c.get("Configuración", "")).strip().upper()
-        calibre = str(c.get("Calibre", "")).strip()
-        n_fases = _parse_n_fases(fase)
-        long_desc = (long_total / n_fases) if n_fases > 1 else long_total
-        if long_desc > 0 and calibre:
-            lineas.append(f"Construcción de {long_desc:.0f} m de LP, {nivel_tension_fmt}, {fase}, {calibre}.")
+    def _longitud_por_tramo(c: dict) -> float:
+        # Total Cable ya viene = Longitud * conductores (en tu nueva lógica)
+        total = _float_safe(c.get("Total Cable (m)", c.get("Longitud (m)", 0)))
+        cfg = str(c.get("Configuración", "")).strip().upper()
 
-    # LS
-    for c in secundarios:
-        long_total = _float_safe(c.get("Total Cable (m)", 0))
-        fase = str(c.get("Configuración", "")).strip().upper()
+        # Si cfg es 2F/3F, dividimos para expresar “metros de tramo”
+        n_f = _parse_n_fases(cfg)
+        if n_f > 1:
+            return total / n_f
+        return total
+
+    def _armar_linea(etiqueta: str, tension: str, c: dict) -> Optional[str]:
+        long_desc = _longitud_por_tramo(c)
+        cfg = str(c.get("Configuración", "")).strip().upper()
         calibre = str(c.get("Calibre", "")).strip()
-        n_fases = _parse_n_fases(fase)
-        long_desc = (long_total / n_fases) if n_fases > 1 else long_total
-        if long_desc > 0 and calibre:
-            lineas.append(f"Construcción de {long_desc:.0f} m de LS, 120/240 V, {fase}, {calibre}.")
+
+        if long_desc <= 0 or not calibre:
+            return None
+
+        # ✅ Evita comas vacías: solo incluimos cfg si existe
+        partes = [
+            f"Construcción de {long_desc:.0f} m de {etiqueta}",
+            tension,
+        ]
+        if cfg:
+            partes.append(cfg)
+        partes.append(calibre)
+
+        return ", ".join(partes) + "."
+
+    # LP (MT)
+    for c in primarios:
+        l = _armar_linea("LP", nivel_tension_fmt, c)
+        if l:
+            lineas.append(l)
+
+    # LS (BT)
+    for c in bt:
+        l = _armar_linea("LS", "120/240 V", c)
+        if l:
+            lineas.append(l)
+
+    # Neutro (N) — se imprime como N para que no se confunda con BT
+    for c in neutro:
+        l = _armar_linea("N", "120/240 V", c)
+        if l:
+            lineas.append(l)
+
+    # Hilo piloto (HP) — se imprime como HP (no como LS)
+    for c in hp:
+        l = _armar_linea("HP", "120/240 V", c)
+        if l:
+            lineas.append(l)
 
     # Transformadores
     total_t, caps = extraer_transformadores(df_estructuras, df_mat)
@@ -361,7 +397,7 @@ def build_descripcion_general(
         cap_txt = ", ".join(caps) if caps else ""
         lineas.append(f"Instalación de {total_t} transformador(es) {f'({cap_txt})' if cap_txt else ''}.")
 
-    # Luminarias (ahora por CÓDIGO)
+    # Luminarias
     total_l, det_l = extraer_luminarias(df_estructuras, df_mat)
     if total_l > 0:
         det = " y ".join([f"{v} de {k}" for k, v in sorted(det_l.items(), key=lambda x: x[0])])
