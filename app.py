@@ -132,9 +132,23 @@ def main() -> None:
     elif seccion == "estructuras":
         modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
         df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
+
+        # ✅ DEBUG temporal (puedes quitarlo luego)
+        st.write("DEBUG df_estructuras:", None if df_estructuras is None else df_estructuras.shape)
+
+        # ✅ Solo guarda si viene válido
         if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
             st.session_state["df_estructuras_compacto"] = df_estructuras
             st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
+            st.success("✅ Guardado en memoria. Ya puedes ir a Finalizar.")
+        else:
+            # Si ya había algo guardado antes, no lo borres
+            df_prev = st.session_state.get("df_estructuras_compacto")
+            if df_prev is not None and hasattr(df_prev, "empty") and not df_prev.empty:
+                st.info("ℹ️ No hubo nuevas estructuras, pero ya hay datos guardados previamente.")
+            else:
+                st.warning("⚠️ No se generó la tabla LARGA (compacta). No hay nada para Finalizar.")
+
 
     elif seccion == "materiales":
         seccion_adicionar_material()
@@ -185,5 +199,6 @@ def main() -> None:
 # ==========================================================
 if __name__ == "__main__":
     main()
+
 
 
