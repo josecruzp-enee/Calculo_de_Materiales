@@ -127,9 +127,11 @@ def parse_item(piece: str) -> tuple[str, int]:
 def expand_wide_to_long(df_ancho: pd.DataFrame, solo_proyectadas: bool = True) -> pd.DataFrame:
     """
     ANCHO -> LARGO para el motor de reportes.
-    Devuelve columnas: Punto, codigodeestructura, cantidad
+    Devuelve columnas: Punto, codigodeestructura, cantidad.
 
-    Si solo_proyectadas=True: SOLO toma items que terminen en (P).
+    Si solo_proyectadas=True: SOLO toma items con (P) al final,
+    PERO si NO existe ningún (P) en el DF (caso PDF ENEE donde ya filtraste),
+    entonces se asume que ya vienen proyectadas y NO se descarta nada.
     """
     df = normalizar_columnas(df_ancho, COLUMNAS_BASE).copy()
     cat_cols = [
@@ -137,6 +139,15 @@ def expand_wide_to_long(df_ancho: pd.DataFrame, solo_proyectadas: bool = True) -
         "Retenidas", "Conexiones a tierra",
         "Transformadores", "Luminarias",
     ]
+
+    # 🔎 Detecta si el DF realmente contiene marcas (P)
+    hay_marca_p = False
+    if solo_proyectadas:
+        for col in cat_cols:
+            s = df[col].astype(str)
+            if s.str.contains(r"\(\s*p\s*\)", case=False, regex=True).any():
+                hay_marca_p = True
+                break
 
     rows = []
     for _, r in df.iterrows():
@@ -146,19 +157,20 @@ def expand_wide_to_long(df_ancho: pd.DataFrame, solo_proyectadas: bool = True) -
             cell = str(r.get(col, "") or "")
             for piece in split_cell_items(cell):
 
-                # ✅ FILTRO PRINCIPAL: solo lo que venga marcado como (P)
-                if solo_proyectadas and not es_proyectada(piece):
+                # ✅ aplica filtro solo si existen marcas (P) en el DF
+                if solo_proyectadas and hay_marca_p and not es_proyectada(piece):
                     continue
 
                 code, qty = parse_item(piece)
                 if code:
                     rows.append({
                         "Punto": punto,
-                        "codigodeestructura": code,   # EXACTO como lo exige el generador
+                        "codigodeestructura": code,  # exacto como lo exige el generador
                         "cantidad": int(qty),
                     })
 
     return pd.DataFrame(rows, columns=["Punto", "codigodeestructura", "cantidad"])
+
 
 
 def materializar_df_a_archivo(df_ancho: pd.DataFrame, etiqueta: str = "data") -> str:
