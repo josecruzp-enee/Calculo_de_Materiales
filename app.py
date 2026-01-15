@@ -133,6 +133,8 @@ def main() -> None:
         # Lee el modo elegido previamente o aplica el default
         modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
         df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
+        if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
+        
         st.session_state["df_estructuras_compacto"] = df_estructuras
         st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
 
@@ -185,3 +187,4 @@ def main() -> None:
 # ==========================================================
 if __name__ == "__main__":
     main()
+
