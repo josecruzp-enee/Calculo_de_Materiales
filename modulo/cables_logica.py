@@ -2,14 +2,19 @@
 """
 cables_logica.py
 Validación, cálculo y extracción de cables desde materiales.
+
+Decisión de negocio:
+- La longitud SIEMPRE está en metros.
+- Conductores se calcula automáticamente por Tipo+Config.
+- No usamos columnas 'Unidad' ni 'Incluir' en la tabla.
 """
 
 from __future__ import annotations
+
 import pandas as pd
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
-from .cables_catalogo import get_calibres, get_calibres_union, get_configs_por_tipo, get_configs_union
 from .cables_normalizacion import _norm_key, _norm_txt, calibre_corto_desde_seleccion, conductores_de
 
 
@@ -23,47 +28,65 @@ CABLES_OFICIALES: Dict[Tuple[str, str], str] = {
     ("RETENIDA", "3/8"):  'Cable Acerado 3/8"',
 
     # BT forrado WP (Quince/Fig/Peach)
-    ("BT", "2 WP"):     "Cable de Aluminio Forrado WP # 2 AWG Peach",
-    ("BT", "1/0 WP"):   "Cable de Aluminio Forrado WP # 1/0 AWG Quince",
-    ("BT", "3/0 WP"):   "Cable de Aluminio Forrado WP # 3/0 AWG Fig",
-    ("BT", "266.8 MCM"): "Cable BT 266.8 MCM",  # ajustá si tenías nombre real
+    ("BT", "2 WP"):       "Cable de Aluminio Forrado WP # 2 AWG Peach",
+    ("BT", "1/0 WP"):     "Cable de Aluminio Forrado WP # 1/0 AWG Quince",
+    ("BT", "3/0 WP"):     "Cable de Aluminio Forrado WP # 3/0 AWG Fig",
+    ("BT", "266.8 MCM"):  "Cable de Aluminio Forrado 266.8 MCM Mulberry",  # ajustá si aplica
 
     # MT ACSR (ejemplos)
-    ("MT", "1/0 ACSR"): "Cable de Aluminio ACSR # 1/0 AWG Raven",
-    ("MT", "2 ACSR"):   "Cable de Aluminio ACSR # 2 AWG",
-    ("MT", "266.8 MCM"): "Cable de Aluminio ACSR 266.8 MCM",
+    ("MT", "1/0 ACSR"):   "Cable de Aluminio ACSR # 1/0 AWG Raven",
+    ("MT", "2 ACSR"):     "Cable de Aluminio ACSR # 2 AWG",
+    ("MT", "266.8 MCM"):  "Cable de Aluminio ACSR 266.8 MCM",
 }
 
 
 def _persistir_oficial(st) -> None:
     """
-    Guarda el catálogo oficial en session_state para usarlo en UI/PDF si querés.
+    (Opcional) Guarda el catálogo oficial en session_state.
+    No es obligatorio para el cálculo, solo por si querés usarlo en UI/PDF.
     """
     st.session_state.setdefault("cables_oficiales", {})
     st.session_state["cables_oficiales"] = {f"{k[0]}|{k[1]}": v for k, v in CABLES_OFICIALES.items()}
 
 
-def descripcion_oficial(tipo: str, calibre: str) -> str:
-    k = (_norm_key(tipo), _norm_key(calibre))
-    # fallback: probar calibre corto
+def descripcion_oficial(tipo: str, calibre_o_desc: str) -> str:
+    """
+    Devuelve la descripción oficial.
+    Si el usuario pegó una descripción del catálogo, la respeta;
+    si pegó calibre corto, intenta mapear.
+    """
+    t = _norm_key(tipo)
+    c = _norm_txt(calibre_o_desc)
+
+    # 1) match directo (tipo, calibre)
+    k = (t, _norm_key(c))
     if k in CABLES_OFICIALES:
         return CABLES_OFICIALES[k]
-    k2 = (_norm_key(tipo), _norm_key(calibre_corto_desde_seleccion(calibre)))
-    return CABLES_OFICIALES.get(k2, _norm_txt(f"{tipo} {calibre}"))
+
+    # 2) intentar convertir selección (descripción) -> calibre corto y volver a buscar
+    #    OJO: calibre_corto_desde_seleccion recibe (tipo, texto)
+    cal_corto = calibre_corto_desde_seleccion(tipo, calibre_o_desc)
+    k2 = (t, _norm_key(cal_corto))
+    if k2 in CABLES_OFICIALES:
+        return CABLES_OFICIALES[k2]
+
+    # 3) fallback
+    return _norm_txt(f"{tipo} {calibre_o_desc}")
 
 
 def _resumen_por_calibre(df: pd.DataFrame) -> Dict[str, float]:
     """
-    Resumen simple: suma Longitud por 'Tipo+Calibre'
+    Resumen simple: suma Longitud (m) por 'Tipo|Calibre'
     """
     if df is None or df.empty:
         return {}
-    tmp = df.copy()
-    tmp["Tipo"] = tmp["Tipo"].astype(str)
-    tmp["Calibre"] = tmp["Calibre"].astype(str)
-    tmp["Longitud"] = pd.to_numeric(tmp["Longitud"], errors="coerce").fillna(0.0)
 
-    out = {}
+    tmp = df.copy()
+    tmp["Tipo"] = tmp.get("Tipo", "").astype(str).map(_norm_txt)
+    tmp["Calibre"] = tmp.get("Calibre", "").astype(str).map(_norm_txt)
+    tmp["Longitud"] = pd.to_numeric(tmp.get("Longitud", 0), errors="coerce").fillna(0.0)
+
+    out: Dict[str, float] = {}
     for (t, c), grp in tmp.groupby(["Tipo", "Calibre"]):
         key = f"{t} | {c}"
         out[key] = float(grp["Longitud"].sum())
@@ -73,68 +96,70 @@ def _resumen_por_calibre(df: pd.DataFrame) -> Dict[str, float]:
 def _validar_y_calcular(df: pd.DataFrame) -> pd.DataFrame:
     """
     Limpia y calcula columnas derivadas.
-    Espera columnas: Tipo, Calibre, Config, Longitud, Unidad, Conductores, Incluir
+
+    Entrada mínima esperada:
+      - Tipo
+      - Calibre
+      - Config
+      - Longitud   (metros)
+
+    Salida:
+      - Tipo, Calibre, Config, Longitud
+      - Conductores (calculado)
+      - Total Cable (m) (calculado)
+      - Descripcion (oficial/fallback)
     """
+    cols_out = ["Tipo", "Calibre", "Config", "Longitud", "Conductores", "Total Cable (m)", "Descripcion"]
+
     if df is None or df.empty:
-        return pd.DataFrame(columns=["Tipo", "Calibre", "Config", "Longitud", "Unidad", "Conductores", "Incluir", "Descripcion"])
+        return pd.DataFrame(columns=cols_out)
 
     out = df.copy()
-    out["Tipo"] = out["Tipo"].astype(str).map(_norm_txt)
-    out["Calibre"] = out["Calibre"].astype(str).map(_norm_txt)
+
+    out["Tipo"] = out.get("Tipo", "").astype(str).map(_norm_txt)
+    out["Calibre"] = out.get("Calibre", "").astype(str).map(_norm_txt)
     out["Config"] = out.get("Config", "").astype(str).map(_norm_txt)
-    out["Unidad"] = out.get("Unidad", "m").astype(str).map(_norm_txt)
 
     out["Longitud"] = pd.to_numeric(out.get("Longitud", 0), errors="coerce").fillna(0.0)
-    out["Incluir"] = out.get("Incluir", True).astype(bool)
 
-    # Conductores: si viene vacío lo inferimos por tipo
-    if "Conductores" not in out.columns:
-        out["Conductores"] = ""
-    out["Conductores"] = out["Conductores"].astype(str).map(_norm_txt)
-    mask_empty = out["Conductores"].str.strip().eq("")
-    out.loc[mask_empty, "Conductores"] = out.loc[mask_empty, "Tipo"].map(conductores_de)
+    # Filtrar filas vacías
+    out = out[(out["Tipo"].str.strip() != "") & (out["Calibre"].str.strip() != "")].copy()
+
+    # Conductores AUTOMÁTICO: depende de Tipo + Config
+    out["Conductores"] = [
+        int(conductores_de(t, cfg)) for t, cfg in zip(out["Tipo"].tolist(), out["Config"].tolist())
+    ]
+
+    # Total en metros
+    out["Total Cable (m)"] = out["Longitud"].astype(float) * out["Conductores"].astype(float)
 
     # Descripción oficial
     out["Descripcion"] = [
         descripcion_oficial(t, c) for t, c in zip(out["Tipo"].tolist(), out["Calibre"].tolist())
     ]
 
-    # filtrar filas sin tipo/calibre o longitud cero (opcional)
-    out = out[(out["Tipo"].str.strip() != "") & (out["Calibre"].str.strip() != "")]
+    out = out.reindex(columns=cols_out)
     return out.reset_index(drop=True)
 
 
 def _extraer_cables_desde_materiales(df_materiales: pd.DataFrame) -> pd.DataFrame:
     """
-    Extrae cables a partir de df_materiales si tu app guarda materiales en session_state.
-    Regla: detectar palabras clave y luego construir tabla base.
+    (Opcional) Detecta si hay cables en la tabla de materiales y devuelve una plantilla base
+    para el editor de cables.
+
+    NOTA: Ya no devolvemos Unidad/Incluir.
     """
     if df_materiales is None or df_materiales.empty:
         return pd.DataFrame()
 
-    df = df_materiales.copy()
-    if "Materiales" not in df.columns:
+    if "Materiales" not in df_materiales.columns:
         return pd.DataFrame()
 
-    s = df["Materiales"].astype(str)
+    s = df_materiales["Materiales"].astype(str)
+    mask = s.str.contains(r"\b(CABLE|ALAMBRE|CONDUCTOR)\b", case=False, na=False)
 
-    # filtro simple: contiene Cable
-    mask = s.str.contains(r"\bCable\b", case=False, na=False)
-    dfc = df[mask].copy()
-    if dfc.empty:
+    if not mask.any():
         return pd.DataFrame()
 
-    # Tabla mínima para editor
-    out = pd.DataFrame({
-        "Tipo": "",
-        "Calibre": "",
-        "Config": "",
-        "Longitud": 0.0,
-        "Unidad": "m",
-        "Conductores": "",
-        "Incluir": True,
-    })
-
-    # Si querés extraer calibre real del texto, aquí lo podés mejorar luego.
-    # Por ahora, devolvemos plantilla vacía si detectó cables.
-    return out
+    # Plantilla mínima para el editor
+    return pd.DataFrame(columns=["Tipo", "Calibre", "Config", "Longitud"])
