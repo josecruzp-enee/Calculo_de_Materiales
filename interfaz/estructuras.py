@@ -535,48 +535,39 @@ import streamlit as st
 
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """
-    Devuelve (df_estructuras_largo, ruta_estructuras_xlsx) según el modo:
-      - "excel"  -> cargar desde .xlsx
-      - "pegar"  -> pegar CSV/TSV en texto
-      - otro     -> UI de Desplegables
+    Devuelve (df_estructuras_largo, ruta_estructuras_xlsx) según el modo elegido en el radio.
     """
-    modo = (modo_carga or "").strip().lower()
+    modo_raw = (modo_carga or "").strip().lower()
+
+    # ✅ Mapa robusto: lo que devuelve el radio -> clave interna
+    mapa = {
+        "desde archivo excel": "excel",
+        "excel": "excel",
+        "pegar tabla": "pegar",
+        "pegar": "pegar",
+        "listas desplegables": "desplegables",
+        "desplegables": "desplegables",
+        "pdf": "pdf",
+        "subir pdf (enee)": "pdf",
+    }
+
+    modo = mapa.get(modo_raw, "desplegables")
+
     if modo == "excel":
         return cargar_desde_excel()
+
     if modo == "pegar":
         return pegar_tabla()
 
-    # ✅ Si no es ninguno de los anteriores → usar la UI de desplegables
+    if modo == "pdf":
+        # ✅ aquí va tu nuevo modo PDF
+        return cargar_desde_pdf_enee()   # la creamos/pegamos abajo
+
+    # ✅ por defecto desplegables
     res = listas_desplegables()
     if res is None or not isinstance(res, tuple):
         return None, None
 
-    # --- 🧩 DEBUG + LIMPIEZA ---
-    try:
-        if isinstance(res, tuple) and isinstance(res[0], pd.DataFrame):
-            df_dbg = res[0].copy()
-
-            # 🔧 Normalización: convertir listas/tuplas a texto plano
-            for col in ["Punto", "codigodeestructura"]:
-                if col in df_dbg.columns:
-                    df_dbg[col] = df_dbg[col].apply(
-                        lambda x: ", ".join(map(str, x)) if isinstance(x, (list, tuple, set)) else str(x)
-                    )
-
-            # Reemplazar nulos por cadenas vacías
-            df_dbg = df_dbg.fillna("")
-
-            # Mostrar vista previa en Streamlit
-            st.markdown("### 🧪 DEBUG: vista previa de df_expandido (normalizado)")
-            st.dataframe(df_dbg.head(10), use_container_width=True)
-            st.write("**Columnas:**", list(df_dbg.columns))
-            st.write("**Tipos de datos:**")
-            st.write(df_dbg.dtypes)
-            st.write("**Forma:**", df_dbg.shape)
-
-            # Reasignar el DataFrame limpio al resultado
-            res = (df_dbg, res[1])
-    except Exception as e:
-        st.error(f"⚠️ Error en debug de seccion_entrada_estructuras: {e}")
-
+    # (tu bloque debug lo podés dejar igual)
     return res
+
