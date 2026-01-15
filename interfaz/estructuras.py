@@ -116,5 +116,8 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
     if modo == "pdf":
         return cargar_desde_pdf_router()
 
+    if modo == "DXF (ENEE)":
+        return cargar_desde_dxf_enee()
+
     # por defecto
     return listas_desplegables()
