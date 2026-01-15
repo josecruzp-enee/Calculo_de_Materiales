@@ -22,23 +22,34 @@ def seccion_cables():
 
     df_base = _editor_df_actual(st)
 
+    # --- Normalizar columnas mínimas para el editor (por si viene vacío o con columnas viejas) ---
+    # Queremos SOLO: Tipo, Calibre, Config, Longitud
+    cols_min = ["Tipo", "Calibre", "Config", "Longitud"]
+    if df_base is None or not isinstance(df_base, pd.DataFrame) or df_base.empty:
+        df_base = pd.DataFrame(columns=cols_min)
+    else:
+        # si vienen columnas extra (Unidad/Incluir/etc), no las mostramos
+        for c in cols_min:
+            if c not in df_base.columns:
+                df_base[c] = ""
+        df_base = df_base[cols_min].copy()
+
     # Column config (si tu versión de Streamlit lo soporta)
     colcfg = None
     try:
-        from streamlit.column_config import SelectboxColumn, NumberColumn, CheckboxColumn
+        from streamlit.column_config import SelectboxColumn, NumberColumn
         colcfg = {
-            "Tipo": SelectboxColumn("Tipo", options=get_tipos(), required=True),
-            "Calibre": SelectboxColumn("Calibre", options=get_calibres_union(), required=True),
-            "Config": SelectboxColumn("Config", options=get_configs_union(), required=False),
-            "Longitud": NumberColumn("Longitud", min_value=0.0, step=1.0),
-            "Unidad": SelectboxColumn("Unidad", options=["m", "km", "pies", "pie", "ft"], required=False),
-            "Incluir": CheckboxColumn("Incluir"),
+            "Tipo": SelectboxColumn("Tipo", options=get_tipos(), required=True, width="small"),
+            "Calibre": SelectboxColumn("Calibre", options=get_calibres_union(), required=True, width="large"),
+            "Config": SelectboxColumn("Config", options=get_configs_union(), required=True, width="small"),
+            "Longitud": NumberColumn("Longitud (m)", min_value=0.0, step=1.0, format="%.2f", width="small"),
         }
     except Exception:
         colcfg = None
 
     with st.form("form_cables"):
-        st.caption("Editá la lista de cables. Si algo no aplica, desmarcá 'Incluir'.")
+        st.caption("Editá la lista de cables. El total se calcula automáticamente según la configuración (1F/2F/3F).")
+
         df_edit = st.data_editor(
             df_base,
             use_container_width=True,
@@ -59,6 +70,7 @@ def seccion_cables():
 
     if ok:
         df_ok = _validar_y_calcular(df_edit)
+
         st.session_state["cables_proyecto_df"] = df_ok.copy()
         st.session_state["cables_proyecto"] = df_ok.to_dict(orient="records")
 
@@ -67,11 +79,19 @@ def seccion_cables():
         dp["cables_proyecto"] = st.session_state["cables_proyecto"]
         st.session_state["datos_proyecto"] = dp
 
-        resumen = _resumen_por_calibre(df_ok)
-        if resumen:
+        # --- Vista resumida (más útil que el json largo) ---
+        if df_ok is not None and not df_ok.empty:
             st.success("Cables guardados.")
-            st.write("Resumen (longitud por calibre):")
-            st.json(resumen)
+
+            # Mostrar tabla calculada (incluye Total Cable (m) y Conductores calculados)
+            cols_show = [c for c in ["Tipo", "Calibre", "Config", "Longitud", "Conductores", "Total Cable (m)"] if c in df_ok.columns]
+            st.dataframe(df_ok[cols_show], use_container_width=True, hide_index=True)
+
+            resumen = _resumen_por_calibre(df_ok)
+            if resumen:
+                st.write("Resumen (longitud por calibre):")
+                st.json(resumen)
         else:
-            st.info("Cables guardados (sin longitudes).")
+            st.info("Guardado: no hay filas válidas (faltan datos).")
+
         st.rerun()
