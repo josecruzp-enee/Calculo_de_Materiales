@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Tuple, Optional
 import pandas as pd
 import streamlit as st
+from interfaz.estructuras_pdf import cargar_desde_pdf
 
 from interfaz.estructuras_comunes import (
     COLUMNAS_BASE,
