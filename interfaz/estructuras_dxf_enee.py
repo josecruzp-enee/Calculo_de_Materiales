@@ -43,6 +43,21 @@ RE_COD_P = re.compile(
 
 RE_MULT = re.compile(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", flags=re.I)
 
+# Tokenizador: saca códigos aunque vengan pegados en una misma celda
+RE_TOKEN = re.compile(
+    r"""
+    (?:PC|PM|PT)-[A-Z0-9"'\-]+
+    |A-[A-Z0-9\-]+
+    |B-[A-Z0-9\-]+
+    |CT-[A-Z0-9\-]+
+    |TS-[A-Z0-9\-]+
+    |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
+    |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
+    |R-\d+[A-Z0-9\-]*
+    """,
+    re.VERBOSE,
+)
+
 
 def _limpiar(s: str) -> str:
     s = (s or "").strip().strip('"').strip("'")
@@ -193,6 +208,7 @@ def _leer_dxf_streamlit(archivo) -> Any:
     import ezdxf  # type: ignore
 
     data = archivo.getvalue()
+
     # intento 1: BytesIO
     try:
         stream = io.BytesIO(data)
@@ -200,12 +216,50 @@ def _leer_dxf_streamlit(archivo) -> Any:
     except Exception:
         pass
 
-    # intento 2: archivo temporal (100% estable en cloud)
+    # intento 2: archivo temporal (estable en cloud)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
         tmp.write(data)
         tmp_path = tmp.name
 
     return ezdxf.readfile(tmp_path)
+
+
+def _tokenizar_celda(celda: str) -> List[str]:
+    if not celda:
+        return []
+    t = " ".join(str(celda).split())
+    return [m.group(0).strip() for m in RE_TOKEN.finditer(t)]
+
+
+def _explotar_codigos_largos(df_largo: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convierte CodigoEstructura como "R-02 R-04" -> dos filas.
+    Trabaja con columnas típicas del pipeline: Punto, Tipo, CodigoEstructura, Cantidad.
+    """
+    if df_largo is None or df_largo.empty:
+        return df_largo
+
+    df = df_largo.copy()
+
+    col_code = "CodigoEstructura" if "CodigoEstructura" in df.columns else "codigodeestructura"
+    col_qty = "Cantidad" if "Cantidad" in df.columns else "cantidad"
+
+    df["__tokens__"] = df[col_code].apply(_tokenizar_celda)
+    df = df.explode("__tokens__").dropna(subset=["__tokens__"])
+    df["__tokens__"] = df["__tokens__"].astype(str).str.strip()
+    df = df[df["__tokens__"].str.len() > 0].copy()
+
+    df[col_code] = df["__tokens__"]
+    df.drop(columns=["__tokens__"], inplace=True)
+
+    df[col_qty] = pd.to_numeric(df[col_qty], errors="coerce").fillna(1).astype(int)
+
+    group_cols = ["Punto", col_code]
+    if "Tipo" in df.columns:
+        group_cols = ["Punto", "Tipo", col_code]
+
+    df = df.groupby(group_cols, as_index=False)[col_qty].sum()
+    return df
 
 
 def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
@@ -228,7 +282,6 @@ def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         st.error(f"No pude leer el DXF: {e}")
         return None, None
 
-    # capa objetivo (por si viene con otro nombre)
     capa = st.text_input(
         "Capa de estructuras (opcional)",
         value="Estructuras",
@@ -247,7 +300,11 @@ def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     st.dataframe(df_ancho, use_container_width=True, hide_index=True)
 
     ruta_tmp = materializar_df_a_archivo(df_ancho, "dxf")
+
+    # 1) wide -> long
     df_largo = expand_wide_to_long(df_ancho)
+    # 2) ✅ rompe combinados: "R-02 R-04" => filas separadas
+    df_largo = _explotar_codigos_largos(df_largo)
 
     st.caption("🔎 Vista LARGA (lo que consume el motor)")
     st.dataframe(df_largo, use_container_width=True, hide_index=True)
