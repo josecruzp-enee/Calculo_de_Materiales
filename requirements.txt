@@ -12,3 +12,4 @@ PyPDF2
 simplekml
 folium
 streamlit-folium
+pdfplumber
