@@ -25,16 +25,20 @@ _RE_PUNTO = re.compile(r"^\s*P\s*#\s*(\d+)\s*$", re.IGNORECASE)
 _RE_PUNTO_EN_LINEA = re.compile(r"\bP\s*#\s*(\d+)\b", re.IGNORECASE)  # por si viene con más texto
 _RE_XY_APOYO = re.compile(r"^\s*(X:|Y:|Apoyo:)\b", re.IGNORECASE)
 
+
 def _punto_label(num: str) -> str:
     n = int(num)
     return f"Punto {n}"
+
 
 def _limpiar_item(item: str) -> str:
     s = (item or "").strip().strip('"').strip("'")
     s = re.sub(r"\s+", " ", s)
     return s
 
-def _clasificar_item(code: str) -> str | None:
+
+# ✅ Compatible con Python 3.8/3.9 (sin "str | None")
+def _clasificar_item(code: str) -> Optional[str]:
     c = code.strip().upper()
 
     if c.startswith(("PC-", "PM-", "PT-")):
@@ -57,11 +61,13 @@ def _clasificar_item(code: str) -> str | None:
 
     return None
 
-def _agregar_en_bucket(bucket: Dict[str, List[str]], col: str, raw_item: str):
+
+def _agregar_en_bucket(bucket: Dict[str, List[str]], col: str, raw_item: str) -> None:
     item = _limpiar_item(raw_item)
     if not item:
         return
     bucket[col].append(item)
+
 
 def _bucket_to_row(punto: str, bucket: Dict[str, List[str]]) -> Dict[str, str]:
     row = {c: "" for c in COLUMNAS_BASE}
@@ -73,6 +79,7 @@ def _bucket_to_row(punto: str, bucket: Dict[str, List[str]]) -> Dict[str, str]:
         row[col] = "\n".join([_limpiar_item(v) for v in vals if _limpiar_item(v)])
     return row
 
+
 # -----------------------------------------
 # Parser principal (texto extraído del PDF)
 # -----------------------------------------
@@ -83,7 +90,7 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
     lines = [ln.rstrip() for ln in texto.splitlines()]
 
     bloques: Dict[str, Dict[str, List[str]]] = {}
-    punto_actual: str | None = None
+    punto_actual: Optional[str] = None
 
     for ln in lines:
         t = (ln or "").strip()
@@ -103,7 +110,6 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
             punto_actual = _punto_label(m2.group(1))
             bloques.setdefault(punto_actual, {c: [] for c in COLUMNAS_BASE if c != "Punto"})
             # no hacemos continue; porque la misma línea puede tener basura (Apoyo) y la ignoramos abajo
-            # pero si vinieran estructuras en esa misma línea, aún podrían procesarse.
 
         if punto_actual is None:
             continue
@@ -137,6 +143,7 @@ def extraer_estructuras_desde_texto_pdf(texto: str) -> pd.DataFrame:
 
     return normalizar_columnas(df, COLUMNAS_BASE)
 
+
 # -----------------------------------------
 # UI Streamlit: modo PDF
 # -----------------------------------------
@@ -153,17 +160,17 @@ def cargar_desde_pdf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         st.error("Falta dependencia: pdfplumber. Agrega 'pdfplumber' a requirements.txt")
         return None, None
 
-    texto_total = []
+    texto_total: List[str] = []
     with pdfplumber.open(io.BytesIO(archivo_pdf.getvalue())) as pdf:
         for page in pdf.pages:
             texto_total.append(page.extract_text() or "")
 
-    texto_total = "\n".join(texto_total).strip()
-    if not texto_total:
+    texto_total_str = "\n".join(texto_total).strip()
+    if not texto_total_str:
         st.warning("No se detectó texto en el PDF. Si el plano es escaneado (imagen), tocaría OCR.")
         return None, None
 
-    df_ancho = extraer_estructuras_desde_texto_pdf(texto_total)
+    df_ancho = extraer_estructuras_desde_texto_pdf(texto_total_str)
     if df_ancho.empty:
         st.warning("Se leyó el PDF, pero no se encontraron estructuras PROYECTADAS (P).")
         return None, None
