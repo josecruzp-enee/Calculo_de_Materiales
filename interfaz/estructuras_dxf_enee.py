@@ -1,144 +1,51 @@
-# interfaz/estructuras_dxf_enee.py
+# interfaz/descripcion_dxf_enee.py
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Optional, Tuple, Dict, List, Any
+from typing import Optional, Tuple, Any, Dict, List
 import io
 import re
 import tempfile
 
-import pandas as pd
 import streamlit as st
 
-from interfaz.estructuras_comunes import (
-    COLUMNAS_BASE,
-    normalizar_columnas,
-    materializar_df_a_archivo,
-    expand_wide_to_long,
-)
 
-# -------------------------
-# Regex (alineado a tu estilo)
-# -------------------------
-# Punto dentro de texto: "P # 22", "P-22", "P 22", "Punto 22"
-RE_PUNTO_EN_TEXTO = re.compile(r"\bP(?:UNTO)?\s*[-#]?\s*(\d+)\b", re.IGNORECASE)
+# ==========================================================
+# 1) Lectura DXF desde Streamlit (robusto en cloud)
+# ==========================================================
+def leer_dxf_streamlit(archivo) -> Any:
+    """
+    Lee DXF desde st.file_uploader.
+    En cloud, lo más estable es escribir a tmp y usar ezdxf.readfile(path).
+    """
+    try:
+        import ezdxf  # type: ignore
+    except Exception as e:
+        raise RuntimeError("Falta dependencia: ezdxf. Agrega 'ezdxf' a requirements.txt") from e
 
-# Captura códigos proyectados (P)
-RE_COD_P = re.compile(
-    r"""
-    (?P<code>
-        (?:PC|PM|PT)-[A-Z0-9"'\-]+
-        |A-[A-Z0-9\-]+
-        |B-[A-Z0-9\-]+
-        |CT-[A-Z0-9\-]+
-        |TS-[A-Z0-9\-]+
-        |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
-        |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
-        |R-\d+[A-Z0-9\-]*
-    )
-    \s*\(\s*[Pp]\s*\)
-    """,
-    re.VERBOSE,
-)
+    data = archivo.getvalue()
 
-RE_MULT = re.compile(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", flags=re.I)
+    # Intento 1: archivo temporal (estable)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
+        tmp.write(data)
+        tmp_path = tmp.name
 
-# Tokenizador: saca códigos aunque vengan pegados en una misma celda
-RE_TOKEN = re.compile(
-    r"""
-    (?:PC|PM|PT)-[A-Z0-9"'\-]+
-    |A-[A-Z0-9\-]+
-    |B-[A-Z0-9\-]+
-    |CT-[A-Z0-9\-]+
-    |TS-[A-Z0-9\-]+
-    |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
-    |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
-    |R-\d+[A-Z0-9\-]*
-    """,
-    re.VERBOSE,
-)
+    return ezdxf.readfile(tmp_path)
 
 
-def _limpiar(s: str) -> str:
-    s = (s or "").strip().strip('"').strip("'")
-    return re.sub(r"\s+", " ", s)
-
-
-def _clasificar(code: str) -> Optional[str]:
-    c = (code or "").strip().upper()
-    if c.startswith(("PC-", "PM-", "PT-")):
-        return "Poste"
-    if c.startswith("A-"):
-        return "Primario"
-    if c.startswith("B-"):
-        return "Secundario"
-    if c.startswith("R-"):
-        return "Retenidas"
-    if c.startswith("CT-"):
-        return "Conexiones a tierra"
-    if c.startswith(("TS-", "TD", "TF", "TR", "TX")):
-        return "Transformadores"
-    if c.startswith(("LL-", "LS-")):
-        return "Luminarias"
-    return None
-
-
-def _add(bucket: Dict[str, Dict[str, int]], col: str, raw_item: str) -> None:
-    item = _limpiar(raw_item)
-    if not item:
-        return
-
-    m = RE_MULT.match(item)
-    if m:
-        qty = int(m.group(1))
-        code = _limpiar(m.group(2))
-        if code:
-            bucket[col][code] = max(bucket[col].get(code, 0), qty)
-        return
-
-    bucket[col][item] = max(bucket[col].get(item, 0), 1)
-
-
-def _bucket_to_row(punto: int, bucket: Dict[str, Dict[str, int]]) -> Dict[str, str]:
-    row = {c: "" for c in COLUMNAS_BASE}
-    row["Punto"] = f"Punto {punto}"
-
-    for col in COLUMNAS_BASE:
-        if col == "Punto":
-            continue
-        d = bucket.get(col, {})
-        if not d:
-            continue
-
-        parts: List[str] = []
-        for code in sorted(d.keys()):
-            qty = int(d[code])
-            parts.append(f"{qty}x {code}" if qty > 1 else code)
-
-        row[col] = " ".join(parts)
-
-    return row
-
-
-def _extraer_codigos_proyectados(texto: str) -> List[str]:
-    t = " ".join((texto or "").split())
-    return [m.group("code").strip() for m in RE_COD_P.finditer(t) if m.group("code")]
-
-
-def _extraer_punto(texto: str) -> Optional[int]:
-    m = RE_PUNTO_EN_TEXTO.search(texto or "")
-    return int(m.group(1)) if m else None
-
-
+# ==========================================================
+# 2) Extraer texto de entidades (TEXT/MTEXT)
+# ==========================================================
 def _texto_entidad(e: Any) -> str:
-    # MTEXT: plain_text() es lo más confiable
+    # MTEXT
     try:
         if e.dxftype() == "MTEXT":
+            # plain_text() quita formato
             return (e.plain_text() or "").strip()
     except Exception:
         pass
 
-    # TEXT: dxf.text
+    # TEXT
     try:
         if e.dxftype() == "TEXT":
             return (e.dxf.text or "").strip()
@@ -152,161 +59,246 @@ def _texto_entidad(e: Any) -> str:
         return ""
 
 
-def extraer_estructuras_desde_dxf(doc: Any, capa_objetivo: str = "Estructuras") -> pd.DataFrame:
+def _norm_keep_breaks(s: str) -> str:
+    s = (s or "").replace("\xa0", " ")
+    s = s.replace("\r\n", "\n").replace("\r", "\n")
+    s = re.sub(r"[ \t]+", " ", s)
+    s = re.sub(r"\n{3,}", "\n\n", s)
+    return s.strip()
+
+
+def _norm_line(s: str) -> str:
+    s = (s or "").replace("\xa0", " ")
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+# ==========================================================
+# 3) Extraer BLOQUE DESCRIPCIÓN desde DXF
+# ==========================================================
+RE_DESC = re.compile(r"\bDESCRIPCI[ÓO]N\s*:\s*(.+)", re.IGNORECASE | re.DOTALL)
+
+def extraer_descripcion_desde_dxf(doc: Any, capa: str = "") -> str:
     """
-    Lee MTEXT/TEXT del modelspace.
-    Detecta Punto dentro del mismo bloque y códigos (P) dentro del mismo bloque.
+    Busca en TEXT/MTEXT un bloque que contenga 'DESCRIPCIÓN:'.
+    Si 'capa' se da, filtra por esa capa.
     """
     msp = doc.modelspace()
-    bloques: Dict[int, Dict[str, Dict[str, int]]] = {}
+
+    candidatos: List[str] = []
 
     for e in msp:
-        et = e.dxftype()
-        if et not in ("MTEXT", "TEXT"):
+        if e.dxftype() not in ("TEXT", "MTEXT"):
             continue
 
-        # filtro por capa
         layer = (getattr(e.dxf, "layer", "") or "").strip()
-        if capa_objetivo and layer.lower() != capa_objetivo.lower():
+        if capa and layer.lower() != capa.lower():
             continue
 
         txt = _texto_entidad(e)
         if not txt:
             continue
 
-        punto = _extraer_punto(txt)
-        if punto is None:
-            continue
+        txt2 = _norm_keep_breaks(txt)
+        if re.search(r"\bDESCRIPCI[ÓO]N\s*:", txt2, flags=re.IGNORECASE):
+            candidatos.append(txt2)
 
-        cods = _extraer_codigos_proyectados(txt)
-        if not cods:
-            continue
+    if not candidatos:
+        return ""
 
-        bloques.setdefault(punto, {c: {} for c in COLUMNAS_BASE if c != "Punto"})
+    # Elegimos el candidato más largo (normalmente la caja completa)
+    best = max(candidatos, key=len)
 
-        for c in cods:
-            c = _limpiar(c)
-            col = _clasificar(c)
-            if col:
-                _add(bloques[punto], col, c)
+    # Extraer solo lo que viene después de DESCRIPCIÓN:
+    m = RE_DESC.search(best)
+    if not m:
+        return best.strip()
 
-    rows = [_bucket_to_row(p, b) for p, b in sorted(bloques.items(), key=lambda x: x[0])]
-    df = pd.DataFrame(rows, columns=COLUMNAS_BASE)
+    tail = m.group(1).strip()
 
-    if not df.empty:
-        cols = [c for c in COLUMNAS_BASE if c != "Punto"]
-        df = df[df[cols].astype(str).apply(lambda r: any(v.strip() for v in r), axis=1)]
+    # Cortar si vienen otros labels debajo
+    corte = re.split(
+        r"\n\s*(?:REVIS[ÓO]\s*:|APROB[ÓO]\s*:|CONTENIDO\s*:|NOTAS\s*:|OBSERVACIONES\s*:)\s*",
+        tail,
+        flags=re.IGNORECASE,
+        maxsplit=1,
+    )[0]
 
-    return normalizar_columnas(df, COLUMNAS_BASE)
+    return _norm_keep_breaks(corte)
 
 
-def _leer_dxf_streamlit(archivo) -> Any:
+# ==========================================================
+# 4) Parsear la descripción a datos estructurados
+# ==========================================================
+def _to_int(s: str) -> int:
+    s = (s or "").strip()
+    s = s.replace(".", "").replace(",", "")
+    return int(s)
+
+def parsear_descripcion_plano(texto: str) -> Dict[str, Any]:
     """
-    Lee DXF desde Streamlit uploader.
-    Usa readfile(BytesIO) si funciona; si no, cae a archivo temporal.
+    Devuelve datos típicos:
+    - primaria_m, primaria_kv, primaria_fases, primaria_cond
+    - secundaria_m, secundaria_v, secundaria_fases, secundaria_cond
+    - transfo_cant, transfo_kva, transfo_prim_kv, transfo_sec_v
+    - lum_cant, lum_w
     """
-    import ezdxf  # type: ignore
+    t = _norm_line(texto)
+    out: Dict[str, Any] = {}
 
-    data = archivo.getvalue()
-
-    # intento 1: BytesIO
-    try:
-        stream = io.BytesIO(data)
-        return ezdxf.readfile(stream)
-    except Exception:
-        pass
-
-    # intento 2: archivo temporal (estable en cloud)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
-        tmp.write(data)
-        tmp_path = tmp.name
-
-    return ezdxf.readfile(tmp_path)
-
-
-def _tokenizar_celda(celda: str) -> List[str]:
-    if not celda:
-        return []
-    t = " ".join(str(celda).split())
-    return [m.group(0).strip() for m in RE_TOKEN.finditer(t)]
-
-
-def _explotar_codigos_largos(df_largo: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convierte CodigoEstructura como "R-02 R-04" -> dos filas.
-    Trabaja con columnas típicas del pipeline: Punto, Tipo, CodigoEstructura, Cantidad.
-    """
-    if df_largo is None or df_largo.empty:
-        return df_largo
-
-    df = df_largo.copy()
-
-    col_code = "CodigoEstructura" if "CodigoEstructura" in df.columns else "codigodeestructura"
-    col_qty = "Cantidad" if "Cantidad" in df.columns else "cantidad"
-
-    df["__tokens__"] = df[col_code].apply(_tokenizar_celda)
-    df = df.explode("__tokens__").dropna(subset=["__tokens__"])
-    df["__tokens__"] = df["__tokens__"].astype(str).str.strip()
-    df = df[df["__tokens__"].str.len() > 0].copy()
-
-    df[col_code] = df["__tokens__"]
-    df.drop(columns=["__tokens__"], inplace=True)
-
-    df[col_qty] = pd.to_numeric(df[col_qty], errors="coerce").fillna(1).astype(int)
-
-    group_cols = ["Punto", col_code]
-    if "Tipo" in df.columns:
-        group_cols = ["Punto", "Tipo", col_code]
-
-    df = df.groupby(group_cols, as_index=False)[col_qty].sum()
-    return df
-
-
-def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
-    st.subheader("📐 Cargar estructuras desde DXF (ENEE)")
-
-    archivo = st.file_uploader("Sube el DXF del plano", type=["dxf"], key="upl_dxf")
-    if not archivo:
-        return None, None
-
-    try:
-        import ezdxf  # noqa: F401  # type: ignore
-    except Exception:
-        st.error("Falta dependencia: ezdxf. Agrega 'ezdxf' a requirements.txt")
-        return None, None
-
-    # leer doc (arreglado)
-    try:
-        doc = _leer_dxf_streamlit(archivo)
-    except Exception as e:
-        st.error(f"No pude leer el DXF: {e}")
-        return None, None
-
-    capa = st.text_input(
-        "Capa de estructuras (opcional)",
-        value="Estructuras",
-        help="Debe coincidir con el nombre de la capa en AutoCAD.",
-        key="capa_estructuras_dxf",
+    # Primaria: "Construcción de 190 m de línea Primaria, 19.9/34.5 KV; ..."
+    m = re.search(
+        r"(?:Construcci[óo]n|Extensi[óo]n)\s+de\s+([\d\.,]+)\s*(?:m|metros)\s+de\s+l[ií]nea\s+Primaria\s*,?\s*"
+        r"([\d\.]+(?:/\d\.?\d*)?)\s*KV\s*[,;]?\s*([123]F\+N)?\s*[,;]?\s*(.*?)(?:\.|$)",
+        t,
+        flags=re.IGNORECASE,
     )
+    if m:
+        out["primaria_m"] = _to_int(m.group(1))
+        out["primaria_kv"] = m.group(2)
+        out["primaria_fases"] = (m.group(3) or "").upper()
+        out["primaria_cond"] = _norm_line(m.group(4))
 
-    df_ancho = extraer_estructuras_desde_dxf(doc, capa_objetivo=capa.strip() if capa else "")
+    # Secundaria: "Construcción de 1,062 m de Línea Secundaria 2F+N, 120/240 V. ..."
+    m = re.search(
+        r"(?:Construcci[óo]n|Extensi[óo]n)\s+de\s+([\d\.,]+)\s*(?:m|metros)\s+de\s+(?:L[ií]nea\s+Secundaria|LS)\s*,?\s*"
+        r"([123]F\+N)?\s*[,;]?\s*([\d\/]+)\s*V\s*[,;]?\s*(.*?)(?:\.|$)",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m:
+        out["secundaria_m"] = _to_int(m.group(1))
+        out["secundaria_fases"] = (m.group(2) or "").upper()
+        out["secundaria_v"] = m.group(3)
+        out["secundaria_cond"] = _norm_line(m.group(4))
 
-    if df_ancho.empty:
-        st.warning("Se leyó el DXF, pero no se encontraron estructuras PROYECTADAS (P) en esa capa.")
-        st.info("Tip: verifica que el texto esté en la capa 'Estructuras' y que los códigos tengan '(P)'.")
-        return None, None
+    # Luminarias: "Instalación de 25 luminarias Led de 29 W"
+    m = re.search(r"Instalaci[óo]n\s+de\s+(\d+)\s+luminarias?.*?(\d+)\s*W", t, flags=re.IGNORECASE)
+    if m:
+        out["lum_cant"] = int(m.group(1))
+        out["lum_w"] = int(m.group(2))
 
-    st.success(f"✅ Estructuras proyectadas detectadas: {len(df_ancho)} puntos")
-    st.dataframe(df_ancho, use_container_width=True, hide_index=True)
+    # Transformadores: "Instalación de dos transformadores ... TS-50 KVA ... 7.9/13.8 KV-120/240 V"
+    m = re.search(
+        r"Instalaci[óo]n\s+de\s+(\d+)\s+transformadores?",
+        t,
+        flags=re.IGNORECASE,
+    )
+    out["transfo_cant"] = int(m.group(1)) if m else 0
 
-    ruta_tmp = materializar_df_a_archivo(df_ancho, "dxf")
+    m = re.search(r"\bTS[-\s]*([0-9]+(?:\.[0-9]+)?)\s*KVA\b", t, flags=re.IGNORECASE)
+    if m:
+        out["transfo_kva"] = float(m.group(1))
 
-    # 1) wide -> long
-    df_largo = expand_wide_to_long(df_ancho)
-    # 2) ✅ rompe combinados: "R-02 R-04" => filas separadas
-    df_largo = _explotar_codigos_largos(df_largo)
+    m = re.search(
+        r"([\d\.]+(?:/\d\.?\d*)?)\s*KV\s*[-–]\s*([\d\/]+)\s*V",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m:
+        out["transfo_prim_kv"] = m.group(1)
+        out["transfo_sec_v"] = m.group(2)
 
-    st.caption("🔎 Vista LARGA (lo que consume el motor)")
-    st.dataframe(df_largo, use_container_width=True, hide_index=True)
+    # si no dijo cantidad pero sí hay TS, asumimos 1
+    if out.get("transfo_cant", 0) == 0 and out.get("transfo_kva"):
+        out["transfo_cant"] = 1
 
-    return df_largo, ruta_tmp
+    return out
+
+
+# ==========================================================
+# 5) Generar tu "Descripción general del proyecto"
+# ==========================================================
+def construir_descripcion_general(datos: Dict[str, Any]) -> str:
+    lines: List[str] = ["Descripción general del Proyecto:"]
+    n = 1
+
+    if datos.get("primaria_m"):
+        s = f"{n}. Construcción de {datos['primaria_m']} m de línea Primaria"
+        if datos.get("primaria_kv"):
+            s += f", {datos['primaria_kv']} KV"
+        if datos.get("primaria_fases"):
+            s += f", {datos['primaria_fases']}"
+        if datos.get("primaria_cond"):
+            s += f", {datos['primaria_cond']}"
+        s += "."
+        lines.append(s)
+        n += 1
+
+    if datos.get("secundaria_m"):
+        s = f"{n}. Construcción de {datos['secundaria_m']} m de línea Secundaria/LS"
+        if datos.get("secundaria_fases"):
+            s += f", {datos['secundaria_fases']}"
+        if datos.get("secundaria_v"):
+            s += f", {datos['secundaria_v']} V"
+        if datos.get("secundaria_cond"):
+            s += f", {datos['secundaria_cond']}"
+        s += "."
+        lines.append(s)
+        n += 1
+
+    if datos.get("transfo_cant", 0) > 0 and datos.get("transfo_kva"):
+        s = f"{n}. Instalación de {datos['transfo_cant']} transformador(es) (TS-{int(datos['transfo_kva'])} KVA)"
+        if datos.get("transfo_prim_kv") and datos.get("transfo_sec_v"):
+            s += f", {datos['transfo_prim_kv']} KV-{datos['transfo_sec_v']} V"
+        s += "."
+        lines.append(s)
+        n += 1
+
+    if datos.get("lum_cant"):
+        s = f"{n}. Instalación de {datos['lum_cant']} luminaria(s)"
+        if datos.get("lum_w"):
+            s += f" de {datos['lum_w']} W"
+        s += "."
+        lines.append(s)
+        n += 1
+
+    if len(lines) == 1:
+        lines.append("(No se pudo generar automáticamente desde la descripción del plano.)")
+
+    return "\n".join(lines)
+
+
+# ==========================================================
+# 6) Sección Streamlit lista para tu app
+# ==========================================================
+def seccion_descripcion_desde_dxf_enee() -> Optional[str]:
+    st.subheader("🧾 Descripción del Proyecto (desde DXF)")
+
+    archivo = st.file_uploader("Sube el DXF del plano", type=["dxf"], key="upl_dxf_desc")
+    if not archivo:
+        return None
+
+    # (opcional) capa donde está el texto del rótulo
+    capa = st.text_input(
+        "Capa del rótulo (opcional)",
+        value="",
+        help="Si lo sabes, pon la capa donde está el texto de 'DESCRIPCIÓN'. Si lo dejas vacío, busca en todas.",
+        key="capa_desc_dxf",
+    ).strip()
+
+    try:
+        doc = leer_dxf_streamlit(archivo)
+    except Exception as e:
+        st.error(str(e))
+        return None
+
+    bloque = extraer_descripcion_desde_dxf(doc, capa=capa)
+
+    if not bloque.strip():
+        st.warning("No encontré un bloque con 'DESCRIPCIÓN:' en TEXT/MTEXT.")
+        st.info("Tip: revisa que el rótulo sea texto real (TEXT/MTEXT) y no un bloque raro sin texto.")
+        return None
+
+    st.markdown("### Bloque detectado (DESCRIPCIÓN):")
+    st.text_area("Texto", bloque, height=220)
+
+    datos = parsear_descripcion_plano(bloque)
+    st.markdown("### Datos extraídos (debug):")
+    st.json(datos)
+
+    desc_final = construir_descripcion_general(datos)
+    st.markdown("### Descripción general generada:")
+    st.text_area("Resultado", desc_final, height=220)
+
+    return desc_final
