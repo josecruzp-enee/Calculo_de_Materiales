@@ -124,7 +124,7 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
 
     if modo == "dxf":
         return cargar_desde_dxf_enee()
-
+        
     # por defecto
     return listas_desplegables()
 
