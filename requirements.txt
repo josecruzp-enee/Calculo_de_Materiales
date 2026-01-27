@@ -14,3 +14,4 @@ folium
 streamlit-folium
 pdfplumber
 ezdxf
+altair<5
