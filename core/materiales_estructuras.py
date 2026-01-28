@@ -8,7 +8,7 @@ from collections import Counter
 from core.materiales_aux import limpiar_codigo, expandir_lista_codigos
 from modulo.entradas import extraer_estructuras_proyectadas, cargar_materiales
 
-# ✅ Cambio: usar reemplazo PURO y específico (solo YC 25A25 en MT)
+# ✅ Import correcto (nombre exacto del archivo core/conectores_mt.py)
 from core.conectores_mt import reemplazar_solo_yc25a25_mt
 
 
@@ -137,7 +137,6 @@ def calcular_materiales_estructura(
             return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
 
         if "Unidad" not in df.columns:
-            # por si alguna hoja viene rara
             df["Unidad"] = ""
 
         # --- Seleccionar columna de tensión ---
@@ -160,23 +159,19 @@ def calcular_materiales_estructura(
         df_filtrado["Unidad"] = df_filtrado["Unidad"].astype(str).str.strip()
         df_filtrado["Cantidad"] = pd.to_numeric(df_filtrado["Cantidad"], errors="coerce").fillna(0).astype(float)
 
-        # ✅ Cambio: Reemplazo PURO y específico:
-        # SOLO reemplaza YC 25A25 (1/0-1/0) en estructuras MT (A/TH/ER/TM),
-        # usando el calibre_mt global, y NO toca ningún otro conector/material.
+        # ✅ Reemplazo específico: SOLO YC 25A25 en MT
         df_filtrado["Materiales"] = reemplazar_solo_yc25a25_mt(
-            lista_materiales=df_filtrado["Materiales"].tolist(),
-            estructura=estructura,
-            calibre_mt_global=calibre_mt,
-            tabla_conectores=tabla_conectores_mt,
+            df_filtrado["Materiales"].tolist(),
+            estructura,
+            calibre_mt,
+            tabla_conectores_mt
         )
 
         # ✅ MULTIPLICAR SIEMPRE por cantidad de estructuras
         df_filtrado["Cantidad"] = df_filtrado["Cantidad"] * float(cant)
 
         # Agrupar por si hay materiales repetidos dentro de la misma hoja
-        df_filtrado = (
-            df_filtrado.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
-        )
+        df_filtrado = df_filtrado.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
         return df_filtrado[["Materiales", "Unidad", "Cantidad"]]
 
