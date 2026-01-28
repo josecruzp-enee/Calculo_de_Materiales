@@ -2,11 +2,15 @@
 """
 core/conectores_mt.py
 
-Regla:
-- Reemplazar SOLO en estructuras MT: A, TH, ER, TM
-- SOLO si calibre_estructura != 1/0
-- Reemplazar SOLO conectores de compresión YC/YPC
-- Si el material ya trae (X-Y) en paréntesis => NO tocar
+Regla (muy específica):
+- En MT (estructuras A/TH/ER/TM), el ÚNICO conector que puede reemplazarse es:
+    YC 25A25 (1/0-1/0)
+- Si calibre_mt_global == 1/0  => NO reemplazar nada
+- Si calibre_mt_global != 1/0  => reemplazar SOLO ese YC 25A25 por el conector
+  que corresponda al calibre_mt_global (desde hoja 'conectores').
+
+NO toca:
+- YC 28A25, YC 28A28, bimetálicos, YG, pines, etc.
 """
 
 from __future__ import annotations
@@ -33,20 +37,12 @@ def _token_calibre(cal: str) -> str:
         t = t.replace(suf, "")
     return t
 
-def _aplica_reemplazo(estructura: str, calibre_estructura: str) -> bool:
+def _es_1_0(calibre_mt: str) -> bool:
+    return _token_calibre(calibre_mt) in ("1/0", "1/0AWG")
+
+def _es_estructura_mt(estructura: str) -> bool:
     e = _norm(estructura)
-    if not e.startswith(("A", "TH", "ER", "TM")):
-        return False
-    t = _token_calibre(calibre_estructura)
-    return t not in ("1/0", "1/0AWG")
-
-def _es_conector_yc(material: str) -> bool:
-    m = _norm(material)
-    # Solo conectores de compresión YC / YPC
-    return ("CONECTOR" in m) and ("COMPRESION" in m or "COMPRESIÓN" in m) and bool(re.search(r"\b(YC|YPC)\b", m))
-
-def _tiene_parentesis(material: str) -> bool:
-    return bool(re.search(r"\([^)]+\)", _norm(material)))
+    return e.startswith(("A", "TH", "ER", "TM"))
 
 
 # -------------------------
@@ -57,7 +53,6 @@ def cargar_conectores_mt(archivo_materiales: str) -> pd.DataFrame:
         df = pd.read_excel(archivo_materiales, sheet_name="conectores")
         df.columns = [str(c).strip() for c in df.columns]
 
-        # Mapeo tolerante
         rename_map = {}
         for col in df.columns:
             c = _norm(col)
@@ -81,17 +76,22 @@ def cargar_conectores_mt(archivo_materiales: str) -> pd.DataFrame:
 
 
 # -------------------------
-# Buscar conector por calibre
+# Buscar conector por calibre MT global
 # -------------------------
-def buscar_conector_mt(calibre: str, tabla_conectores: pd.DataFrame) -> Optional[str]:
+def buscar_conector_por_calibre(calibre_mt: str, tabla_conectores: pd.DataFrame) -> Optional[str]:
+    """
+    Devuelve la descripción del conector que corresponde al calibre_mt global.
+    Preferencia:
+      1) (X-X)
+      2) (X-*)
+    """
     if tabla_conectores is None or getattr(tabla_conectores, "empty", True):
         return None
 
-    tok = _token_calibre(calibre)
+    tok = _token_calibre(calibre_mt)
     if not tok:
         return None
 
-    # match (X-X) preferido; si no, (X-*)
     pat_sim = re.compile(rf"\(\s*{re.escape(tok)}\s*[-–]\s*{re.escape(tok)}\s*\)")
     pat_any = re.compile(rf"\(\s*{re.escape(tok)}\s*[-–].*?\)")
 
@@ -108,27 +108,42 @@ def buscar_conector_mt(calibre: str, tabla_conectores: pd.DataFrame) -> Optional
 
 
 # -------------------------
-# Reemplazar conectores (lista)
+# Reemplazo súper específico: SOLO YC 25A25
 # -------------------------
-def aplicar_reemplazos_conectores(
+def reemplazar_solo_yc25a25_mt(
     lista_materiales: List[str],
     estructura: str,
-    calibre_estructura: str,
+    calibre_mt_global: str,
     tabla_conectores: pd.DataFrame,
 ) -> List[str]:
+    """
+    Si aplica, reemplaza SOLO el material 'YC 25A25 (1/0-1/0)' (en cualquier variante de texto)
+    por el conector correspondiente al calibre_mt_global.
 
+    Si no aplica -> devuelve lista original.
+    """
     mats = list(lista_materiales or [])
 
-    # Gate único: si no aplica, devolver tal cual
-    if not _aplica_reemplazo(estructura, calibre_estructura):
+    # Gate general
+    if (not _es_estructura_mt(estructura)) or _es_1_0(calibre_mt_global):
         return mats
 
-    reemplazo = buscar_conector_mt(calibre_estructura, tabla_conectores)
+    reemplazo = buscar_conector_por_calibre(calibre_mt_global, tabla_conectores)
+    if not reemplazo:
+        return mats
+
+    # Detectar el YC 25A25 (tolerante a texto)
+    # - debe contener YC y 25A25
+    # - y (1/0-1/0) o equivalente en paréntesis
+    pat_yc25 = re.compile(r"\bYC\b.*\b25A25\b")
+    pat_10_10 = re.compile(r"\(\s*1/0\s*[-–]\s*1/0\s*\)")
 
     out: List[str] = []
     for mat in mats:
-        if _es_conector_yc(mat) and (not _tiene_parentesis(mat)) and reemplazo:
+        m = _norm(mat)
+        if pat_yc25.search(m) and pat_10_10.search(m):
             out.append(reemplazo)
         else:
             out.append(mat)
+
     return out
