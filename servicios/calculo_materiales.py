@@ -12,10 +12,8 @@ from modulo.entradas import (
     cargar_estructuras_proyectadas,
 )
 
-from core.conectores_mt import (
-    cargar_conectores_mt,
-    determinar_calibre_por_estructura,
-)
+# ✅ SOLO necesitamos cargar la tabla de conectores MT
+from core.conectores_mt import cargar_conectores_mt
 
 from core.materiales_validacion import validar_datos_proyecto
 from core.materiales_estructuras import calcular_materiales_estructura
@@ -84,6 +82,7 @@ def calcular_materiales(
 
     datos_proyecto = normalizar_datos_proyecto(datos_proyecto)
 
+    # ✅ Este calibre_mt es el GLOBAL que se define en Streamlit / datos_proyecto
     tension_raw, calibre_mt = validar_datos_proyecto(datos_proyecto)
     log(f"Tensión (raw): {tension_raw}   Calibre MT: {calibre_mt}")
 
@@ -108,10 +107,10 @@ def calcular_materiales(
     # === Materiales globales por estructura ===
     df_lista = []
     for e, cantidad in conteo.items():
-        calibre_actual = determinar_calibre_por_estructura(e, datos_proyecto)
-
+        # ✅ NO se determina calibre por estructura.
+        # ✅ Se usa SIEMPRE el calibre MT global.
         df_mat = calcular_materiales_estructura(
-            archivo_materiales, e, cantidad, tension_ll, calibre_actual, tabla_conectores_mt
+            archivo_materiales, e, cantidad, tension_ll, calibre_mt, tabla_conectores_mt
         )
 
         if df_mat is not None and not df_mat.empty:
