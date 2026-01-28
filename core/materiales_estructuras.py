@@ -7,7 +7,9 @@ from collections import Counter
 
 from core.materiales_aux import limpiar_codigo, expandir_lista_codigos
 from modulo.entradas import extraer_estructuras_proyectadas, cargar_materiales
-from core.conectores_mt import aplicar_reemplazos_conectores
+
+# ✅ Cambio: usar reemplazo PURO y específico (solo YC 25A25 en MT)
+from core.conectores_mt import reemplazar_solo_yc25a25_mt
 
 
 # ==========================================================
@@ -158,20 +160,15 @@ def calcular_materiales_estructura(
         df_filtrado["Unidad"] = df_filtrado["Unidad"].astype(str).str.strip()
         df_filtrado["Cantidad"] = pd.to_numeric(df_filtrado["Cantidad"], errors="coerce").fillna(0).astype(float)
 
-        # --- Reemplazo conectores por calibre (si aplica) ---
-        try:
-            df_filtrado["Materiales"] = aplicar_reemplazos_conectores(
-                df_filtrado["Materiales"].tolist(),
-                calibre_mt,
-                tabla_conectores_mt
-            )
-        except TypeError:
-            # por si tu función tiene firma distinta
-            df_filtrado["Materiales"] = aplicar_reemplazos_conectores(
-                df_filtrado["Materiales"].tolist(),
-                calibre_estructura=calibre_mt,
-                tabla_conectores=tabla_conectores_mt
-            )
+        # ✅ Cambio: Reemplazo PURO y específico:
+        # SOLO reemplaza YC 25A25 (1/0-1/0) en estructuras MT (A/TH/ER/TM),
+        # usando el calibre_mt global, y NO toca ningún otro conector/material.
+        df_filtrado["Materiales"] = reemplazar_solo_yc25a25_mt(
+            lista_materiales=df_filtrado["Materiales"].tolist(),
+            estructura=estructura,
+            calibre_mt_global=calibre_mt,
+            tabla_conectores=tabla_conectores_mt,
+        )
 
         # ✅ MULTIPLICAR SIEMPRE por cantidad de estructuras
         df_filtrado["Cantidad"] = df_filtrado["Cantidad"] * float(cant)
