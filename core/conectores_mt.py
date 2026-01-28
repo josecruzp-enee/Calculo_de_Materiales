@@ -165,16 +165,31 @@ def aplicar_reemplazos_conectores(
     calibre_estructura: str,
     tabla_conectores: pd.DataFrame,
 ) -> List[str]:
-    """
-    Recorre la lista de materiales y reemplaza los que sean conectores por
-    el que corresponda al calibre de ESTA estructura.
-    """
+
     salida: List[str] = []
+    token_real = _calibre_token(calibre_estructura)
+
     for mat in (lista_materiales or []):
-        if _es_conector(mat):
-            nuevo = buscar_conector_mt(calibre_estructura, tabla_conectores)
-            salida.append(nuevo if nuevo else mat)
-        else:
+        if not _es_conector(mat):
             salida.append(mat)
+            continue
+
+        mat_norm = _norm(mat)
+
+        # ¿El conector ya tiene calibre explícito? (25A25, 28A28, 1/0-1/0, etc.)
+        m = re.search(r"\(([^)]+)\)", mat_norm)
+        if m:
+            token_mat = m.group(1).replace(" ", "")
+            # si coincide con el calibre real → NO tocar
+            if token_real and token_real in token_mat:
+                salida.append(mat)
+                continue
+
+        # SOLO aquí se reemplaza
+        nuevo = buscar_conector_mt(calibre_estructura, tabla_conectores)
+        salida.append(nuevo if nuevo else mat)
+
     return salida
+
+
 
