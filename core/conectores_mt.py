@@ -81,7 +81,7 @@ def cargar_conectores_mt(archivo_materiales: str) -> pd.DataFrame:
 def determinar_calibre_por_estructura(estructura: str, datos_proyecto: dict) -> str:
     """
     Heurística simple:
-    - A*, TM*, TH*, ER*  → calibre MT (por defecto '1/0 ASCR')
+    - A*, TM*, TH*, ER*  → calibre MT (por defecto '1/0 ACSR')
     - B*, R*             → calibre BT (por defecto '1/0 WP')
     - contiene CT / N    → calibre Neutro (por defecto '#2 AWG')
     - otro               → calibre MT
@@ -93,12 +93,12 @@ def determinar_calibre_por_estructura(estructura: str, datos_proyecto: dict) -> 
     calibre_n  = _norm(datos_proyecto.get("calibre_neutro", "") or "")
 
     if any(estructura.startswith(pref) for pref in ("A", "TM", "TH", "ER")):
-        return calibre_mt or "1/0 ASCR"
+        return calibre_mt or "1/0 ACSR"
     if any(estructura.startswith(pref) for pref in ("B", "R")):
         return calibre_bt or "1/0 WP"
     if ("CT" in estructura) or (estructura.startswith("N")) or ("NEUTRO" in estructura):
         return calibre_n or "#2 AWG"
-    return calibre_mt or "1/0 ASCR"
+    return calibre_mt or "1/0 ACSR"
 
 
 # =========================
@@ -109,7 +109,7 @@ def _calibre_token(cal: str) -> str:
     return (
         _norm(cal)
         .replace(" ", "")
-        .replace("ASCR", "")
+        .replace("ACSR", "")
         .replace("AAC", "")
         .replace("MCM", "")
         .strip()
@@ -177,3 +177,4 @@ def aplicar_reemplazos_conectores(
         else:
             salida.append(mat)
     return salida
+
