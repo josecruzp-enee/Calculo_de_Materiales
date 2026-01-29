@@ -138,7 +138,7 @@ def get_configs_union() -> List[str]:
         for x in lst:
             if x not in seen:
                 seen.append(x)
-    return seen   esta en catalogo cacble
+    return seen
 
 
 # =========================
