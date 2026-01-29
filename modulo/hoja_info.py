@@ -144,15 +144,30 @@ def extraer_postes(df_estructuras: Optional[pd.DataFrame]) -> Tuple[Optional[Dic
 def extraer_transformadores(
     df_estructuras: Optional[pd.DataFrame],
     df_mat: Optional[pd.DataFrame],
-) -> Tuple[int, List[str]]:
+) -> Tuple[int, str, List[str]]:
     """
-    Retorna: (total_transformadores, capacidades_lista)
-    total_transformadores = cantidad física (TS=1, TD=2, TT=3)
-    capacidades_lista: ["TS-15 KVA", "TT-37.5 KVA", ...]
+    Retorna:
+      - total_transformadores: cantidad física (TS=1, TD=2, TT=3) sumada por bancos
+      - resumen_conexion: string estilo "2 x TS-50 kVA + 1 x TD-50 kVA"
+      - lista_bancos: ["TS-50 kVA", "TD-50 kVA", ...] (por si ocupás lista aparte)
     """
     mult = {"TS": 1, "TD": 2, "TT": 3}
 
-    # ---- 1) Desde ESTRUCTURAS (preferido) ----
+    def _norm_key(pref: str, kva: float) -> str:
+        # 50.0 -> 50 ; 37.5 -> 37.5
+        kva_txt = f"{kva:g}"
+        return f"{pref.upper()}-{kva_txt} kVA"
+
+    def _orden_key(k: str):
+        # "TS-50 kVA" -> ("TS", 50.0)
+        m = re.match(r"^(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*kVA$", k, flags=re.IGNORECASE)
+        if not m:
+            return ("ZZ", 0.0)
+        return (m.group(1).upper(), _float_safe(m.group(2), 0.0))
+
+    # ==========================================================
+    # 1) Desde ESTRUCTURAS (preferido)
+    # ==========================================================
     if df_estructuras is not None and not df_estructuras.empty and "codigodeestructura" in df_estructuras.columns:
         s = df_estructuras["codigodeestructura"].astype(str).str.upper().str.strip()
 
@@ -160,18 +175,35 @@ def extraer_transformadores(
         mask = ext[0].notna()
         if mask.any():
             qty = pd.to_numeric(df_estructuras.loc[mask, "Cantidad"], errors="coerce").fillna(0)
-            pref = ext.loc[mask, 0]
+            pref = ext.loc[mask, 0].astype(str).str.upper()
             kva = pd.to_numeric(ext.loc[mask, 1], errors="coerce").fillna(0)
 
-            total_t = int((qty * pref.map(mult)).sum())
-            caps = sorted({f"{p}-{k:g} KVA" for p, k in zip(pref, kva)})
-            return total_t, caps
+            # bancos: conteo por tipo-capacidad (cantidad de bancos)
+            bancos = {}
+            for p, k, q in zip(pref, kva, qty):
+                if q <= 0:
+                    continue
+                key = _norm_key(p, float(k))
+                bancos[key] = bancos.get(key, 0) + int(round(float(q)))
 
-    # ---- 2) Fallback: desde MATERIALES (solo si no hay en estructuras) ----
+            # total físico: bancos * multiplicador (TS=1, TD=2, TT=3)
+            total_fisico = 0
+            for key, nb in bancos.items():
+                p = key.split("-", 1)[0].upper()
+                total_fisico += int(nb * mult.get(p, 1))
+
+            # resumen conexión: "N x KEY + M x KEY"
+            partes = [f"{nb} x {key}" for key, nb in sorted(bancos.items(), key=lambda kv: _orden_key(kv[0]))]
+            resumen = " + ".join(partes)
+            return int(total_fisico), resumen, list(sorted(bancos.keys(), key=_orden_key))
+
+    # ==========================================================
+    # 2) Fallback: desde MATERIALES
+    # ==========================================================
     if df_mat is not None and not df_mat.empty:
-        # En tu pipeline, a veces el código viene como "Codigo" o "CODIGO".
         posibles_cols = [c for c in ("Codigo", "CODIGO", "cod", "COD", "Cod", "codigodeestructura") if c in df_mat.columns]
         col_busqueda = posibles_cols[0] if posibles_cols else ("Materiales" if "Materiales" in df_mat.columns else None)
+
         if col_busqueda:
             s = df_mat[col_busqueda].astype(str).str.upper().str.strip()
             ext = s.str.extract(r"\b(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA\b", expand=True)
@@ -183,17 +215,25 @@ def extraer_transformadores(
                     df_tx[cc] = 0
                 df_tx[cc] = pd.to_numeric(df_tx[cc], errors="coerce").fillna(0)
 
-                df_tx["_key"] = ext.loc[mask, 0] + "-" + ext.loc[mask, 1] + " KVA"
-                bancos = df_tx.groupby("_key", as_index=False)[cc].max()
+                bancos = {}
+                for p, k, q in zip(ext.loc[mask, 0], ext.loc[mask, 1], df_tx[cc]):
+                    if q <= 0:
+                        continue
+                    key = _norm_key(str(p), _float_safe(k, 0.0))
+                    # En materiales puede repetirse; tomamos MAX por banco típico, pero aquí sumamos por seguridad:
+                    bancos[key] = max(bancos.get(key, 0), int(round(float(q))))
 
-                total_t = 0
-                for _, r in bancos.iterrows():
-                    pref = str(r["_key"]).split("-")[0].upper()
-                    total_t += int(_float_safe(r[cc], 0) * mult.get(pref, 1))
+                total_fisico = 0
+                for key, nb in bancos.items():
+                    p = key.split("-", 1)[0].upper()
+                    total_fisico += int(nb * mult.get(p, 1))
 
-                return int(total_t), bancos["_key"].tolist()
+                partes = [f"{nb} x {key}" for key, nb in sorted(bancos.items(), key=lambda kv: _orden_key(kv[0]))]
+                resumen = " + ".join(partes)
+                return int(total_fisico), resumen, list(sorted(bancos.keys(), key=_orden_key))
 
-    return 0, []
+    return 0, "", []
+
 
 
 def extraer_luminarias(
@@ -512,10 +552,17 @@ def build_descripcion_general(
     # ==========================================================
     # Transformadores
     # ==========================================================
-    total_t, caps = extraer_transformadores(df_estructuras, df_mat)
+    total_t, resumen_conexion, _caps = extraer_transformadores(df_estructuras, df_mat)
     if total_t > 0:
-        cap_txt = ", ".join(caps) if caps else ""
-        lineas.append(f"Instalación de {total_t} transformador(es) {f'({cap_txt})' if cap_txt else ''}.")
+        # Ej: "Instalación de 2 transformador(es) en conexión 2 x TS-50 kVA."
+        if resumen_conexion:
+            if total_t == 1:
+                lineas.append(f"Instalación de 1 transformador en conexión {resumen_conexion}.")
+            else:
+                lineas.append(f"Instalación de {total_t} transformador(es) en conexión {resumen_conexion}.")
+        else:
+            # fallback
+            lineas.append(f"Instalación de {total_t} transformador(es).")
 
     # ==========================================================
     # Luminarias
