@@ -1,9 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-calculo_materiales.py
+servicios/calculo_materiales.py
+
 Orquestador: calcula materiales globales y por punto.
 Devuelve dict 'resultados' con DFs + datos_proyecto.
+
+Refactor:
+- Separación por etapas (entradas, validación/normalización, cálculo global, cálculo por punto, extras)
+- Helpers privados (_func) para que sea mantenible
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
 
@@ -12,9 +22,7 @@ from modulo.entradas import (
     cargar_estructuras_proyectadas,
 )
 
-# ✅ SOLO necesitamos cargar la tabla de conectores MT
 from core.conectores_mt import cargar_conectores_mt
-
 from core.materiales_validacion import validar_datos_proyecto
 from core.materiales_estructuras import calcular_materiales_estructura
 
@@ -37,9 +45,195 @@ from servicios.materiales_por_punto import (
 )
 
 
-def integrar_materiales_extra(df_resumen: pd.DataFrame, datos_proyecto: dict, log):
+# =============================================================================
+# Modelos auxiliares
+# =============================================================================
+
+@dataclass(frozen=True)
+class ContextoCalculo:
+    """Contexto normalizado para el cálculo."""
+    datos_proyecto: dict
+    df_estructuras: pd.DataFrame
+    tension_raw: str
+    tension_ll: float
+    calibre_mt: str
+
+
+# =============================================================================
+# Helpers: Entradas
+# =============================================================================
+
+def _cargar_entradas(
+    *,
+    archivo_estructuras=None,
+    estructuras_df: Optional[pd.DataFrame] = None,
+    datos_proyecto: Optional[dict] = None,
+) -> Tuple[dict, pd.DataFrame]:
     """
-    Integra materiales extra desde session_state.
+    Obtiene datos_proyecto y df_estructuras desde:
+      - archivo_estructuras (Excel) o
+      - estructuras_df (DataFrame ya cargado)
+    """
+    if archivo_estructuras:
+        dp = datos_proyecto or cargar_datos_proyecto(archivo_estructuras)
+        df = cargar_estructuras_proyectadas(archivo_estructuras)
+        return dp, df
+
+    if estructuras_df is not None:
+        dp = datos_proyecto or {}
+        df = estructuras_df.copy()
+        return dp, df
+
+    raise ValueError("Debe proporcionar 'archivo_estructuras' o 'estructuras_df'.")
+
+
+def _normalizar_y_validar_contexto(datos_proyecto: dict, df_estructuras: pd.DataFrame, log) -> ContextoCalculo:
+    """
+    Normaliza datos_proyecto, valida tensión/calibre, interpreta tensión LL.
+    """
+    dp = normalizar_datos_proyecto(datos_proyecto)
+
+    tension_raw, calibre_mt = validar_datos_proyecto(dp)
+    log(f"Tensión (raw): {tension_raw}   Calibre MT: {calibre_mt}")
+
+    tension_ll = (
+        extraer_tension_ll_kv(tension_raw)
+        or extraer_tension_ll_kv(dp.get("nivel_de_tension"))
+        or extraer_tension_ll_kv(dp.get("tension"))
+    )
+    if tension_ll is None:
+        raise ValueError(f"No pude interpretar la tensión. Recibí: {tension_raw!r}")
+
+    log(f"✅ Tensión normalizada (LL kV): {tension_ll}")
+
+    return ContextoCalculo(
+        datos_proyecto=dp,
+        df_estructuras=df_estructuras,
+        tension_raw=tension_raw,
+        tension_ll=float(tension_ll),
+        calibre_mt=str(calibre_mt).strip(),
+    )
+
+
+# =============================================================================
+# Helpers: Limpieza / Conteo estructuras
+# =============================================================================
+
+def _limpiar_y_contar_estructuras(df_estructuras: pd.DataFrame, log) -> Tuple[pd.DataFrame, dict, pd.DataFrame]:
+    """
+    - Limpia estructuras
+    - Explota y construye conteo por estructura
+    Retorna:
+      df_estructuras_unicas, conteo, tmp_explotado
+    """
+    log("🔍 Limpieza inicial de estructuras...")
+    df_estructuras_unicas = limpiar_df_estructuras(df_estructuras, log)
+
+    _, conteo, tmp_explotado = construir_estructuras_por_punto_y_conteo(df_estructuras_unicas, log)
+
+    return df_estructuras_unicas, conteo, tmp_explotado
+
+
+# =============================================================================
+# Helpers: Materiales globales
+# =============================================================================
+
+def _calcular_materiales_globales(
+    *,
+    archivo_materiales,
+    conteo: dict,
+    tension_ll: float,
+    calibre_mt: str,
+    tabla_conectores_mt: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Calcula materiales globales (sumatoria por estructura) como DF explotado (no resumido).
+    """
+    df_lista: List[pd.DataFrame] = []
+
+    for e, cantidad in conteo.items():
+        df_mat = calcular_materiales_estructura(
+            archivo_materiales,
+            e,
+            cantidad,
+            tension_ll,
+            calibre_mt,
+            tabla_conectores_mt,
+        )
+        if df_mat is not None and not df_mat.empty:
+            df_mat = df_mat.copy()
+            df_mat["Unidad"] = df_mat["Unidad"].astype(str).str.strip()
+            df_lista.append(df_mat)
+
+    if not df_lista:
+        return pd.DataFrame()
+
+    return pd.concat(df_lista, ignore_index=True)
+
+
+def _resumir_materiales_globales(df_total: pd.DataFrame) -> pd.DataFrame:
+    """
+    Resumen global: groupby Materiales/Unidad.
+    """
+    if df_total is None or df_total.empty:
+        return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+
+    return df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
+
+# =============================================================================
+# Helpers: Estructuras resumen / por punto
+# =============================================================================
+
+def _construir_dfs_estructuras(
+    df_indice: pd.DataFrame,
+    conteo: dict,
+    tmp_explotado: pd.DataFrame,
+    log,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Construye:
+      - df_estructuras_resumen
+      - df_estructuras_por_punto
+    """
+    df_estructuras_resumen = construir_df_estructuras_resumen(df_indice, conteo, log)
+    df_estructuras_por_punto = construir_df_estructuras_por_punto(tmp_explotado, df_indice, log)
+    return df_estructuras_resumen, df_estructuras_por_punto
+
+
+# =============================================================================
+# Helpers: Materiales por punto
+# =============================================================================
+
+def _calcular_materiales_por_punto(
+    *,
+    archivo_materiales,
+    tmp_explotado: pd.DataFrame,
+    tension_ll: float,
+    tabla_conectores_mt: pd.DataFrame,
+    datos_proyecto: dict,
+    log,
+) -> pd.DataFrame:
+    """
+    Materiales por punto (con cantidades por punto).
+    """
+    return calcular_materiales_por_punto_con_cantidad(
+        archivo_materiales,
+        tmp_explotado,
+        tension_ll,
+        tabla_conectores_mt,
+        datos_proyecto,
+        log=log,
+    )
+
+
+# =============================================================================
+# Helpers: Materiales extra (manuales)
+# =============================================================================
+
+def _integrar_materiales_extra(df_resumen: pd.DataFrame, datos_proyecto: dict, log):
+    """
+    Integra materiales extra desde session_state (si corre en Streamlit).
     ✅ NO normaliza nombres (ya vienen uniformes).
     """
     try:
@@ -62,90 +256,83 @@ def integrar_materiales_extra(df_resumen: pd.DataFrame, datos_proyecto: dict, lo
     return df_resumen, datos_proyecto
 
 
+# =============================================================================
+# API pública (orquestador)
+# =============================================================================
+
 def calcular_materiales(
     archivo_estructuras=None,
     archivo_materiales=None,
-    estructuras_df=None,
-    datos_proyecto=None
-):
+    estructuras_df: Optional[pd.DataFrame] = None,
+    datos_proyecto: Optional[dict] = None,
+) -> Dict[str, Any]:
+    """
+    Orquesta todo el pipeline y retorna el dict de resultados.
+    """
     log = get_logger()
 
-    if archivo_estructuras:
-        if not datos_proyecto:
-            datos_proyecto = cargar_datos_proyecto(archivo_estructuras)
-        df_estructuras = cargar_estructuras_proyectadas(archivo_estructuras)
-    elif estructuras_df is not None:
-        datos_proyecto = datos_proyecto or {}
-        df_estructuras = estructuras_df.copy()
-    else:
-        raise ValueError("Debe proporcionar 'archivo_estructuras' o 'estructuras_df'.")
-
-    datos_proyecto = normalizar_datos_proyecto(datos_proyecto)
-
-    # ✅ Este calibre_mt es el GLOBAL que se define en Streamlit / datos_proyecto
-    tension_raw, calibre_mt = validar_datos_proyecto(datos_proyecto)
-    log(f"Tensión (raw): {tension_raw}   Calibre MT: {calibre_mt}")
-
-    tension_ll = (
-        extraer_tension_ll_kv(tension_raw)
-        or extraer_tension_ll_kv(datos_proyecto.get("nivel_de_tension"))
-        or extraer_tension_ll_kv(datos_proyecto.get("tension"))
+    # 1) Entradas
+    dp_in, df_estructuras = _cargar_entradas(
+        archivo_estructuras=archivo_estructuras,
+        estructuras_df=estructuras_df,
+        datos_proyecto=datos_proyecto,
     )
-    if tension_ll is None:
-        raise ValueError(f"No pude interpretar la tensión. Recibí: {tension_raw!r}")
 
-    log(f"✅ Tensión normalizada (LL kV): {tension_ll}")
+    # 2) Normalización/validación
+    ctx = _normalizar_y_validar_contexto(dp_in, df_estructuras, log)
 
-    log("🔍 Limpieza inicial de estructuras...")
-    df_estructuras_unicas = limpiar_df_estructuras(df_estructuras, log)
+    # 3) Limpieza + conteo
+    _, conteo, tmp_explotado = _limpiar_y_contar_estructuras(ctx.df_estructuras, log)
 
-    _, conteo, tmp_explotado = construir_estructuras_por_punto_y_conteo(df_estructuras_unicas, log)
-
+    # 4) Índice + conectores
     df_indice = cargar_indice_normalizado(archivo_materiales, log)
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
 
-    # === Materiales globales por estructura ===
-    df_lista = []
-    for e, cantidad in conteo.items():
-        # ✅ NO se determina calibre por estructura.
-        # ✅ Se usa SIEMPRE el calibre MT global.
-        df_mat = calcular_materiales_estructura(
-            archivo_materiales, e, cantidad, tension_ll, calibre_mt, tabla_conectores_mt
-        )
+    # 5) Materiales globales
+    df_total = _calcular_materiales_globales(
+        archivo_materiales=archivo_materiales,
+        conteo=conteo,
+        tension_ll=ctx.tension_ll,
+        calibre_mt=ctx.calibre_mt,
+        tabla_conectores_mt=tabla_conectores_mt,
+    )
+    df_resumen = _resumir_materiales_globales(df_total)
 
-        if df_mat is not None and not df_mat.empty:
-            df_mat["Unidad"] = df_mat["Unidad"].astype(str).str.strip()
-            df_lista.append(df_mat)
-
-    df_total = pd.concat(df_lista, ignore_index=True) if df_lista else pd.DataFrame()
-
-    if not df_total.empty:
-        df_resumen = df_total.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
-    else:
-        df_resumen = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
-
-    df_estructuras_resumen = construir_df_estructuras_resumen(df_indice, conteo, log)
-    df_estructuras_por_punto = construir_df_estructuras_por_punto(tmp_explotado, df_indice, log)
-
-    # === Materiales por punto ===
-    df_resumen_por_punto = calcular_materiales_por_punto_con_cantidad(
-        archivo_materiales, tmp_explotado, tension_ll, tabla_conectores_mt, datos_proyecto, log=log
+    # 6) Estructuras (resumen y por punto)
+    df_estructuras_resumen, df_estructuras_por_punto = _construir_dfs_estructuras(
+        df_indice, conteo, tmp_explotado, log
     )
 
-    # materiales extra (manuales)
-    df_resumen, datos_proyecto = integrar_materiales_extra(df_resumen, datos_proyecto, log)
+    # 7) Materiales por punto
+    df_resumen_por_punto = _calcular_materiales_por_punto(
+        archivo_materiales=archivo_materiales,
+        tmp_explotado=tmp_explotado,
+        tension_ll=ctx.tension_ll,
+        tabla_conectores_mt=tabla_conectores_mt,
+        datos_proyecto=ctx.datos_proyecto,
+        log=log,
+    )
 
+    # 8) Materiales extra (manuales)
+    df_resumen, dp_out = _integrar_materiales_extra(df_resumen, ctx.datos_proyecto, log)
+
+    # 9) Resultado final
     return {
-        "datos_proyecto": datos_proyecto,
-        "tension_ll": tension_ll,
-        "calibre_mt": calibre_mt,
+        "datos_proyecto": dp_out,
+        "tension_ll": ctx.tension_ll,
+        "calibre_mt": ctx.calibre_mt,
 
         "df_resumen": df_resumen,
         "df_estructuras_resumen": df_estructuras_resumen,
         "df_estructuras_por_punto": df_estructuras_por_punto,
         "df_resumen_por_punto": df_resumen_por_punto,
 
-        # opcional debug
+        # debug
         "conteo": conteo,
         "tmp_explotado": tmp_explotado,
     }
+
+
+# Alias corto (por si querés dejar de escribir "calcular_materiales")
+def calcular_material(*args, **kwargs):
+    return calcular_materiales(*args, **kwargs)
