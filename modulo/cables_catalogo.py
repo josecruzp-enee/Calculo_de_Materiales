@@ -12,9 +12,9 @@ from typing import Dict, List, Tuple
 # =========================
 CABLES_OFICIALES: Dict[Tuple[str, str], str] = {
     # Retenidas (acerado)
-    ("RETENIDA", "1/4"):  'Cable Acerado 1/4"',
-    ("RETENIDA", "5/16"): 'Cable Acerado 5/16"',
-    ("RETENIDA", "3/8"):  'Cable Acerado 3/8"',
+    ("RETENIDA", "1/4"):  'Cable Acerado 1/4 EHS"',
+    ("RETENIDA", "5/16"): 'Cable Acerado 5/16 EHS"',
+    ("RETENIDA", "3/8"):  'Cable Acerado 3/8 EHS"',
 
     # BT forrado WP (Quince/Fig/Peach)
     ("BT", "2 WP"):      "Cable de Aluminio Forrado WP # 2 AWG Peach",
