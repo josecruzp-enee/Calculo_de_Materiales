@@ -6,7 +6,9 @@ import pandas as pd
 from collections import Counter
 
 from core.materiales_aux import limpiar_codigo, expandir_lista_codigos
-from modulo.entradas import extraer_estructuras_proyectadas, cargar_materiales
+from entradas.excel_legacy import extraer_estructuras_proyectadas, cargar_materiales
+
+
 
 # ✅ Import correcto (nombre exacto del archivo core/conectores_mt.py)
 from core.conectores_mt import reemplazar_solo_yc25a25_mt
