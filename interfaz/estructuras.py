@@ -8,7 +8,8 @@ import traceback
 import pandas as pd
 import streamlit as st
 
-from entradas.transformador_estructuras import convertir_ancho_a_largo
+from core.transformador_estructuras import coerce_df_estructuras_largo
+
 
 
 # fuentes
