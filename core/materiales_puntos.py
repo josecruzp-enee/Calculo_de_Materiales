@@ -1,6 +1,7 @@
 import pandas as pd
 from core.materiales_aux import limpiar_codigo, expandir_lista_codigos
-from modulo.entradas import cargar_materiales
+from entradas.excel_legacy import cargar_materiales
+
 
 def calcular_materiales_por_punto(archivo_materiales, estructuras_por_punto, tension):
     resumen_punto = []
