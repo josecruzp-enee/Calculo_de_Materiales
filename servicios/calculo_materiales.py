@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
-
+from core.precios_materiales import cargar_tabla_precios, calcular_costos_desde_resumen
 from core.cables_materiales import materiales_desde_cables
 
 from entradas.excel_legacy import (
@@ -348,6 +348,10 @@ def calcular_materiales(
     # 8) Materiales extra (manuales)
     df_resumen, dp_out = _integrar_materiales_extra(df_resumen, ctx.datos_proyecto, log)
 
+    # 8.1) Costos (ANEXO)
+    df_precios = cargar_tabla_precios(archivo_materiales)
+    df_costos = calcular_costos_desde_resumen(df_resumen, df_precios)
+    
     # 9) Resultado final
     return {
         "datos_proyecto": dp_out,
