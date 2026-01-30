@@ -9,7 +9,8 @@ import pandas as pd
 
 from core.cables_catalogo import get_tipos, get_calibres_union, get_configs_union
 from .cables_estado import _init_state, _editor_df_actual
-from .cables_logica import _persistir_oficial, _resumen_por_calibre, _validar_y_calcular
+from servicios.cables_logica import _persistir_oficial, _resumen_por_calibre, _validar_y_calcular
+
 
 
 def seccion_cables():
