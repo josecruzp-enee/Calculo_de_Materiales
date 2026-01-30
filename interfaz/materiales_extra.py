@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
-from modulo.entradas import cargar_catalogo_materiales
+from entradas.excel_legacy import cargar_catalogo_materiales
 
 def _consolidar_materiales(lista):
     if not lista:
