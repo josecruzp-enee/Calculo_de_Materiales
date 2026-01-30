@@ -1,6 +1,10 @@
 # app.py — navegación por secciones sin scroll (estado + query params)
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
+
+import os
+import pandas as pd
 import streamlit as st
 
 # ==== Importa tus secciones ya existentes ====
@@ -17,18 +21,6 @@ from interfaz.materiales_extra import seccion_adicionar_material
 from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
 from interfaz.mapa_kml import seccion_mapa_kmz
 
-# app.py
-import os
-import streamlit as st
-import pandas as pd
-
-# Ruta absoluta al archivo dentro de la carpeta "data"
-BASE_DIR = os.path.dirname(__file__)
-RUTA_DATOS_MATERIALES = os.path.join(BASE_DIR, "data", "Estructura_datos.xlsx")
-
-# Déjalo disponible para toda la app
-st.session_state.setdefault("ruta_datos_materiales", RUTA_DATOS_MATERIALES)
-
 
 # ---------------------------
 #   Navegación sin scroll
@@ -41,8 +33,9 @@ SECCIONES = [
     ("materiales", "Adicionar Material"),
     ("final", "Finalizar"),
     ("exportar", "Exportación"),
-    ("mapa_kml", "Mapa / KMZ"),  # <-- agregado
+    ("mapa_kml", "Mapa / KMZ"),
 ]
+
 
 def _nav_estado_actual() -> str:
     """Lee la sección actual desde query params o estado; pone un valor por defecto."""
@@ -53,21 +46,23 @@ def _nav_estado_actual() -> str:
     st.session_state["sec"] = sec
     return sec
 
+
 def _ir_a(seccion: str) -> None:
     """Cambia de sección y re-ejecuta."""
     st.session_state["sec"] = seccion
     st.query_params["s"] = seccion
     st.rerun()
 
+
 def _barra_nav_botones(seccion_activa: str) -> None:
-    """Barra superior con botones estilo azul (como los anteriores)."""
+    """Barra superior con botones."""
     st.markdown(
         """
         <style>
         .nav-top { position: sticky; top: 0; z-index: 999; background: #fff; padding: .55rem 0 .6rem; border-bottom: 1px solid #e6e6e6; }
         .pill { display:inline-block; margin:.25rem .45rem .25rem 0; }
         .pill button {
-            background:#0A3D91;               /* azul ENEE */
+            background:#0A3D91;
             color:#fff;
             border:1px solid #0A3D91;
             border-radius: 10px;
@@ -78,7 +73,7 @@ def _barra_nav_botones(seccion_activa: str) -> None:
         }
         .pill button:hover { background:#145CC9; border-color:#145CC9; }
         .pill.active button { background:#072C69; border-color:#072C69; }
-        .stButton>button { min-width: 140px; }  /* ancho consistente como antes */
+        .stButton>button { min-width: 140px; }
         </style>
         """,
         unsafe_allow_html=True
@@ -86,15 +81,21 @@ def _barra_nav_botones(seccion_activa: str) -> None:
 
     st.markdown('<div class="nav-top">', unsafe_allow_html=True)
     cols = st.columns(len(SECCIONES), gap="small")
-    for (i, (key, label)) in enumerate(SECCIONES):
+    for i, (key, label) in enumerate(SECCIONES):
         with cols[i]:
             active_cls = "active" if key == seccion_activa else ""
             st.markdown(f'<div class="pill {active_cls}">', unsafe_allow_html=True)
             if st.button(label, key=f"nav_{key}"):
-                _ir_a(key)  # cambia sección + rerun
-            st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+                _ir_a(key)
+            st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
+
+def _init_rutas() -> None:
+    """Define rutas base (solo una vez)."""
+    base_dir = os.path.dirname(__file__)
+    ruta_datos_materiales = os.path.join(base_dir, "data", "Estructura_datos.xlsx")
+    st.session_state.setdefault("ruta_datos_materiales", ruta_datos_materiales)
 
 
 # ---------------------------
@@ -103,21 +104,17 @@ def _barra_nav_botones(seccion_activa: str) -> None:
 def main() -> None:
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
 
-    # ==========================================================
-    # Encabezado institucional / estado global de la app
-    # ==========================================================
+    _init_rutas()
+
+    # Encabezado / estado global
     renderizar_encabezado()
     inicializar_estado()
 
-    # ==========================================================
     # Navegación
-    # ==========================================================
     seccion = _nav_estado_actual()
     _barra_nav_botones(seccion)
 
-    # ==========================================================
-    # Render condicional (solo UNA sección visible a la vez)
-    # ==========================================================
+    # Render condicional
     if seccion == "datos":
         seccion_datos_proyecto()
 
@@ -133,23 +130,15 @@ def main() -> None:
         modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
         df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
 
-        # ✅ DEBUG temporal (puedes quitarlo luego)
         st.write("DEBUG df_estructuras:", None if df_estructuras is None else df_estructuras.shape)
 
-        # ✅ Solo guarda si viene válido
         if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
-            # ------------------------------------------------------------------
-            # Alias viejo (tu flujo actual)
-            # ------------------------------------------------------------------
+            # Alias viejo (para no romper tu flujo actual)
             st.session_state["df_estructuras_compacto"] = df_estructuras
             st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
 
-            # ------------------------------------------------------------------
-            # ✅ Paquete estándar (nuevo pipeline)
-            # ------------------------------------------------------------------
+            # Paquete estándar (nuevo)
             st.session_state["df_estructuras"] = df_estructuras
-
-            # Si aún no existen, los crea (no pisa lo que ya tengas en Datos/Cables/Materiales)
             st.session_state.setdefault("datos_proyecto", {})
             st.session_state.setdefault(
                 "df_cables",
@@ -162,7 +151,6 @@ def main() -> None:
 
             st.success("✅ Guardado en memoria. Ya puedes ir a Finalizar.")
         else:
-            # Si ya había algo guardado antes, no lo borres
             df_prev = st.session_state.get("df_estructuras_compacto")
             if df_prev is not None and hasattr(df_prev, "empty") and not df_prev.empty:
                 st.info("ℹ️ No hubo nuevas estructuras, pero ya hay datos guardados previamente.")
@@ -173,16 +161,20 @@ def main() -> None:
         seccion_adicionar_material()
 
     elif seccion == "final":
-        # ✅ usa el oficial primero, y cae al alias viejo si no existe
-        df_e = st.session_state.get("df_estructuras") or st.session_state.get("df_estructuras_compacto")
+        df_e = st.session_state.get("df_estructuras")
+        if df_e is None:
+            df_e = st.session_state.get("df_estructuras_compacto")
+
         if df_e is None or not hasattr(df_e, "empty") or df_e.empty:
             st.info("⚠️ Carga primero las estructuras en la sección ‘Estructuras’.")
         else:
             seccion_finalizar_calculo(df_e)
 
     elif seccion == "exportar":
-        # ✅ usa el oficial primero, y cae al alias viejo si no existe
-        df_e = st.session_state.get("df_estructuras") or st.session_state.get("df_estructuras_compacto")
+        df_e = st.session_state.get("df_estructuras")
+        if df_e is None:
+            df_e = st.session_state.get("df_estructuras_compacto")
+
         ruta_e = st.session_state.get("ruta_estructuras_compacto")
 
         if df_e is None or not hasattr(df_e, "empty") or df_e.empty:
@@ -205,3 +197,5 @@ def main() -> None:
         seccion_mapa_kmz()
 
 
+if __name__ == "__main__":
+    main()
