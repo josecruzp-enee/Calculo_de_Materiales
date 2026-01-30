@@ -16,10 +16,9 @@ from interfaz.estructuras_comunes import (
     parsear_texto_a_df,
 )
 
-# ✅ Desplegables (sin circular)
-from interfaz.estructuras_desplegables import listas_desplegables
-from interfaz.estructuras_dxf_enee import cargar_desde_dxf_enee
-from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee
+# ⚠️ IMPORTANTE:
+# No importar aquí PDF/DXF/Desplegables para evitar que una dependencia
+# o un error de ese módulo tumbe toda la app al iniciar.
 
 
 # =============================================================================
@@ -71,20 +70,40 @@ def pegar_tabla() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
 
 
 # =============================================================================
-# Modo: PDF (ENEE) - import tardío para evitar caídas al iniciar
+# Router PDF (import tardío)
 # =============================================================================
 def cargar_desde_pdf_router() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
-    """
-    Import tardío para evitar que la app se caiga al arrancar por:
-    - errores de dependencias
-    - errores de sintaxis por versión de Python
-    - cambios en el módulo PDF
-    """
     try:
         from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee
         return cargar_desde_pdf_enee()
     except Exception:
         st.error("❌ No se pudo cargar el lector PDF ENEE.")
+        st.code(traceback.format_exc())
+        return None, None
+
+
+# =============================================================================
+# Router DXF (import tardío)
+# =============================================================================
+def cargar_desde_dxf_router() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    try:
+        from interfaz.estructuras_dxf_enee import cargar_desde_dxf_enee
+        return cargar_desde_dxf_enee()
+    except Exception:
+        st.error("❌ No se pudo cargar el lector DXF ENEE.")
+        st.code(traceback.format_exc())
+        return None, None
+
+
+# =============================================================================
+# Router Desplegables (import tardío)
+# =============================================================================
+def cargar_desde_desplegables_router() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    try:
+        from interfaz.estructuras_desplegables import listas_desplegables
+        return listas_desplegables()
+    except Exception:
+        st.error("❌ No se pudo cargar el modo 'Listas desplegables'.")
         st.code(traceback.format_exc())
         return None, None
 
@@ -105,8 +124,6 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
         "pdf": "pdf",
         "subir pdf (enee)": "pdf",
         "pdf (enee)": "pdf",
-
-        # ✅ DXF
         "dxf": "dxf",
         "dxf (enee)": "dxf",
     }
@@ -123,8 +140,6 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
         return cargar_desde_pdf_router()
 
     if modo == "dxf":
-        return cargar_desde_dxf_enee()
-        
-    # por defecto
-    return listas_desplegables()
+        return cargar_desde_dxf_router()
 
+    return cargar_desde_desplegables_router()
