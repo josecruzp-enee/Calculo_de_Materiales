@@ -20,6 +20,7 @@ from interfaz.mapa_kml import seccion_mapa_kmz
 # app.py
 import os
 import streamlit as st
+import pandas as pd
 
 # Ruta absoluta al archivo dentro de la carpeta "data"
 BASE_DIR = os.path.dirname(__file__)
@@ -202,4 +203,5 @@ def main() -> None:
 
     elif seccion == "mapa_kml":
         seccion_mapa_kmz()
+
 
