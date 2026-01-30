@@ -23,7 +23,8 @@ from xml.sax.saxutils import escape
 
 # --- Importación de tabla de cables ---
 from exportadores.cables_pdf import tabla_cables_pdf
-from modulo.hoja_info import hoja_info_proyecto
+from exportadores.hoja_info import hoja_info_proyecto
+
 
 
 # ======== ESTILOS COMUNES ========
@@ -632,6 +633,7 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
