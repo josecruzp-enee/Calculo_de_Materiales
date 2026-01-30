@@ -5,7 +5,8 @@ import time
 import os
 import pandas as pd
 import streamlit as st
-from modulo.estilos_app import aplicar_estilos
+from interfaz.estilos_app import aplicar_estilos
+
 
 # ====== Constantes compartidas ======
 COLUMNAS_BASE = [
