@@ -142,6 +142,9 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     Si 'codigodeestructura' existe -> respeta como LARGO.
     Si no, crea df_expandido con una fila por (Punto, codigodeestructura) desde columnas ANCHO.
     """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+
     if "codigodeestructura" in df.columns:
         base = df.copy()
         if "cantidad" not in base.columns:
@@ -149,6 +152,10 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
         return base
 
     df2 = df.copy()
+
+    if "Punto" not in df2.columns:
+        df2["Punto"] = ""
+
     df2["Estructura"] = df2.apply(
         lambda fila: sum((_limpiar_listado(fila.get(c, "")) for c in COLUMNAS_ESTRUCTURAS), []),
         axis=1
@@ -178,7 +185,7 @@ def _preview_conteo(df_expandido: pd.DataFrame) -> None:
     st.dataframe(conteo, use_container_width=True, hide_index=True)
 
 # =============================================================================
-# Sección FINALIZAR: aquí se calcula y se guarda en session_state
+# Sección FINALIZAR: calcula y guarda en session_state (NO exporta)
 # =============================================================================
 def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
     st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
@@ -193,35 +200,41 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
 
     if not ejecutar:
         # Mostrar estado
-        if st.session_state.get("resultados"):
+        if st.session_state.get("resultado_calculo"):
             st.success("✅ Ya hay resultados calculados. Puedes ir a Exportación.")
         else:
             st.caption("Presiona el botón para calcular materiales.")
         return
 
     try:
-        # Expandir + coerción 1-D
+        # Expandir + coerción 1-D (contrato final: LARGO)
         df_expandido = _expandir_estructuras(df)
         df_expandido = coerce_expandido_para_groupby(df_expandido)
+
+        # Guardar el contrato de entrada definitivo (por consistencia del pipeline)
+        st.session_state["df_estructuras"] = df_expandido
 
         # sincronizar materiales extra
         st.session_state.setdefault("datos_proyecto", {})
         if st.session_state.get("materiales_extra"):
             st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(st.session_state["materiales_extra"])
         else:
-            st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+            st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(
+                columns=["Materiales", "Unidad", "Cantidad"]
+            )
 
         ruta_materiales = st.session_state.get("ruta_datos_materiales")  # viene del app.py
         if not ruta_materiales:
             raise ValueError("No está definida la ruta del archivo de materiales (ruta_datos_materiales).")
 
-        resultados = calcular_materiales(
+        resultado = calcular_materiales(
             estructuras_df=df_expandido,
             archivo_materiales=ruta_materiales,
             datos_proyecto=st.session_state.get("datos_proyecto", {}),
         )
 
-        st.session_state["resultados"] = resultados
+        # Consolidación: un único objeto de salida del cálculo
+        st.session_state["resultado_calculo"] = resultado
         st.session_state["calculo_finalizado"] = True
 
         # invalidar PDFs viejos si existieran
@@ -233,7 +246,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
         st.error(f"❌ Error al calcular: {type(e).__name__}: {e}")
 
 # =============================================================================
-# Sección EXPORTACIÓN: aquí SOLO se generan PDFs desde resultados (NO recalcula)
+# Sección EXPORTACIÓN: SOLO genera PDFs desde resultado_calculo (NO recalcula)
 # =============================================================================
 def seccion_exportacion(
     df: pd.DataFrame,
@@ -243,14 +256,20 @@ def seccion_exportacion(
 ) -> None:
     st.subheader("6. 📂 Exportación de Reportes")
 
-    resultados = st.session_state.get("resultados")
-    if not resultados:
+    resultado = st.session_state.get("resultado_calculo")
+    if not resultado:
         st.warning("⚠️ Primero ve a la sección **Finalizar** y ejecuta el cálculo.")
         return
 
-    # preview opcional de estructuras (sin recalcular)
-    df_expandido = coerce_expandido_para_groupby(_expandir_estructuras(df))
-    _preview_conteo(df_expandido)
+    # Preview opcional de estructuras (sin recalcular materiales)
+    # Nota: preferimos mostrar lo que está en session_state["df_estructuras"] como fuente de verdad.
+    df_prev = st.session_state.get("df_estructuras")
+    if isinstance(df_prev, pd.DataFrame) and not df_prev.empty:
+        _preview_conteo(df_prev)
+    else:
+        # fallback: lo que venga por argumento
+        df_expandido = coerce_expandido_para_groupby(_expandir_estructuras(df))
+        _preview_conteo(df_expandido)
 
     with st.form("form_generar_pdfs"):
         generar = st.form_submit_button("📥 Generar Reportes PDF")
@@ -258,7 +277,7 @@ def seccion_exportacion(
     if generar:
         try:
             with st.spinner("⏳ Generando reportes, por favor espere..."):
-                pdfs = generar_pdfs(resultados)
+                pdfs = generar_pdfs(resultado)
             st.session_state["pdfs_generados"] = pdfs
             st.success("✅ Reportes generados correctamente")
         except Exception as e:
@@ -273,17 +292,42 @@ def seccion_exportacion(
     st.markdown("### 📥 Descarga de Reportes Generados")
 
     if pdfs.get("materiales"):
-        st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"], "Resumen_Materiales.pdf",
-                           "application/pdf", key="dl_mat")
+        st.download_button(
+            "📄 Descargar PDF de Materiales",
+            pdfs["materiales"],
+            "Resumen_Materiales.pdf",
+            "application/pdf",
+            key="dl_mat"
+        )
     if pdfs.get("estructuras_global"):
-        st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"], "Resumen_Estructuras.pdf",
-                           "application/pdf", key="dl_estr_glob")
+        st.download_button(
+            "📄 Descargar PDF de Estructuras (Global)",
+            pdfs["estructuras_global"],
+            "Resumen_Estructuras.pdf",
+            "application/pdf",
+            key="dl_estr_glob"
+        )
     if pdfs.get("estructuras_por_punto"):
-        st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"], "Estructuras_Por_Punto.pdf",
-                           "application/pdf", key="dl_estr_punto")
+        st.download_button(
+            "📄 Descargar PDF de Estructuras por Punto",
+            pdfs["estructuras_por_punto"],
+            "Estructuras_Por_Punto.pdf",
+            "application/pdf",
+            key="dl_estr_punto"
+        )
     if pdfs.get("materiales_por_punto"):
-        st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"], "Materiales_Por_Punto.pdf",
-                           "application/pdf", key="dl_mat_punto")
+        st.download_button(
+            "📄 Descargar PDF de Materiales por Punto",
+            pdfs["materiales_por_punto"],
+            "Materiales_Por_Punto.pdf",
+            "application/pdf",
+            key="dl_mat_punto"
+        )
     if pdfs.get("completo"):
-        st.download_button("📄 Descargar Informe Completo", pdfs["completo"], "Informe_Completo.pdf",
-                           "application/pdf", key="dl_full")
+        st.download_button(
+            "📄 Descargar Informe Completo",
+            pdfs["completo"],
+            "Informe_Completo.pdf",
+            "application/pdf",
+            key="dl_full"
+        )
