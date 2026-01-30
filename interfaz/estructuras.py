@@ -8,7 +8,8 @@ import traceback
 import pandas as pd
 import streamlit as st
 
-from modulo.entradas.transformador_estructuras import convertir_ancho_a_largo
+from entradas.transformador_estructuras import convertir_ancho_a_largo
+
 
 # fuentes
 from interfaz.estructuras_desplegables import listas_desplegables  # debe devolver df_ancho
