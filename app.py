@@ -130,24 +130,37 @@ def main() -> None:
         st.session_state["modo_carga_seleccionado"] = modo
 
     elif seccion == "estructuras":
-        modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
-        df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
+    modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
+    df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
 
-        # ✅ DEBUG temporal (puedes quitarlo luego)
-        st.write("DEBUG df_estructuras:", None if df_estructuras is None else df_estructuras.shape)
+    # ✅ DEBUG temporal (puedes quitarlo luego)
+    st.write("DEBUG df_estructuras:", None if df_estructuras is None else df_estructuras.shape)
 
-        # ✅ Solo guarda si viene válido
-        if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
-            st.session_state["df_estructuras_compacto"] = df_estructuras
-            st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
-            st.success("✅ Guardado en memoria. Ya puedes ir a Finalizar.")
+    # ✅ Solo guarda si viene válido
+    if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
+        # ------------------------------------------------------------------
+        # Alias viejo (tu flujo actual)
+        # ------------------------------------------------------------------
+        st.session_state["df_estructuras_compacto"] = df_estructuras
+        st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
+
+        # ------------------------------------------------------------------
+        # ✅ Paquete estándar (nuevo pipeline)
+        # ------------------------------------------------------------------
+        st.session_state["df_estructuras"] = df_estructuras
+        st.session_state.setdefault("datos_proyecto", {})
+        st.session_state.setdefault("df_cables", pd.DataFrame(columns=["Tipo", "Configuración", "Calibre", "Longitud (m)"]))
+        st.session_state.setdefault("df_materiales_extra", pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"]))
+
+        st.success("✅ Guardado en memoria. Ya puedes ir a Finalizar.")
+    else:
+        # Si ya había algo guardado antes, no lo borres
+        df_prev = st.session_state.get("df_estructuras_compacto")
+        if df_prev is not None and hasattr(df_prev, "empty") and not df_prev.empty:
+            st.info("ℹ️ No hubo nuevas estructuras, pero ya hay datos guardados previamente.")
         else:
-            # Si ya había algo guardado antes, no lo borres
-            df_prev = st.session_state.get("df_estructuras_compacto")
-            if df_prev is not None and hasattr(df_prev, "empty") and not df_prev.empty:
-                st.info("ℹ️ No hubo nuevas estructuras, pero ya hay datos guardados previamente.")
-            else:
-                st.warning("⚠️ No se generó la tabla LARGA (compacta). No hay nada para Finalizar.")
+            st.warning("⚠️ No se generó la tabla LARGA (compacta). No hay nada para Finalizar.")
+
 
 
     elif seccion == "materiales":
@@ -199,6 +212,7 @@ def main() -> None:
 # ==========================================================
 if __name__ == "__main__":
     main()
+
 
 
 
