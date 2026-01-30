@@ -17,7 +17,7 @@ from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
 
-from entradas.entradas_excel import (
+from entradas.excel_legacy import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
 )
