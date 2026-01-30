@@ -125,77 +125,74 @@ def main() -> None:
 
     elif seccion == "modo":
         st.subheader("3) Modo de Carga")
-        # ⚠️ Este radio se crea solo aquí → evita claves duplicadas
         modo = seleccionar_modo_carga()
         st.session_state["modo_carga_seleccionado"] = modo
 
     elif seccion == "estructuras":
-    modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
-    df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
+        modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
+        df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
 
-    # ✅ DEBUG temporal (puedes quitarlo luego)
-    st.write("DEBUG df_estructuras:", None if df_estructuras is None else df_estructuras.shape)
+        # ✅ DEBUG temporal (puedes quitarlo luego)
+        st.write("DEBUG df_estructuras:", None if df_estructuras is None else df_estructuras.shape)
 
-    # ✅ Solo guarda si viene válido
-    if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
-        # ------------------------------------------------------------------
-        # Alias viejo (tu flujo actual)
-        # ------------------------------------------------------------------
-        st.session_state["df_estructuras_compacto"] = df_estructuras
-        st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
+        # ✅ Solo guarda si viene válido
+        if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
+            # ------------------------------------------------------------------
+            # Alias viejo (tu flujo actual)
+            # ------------------------------------------------------------------
+            st.session_state["df_estructuras_compacto"] = df_estructuras
+            st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
 
-        # ------------------------------------------------------------------
-        # ✅ Paquete estándar (nuevo pipeline)
-        # ------------------------------------------------------------------
-        st.session_state["df_estructuras"] = df_estructuras
-        st.session_state.setdefault("datos_proyecto", {})
-        st.session_state.setdefault("df_cables", pd.DataFrame(columns=["Tipo", "Configuración", "Calibre", "Longitud (m)"]))
-        st.session_state.setdefault("df_materiales_extra", pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"]))
+            # ------------------------------------------------------------------
+            # ✅ Paquete estándar (nuevo pipeline)
+            # ------------------------------------------------------------------
+            st.session_state["df_estructuras"] = df_estructuras
 
-        st.success("✅ Guardado en memoria. Ya puedes ir a Finalizar.")
-    else:
-        # Si ya había algo guardado antes, no lo borres
-        df_prev = st.session_state.get("df_estructuras_compacto")
-        if df_prev is not None and hasattr(df_prev, "empty") and not df_prev.empty:
-            st.info("ℹ️ No hubo nuevas estructuras, pero ya hay datos guardados previamente.")
+            # Si aún no existen, los crea (no pisa lo que ya tengas en Datos/Cables/Materiales)
+            st.session_state.setdefault("datos_proyecto", {})
+            st.session_state.setdefault(
+                "df_cables",
+                pd.DataFrame(columns=["Tipo", "Configuración", "Calibre", "Longitud (m)"]),
+            )
+            st.session_state.setdefault(
+                "df_materiales_extra",
+                pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"]),
+            )
+
+            st.success("✅ Guardado en memoria. Ya puedes ir a Finalizar.")
         else:
-            st.warning("⚠️ No se generó la tabla LARGA (compacta). No hay nada para Finalizar.")
-
-
+            # Si ya había algo guardado antes, no lo borres
+            df_prev = st.session_state.get("df_estructuras_compacto")
+            if df_prev is not None and hasattr(df_prev, "empty") and not df_prev.empty:
+                st.info("ℹ️ No hubo nuevas estructuras, pero ya hay datos guardados previamente.")
+            else:
+                st.warning("⚠️ No se generó la tabla LARGA (compacta). No hay nada para Finalizar.")
 
     elif seccion == "materiales":
         seccion_adicionar_material()
 
     elif seccion == "final":
-        df_e = st.session_state.get("df_estructuras_compacto")
+        # ✅ usa el oficial primero, y cae al alias viejo si no existe
+        df_e = st.session_state.get("df_estructuras") or st.session_state.get("df_estructuras_compacto")
         if df_e is None or not hasattr(df_e, "empty") or df_e.empty:
             st.info("⚠️ Carga primero las estructuras en la sección ‘Estructuras’.")
         else:
             seccion_finalizar_calculo(df_e)
 
     elif seccion == "exportar":
-        df_e = st.session_state.get("df_estructuras_compacto")
+        # ✅ usa el oficial primero, y cae al alias viejo si no existe
+        df_e = st.session_state.get("df_estructuras") or st.session_state.get("df_estructuras_compacto")
         ruta_e = st.session_state.get("ruta_estructuras_compacto")
 
-        # 🔒 Validación robusta antes de exportar
         if df_e is None or not hasattr(df_e, "empty") or df_e.empty:
             st.warning("⚠️ Primero completa la sección ‘Estructuras’ antes de exportar.")
             st.info("Ve a la pestaña **Estructuras**, carga o genera tus datos, y luego vuelve aquí.")
         else:
-            # ==========================================================
-            # 🔍 DEBUG: inspecciona el DataFrame antes de exportar
-            # ==========================================================
             st.markdown("### 🧩 DEBUG: DataFrame antes de exportar")
             st.write("Columnas:", df_e.columns.tolist())
             st.write("Shape:", df_e.shape)
-            if len(df_e) > 0:
-                st.dataframe(df_e.head(10), use_container_width=True)
-            else:
-                st.info("⚠️ DataFrame vacío antes de exportar")
+            st.dataframe(df_e.head(10), use_container_width=True, hide_index=True)
 
-            # ==========================================================
-            # Ejecución normal de la exportación
-            # ==========================================================
             seccion_exportacion(
                 df=df_e,
                 modo_carga=st.session_state.get("modo_carga_seleccionado"),
@@ -205,14 +202,4 @@ def main() -> None:
 
     elif seccion == "mapa_kml":
         seccion_mapa_kmz()
-
-
-# ==========================================================
-# Punto de entrada
-# ==========================================================
-if __name__ == "__main__":
-    main()
-
-
-
 
