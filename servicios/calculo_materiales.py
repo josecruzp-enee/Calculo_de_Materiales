@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
+
 from core.cables_materiales import materiales_desde_cables
 
 from entradas.excel_legacy import (
@@ -45,8 +46,6 @@ from servicios.materiales_por_punto import (
     calcular_materiales_por_punto_con_cantidad,
 )
 
-df_mat_cables = materiales_desde_cables(df_cables)  # df_cables viene como parámetro
-df_total = pd.concat([df_mat_estructuras, df_mat_extra, df_mat_cables], ignore_index=True)
 
 # =============================================================================
 # Modelos auxiliares
@@ -268,9 +267,14 @@ def calcular_materiales(
     archivo_materiales=None,
     estructuras_df: Optional[pd.DataFrame] = None,
     datos_proyecto: Optional[dict] = None,
+    df_cables: Optional[pd.DataFrame] = None,
 ) -> Dict[str, Any]:
     """
     Orquesta todo el pipeline y retorna el dict de resultados.
+
+    df_cables:
+      DataFrame generado desde la UI (st.session_state["cables_proyecto_df"]).
+      Se transforma a materiales y se suma al resumen global.
     """
     log = get_logger()
 
@@ -291,7 +295,7 @@ def calcular_materiales(
     df_indice = cargar_indice_normalizado(archivo_materiales, log)
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
 
-    # 5) Materiales globales
+    # 5) Materiales globales (estructuras)
     df_total = _calcular_materiales_globales(
         archivo_materiales=archivo_materiales,
         conteo=conteo,
@@ -299,6 +303,30 @@ def calcular_materiales(
         calibre_mt=ctx.calibre_mt,
         tabla_conectores_mt=tabla_conectores_mt,
     )
+
+    # 5.1) Materiales desde cables (UI)
+    df_mat_cables = materiales_desde_cables(df_cables)
+    if df_mat_cables is not None and not df_mat_cables.empty:
+        df_mat_cables = df_mat_cables.copy()
+
+        # Bridge a esquema global: Materiales / Unidad / Cantidad
+        if "Codigo" in df_mat_cables.columns and "Materiales" not in df_mat_cables.columns:
+            df_mat_cables["Materiales"] = df_mat_cables["Codigo"].astype(str).str.strip()
+        if "Unidad" not in df_mat_cables.columns:
+            df_mat_cables["Unidad"] = "m"
+        if "Cantidad" not in df_mat_cables.columns and "Total Cable (m)" in df_mat_cables.columns:
+            df_mat_cables["Cantidad"] = pd.to_numeric(df_mat_cables["Total Cable (m)"], errors="coerce").fillna(0.0)
+
+        df_mat_cables = df_mat_cables[["Materiales", "Unidad", "Cantidad"]].copy()
+        df_mat_cables["Unidad"] = df_mat_cables["Unidad"].astype(str).str.strip()
+
+        df_total = pd.concat([df_total, df_mat_cables], ignore_index=True)
+        log(f"✅ Se integraron materiales desde cables ({len(df_mat_cables)} filas)")
+
+        # Guardar también en datos_proyecto (útil para reportes/debug)
+        ctx.datos_proyecto["cables_proyecto_df"] = df_cables
+
+    # 5.2) Resumen global
     df_resumen = _resumir_materiales_globales(df_total)
 
     # 6) Estructuras (resumen y por punto)
