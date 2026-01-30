@@ -7,7 +7,7 @@ UI de Streamlit para gestionar cables del proyecto.
 from __future__ import annotations
 import pandas as pd
 
-from .cables_catalogo import get_tipos, get_calibres_union, get_configs_union
+from core.cables_catalogo import get_tipos, get_calibres_union, get_configs_union
 from .cables_estado import _init_state, _editor_df_actual
 from .cables_logica import _persistir_oficial, _resumen_por_calibre, _validar_y_calcular
 
