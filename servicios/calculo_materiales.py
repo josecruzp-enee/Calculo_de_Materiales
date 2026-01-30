@@ -307,7 +307,8 @@ def calcular_materiales(
     # 5.1) Materiales desde cables (UI)
     df_mat_cables = materiales_desde_cables(df_cables)
     if df_mat_cables is not None and not df_mat_cables.empty:
-        df_mat_cables = df_mat_cables.copy()
+        df_total = pd.concat([df_total, df_mat_cables], ignore_index=True)
+        log(f"✅ Se integraron materiales desde cables ({len(df_mat_cables)} filas)")
 
         # Bridge a esquema global: Materiales / Unidad / Cantidad
         if "Codigo" in df_mat_cables.columns and "Materiales" not in df_mat_cables.columns:
