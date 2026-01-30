@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
+from core.cables_materiales import materiales_desde_cables
 
 from entradas.excel_legacy import (
     cargar_datos_proyecto,
@@ -44,6 +45,8 @@ from servicios.materiales_por_punto import (
     calcular_materiales_por_punto_con_cantidad,
 )
 
+df_mat_cables = materiales_desde_cables(df_cables)  # df_cables viene como parámetro
+df_total = pd.concat([df_mat_estructuras, df_mat_extra, df_mat_cables], ignore_index=True)
 
 # =============================================================================
 # Modelos auxiliares
