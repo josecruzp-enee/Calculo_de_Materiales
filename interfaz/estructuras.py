@@ -8,109 +8,68 @@ import traceback
 import pandas as pd
 import streamlit as st
 
-from interfaz.estructuras_comunes import (
-    COLUMNAS_BASE,
-    normalizar_columnas,
-    expand_wide_to_long,
-    materializar_df_a_archivo,
-    parsear_texto_a_df,
-)
+from modulo.entradas.transformador_estructuras import convertir_ancho_a_largo
 
-# ⚠️ IMPORTANTE:
-# No importar aquí PDF/DXF/Desplegables para evitar que una dependencia
-# o un error de ese módulo tumbe toda la app al iniciar.
+# fuentes
+from interfaz.estructuras_desplegables import listas_desplegables  # debe devolver df_ancho
+from interfaz.estructuras_dxf_enee import extraer_estructuras_desde_dxf, leer_dxf_streamlit  # o tu función pública
+from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee  # ideal: que devuelva df_ancho
 
 
-# =============================================================================
-# Modo: Excel
-# =============================================================================
-def cargar_desde_excel() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+def cargar_desde_excel_ancho() -> Optional[pd.DataFrame]:
     archivo = st.file_uploader("Archivo de estructuras (.xlsx)", type=["xlsx"], key="upl_estructuras")
     if not archivo:
-        return None, None
-
+        return None
     try:
         xls = pd.ExcelFile(archivo)
         hoja = next((s for s in xls.sheet_names if s.strip().lower() == "estructuras"), xls.sheet_names[0])
-        df_ancho = pd.read_excel(xls, sheet_name=hoja)
+        return pd.read_excel(xls, sheet_name=hoja)
     except Exception as e:
         st.error(f"Error leyendo el Excel: {e}")
-        return None, None
-
-    df_ancho = normalizar_columnas(df_ancho, COLUMNAS_BASE)
-    ruta_tmp = materializar_df_a_archivo(df_ancho, "excel")
-    df_largo = expand_wide_to_long(df_ancho)
-
-    st.success(f"✅ Cargadas {len(df_largo)} filas (largo) desde Excel")
-    return df_largo, ruta_tmp
+        return None
 
 
-# =============================================================================
-# Modo: Pegar tabla
-# =============================================================================
-def pegar_tabla() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
-    texto_pegado = st.text_area(
-        "Pega aquí tu tabla (CSV/TSV). Soporta coma y saltos de línea en celdas.",
+def pegar_tabla_ancho() -> Optional[pd.DataFrame]:
+    from interfaz.estructuras_comunes import parsear_texto_a_df, COLUMNAS_BASE
+
+    texto = st.text_area(
+        "Pega aquí tu tabla (CSV/TSV).",
         height=200,
         key="txt_pegar_tabla",
     )
-    if not texto_pegado:
-        return None, None
+    if not texto:
+        return None
 
-    df_ancho = parsear_texto_a_df(texto_pegado, COLUMNAS_BASE)
-    if df_ancho is None or df_ancho.empty:
-        st.warning("No se detectaron filas válidas en el texto.")
-        return None, None
-
-    ruta_tmp = materializar_df_a_archivo(df_ancho, "pega")
-    df_largo = expand_wide_to_long(df_ancho)
-
-    st.success(f"✅ Tabla pegada convertida ({len(df_largo)} filas)")
-    return df_largo, ruta_tmp
+    df = parsear_texto_a_df(texto, COLUMNAS_BASE)
+    return df if df is not None and not df.empty else None
 
 
-# =============================================================================
-# Router PDF (import tardío)
-# =============================================================================
-def cargar_desde_pdf_router() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+def cargar_pdf_ancho() -> Optional[pd.DataFrame]:
     try:
-        from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee
-        return cargar_desde_pdf_enee()
+        return cargar_desde_pdf_enee()  # ideal: que retorne df_ancho
     except Exception:
         st.error("❌ No se pudo cargar el lector PDF ENEE.")
         st.code(traceback.format_exc())
-        return None, None
+        return None
 
 
-# =============================================================================
-# Router DXF (import tardío)
-# =============================================================================
-def cargar_desde_dxf_router() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+def cargar_dxf_ancho() -> Optional[pd.DataFrame]:
+    st.subheader("📐 Cargar estructuras desde DXF (ENEE)")
+    archivo = st.file_uploader("Sube el DXF del plano", type=["dxf"], key="upl_dxf")
+    if not archivo:
+        return None
+
+    capa = st.text_input("Capa de estructuras (opcional)", value="Estructuras", key="capa_estructuras_dxf").strip()
+
     try:
-        from interfaz.estructuras_dxf_enee import cargar_desde_dxf_enee
-        return cargar_desde_dxf_enee()
-    except Exception:
-        st.error("❌ No se pudo cargar el lector DXF ENEE.")
-        st.code(traceback.format_exc())
-        return None, None
+        doc = leer_dxf_streamlit(archivo)
+        df_ancho = extraer_estructuras_desde_dxf(doc, capa_objetivo=capa if capa else "")
+        return df_ancho if df_ancho is not None and not df_ancho.empty else None
+    except Exception as e:
+        st.error(f"No pude leer el DXF: {e}")
+        return None
 
 
-# =============================================================================
-# Router Desplegables (import tardío)
-# =============================================================================
-def cargar_desde_desplegables_router() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
-    try:
-        from interfaz.estructuras_desplegables import listas_desplegables
-        return listas_desplegables()
-    except Exception:
-        st.error("❌ No se pudo cargar el modo 'Listas desplegables'.")
-        st.code(traceback.format_exc())
-        return None, None
-
-
-# =============================================================================
-# Router público
-# =============================================================================
 def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     modo_raw = (modo_carga or "").strip().lower()
 
@@ -130,16 +89,26 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
 
     modo = mapa.get(modo_raw, "desplegables")
 
+    # 1) obtener ANCHO según fuente
     if modo == "excel":
-        return cargar_desde_excel()
+        df_ancho = cargar_desde_excel_ancho()
 
-    if modo == "pegar":
-        return pegar_tabla()
+    elif modo == "pegar":
+        df_ancho = pegar_tabla_ancho()
 
-    if modo == "pdf":
-        return cargar_desde_pdf_router()
+    elif modo == "pdf":
+        df_ancho = cargar_pdf_ancho()
 
-    if modo == "dxf":
-        return cargar_desde_dxf_router()
+    elif modo == "dxf":
+        df_ancho = cargar_dxf_ancho()
 
-    return cargar_desde_desplegables_router()
+    else:
+        df_ancho = listas_desplegables()  # importante: que esto devuelva df_ancho
+
+    if df_ancho is None or df_ancho.empty:
+        return None, None
+
+    # 2) convertir ANCHO → LARGO (único camino)
+    _, df_largo, ruta_tmp = convertir_ancho_a_largo(df_ancho, etiqueta=modo)
+
+    return df_largo, ruta_tmp
