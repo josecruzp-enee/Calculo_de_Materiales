@@ -4,7 +4,7 @@ pdf_exportador.py
 Genera PDFs a partir de resultados ya calculados (DFs + datos_proyecto).
 """
 
-from modulo.pdf_utils import (
+from exportadores.pdf_utils import (
     generar_pdf_materiales,
     generar_pdf_estructuras_global,
     generar_pdf_estructuras_por_punto,
