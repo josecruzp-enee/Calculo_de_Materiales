@@ -6,7 +6,8 @@ Carga y normalización del índice de estructuras + construcción de DFs de resu
 
 import pandas as pd
 
-from modulo.entradas import cargar_indice
+from entradas.excel_legacy import cargar_indice
+
 from servicios.normalizacion_estructuras import _normalizar_codigo_basico
 
 
