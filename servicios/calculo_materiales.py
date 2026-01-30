@@ -17,7 +17,7 @@ from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
 
-from modulo.entradas import (
+from entradas.entradas import (
     cargar_datos_proyecto,
     cargar_estructuras_proyectadas,
 )
