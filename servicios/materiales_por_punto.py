@@ -6,7 +6,8 @@ Cálculo de materiales por punto, respetando cantidad y reemplazo específico de
 
 import pandas as pd
 
-from modulo.entradas import cargar_materiales
+from entradas.excel_legacy import cargar_materiales
+
 from servicios.normalizacion_estructuras import encontrar_col_tension
 
 from core.conectores_mt import reemplazar_solo_yc25a25_mt
