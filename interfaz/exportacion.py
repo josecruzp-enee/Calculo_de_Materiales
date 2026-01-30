@@ -25,7 +25,7 @@ COLUMNAS_ESTRUCTURAS = [
 # =============================================================================
 # Utils de saneo 1-D (blindaje definitivo para groupby)
 # =============================================================================
-def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
+def _aplanar_columnas(df: pd.DataFrame) -> pd.DataFrame:
     """Convierte columnas MultiIndex/Tuplas a texto plano 'a / b / c' y normaliza espacios."""
     flat = []
     for c in df.columns:
@@ -37,23 +37,23 @@ def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
     out.columns = [s.strip() for s in flat]
     return out
 
-def _dedup_columns(df: pd.DataFrame) -> pd.DataFrame:
+def _hacer_columnas_unicas(df: pd.DataFrame) -> pd.DataFrame:
     """Hace únicos los nombres de columna agregando sufijos .1, .2, ... cuando se repiten."""
     cols = list(map(str, df.columns))
-    seen: Dict[str, int] = {}
-    newcols: List[str] = []
+    vistos: Dict[str, int] = {}
+    nuevas: List[str] = []
     for c in cols:
-        if c not in seen:
-            seen[c] = 0
-            newcols.append(c)
+        if c not in vistos:
+            vistos[c] = 0
+            nuevas.append(c)
         else:
-            seen[c] += 1
-            newcols.append(f"{c}.{seen[c]}")
+            vistos[c] += 1
+            nuevas.append(f"{c}.{vistos[c]}")
     out = df.copy()
-    out.columns = newcols
+    out.columns = nuevas
     return out
 
-def _scalarize_cell(x) -> str:
+def _valor_a_texto_plano(x) -> str:
     """Convierte cualquier valor no 1-D a string plano."""
     if isinstance(x, (list, tuple, set)):
         return ", ".join(map(str, x))
@@ -68,14 +68,14 @@ def _scalarize_cell(x) -> str:
         return ""
     return str(x)
 
-def _to_int_safe(v) -> int:
+def _a_entero_seguro(v) -> int:
     try:
         iv = int(float(v))
         return iv if iv >= 0 else 0
     except Exception:
         return 0
 
-def coerce_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
+def forzar_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
     """
     Devuelve SIEMPRE un DataFrame NUEVO y 1-D con columnas EXACTAS:
     ['Punto','codigodeestructura','cantidad'] listo para groupby.
@@ -83,8 +83,8 @@ def coerce_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
 
-    df = _flatten_columns(df)
-    df = _dedup_columns(df).copy()
+    df = _aplanar_columnas(df)
+    df = _hacer_columnas_unicas(df).copy()
 
     # Asegura columnas requeridas
     if "Punto" not in df.columns:
@@ -102,10 +102,10 @@ def coerce_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df["cantidad"] = 1
 
-    p = df["Punto"].map(_scalarize_cell).map(str).str.strip()
-    c = df["codigodeestructura"].map(_scalarize_cell).map(str).str.strip()
+    p = df["Punto"].map(_valor_a_texto_plano).map(str).str.strip()
+    c = df["codigodeestructura"].map(_valor_a_texto_plano).map(str).str.strip()
     c = c.str.replace(r"\s*\([^)]*\)\s*$", "", regex=True).str.strip()  # quita "(E)" etc al final
-    q = df["cantidad"].map(_to_int_safe).astype(int)
+    q = df["cantidad"].map(_a_entero_seguro).astype(int)
 
     mask = (c != "") & (q > 0)
     p, c, q = p[mask], c[mask], q[mask]
@@ -171,8 +171,8 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 # UI de conteo rápido
 # =============================================================================
-def _preview_conteo(df_expandido: pd.DataFrame) -> None:
-    df_expandido = coerce_expandido_para_groupby(df_expandido)
+def _vista_previa_conteo(df_expandido: pd.DataFrame) -> None:
+    df_expandido = forzar_expandido_para_groupby(df_expandido)
     conteo = (
         df_expandido
         .groupby(["Punto", "codigodeestructura"], dropna=False)["cantidad"]
@@ -194,12 +194,10 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
         st.info("⚠️ No hay estructuras cargadas.")
         return
 
-    # Botón estable (form)
     with st.form("form_finalizar_calculo"):
         ejecutar = st.form_submit_button("✅ Finalizar Cálculo")
 
     if not ejecutar:
-        # Mostrar estado
         if st.session_state.get("resultado_calculo"):
             st.success("✅ Ya hay resultados calculados. Puedes ir a Exportación.")
         else:
@@ -209,7 +207,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
     try:
         # Expandir + coerción 1-D (contrato final: LARGO)
         df_expandido = _expandir_estructuras(df)
-        df_expandido = coerce_expandido_para_groupby(df_expandido)
+        df_expandido = forzar_expandido_para_groupby(df_expandido)
 
         # Guardar el contrato de entrada definitivo (por consistencia del pipeline)
         st.session_state["df_estructuras"] = df_expandido
@@ -227,17 +225,18 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
         if not ruta_materiales:
             raise ValueError("No está definida la ruta del archivo de materiales (ruta_datos_materiales).")
 
+        # ✅ Cables desde la UI (si existen)
+        df_cables = st.session_state.get("cables_proyecto_df")
+
         resultado = calcular_materiales(
             estructuras_df=df_expandido,
             archivo_materiales=ruta_materiales,
             datos_proyecto=st.session_state.get("datos_proyecto", {}),
+            df_cables=df_cables,  # ✅ aquí se integran al resumen
         )
 
-        # Consolidación: un único objeto de salida del cálculo
         st.session_state["resultado_calculo"] = resultado
         st.session_state["calculo_finalizado"] = True
-
-        # invalidar PDFs viejos si existieran
         st.session_state.pop("pdfs_generados", None)
 
         st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
@@ -261,15 +260,12 @@ def seccion_exportacion(
         st.warning("⚠️ Primero ve a la sección **Finalizar** y ejecuta el cálculo.")
         return
 
-    # Preview opcional de estructuras (sin recalcular materiales)
-    # Nota: preferimos mostrar lo que está en session_state["df_estructuras"] como fuente de verdad.
     df_prev = st.session_state.get("df_estructuras")
     if isinstance(df_prev, pd.DataFrame) and not df_prev.empty:
-        _preview_conteo(df_prev)
+        _vista_previa_conteo(df_prev)
     else:
-        # fallback: lo que venga por argumento
-        df_expandido = coerce_expandido_para_groupby(_expandir_estructuras(df))
-        _preview_conteo(df_expandido)
+        df_expandido = forzar_expandido_para_groupby(_expandir_estructuras(df))
+        _vista_previa_conteo(df_expandido)
 
     with st.form("form_generar_pdfs"):
         generar = st.form_submit_button("📥 Generar Reportes PDF")
