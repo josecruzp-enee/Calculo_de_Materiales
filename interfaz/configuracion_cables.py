@@ -17,4 +17,5 @@ from core.cables_catalogo import (
     get_configs_union,
 )
 
-from .cables_logica import descripcion_oficial
+from servicios.cables_logica import descripcion_oficial
+
