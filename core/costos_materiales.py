@@ -1,109 +1,154 @@
 # -*- coding: utf-8 -*-
 """
 core/costos_materiales.py
-Arma df_costos_materiales cruzando df_resumen con hoja 'precios'.
+
+Este módulo es el contrato oficial para costos.
+
+El servicio importa:
+  - cargar_tabla_precios(archivo_materiales) -> DataFrame precios
+  - calcular_costos_desde_resumen(df_resumen, precios_o_archivo) -> DataFrame costos
+
+Lee hoja: 'precios'
+Columnas esperadas (flexibles): Materiales, Unidad, Precio Unitario, Moneda (opcional)
+
+Salida df_costos:
+  Materiales, Unidad, Cantidad, Precio Unitario, Costo, Moneda, Tiene_Precio
 """
 
 from __future__ import annotations
+
 import pandas as pd
 import unicodedata
 
 
+# -------------------------
+# Normalización robusta
+# -------------------------
 def _norm_txt(s: object) -> str:
     if s is None or (isinstance(s, float) and pd.isna(s)):
         return ""
     t = str(s).strip()
-    t = "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn")
+    t = "".join(
+        c for c in unicodedata.normalize("NFD", t)
+        if unicodedata.category(c) != "Mn"
+    )
     t = " ".join(t.split())
     return t.upper()
 
 
-def cargar_precios(archivo_materiales: str) -> pd.DataFrame:
+# -------------------------
+# API esperada por servicios
+# -------------------------
+def cargar_tabla_precios(archivo_materiales: str) -> pd.DataFrame:
     """
-    Lee precios desde Estructura_datos.xlsx, hoja 'Materiales' (tu tabla maestra).
-    Espera columnas tipo:
-      - 'DESCRIPCIÓN DE MATERIALES' (o similar)
-      - 'Unidad'
-      - 'Costo Unitario' (o similar)
-      - opcional: 'Moneda'
+    Lee hoja 'precios' del Excel.
+    Retorna DataFrame con:
+      Materiales, Unidad, Precio Unitario, Moneda, Materiales_norm, Unidad_norm
     """
     try:
-        df = pd.read_excel(archivo_materiales, sheet_name="Materiales")
+        df = pd.read_excel(archivo_materiales, sheet_name="precios")
     except Exception:
-        return pd.DataFrame(columns=["Materiales", "Unidad", "Precio_Unitario", "Moneda"])
+        return pd.DataFrame(
+            columns=["Materiales", "Unidad", "Precio Unitario", "Moneda", "Materiales_norm", "Unidad_norm"]
+        )
 
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Mapear nombres reales de tu Excel -> nombres estándar del motor
-    ren = {
-        "DESCRIPCIÓN DE MATERIALES": "Materiales",
-        "DESCRIPCION DE MATERIALES": "Materiales",
-        "DESCRIPCIÓN": "Materiales",
-        "DESCRIPCION": "Materiales",
-        "Costo Unitario": "Precio_Unitario",
-        "COSTO UNITARIO": "Precio_Unitario",
-        "Costo_Unitario": "Precio_Unitario",
-        "COSTO_UNITARIO": "Precio_Unitario",
-    }
+    # Normalizar nombres de columnas a estándar
+    ren = {}
+    for c in df.columns:
+        cc = c.lower().strip()
+        if cc.startswith("material"):
+            ren[c] = "Materiales"
+        elif cc.startswith("unidad"):
+            ren[c] = "Unidad"
+        elif "precio" in cc or "costo" in cc:
+            ren[c] = "Precio Unitario"
+        elif "moneda" in cc:
+            ren[c] = "Moneda"
+
     df = df.rename(columns=ren)
 
-    # Asegurar columnas mínimas
-    for c in ["Materiales", "Unidad", "Precio_Unitario"]:
-        if c not in df.columns:
-            df[c] = ""
+    # Asegurar mínimas
+    for col in ["Materiales", "Unidad", "Precio Unitario"]:
+        if col not in df.columns:
+            df[col] = ""
 
     if "Moneda" not in df.columns:
-        # si no la tenés en la tabla, la fijamos (como en tu ejemplo)
-        df["Moneda"] = "L"
+        df["Moneda"] = ""
+
+    df["Materiales"] = df["Materiales"].astype(str).str.strip()
+    df["Unidad"] = df["Unidad"].astype(str).str.strip()
+    df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce")
 
     # Normalización para match robusto
     df["Materiales_norm"] = df["Materiales"].map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].map(_norm_txt)
 
-    # Precio a número
-    df["Precio_Unitario"] = pd.to_numeric(df["Precio_Unitario"], errors="coerce")
-
-    # Quitar duplicados (si existen)
+    # quitar duplicados por material+unidad normalizados
     df = df.drop_duplicates(subset=["Materiales_norm", "Unidad_norm"], keep="last")
 
-    return df[["Materiales", "Unidad", "Precio_Unitario", "Moneda", "Materiales_norm", "Unidad_norm"]].copy()
+    return df[
+        ["Materiales", "Unidad", "Precio Unitario", "Moneda", "Materiales_norm", "Unidad_norm"]
+    ].copy()
 
 
-
-def construir_costos_desde_resumen(df_resumen: pd.DataFrame, archivo_materiales: str) -> pd.DataFrame:
+def calcular_costos_desde_resumen(df_resumen: pd.DataFrame, precios_o_archivo) -> pd.DataFrame:
     """
-    df_resumen debe tener: Materiales, Unidad, Cantidad
-    retorna: Materiales, Unidad, Cantidad, Precio_Unitario, Costo_Total, Moneda, Tiene_Precio
+    Construye df_costos a partir de df_resumen (Materiales, Unidad, Cantidad).
+
+    precios_o_archivo puede ser:
+      A) DataFrame de precios (salida de cargar_tabla_precios)
+      B) str ruta del archivo_materiales (para autoleer precios)
+
+    Retorna:
+      Materiales, Unidad, Cantidad, Precio Unitario, Costo, Moneda, Tiene_Precio
     """
     if df_resumen is None or df_resumen.empty:
-        return pd.DataFrame(columns=[
-            "Materiales", "Unidad", "Cantidad", "Precio_Unitario",
-            "Costo_Total", "Moneda", "Tiene_Precio"
-        ])
+        return pd.DataFrame(
+            columns=["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo", "Moneda", "Tiene_Precio"]
+        )
 
-    precios = cargar_precios(archivo_materiales)
+    # Obtener tabla de precios
+    if isinstance(precios_o_archivo, str):
+        df_precios = cargar_tabla_precios(precios_o_archivo)
+    else:
+        df_precios = precios_o_archivo
 
-    df = df_resumen.copy()
-    df.columns = [str(c).strip() for c in df.columns]
+    base = df_resumen.copy()
+    base.columns = [str(c).strip() for c in base.columns]
 
-    df["Materiales_norm"] = df["Materiales"].map(_norm_txt)
-    df["Unidad_norm"] = df["Unidad"].map(_norm_txt)
-    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
+    for col in ["Materiales", "Unidad", "Cantidad"]:
+        if col not in base.columns:
+            base[col] = ""
 
-    if precios is None or precios.empty:
-        df["Precio_Unitario"] = pd.NA
-        df["Moneda"] = ""
-        df["Costo_Total"] = pd.NA
-        df["Tiene_Precio"] = False
-        return df[["Materiales", "Unidad", "Cantidad", "Precio_Unitario", "Costo_Total", "Moneda", "Tiene_Precio"]]
+    base["Materiales"] = base["Materiales"].astype(str).str.strip()
+    base["Unidad"] = base["Unidad"].astype(str).str.strip()
+    base["Cantidad"] = pd.to_numeric(base["Cantidad"], errors="coerce").fillna(0.0)
 
-    dfm = df.merge(
-        precios[["Materiales_norm", "Unidad_norm", "Precio_Unitario", "Moneda"]],
+    base["Materiales_norm"] = base["Materiales"].map(_norm_txt)
+    base["Unidad_norm"] = base["Unidad"].map(_norm_txt)
+
+    if df_precios is None or getattr(df_precios, "empty", True):
+        base["Precio Unitario"] = pd.NA
+        base["Moneda"] = ""
+        base["Tiene_Precio"] = False
+        base["Costo"] = pd.NA
+        return base[["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo", "Moneda", "Tiene_Precio"]]
+
+    precios = df_precios.copy()
+    # asegurar cols
+    for col in ["Precio Unitario", "Moneda", "Materiales_norm", "Unidad_norm"]:
+        if col not in precios.columns:
+            precios[col] = ""
+
+    out = base.merge(
+        precios[["Materiales_norm", "Unidad_norm", "Precio Unitario", "Moneda"]],
         on=["Materiales_norm", "Unidad_norm"],
         how="left",
     )
 
-    dfm["Tiene_Precio"] = dfm["Precio_Unitario"].notna()
-    dfm["Costo_Total"] = dfm["Precio_Unitario"] * dfm["Cantidad"]
+    out["Tiene_Precio"] = out["Precio Unitario"].notna()
+    out["Costo"] = out["Precio Unitario"] * out["Cantidad"]
 
-    return dfm[["Materiales", "Unidad", "Cantidad", "Precio_Unitario", "Costo_Total", "Moneda", "Tiene_Precio"]]
+    return out[["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo", "Moneda", "Tiene_Precio"]]
