@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
-from core.costos_materiales import construir_costos_desde_resumen
+from core.costos_materiales import cargar_tabla_precios, calcular_costos_desde_resumen
+
 from core.cables_materiales import materiales_desde_cables
 
 from entradas.excel_legacy import (
@@ -358,7 +359,7 @@ def calcular_materiales(
     df_costos = None
     try:
         if archivo_materiales:
-            df_costos = construir_costos_desde_resumen(df_resumen, archivo_materiales)
+            df_costos = calcular_costos_desde_resumen(df_resumen, archivo_materiales)
             if df_costos is not None and hasattr(df_costos, "empty") and df_costos.empty:
                 df_costos = None
     except Exception:
@@ -377,6 +378,7 @@ def calcular_materiales(
 
         # ✅ CLAVE: esto lo consume pdf_exportador.py → pdf_utils.py
         "df_costos_materiales": df_costos,
+        
 
         # debug
         "conteo": conteo,
