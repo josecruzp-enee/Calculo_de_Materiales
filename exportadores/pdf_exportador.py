@@ -3,6 +3,7 @@
 exportadores/pdf_exportador.py
 Genera PDFs a partir de resultados ya calculados (DFs + datos_proyecto).
 """
+from core.costos_materiales import construir_costos_desde_resumen
 
 from exportadores.pdf_utils import (
     generar_pdf_materiales,
