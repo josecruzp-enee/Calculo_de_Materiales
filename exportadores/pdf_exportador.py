@@ -42,6 +42,7 @@ def generar_pdfs(resultados: dict) -> dict:
 
     # ✅ costos vienen calculados desde servicios (si aplica)
     df_costos = resultados.get("df_costos_materiales", None)
+    df_costos_estructuras = resultados.get("df_costos_estructuras", None)
 
     if any(x is None for x in (df_resumen, df_eg, df_ep, df_mpp)):
         raise ValueError("Uno o más DataFrames vienen como None en 'resultados'.")
@@ -58,6 +59,7 @@ def generar_pdfs(resultados: dict) -> dict:
         df_mpp,
         dp,
         df_costos=df_costos,
+        df_costos_estructuras=df_costos_estructuras,
     )
 
     return {
