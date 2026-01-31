@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-pdf_utils.py
+exportadores/pdf_utils.py
 Generación de informes PDF del cálculo de materiales y estructuras
 Autor: José Nikol Cruz
 """
@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.enums import TA_CENTER
 from datetime import datetime
 from io import BytesIO
 import os
@@ -21,10 +21,9 @@ import re
 import pandas as pd
 from xml.sax.saxutils import escape
 
-# --- Importación de tabla de cables ---
+# --- Importación de tabla de cables y hoja de info ---
 from exportadores.cables_pdf import tabla_cables_pdf
 from exportadores.hoja_info import hoja_info_proyecto
-
 
 
 # ======== ESTILOS COMUNES ========
@@ -53,12 +52,12 @@ def formatear_material(nombre):
 # ==========================
 # HELPERS (ANTI PÁGINAS EN BLANCO)
 # ==========================
-def safe_page_break(elems):
+def salto_pagina_seguro(elems):
     if elems and not isinstance(elems[-1], PageBreak):
         elems.append(PageBreak())
 
 
-def extend_flowables(elems, extra):
+def extender_flowables(elems, extra):
     if not extra:
         return elems
     if elems and isinstance(elems[-1], PageBreak) and isinstance(extra[0], PageBreak):
@@ -67,7 +66,7 @@ def extend_flowables(elems, extra):
     return elems
 
 
-def strip_trailing_pagebreaks(elems):
+def quitar_saltos_finales(elems):
     while elems and isinstance(elems[-1], PageBreak):
         elems.pop()
     return elems
@@ -131,9 +130,6 @@ def _calibres_por_tipo(cables, tipo_buscar: str) -> str:
     return ", ".join(calibres)
 
 
-
-
-
 # ==========================================================
 # PDF: RESUMEN DE MATERIALES (GLOBAL)
 # ==========================================================
@@ -182,6 +178,81 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+
+# ==========================================================
+# ANEXO: COSTOS DE MATERIALES (TABLA)
+# ==========================================================
+def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
+    """
+    Construye flowables ReportLab para el anexo de costos.
+    Espera columnas típicas:
+      Materiales, Unidad, Cantidad, Precio_Unitario, Costo_Total, Moneda, Tiene_Precio
+    """
+    titulo = Paragraph("ANEXO – Costos de Materiales", styles["Heading2"])
+
+    if df_costos is None or df_costos.empty:
+        return [titulo, Paragraph("No hay datos de costos disponibles.", styles["Normal"])]
+
+    df = df_costos.copy()
+
+    # Orden bonito: primero los que tienen precio, luego los faltantes
+    if "Tiene_Precio" not in df.columns:
+        df["Tiene_Precio"] = df["Precio_Unitario"].notna()
+
+    df["Tiene_Precio"] = df["Tiene_Precio"].fillna(False)
+    if "Materiales" not in df.columns:
+        df["Materiales"] = ""
+    df = df.sort_values(["Tiene_Precio", "Materiales"], ascending=[False, True])
+
+    # Totales
+    if "Costo_Total" in df.columns:
+        subtotal = df.loc[df["Tiene_Precio"] == True, "Costo_Total"].sum(skipna=True)
+    else:
+        subtotal = 0.0
+
+    data = [["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo Total", "Moneda"]]
+    for _, r in df.iterrows():
+        mat = str(r.get("Materiales", "") or "")
+        uni = str(r.get("Unidad", "") or "")
+        cant = float(r.get("Cantidad", 0) or 0)
+
+        pu = r.get("Precio_Unitario", None)
+        ct = r.get("Costo_Total", None)
+        mon = str(r.get("Moneda", "") or "")
+
+        pu_txt = "" if (pu is None or pd.isna(pu)) else f"{float(pu):,.2f}"
+        ct_txt = "" if (ct is None or pd.isna(ct)) else f"{float(ct):,.2f}"
+
+        data.append([
+            Paragraph(formatear_material(mat), styleN),
+            escape(uni),
+            f"{cant:,.2f}",
+            pu_txt,
+            ct_txt,
+            escape(mon),
+        ])
+
+    data.append(["", "", "", "SUBTOTAL", f"{float(subtotal):,.2f}", ""])
+
+    t = Table(data, repeatRows=1, colWidths=[3.2*inch, 0.8*inch, 0.8*inch, 1.0*inch, 1.0*inch, 0.7*inch])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (2, 1), (4, -1), "RIGHT"),
+        ("ALIGN", (1, 1), (1, -2), "CENTER"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (3, -1), (4, -1), "Helvetica-Bold"),
+    ]))
+
+    faltan = int((df["Tiene_Precio"] == False).sum())
+    nota = Paragraph(
+        f"Nota: {faltan} material(es) no tienen precio cargado en la hoja 'precios'.",
+        styles["Normal"]
+    )
+
+    return [Spacer(1, 8), titulo, Spacer(1, 8), t, Spacer(1, 8), nota]
 
 
 # ==========================================================
@@ -314,6 +385,7 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
     buffer.close()
     return pdf_bytes
 
+
 # ==========================================================
 # TABLA: ESTRUCTURAS POR PUNTO (USADA EN PDF COMPLETO)
 # ==========================================================
@@ -350,43 +422,6 @@ def _tabla_estructuras_por_punto(punto, df_p, doc_width):
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
 
-    return t
-
-def _tabla_materiales_por_punto(df_p, doc_width):
-    st_hdr = ParagraphStyle("hdr_mat", parent=styles["Normal"], fontName="Helvetica-Bold",
-                            fontSize=9, alignment=TA_CENTER)
-    st_mat = ParagraphStyle("mat", parent=styles["Normal"], fontSize=8, wordWrap="CJK")
-    st_mat.splitLongWords = 1
-    st_un = ParagraphStyle("un", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER)
-    st_qty = ParagraphStyle("qty_mat", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER)
-
-    df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
-
-    data = [[
-        Paragraph("Material", st_hdr),
-        Paragraph("Unidad", st_hdr),
-        Paragraph("Cantidad", st_hdr),
-    ]]
-
-    for _, r in df_agr.iterrows():
-        data.append([
-            Paragraph(formatear_material(r["Materiales"]), st_mat),
-            Paragraph(escape(str(r["Unidad"])), st_un),
-            Paragraph(f"{float(r['Cantidad']):.2f}", st_qty),
-        ])
-
-    t = Table(
-        data,
-        colWidths=[doc_width * 0.70, doc_width * 0.15, doc_width * 0.15],
-        repeatRows=1
-    )
-    t.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.darkgreen),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-    ]))
     return t
 
 
@@ -458,16 +493,18 @@ def generar_pdf_completo(
     df_estructuras,
     df_estructuras_por_punto,
     df_mat_por_punto,
-    datos_proyecto
+    datos_proyecto,
+    df_costos=None,
 ):
     """
     Genera el PDF total del proyecto incluyendo:
     - Hoja de Información del Proyecto
-    - Resumen de Materiales (global)
+    - Resumen de Materiales (global)  (SIN precios)
     - Tabla de Cables
     - Resumen de Estructuras (global)
     - Estructuras por Punto
-    - Materiales por Punto  ✅ (ANTES NO ESTABA)
+    - Materiales por Punto
+    - ANEXO: Costos de Materiales (si df_costos viene)
     """
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
@@ -481,7 +518,7 @@ def generar_pdf_completo(
     # ---------------------------
     # Hoja de información
     # ---------------------------
-    elems = extend_flowables(
+    elems = extender_flowables(
         elems,
         hoja_info_proyecto(
             datos_proyecto,
@@ -497,13 +534,12 @@ def generar_pdf_completo(
     # ---------------------------
     # Resumen de materiales (GLOBAL)
     # ---------------------------
-    safe_page_break(elems)
+    salto_pagina_seguro(elems)
     elems.append(Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"]))
 
     if df_mat is not None and not df_mat.empty:
-        # Normalizar columnas (por si vienen con espacios)
         dfm = df_mat.copy()
-        dfm.columns = [c.strip() for c in dfm.columns]
+        dfm.columns = [str(c).strip() for c in dfm.columns]
 
         df_agr = dfm.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
         data = [["Material", "Unidad", "Cantidad"]]
@@ -529,36 +565,31 @@ def generar_pdf_completo(
     # ---------------------------
     # Tabla de cables
     # ---------------------------
-    elems = extend_flowables(elems, tabla_cables_pdf(datos_proyecto))
+    elems = extender_flowables(elems, tabla_cables_pdf(datos_proyecto))
 
     # ---------------------------
     # Resumen de estructuras (GLOBAL)
     # ---------------------------
+    salto_pagina_seguro(elems)
+    elems.append(Paragraph("<b>Resumen de Estructuras</b>", styles["Heading2"]))
+
     if df_estructuras is not None and not df_estructuras.empty:
-        safe_page_break(elems)
-        elems.append(Paragraph("<b>Resumen de Estructuras</b>", styles["Heading2"]))
-
         dfe = df_estructuras.copy()
-        dfe.columns = [c.strip() for c in dfe.columns]
-
-        # OJO: aquí usas tu helper existente _tabla_estructuras_por_punto
-        # (funciona siempre que df_estructuras tenga: codigodeestructura, Descripcion, Cantidad)
+        dfe.columns = [str(c).strip() for c in dfe.columns]
         tabla = _tabla_estructuras_por_punto("GLOBAL", dfe, doc.width)
         elems.append(tabla)
     else:
-        safe_page_break(elems)
-        elems.append(Paragraph("<b>Resumen de Estructuras</b>", styles["Heading2"]))
         elems.append(Paragraph("No se encontraron estructuras.", styleN))
 
     # ---------------------------
     # Estructuras por punto
     # ---------------------------
     if df_estructuras_por_punto is not None and not df_estructuras_por_punto.empty:
-        safe_page_break(elems)
+        salto_pagina_seguro(elems)
         elems.append(Paragraph("<b>Estructuras por Punto</b>", styles["Heading2"]))
 
         dfep = df_estructuras_por_punto.copy()
-        dfep.columns = [c.strip() for c in dfep.columns]
+        dfep.columns = [str(c).strip() for c in dfep.columns]
 
         puntos = sorted(
             dfep["Punto"].unique(),
@@ -575,20 +606,22 @@ def generar_pdf_completo(
             elems.append(Spacer(1, 0.2 * inch))
 
     # ---------------------------
-    # Materiales por punto ✅ (NUEVO EN PDF TOTAL)
+    # Materiales por punto
     # ---------------------------
     if df_mat_por_punto is not None and not df_mat_por_punto.empty:
-        safe_page_break(elems)
+        salto_pagina_seguro(elems)
         elems.append(Paragraph("<b>Materiales por Punto</b>", styles["Heading2"]))
 
         dfmp = df_mat_por_punto.copy()
-        dfmp.columns = [c.strip() for c in dfmp.columns]
+        dfmp.columns = [str(c).strip() for c in dfmp.columns]
 
-        # Validación mínima de columnas
         required = {"Punto", "Materiales", "Unidad", "Cantidad"}
         if not required.issubset(set(dfmp.columns)):
             faltan = ", ".join(sorted(required - set(dfmp.columns)))
-            elems.append(Paragraph(f"⚠️ No se puede mostrar 'Materiales por Punto'. Faltan columnas: {escape(faltan)}", styleN))
+            elems.append(Paragraph(
+                f"⚠️ No se puede mostrar 'Materiales por Punto'. Faltan columnas: {escape(faltan)}",
+                styleN
+            ))
         else:
             puntos = sorted(
                 dfmp["Punto"].unique(),
@@ -602,7 +635,6 @@ def generar_pdf_completo(
                 elems.append(Paragraph(f"<b>Punto {escape(num)}</b>", styles["Heading3"]))
                 df_p = dfmp[dfmp["Punto"] == p]
 
-                # Agrupar por Material y Unidad en ese punto
                 df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
                 data = [["Material", "Unidad", "Cantidad"]]
@@ -625,16 +657,18 @@ def generar_pdf_completo(
                 elems.append(Spacer(1, 0.2 * inch))
 
     # ---------------------------
+    # ANEXO: Costos de Materiales (al final del PDF completo)
+    # ---------------------------
+    if df_costos is not None:
+        salto_pagina_seguro(elems)
+        elems = extender_flowables(elems, tabla_costos_materiales_pdf(df_costos))
+
+    # ---------------------------
     # Construcción final del PDF
     # ---------------------------
-    strip_trailing_pagebreaks(elems)
+    quitar_saltos_finales(elems)
     doc.build(elems)
 
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-
-
-
-
