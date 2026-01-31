@@ -186,8 +186,7 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
     """
     Construye flowables ReportLab para el anexo de costos.
-    Ahora SIN columna Moneda.
-    Formato de moneda directo: "L 5.00"
+    Formato de moneda: "L 5.00"
     """
     titulo = Paragraph("ANEXO – Costos de Materiales", styles["Heading2"])
 
@@ -196,33 +195,47 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     df = df_costos.copy()
 
-    # Orden bonito: primero los que tienen precio, luego los faltantes
-    if "Tiene_Precio" not in df.columns:
-        df["Tiene_Precio"] = df.get("Precio Unitario", pd.Series([pd.NA] * len(df))).notna()
-    df["Tiene_Precio"] = df["Tiene_Precio"].fillna(False)
+    # ✅ NORMALIZAR columnas (ESTO ES LO QUE TE FALTABA)
+    df.columns = [str(c).replace("\u00A0", " ").strip() for c in df.columns]
+
+    # ✅ Aliases de columnas (por si vienen con otros nombres)
+    ren = {}
+    for c in df.columns:
+        cc = c.lower().replace(" ", "_")
+        if cc in {"material", "materiales", "descripcion", "descripción"}:
+            ren[c] = "Materiales"
+        elif cc in {"unidad", "unid"}:
+            ren[c] = "Unidad"
+        elif cc in {"cantidad", "qty"}:
+            ren[c] = "Cantidad"
+        elif cc in {"precio_unitario", "precio", "costo_unitario"}:
+            ren[c] = "Precio Unitario"
+        elif cc in {"costo", "costo_total", "costototal"}:
+            ren[c] = "Costo Total"
+    df = df.rename(columns=ren)
 
     # Columnas mínimas defensivas
-    for c, default in [("Materiales", ""), ("Unidad", ""), ("Cantidad", 0.0)]:
+    for c, default in [("Materiales", ""), ("Unidad", ""), ("Cantidad", 0.0), ("Precio Unitario", pd.NA), ("Costo Total", pd.NA)]:
         if c not in df.columns:
             df[c] = default
 
+    # Asegurar numéricos
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
+    df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce")
+    df["Costo Total"] = pd.to_numeric(df["Costo Total"], errors="coerce")
+
+    # ✅ Tiene_Precio: mejor por >0 (no solo notna)
+    df["Tiene_Precio"] = (df["Precio Unitario"].fillna(0.0) > 0)
+
     df = df.sort_values(["Tiene_Precio", "Materiales"], ascending=[False, True])
 
-    # Totales
-    if "Costo" in df.columns:
-        subtotal = df.loc[df["Tiene_Precio"] == True, "Costo"].sum(skipna=True)
-    elif "Costo_Total" in df.columns:
-        subtotal = df.loc[df["Tiene_Precio"] == True, "Costo_Total"].sum(skipna=True)
-    else:
-        subtotal = 0.0
+    subtotal = df.loc[df["Tiene_Precio"] == True, "Costo Total"].fillna(0.0).sum()
 
-    # --- Helper para formatear con L ---
     def _money(v):
         if v is None or pd.isna(v):
             return ""
         return f"L {float(v):,.2f}"
 
-    # Encabezados (SIN Moneda)
     data = [["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo Total"]]
 
     for _, r in df.iterrows():
@@ -230,9 +243,8 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
         uni = str(r.get("Unidad", "") or "")
         cant = float(r.get("Cantidad", 0) or 0)
 
-        # Soporta ambos nombres por compatibilidad
-        pu = r.get("Precio Unitario", r.get("Precio_Unitario", None))
-        ct = r.get("Costo", r.get("Costo_Total", None))
+        pu = r.get("Precio Unitario", None)
+        ct = r.get("Costo Total", None)
 
         data.append([
             Paragraph(formatear_material(mat), styleN),
@@ -242,10 +254,8 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
             _money(ct),
         ])
 
-    # Subtotal (SIN Moneda)
     data.append(["", "", "", "SUBTOTAL", _money(subtotal)])
 
-    # Ajuste de anchos: quitamos la última col
     t = Table(
         data,
         repeatRows=1,
@@ -263,7 +273,7 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     faltan = int((df["Tiene_Precio"] == False).sum())
     nota = Paragraph(
-        f"Nota: {faltan} material(es) no tienen precio cargado en la hoja 'precios'.",
+        f"Nota: {faltan} material(es) no tienen precio cargado.",
         styles["Normal"]
     )
 
@@ -686,4 +696,5 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
