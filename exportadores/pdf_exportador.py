@@ -4,8 +4,6 @@ exportadores/pdf_exportador.py
 Genera PDFs a partir de resultados ya calculados (DFs + datos_proyecto).
 """
 
-from core.costos_materiales import construir_costos_desde_resumen
-
 from exportadores.pdf_utils import (
     generar_pdf_materiales,
     generar_pdf_estructuras_global,
@@ -48,49 +46,30 @@ def generar_pdfs(resultados: dict) -> dict:
     df_ep = resultados.get("df_estructuras_por_punto")
     df_mpp = resultados.get("df_resumen_por_punto")
 
-    # (Opcional) costos ya calculados desde antes
-    df_costos = resultados.get("df_costos_materiales")
+    # ✅ Costos: ya vienen calculados desde servicios (si aplica)
+    df_costos = resultados.get("df_costos_materiales", None)
 
     # =========================
     # 3) Validación de DataFrames
     # =========================
-    if any(x is None for x in (df_resumen, df_eg, df_ep, df_mpp)):
+    if df_resumen is None or df_eg is None or df_ep is None or df_mpp is None:
         raise ValueError("Uno o más DataFrames vienen como None en 'resultados'.")
 
     # =========================
-    # 4) Construcción de costos (SIN romper nada)
-    # =========================
-    if df_costos is None:
-        try:
-            # Fuente única de precios: Estructura_datos.xlsx (hoja Materiales)
-            archivo_materiales = (
-                dp.get("archivo_materiales")
-                or "Estructura_datos.xlsx"
-            )
-
-            df_costos = construir_costos_desde_resumen(
-                df_resumen=df_resumen,
-                archivo_materiales=archivo_materiales,
-            )
-
-        except Exception:
-            # Nunca rompemos el flujo de PDFs
-            df_costos = None
-
-    # =========================
-    # 5) Salidas (PDFs)
+    # 4) Salidas (PDFs)
     # =========================
     pdf_materiales = generar_pdf_materiales(df_resumen, nombre, dp)
     pdf_estructuras_global = generar_pdf_estructuras_global(df_eg, nombre)
     pdf_estructuras_por_punto = generar_pdf_estructuras_por_punto(df_ep, nombre)
     pdf_materiales_por_punto = generar_pdf_materiales_por_punto(df_mpp, nombre)
 
+    # ✅ Informe completo con anexo de costos (si df_costos existe y no está vacío)
     pdf_completo = generar_pdf_completo(
-        df_resumen=df_resumen,
-        df_eg=df_eg,
-        df_ep=df_ep,
-        df_mpp=df_mpp,
-        dp=dp,
+        df_resumen,
+        df_eg,
+        df_ep,
+        df_mpp,
+        dp,
         df_costos=df_costos,
     )
 
