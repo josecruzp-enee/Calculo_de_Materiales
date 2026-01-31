@@ -39,58 +39,53 @@ def _norm_txt(s: object) -> str:
 # -------------------------
 # API esperada por servicios
 # -------------------------
-def cargar_tabla_precios(archivo_materiales: str) -> pd.DataFrame:
+def cargar_precios(archivo_materiales: str) -> pd.DataFrame:
     """
-    Lee hoja 'precios' del Excel.
-    Retorna DataFrame con:
-      Materiales, Unidad, Precio Unitario, Moneda, Materiales_norm, Unidad_norm
+    Lee precios desde el Excel base.
+    Soporta hojas: 'precios' o 'Materiales'
+    Soporta columnas: 'DESCRIPCIÓN DE MATERIALES' y 'Costo Unitario'
+    Devuelve: Materiales, Unidad, Precio Unitario
     """
     try:
-        df = pd.read_excel(archivo_materiales, sheet_name="precios")
+        xls = pd.ExcelFile(archivo_materiales)
+        hoja = "precios" if "precios" in xls.sheet_names else ("Materiales" if "Materiales" in xls.sheet_names else xls.sheet_names[0])
+
+        df = pd.read_excel(archivo_materiales, sheet_name=hoja)
+        df.columns = [str(c).replace("\u00A0", " ").strip() for c in df.columns]
+
+        ren = {}
+        for c in df.columns:
+            cc = c.lower()
+
+            # Materiales
+            if cc.startswith("material") or "descrip" in cc:
+                ren[c] = "Materiales"
+
+            # Unidad
+            elif cc.startswith("unidad"):
+                ren[c] = "Unidad"
+
+            # Precio
+            elif "precio" in cc or "costo unitario" in cc or cc.startswith("costo"):
+                ren[c] = "Precio Unitario"
+
+        df = df.rename(columns=ren)
+
+        # defaults defensivos
+        for col in ["Materiales", "Unidad", "Precio Unitario"]:
+            if col not in df.columns:
+                df[col] = ""
+
+        df["Materiales"] = df["Materiales"].astype(str).str.strip()
+        df["Unidad"] = df["Unidad"].astype(str).str.strip()
+
+        # numérico
+        df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce").fillna(0.0)
+
+        return df[["Materiales", "Unidad", "Precio Unitario"]].copy()
+
     except Exception:
-        return pd.DataFrame(
-            columns=["Materiales", "Unidad", "Precio Unitario", "Moneda", "Materiales_norm", "Unidad_norm"]
-        )
-
-    df.columns = [str(c).strip() for c in df.columns]
-
-    # Normalizar nombres de columnas a estándar
-    ren = {}
-    for c in df.columns:
-        cc = c.lower().strip()
-        if cc.startswith("material"):
-            ren[c] = "Materiales"
-        elif cc.startswith("unidad"):
-            ren[c] = "Unidad"
-        elif "precio" in cc or "costo" in cc:
-            ren[c] = "Precio Unitario"
-        elif "moneda" in cc:
-            ren[c] = "Moneda"
-
-    df = df.rename(columns=ren)
-
-    # Asegurar mínimas
-    for col in ["Materiales", "Unidad", "Precio Unitario"]:
-        if col not in df.columns:
-            df[col] = ""
-
-    if "Moneda" not in df.columns:
-        df["Moneda"] = ""
-
-    df["Materiales"] = df["Materiales"].astype(str).str.strip()
-    df["Unidad"] = df["Unidad"].astype(str).str.strip()
-    df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce")
-
-    # Normalización para match robusto
-    df["Materiales_norm"] = df["Materiales"].map(_norm_txt)
-    df["Unidad_norm"] = df["Unidad"].map(_norm_txt)
-
-    # quitar duplicados por material+unidad normalizados
-    df = df.drop_duplicates(subset=["Materiales_norm", "Unidad_norm"], keep="last")
-
-    return df[
-        ["Materiales", "Unidad", "Precio Unitario", "Moneda", "Materiales_norm", "Unidad_norm"]
-    ].copy()
+        return pd.DataFrame(columns=["Materiales", "Unidad", "Precio Unitario"])
 
 
 def calcular_costos_desde_resumen(df_resumen: pd.DataFrame, precios_o_archivo) -> pd.DataFrame:
