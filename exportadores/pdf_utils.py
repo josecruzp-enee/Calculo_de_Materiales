@@ -280,6 +280,110 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
     return [Spacer(1, 8), titulo, Spacer(1, 8), t, Spacer(1, 8), nota]
 
 # ==========================================================
+# ANEXO B: COSTOS POR ESTRUCTURA (TABLA)
+# ==========================================================
+def tabla_costos_estructuras_pdf(df_costos_estructuras: pd.DataFrame):
+    """
+    Construye flowables ReportLab para el ANEXO B – Costos por Estructura.
+
+    Espera columnas (flexibles):
+      - codigodeestructura (o Estructura)
+      - Descripcion (o Descripción)
+      - Cantidad
+      - Costo Unitario
+      - Costo Total
+
+    Imprime moneda como "L 1,234.56"
+    """
+    titulo = Paragraph("ANEXO B – Costos por Estructura", styles["Heading2"])
+
+    if df_costos_estructuras is None or df_costos_estructuras.empty:
+        return [titulo, Paragraph("No hay datos de costos por estructura disponibles.", styles["Normal"])]
+
+    df = df_costos_estructuras.copy()
+    df.columns = [str(c).replace("\u00A0", " ").strip() for c in df.columns]
+
+    # Normalizar nombres flexibles
+    if "codigodeestructura" not in df.columns:
+        if "Estructura" in df.columns:
+            df["codigodeestructura"] = df["Estructura"]
+        else:
+            df["codigodeestructura"] = ""
+
+    if "Descripcion" not in df.columns:
+        if "Descripción" in df.columns:
+            df["Descripcion"] = df["Descripción"]
+        else:
+            df["Descripcion"] = ""
+
+    for col, default in [("Cantidad", 0), ("Costo Unitario", 0.0), ("Costo Total", 0.0)]:
+        if col not in df.columns:
+            df[col] = default
+
+    # Tipos
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0).astype(int)
+    df["Costo Unitario"] = pd.to_numeric(df["Costo Unitario"], errors="coerce").fillna(0.0)
+    df["Costo Total"] = pd.to_numeric(df["Costo Total"], errors="coerce").fillna(0.0)
+
+    # Orden
+    df = df.sort_values(["codigodeestructura"], ascending=[True])
+
+    # Helper moneda
+    def _money(v):
+        if v is None or pd.isna(v):
+            return ""
+        return f"L {float(v):,.2f}"
+
+    # Encabezados
+    data = [[
+        "Estructura", "Descripción", "Cantidad", "Costo Unitario", "Costo Total"
+    ]]
+
+    for _, r in df.iterrows():
+        cod = str(r.get("codigodeestructura", "") or "").strip()
+        desc = str(r.get("Descripcion", "") or "").strip()
+        cant = int(r.get("Cantidad", 0) or 0)
+
+        data.append([
+            Paragraph(escape(cod), styleN),
+            Paragraph(escape(desc), styleN),
+            f"{cant:d}",
+            _money(r.get("Costo Unitario", 0.0)),
+            _money(r.get("Costo Total", 0.0)),
+        ])
+
+    # Total general
+    total_general = float(df["Costo Total"].sum())
+    data.append(["", "", "", "TOTAL", _money(total_general)])
+
+    t = Table(
+        data,
+        repeatRows=1,
+        colWidths=[1.1 * inch, 3.1 * inch, 0.8 * inch, 1.2 * inch, 1.2 * inch],
+    )
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (2, 1), (2, -2), "CENTER"),
+        ("ALIGN", (3, 1), (4, -1), "RIGHT"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (3, -1), (4, -1), "Helvetica-Bold"),
+    ]))
+
+    nota = Paragraph(
+        "Nota: El costo por estructura se calcula como la suma de (cantidad_material × precio_unitario) "
+        "para una (1) estructura, multiplicado por la cantidad total de esa estructura en el proyecto.",
+        styles["Normal"]
+    )
+
+    return [Spacer(1, 8), titulo, Spacer(1, 8), t, Spacer(1, 8), nota]
+
+
+
+
+
+# ==========================================================
 # PDF: RESUMEN DE ESTRUCTURAS (GLOBAL)
 # ==========================================================
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
@@ -519,6 +623,7 @@ def generar_pdf_completo(
     df_mat_por_punto,
     datos_proyecto,
     df_costos=None,
+    df_costos_estructuras=None
 ):
     """
     Genera el PDF total del proyecto incluyendo:
@@ -681,12 +786,21 @@ def generar_pdf_completo(
                 elems.append(Spacer(1, 0.2 * inch))
 
     # ---------------------------
-    # ANEXO: Costos de Materiales (al final del PDF completo)
+    # ANEXO A: Costos de Materiales (al final del PDF completo)
     # ---------------------------
     if df_costos is not None and hasattr(df_costos, "empty") and not df_costos.empty:
         salto_pagina_seguro(elems)
         elems = extender_flowables(elems, tabla_costos_materiales_pdf(df_costos))
 
+    # ---------------------------
+    # ANEXO B: Costos por Estructura
+    # ---------------------------
+    if df_costos_estructuras is not None and hasattr(df_costos_estructuras, "empty") and not df_costos_estructuras.empty:
+        salto_pagina_seguro(elems)
+        elems = extender_flowables(elems, tabla_costos_estructuras_pdf(df_costos_estructuras))
+
+
+    
     # ---------------------------
     # Construcción final del PDF
     # ---------------------------
@@ -696,5 +810,6 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
