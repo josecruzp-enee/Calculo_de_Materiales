@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
-from core.precios_materiales import cargar_tabla_precios, calcular_costos_desde_resumen
+from core.costos_materiales import construir_costos_desde_resumen
 from core.cables_materiales import materiales_desde_cables
 
 from entradas.excel_legacy import (
