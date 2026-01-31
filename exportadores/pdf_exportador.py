@@ -48,25 +48,33 @@ def generar_pdfs(resultados: dict) -> dict:
     df_ep = resultados.get("df_estructuras_por_punto")
     df_mpp = resultados.get("df_resumen_por_punto")
 
-    # (Opcional) Si todavía no existe, intentamos construirlo desde df_resumen
-    df_costos = resultados.get("df_costos_materiales", None)
+    # (Opcional) costos ya calculados desde antes
+    df_costos = resultados.get("df_costos_materiales")
 
     # =========================
     # 3) Validación de DataFrames
     # =========================
-    if df_resumen is None or df_eg is None or df_ep is None or df_mpp is None:
+    if any(x is None for x in (df_resumen, df_eg, df_ep, df_mpp)):
         raise ValueError("Uno o más DataFrames vienen como None en 'resultados'.")
 
     # =========================
-    # 4) Cálculos complementarios (sin romper nada)
+    # 4) Construcción de costos (SIN romper nada)
     # =========================
-    # Si NO viene df_costos_materiales pero queremos el anexo en el completo,
-    # lo construimos desde df_resumen.
     if df_costos is None:
         try:
-            df_costos = construir_costos_desde_resumen(df_resumen, dp=dp)
+            # Fuente única de precios: Estructura_datos.xlsx (hoja Materiales)
+            archivo_materiales = (
+                dp.get("archivo_materiales")
+                or "Estructura_datos.xlsx"
+            )
+
+            df_costos = construir_costos_desde_resumen(
+                df_resumen=df_resumen,
+                archivo_materiales=archivo_materiales,
+            )
+
         except Exception:
-            # Si falla por cualquier razón, no rompemos generación de PDF completo.
+            # Nunca rompemos el flujo de PDFs
             df_costos = None
 
     # =========================
@@ -77,14 +85,13 @@ def generar_pdfs(resultados: dict) -> dict:
     pdf_estructuras_por_punto = generar_pdf_estructuras_por_punto(df_ep, nombre)
     pdf_materiales_por_punto = generar_pdf_materiales_por_punto(df_mpp, nombre)
 
-    # ✅ Informe completo con anexo de costos (si df_costos existe)
     pdf_completo = generar_pdf_completo(
-        df_resumen,
-        df_eg,
-        df_ep,
-        df_mpp,
-        dp,
-        df_costos=df_costos,  # <-- CLAVE
+        df_resumen=df_resumen,
+        df_eg=df_eg,
+        df_ep=df_ep,
+        df_mpp=df_mpp,
+        dp=dp,
+        df_costos=df_costos,
     )
 
     return {
