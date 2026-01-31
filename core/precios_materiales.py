@@ -13,31 +13,38 @@ import pandas as pd
 
 def cargar_precios(archivo_materiales: str) -> pd.DataFrame:
     try:
-        df = pd.read_excel(archivo_materiales, sheet_name="precios")
+        df = pd.read_excel(archivo_materiales, sheet_name="Materiales")
         df.columns = [str(c).strip() for c in df.columns]
-        # Normalizar nombres esperados
+
         ren = {}
         for c in df.columns:
             cc = c.lower()
-            if cc.startswith("material"):
+            if "descripción" in cc or "descripcion" in cc:
                 ren[c] = "Materiales"
             elif cc.startswith("unidad"):
                 ren[c] = "Unidad"
-            elif "precio" in cc:
+            elif "costo" in cc and "unit" in cc:
                 ren[c] = "Precio Unitario"
+
         df = df.rename(columns=ren)
 
+        # columnas mínimas
         for col in ["Materiales", "Unidad", "Precio Unitario"]:
             if col not in df.columns:
                 df[col] = ""
 
         df["Materiales"] = df["Materiales"].astype(str).str.strip()
         df["Unidad"] = df["Unidad"].astype(str).str.strip()
-        df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce").fillna(0.0)
+        df["Precio Unitario"] = pd.to_numeric(
+            df["Precio Unitario"], errors="coerce"
+        ).fillna(0.0)
 
-        return df[["Materiales", "Unidad", "Precio Unitario"]].copy()
-    except Exception:
+        return df[["Materiales", "Unidad", "Precio Unitario"]]
+
+    except Exception as e:
+        print("ERROR cargando precios:", e)
         return pd.DataFrame(columns=["Materiales", "Unidad", "Precio Unitario"])
+
 
 
 def construir_costos(df_resumen: pd.DataFrame, df_precios: pd.DataFrame) -> pd.DataFrame:
