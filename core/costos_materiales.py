@@ -19,17 +19,42 @@ def _norm_txt(s: object) -> str:
 
 
 def cargar_precios(archivo_materiales: str) -> pd.DataFrame:
+    """
+    Lee precios desde Estructura_datos.xlsx, hoja 'Materiales' (tu tabla maestra).
+    Espera columnas tipo:
+      - 'DESCRIPCIÓN DE MATERIALES' (o similar)
+      - 'Unidad'
+      - 'Costo Unitario' (o similar)
+      - opcional: 'Moneda'
+    """
     try:
-        df = pd.read_excel(archivo_materiales, sheet_name="precios")
+        df = pd.read_excel(archivo_materiales, sheet_name="Materiales")
     except Exception:
         return pd.DataFrame(columns=["Materiales", "Unidad", "Precio_Unitario", "Moneda"])
 
     df.columns = [str(c).strip() for c in df.columns]
 
+    # Mapear nombres reales de tu Excel -> nombres estándar del motor
+    ren = {
+        "DESCRIPCIÓN DE MATERIALES": "Materiales",
+        "DESCRIPCION DE MATERIALES": "Materiales",
+        "DESCRIPCIÓN": "Materiales",
+        "DESCRIPCION": "Materiales",
+        "Costo Unitario": "Precio_Unitario",
+        "COSTO UNITARIO": "Precio_Unitario",
+        "Costo_Unitario": "Precio_Unitario",
+        "COSTO_UNITARIO": "Precio_Unitario",
+    }
+    df = df.rename(columns=ren)
+
     # Asegurar columnas mínimas
-    for c in ["Materiales", "Unidad", "Precio_Unitario", "Moneda"]:
+    for c in ["Materiales", "Unidad", "Precio_Unitario"]:
         if c not in df.columns:
             df[c] = ""
+
+    if "Moneda" not in df.columns:
+        # si no la tenés en la tabla, la fijamos (como en tu ejemplo)
+        df["Moneda"] = "L"
 
     # Normalización para match robusto
     df["Materiales_norm"] = df["Materiales"].map(_norm_txt)
@@ -42,6 +67,7 @@ def cargar_precios(archivo_materiales: str) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["Materiales_norm", "Unidad_norm"], keep="last")
 
     return df[["Materiales", "Unidad", "Precio_Unitario", "Moneda", "Materiales_norm", "Unidad_norm"]].copy()
+
 
 
 def construir_costos_desde_resumen(df_resumen: pd.DataFrame, archivo_materiales: str) -> pd.DataFrame:
