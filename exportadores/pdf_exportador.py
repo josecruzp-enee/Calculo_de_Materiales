@@ -87,10 +87,11 @@ def generar_pdfs(resultados: dict) -> dict:
         df_costos=df_costos,  # <-- CLAVE
     )
 
-    return {
-        "materiales": pdf_materiales,  # SIN precios (solo lista)
+        return {
+        "materiales": pdf_materiales,
         "estructuras_global": pdf_estructuras_global,
-        "estructuras_por_punto": pdf_estructuras_global if False else pdf_estructuras_por_punto,
+        "estructuras_por_punto": pdf_estructuras_por_punto,
         "materiales_por_punto": pdf_materiales_por_punto,
-        "completo": pdf_completo,      # CON anexo de costos si df_costos existe
+        "completo": pdf_completo,
     }
+
