@@ -348,9 +348,47 @@ def calcular_materiales(
     # 8) Materiales extra (manuales)
     df_resumen, dp_out = _integrar_materiales_extra(df_resumen, ctx.datos_proyecto, log)
 
-    # 8.1) Costos (ANEXO)
-    df_precios = cargar_tabla_precios(archivo_materiales)
-    df_costos = calcular_costos_desde_resumen(df_resumen, df_precios)
+        # 8.1) Costos (ANEXO)
+    df_precios = None
+    df_costos = None
+
+    try:
+        # tabla de precios (si existe)
+        df_precios = cargar_tabla_precios(archivo_materiales)
+
+        # Intento 1: firma (df_resumen, archivo_materiales)
+        try:
+            df_costos = calcular_costos_desde_resumen(df_resumen, archivo_materiales)
+        except TypeError:
+            # Intento 2: firma (df_resumen, df_precios)
+            df_costos = calcular_costos_desde_resumen(df_resumen, df_precios)
+
+        # Normalización defensiva: si no trae df o viene vacío
+        if df_costos is not None and hasattr(df_costos, "empty") and df_costos.empty:
+            df_costos = None
+
+    except Exception:
+        df_costos = None
+
+    # 9) Resultado final
+    return {
+        "datos_proyecto": dp_out,
+        "tension_ll": ctx.tension_ll,
+        "calibre_mt": ctx.calibre_mt,
+
+        "df_resumen": df_resumen,
+        "df_estructuras_resumen": df_estructuras_resumen,
+        "df_estructuras_por_punto": df_estructuras_por_punto,
+        "df_resumen_por_punto": df_resumen_por_punto,
+
+        # ✅ CLAVE: costos para el anexo del PDF completo
+        "df_costos_materiales": df_costos,
+
+        # debug
+        "conteo": conteo,
+        "tmp_explotado": tmp_explotado,
+    }
+
     
     # 9) Resultado final
     return {
