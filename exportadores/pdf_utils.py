@@ -198,11 +198,16 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     # Orden bonito: primero los que tienen precio, luego los faltantes
     if "Tiene_Precio" not in df.columns:
-        df["Tiene_Precio"] = df["Precio_Unitario"].notna()
+        df["Tiene_Precio"] = df.get("Precio_Unitario", pd.Series([pd.NA] * len(df))).notna()
 
     df["Tiene_Precio"] = df["Tiene_Precio"].fillna(False)
     if "Materiales" not in df.columns:
         df["Materiales"] = ""
+    if "Unidad" not in df.columns:
+        df["Unidad"] = ""
+    if "Cantidad" not in df.columns:
+        df["Cantidad"] = 0.0
+
     df = df.sort_values(["Tiene_Precio", "Materiales"], ascending=[False, True])
 
     # Totales
@@ -235,7 +240,7 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     data.append(["", "", "", "SUBTOTAL", f"{float(subtotal):,.2f}", ""])
 
-    t = Table(data, repeatRows=1, colWidths=[3.2*inch, 0.8*inch, 0.8*inch, 1.0*inch, 1.0*inch, 0.7*inch])
+    t = Table(data, repeatRows=1, colWidths=[3.2 * inch, 0.8 * inch, 0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
@@ -248,7 +253,8 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     faltan = int((df["Tiene_Precio"] == False).sum())
     nota = Paragraph(
-        f"Nota: {faltan} material(es) no tienen precio cargado en la hoja 'precios'.",
+        # ✅ aquí corregimos: tu fuente es hoja "Materiales", no "precios"
+        f"Nota: {faltan} material(es) no tienen precio cargado en la hoja 'Materiales'.",
         styles["Normal"]
     )
 
@@ -659,7 +665,7 @@ def generar_pdf_completo(
     # ---------------------------
     # ANEXO: Costos de Materiales (al final del PDF completo)
     # ---------------------------
-    if df_costos is not None:
+    if df_costos is not None and hasattr(df_costos, "empty") and not df_costos.empty:
         salto_pagina_seguro(elems)
         elems = extender_flowables(elems, tabla_costos_materiales_pdf(df_costos))
 
