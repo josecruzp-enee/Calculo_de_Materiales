@@ -180,32 +180,38 @@ def calcular_costos_desde_resumen(df_resumen: pd.DataFrame, precios_o_archivo) -
 
     # Si no hay precios, devolver plantilla marcada como sin precio
     if df_precios is None or getattr(df_precios, "empty", True):
-        base["Precio Unitario"] = pd.NA
-        base["Moneda"] = "L"
-        base["Tiene_Precio"] = False
-        base["Costo"] = pd.NA
-        return base[["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo", "Moneda", "Tiene_Precio"]]
+        out = base.copy()
+        out["Precio Unitario"] = pd.NA
+        out["Moneda"] = "L"
+        out["Tiene_Precio"] = False
+        out["Costo"] = pd.NA
+        return out[["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo", "Moneda", "Tiene_Precio"]]
 
     precios = df_precios.copy()
-    for col, default in [("Materiales_norm", ""), ("Unidad_norm", ""), ("Precio Unitario", 0.0), ("Moneda", "L")]:
+
+    # Asegurar columnas esperadas en precios
+    for col, default in [("Materiales_norm", ""), ("Unidad_norm", ""), ("Precio Unitario", pd.NA), ("Moneda", "L")]:
         if col not in precios.columns:
             precios[col] = default
 
-    # Merge
+    # Merge por claves normalizadas
     out = base.merge(
         precios[["Materiales_norm", "Unidad_norm", "Precio Unitario", "Moneda"]],
         on=["Materiales_norm", "Unidad_norm"],
         how="left",
     )
 
-    # Tipar y calcular
-    out["Precio Unitario"] = pd.to_numeric(out["Precio Unitario"], errors="coerce").fillna(0.0)
-    out["Cantidad"] = pd.to_numeric(out["Cantidad"], errors="coerce").fillna(0.0)
-
-    out["Tiene_Precio"] = out["Precio Unitario"] > 0
+    # 👇 IMPORTANTE: NO rellenar con 0.0 si no hay match. Mantener NaN.
+    out["Precio Unitario"] = pd.to_numeric(out["Precio Unitario"], errors="coerce")
     out["Moneda"] = out["Moneda"].fillna("L").astype(str).str.strip()
     out.loc[out["Moneda"].eq(""), "Moneda"] = "L"
 
-    out["Costo"] = (out["Precio Unitario"] * out["Cantidad"]).round(2)
+    # Tiene_Precio solo si hay número y > 0
+    out["Tiene_Precio"] = out["Precio Unitario"].notna() & (out["Precio Unitario"] > 0)
+
+    # Costo solo donde hay precio
+    out["Costo"] = pd.NA
+    mask = out["Tiene_Precio"]
+    out.loc[mask, "Costo"] = (out.loc[mask, "Precio Unitario"] * out.loc[mask, "Cantidad"]).round(2)
 
     return out[["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo", "Moneda", "Tiene_Precio"]]
