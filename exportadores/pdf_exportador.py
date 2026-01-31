@@ -3,6 +3,7 @@
 exportadores/pdf_exportador.py
 Genera PDFs a partir de resultados ya calculados (DFs + datos_proyecto).
 """
+
 from core.costos_materiales import construir_costos_desde_resumen
 
 from exportadores.pdf_utils import (
@@ -47,7 +48,7 @@ def generar_pdfs(resultados: dict) -> dict:
     df_ep = resultados.get("df_estructuras_por_punto")
     df_mpp = resultados.get("df_resumen_por_punto")
 
-    # (Opcional) Si todavía no existe, simplemente quedará None
+    # (Opcional) Si todavía no existe, intentamos construirlo desde df_resumen
     df_costos = resultados.get("df_costos_materiales", None)
 
     # =========================
@@ -57,7 +58,19 @@ def generar_pdfs(resultados: dict) -> dict:
         raise ValueError("Uno o más DataFrames vienen como None en 'resultados'.")
 
     # =========================
-    # 4) Salidas (PDFs)
+    # 4) Cálculos complementarios (sin romper nada)
+    # =========================
+    # Si NO viene df_costos_materiales pero queremos el anexo en el completo,
+    # lo construimos desde df_resumen.
+    if df_costos is None:
+        try:
+            df_costos = construir_costos_desde_resumen(df_resumen, dp=dp)
+        except Exception:
+            # Si falla por cualquier razón, no rompemos generación de PDF completo.
+            df_costos = None
+
+    # =========================
+    # 5) Salidas (PDFs)
     # =========================
     pdf_materiales = generar_pdf_materiales(df_resumen, nombre, dp)
     pdf_estructuras_global = generar_pdf_estructuras_global(df_eg, nombre)
@@ -77,7 +90,7 @@ def generar_pdfs(resultados: dict) -> dict:
     return {
         "materiales": pdf_materiales,  # SIN precios (solo lista)
         "estructuras_global": pdf_estructuras_global,
-        "estructuras_por_punto": pdf_estructuras_por_punto,
+        "estructuras_por_punto": pdf_estructuras_global if False else pdf_estructuras_por_punto,
         "materiales_por_punto": pdf_materiales_por_punto,
-        "completo": pdf_completo,      # CON anexo de costos si existe df_costos_materiales
+        "completo": pdf_completo,      # CON anexo de costos si df_costos existe
     }
