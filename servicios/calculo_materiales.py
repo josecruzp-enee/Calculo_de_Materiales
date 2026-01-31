@@ -17,6 +17,7 @@ from typing import Dict, Optional, Tuple, Any, List
 
 import pandas as pd
 from core.costos_materiales import calcular_costos_desde_resumen
+from core.costos_estructuras import calcular_costos_por_estructura
 
 
 from core.cables_materiales import materiales_desde_cables
@@ -345,7 +346,8 @@ def calcular_materiales(
     # 8) Materiales extra (manuales)
     df_resumen, dp_out = _integrar_materiales_extra(df_resumen, ctx.datos_proyecto, log)
 
-    # 8.1) COSTOS (ANEXO)  🔥 AQUÍ ESTABA EL PROBLEMA
+    # 8.1) COSTOS (ANEXO) 
+    #Costos de Materiales
     df_costos = None
     if archivo_materiales:
         try:
@@ -362,13 +364,32 @@ def calcular_materiales(
         except Exception as e:
             log(f"❌ Error calculando costos: {type(e).__name__}: {e}")
             df_costos = None
+   
+    #Costos de Estructuras
+    df_costos_estructuras = None
+    try:
+        if archivo_materiales:
+            df_costos_estructuras = calcular_costos_por_estructura(
+                archivo_materiales=archivo_materiales,
+                conteo=conteo,
+                tension_ll=ctx.tension_ll,
+                calibre_mt=ctx.calibre_mt,
+                tabla_conectores_mt=tabla_conectores_mt,
+                df_indice=df_indice,
+            )
+    except Exception as e:
+        log(f"❌ Error costos por estructura: {type(e).__name__}: {e}")
+        df_costos_estructuras = None
 
+
+
+    
     # 9) Resultado final
     return {
         "datos_proyecto": dp_out,
         "tension_ll": ctx.tension_ll,
         "calibre_mt": ctx.calibre_mt,
-
+        
         "df_resumen": df_resumen,
         "df_estructuras_resumen": df_estructuras_resumen,
         "df_estructuras_por_punto": df_estructuras_por_punto,
@@ -376,7 +397,7 @@ def calcular_materiales(
 
         # 👇 ESTA ERA LA PIEZA QUE NO ESTABA LLEGANDO BIEN
         "df_costos_materiales": df_costos,
-
+        "df_costos_estructuras": df_costos_estructuras,
         # debug
         "conteo": conteo,
         "tmp_explotado": tmp_explotado,
