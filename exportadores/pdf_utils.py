@@ -186,8 +186,8 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
     """
     Construye flowables ReportLab para el anexo de costos.
-    Espera columnas típicas:
-      Materiales, Unidad, Cantidad, Precio_Unitario, Costo_Total, Moneda, Tiene_Precio
+    Ahora SIN columna Moneda.
+    Formato de moneda directo: "L 5.00"
     """
     titulo = Paragraph("ANEXO – Costos de Materiales", styles["Heading2"])
 
@@ -198,54 +198,64 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     # Orden bonito: primero los que tienen precio, luego los faltantes
     if "Tiene_Precio" not in df.columns:
-        df["Tiene_Precio"] = df.get("Precio_Unitario", pd.Series([pd.NA] * len(df))).notna()
-
+        df["Tiene_Precio"] = df.get("Precio Unitario", pd.Series([pd.NA] * len(df))).notna()
     df["Tiene_Precio"] = df["Tiene_Precio"].fillna(False)
-    if "Materiales" not in df.columns:
-        df["Materiales"] = ""
-    if "Unidad" not in df.columns:
-        df["Unidad"] = ""
-    if "Cantidad" not in df.columns:
-        df["Cantidad"] = 0.0
+
+    # Columnas mínimas defensivas
+    for c, default in [("Materiales", ""), ("Unidad", ""), ("Cantidad", 0.0)]:
+        if c not in df.columns:
+            df[c] = default
 
     df = df.sort_values(["Tiene_Precio", "Materiales"], ascending=[False, True])
 
     # Totales
-    if "Costo_Total" in df.columns:
+    if "Costo" in df.columns:
+        subtotal = df.loc[df["Tiene_Precio"] == True, "Costo"].sum(skipna=True)
+    elif "Costo_Total" in df.columns:
         subtotal = df.loc[df["Tiene_Precio"] == True, "Costo_Total"].sum(skipna=True)
     else:
         subtotal = 0.0
 
-    data = [["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo Total", "Moneda"]]
+    # --- Helper para formatear con L ---
+    def _money(v):
+        if v is None or pd.isna(v):
+            return ""
+        return f"L {float(v):,.2f}"
+
+    # Encabezados (SIN Moneda)
+    data = [["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo Total"]]
+
     for _, r in df.iterrows():
         mat = str(r.get("Materiales", "") or "")
         uni = str(r.get("Unidad", "") or "")
         cant = float(r.get("Cantidad", 0) or 0)
 
-        pu = r.get("Precio_Unitario", None)
-        ct = r.get("Costo_Total", None)
-        mon = str(r.get("Moneda", "") or "")
-
-        pu_txt = "" if (pu is None or pd.isna(pu)) else f"{float(pu):,.2f}"
-        ct_txt = "" if (ct is None or pd.isna(ct)) else f"{float(ct):,.2f}"
+        # Soporta ambos nombres por compatibilidad
+        pu = r.get("Precio Unitario", r.get("Precio_Unitario", None))
+        ct = r.get("Costo", r.get("Costo_Total", None))
 
         data.append([
             Paragraph(formatear_material(mat), styleN),
             escape(uni),
             f"{cant:,.2f}",
-            pu_txt,
-            ct_txt,
-            escape(mon),
+            _money(pu),
+            _money(ct),
         ])
 
-    data.append(["", "", "", "SUBTOTAL", f"{float(subtotal):,.2f}", ""])
+    # Subtotal (SIN Moneda)
+    data.append(["", "", "", "SUBTOTAL", _money(subtotal)])
 
-    t = Table(data, repeatRows=1, colWidths=[3.2 * inch, 0.8 * inch, 0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch])
+    # Ajuste de anchos: quitamos la última col
+    t = Table(
+        data,
+        repeatRows=1,
+        colWidths=[3.7 * inch, 0.8 * inch, 0.9 * inch, 1.2 * inch, 1.2 * inch],
+    )
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (2, 1), (4, -1), "RIGHT"),
+        ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
         ("ALIGN", (1, 1), (1, -2), "CENTER"),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTNAME", (3, -1), (4, -1), "Helvetica-Bold"),
@@ -253,13 +263,11 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     faltan = int((df["Tiene_Precio"] == False).sum())
     nota = Paragraph(
-        # ✅ aquí corregimos: tu fuente es hoja "Materiales", no "precios"
-        f"Nota: {faltan} material(es) no tienen precio cargado en la hoja 'Materiales'.",
+        f"Nota: {faltan} material(es) no tienen precio cargado en la hoja 'precios'.",
         styles["Normal"]
     )
 
     return [Spacer(1, 8), titulo, Spacer(1, 8), t, Spacer(1, 8), nota]
-
 
 # ==========================================================
 # PDF: RESUMEN DE ESTRUCTURAS (GLOBAL)
@@ -678,3 +686,4 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
