@@ -271,6 +271,10 @@ def calcular_materiales(
 ) -> Dict[str, Any]:
     """
     Orquesta todo el pipeline y retorna el dict de resultados.
+
+    df_cables:
+      DataFrame generado desde la UI (st.session_state["cables_proyecto_df"]).
+      Se transforma a materiales y se suma al resumen global.
     """
     log = get_logger()
 
@@ -281,7 +285,7 @@ def calcular_materiales(
         datos_proyecto=datos_proyecto,
     )
 
-    # 2) Normalización / validación
+    # 2) Normalización/validación
     ctx = _normalizar_y_validar_contexto(dp_in, df_estructuras, log)
 
     # 3) Limpieza + conteo
@@ -300,28 +304,33 @@ def calcular_materiales(
         tabla_conectores_mt=tabla_conectores_mt,
     )
 
-    # 5.1) Materiales desde cables (UI)  ✅ UNA SOLA VEZ
+    # 5.1) Materiales desde cables (UI)
     df_mat_cables = materiales_desde_cables(df_cables)
     if df_mat_cables is not None and not df_mat_cables.empty:
+        dfc = df_mat_cables.copy()
 
-        if "Codigo" in df_mat_cables.columns and "Materiales" not in df_mat_cables.columns:
-            df_mat_cables["Materiales"] = df_mat_cables["Codigo"].astype(str).str.strip()
+        # Normalizar a esquema global: Materiales / Unidad / Cantidad
+        if "Codigo" in dfc.columns and "Materiales" not in dfc.columns:
+            dfc["Materiales"] = dfc["Codigo"].astype(str).str.strip()
+        if "Unidad" not in dfc.columns:
+            dfc["Unidad"] = "m"
+        if "Cantidad" not in dfc.columns and "Total Cable (m)" in dfc.columns:
+            dfc["Cantidad"] = pd.to_numeric(dfc["Total Cable (m)"], errors="coerce").fillna(0.0)
 
-        if "Unidad" not in df_mat_cables.columns:
-            df_mat_cables["Unidad"] = "m"
+        # Asegurar columnas
+        for col in ["Materiales", "Unidad", "Cantidad"]:
+            if col not in dfc.columns:
+                dfc[col] = "" if col != "Cantidad" else 0.0
 
-        if "Cantidad" not in df_mat_cables.columns and "Total Cable (m)" in df_mat_cables.columns:
-            df_mat_cables["Cantidad"] = (
-                pd.to_numeric(df_mat_cables["Total Cable (m)"], errors="coerce")
-                .fillna(0.0)
-            )
+        dfc["Unidad"] = dfc["Unidad"].astype(str).str.strip()
+        dfc["Cantidad"] = pd.to_numeric(dfc["Cantidad"], errors="coerce").fillna(0.0)
 
-        df_mat_cables = df_mat_cables[["Materiales", "Unidad", "Cantidad"]].copy()
-        df_mat_cables["Unidad"] = df_mat_cables["Unidad"].astype(str).str.strip()
+        dfc = dfc[["Materiales", "Unidad", "Cantidad"]].copy()
 
-        df_total = pd.concat([df_total, df_mat_cables], ignore_index=True)
-        log(f"✅ Se integraron materiales desde cables ({len(df_mat_cables)} filas)")
+        df_total = pd.concat([df_total, dfc], ignore_index=True)
+        log(f"✅ Se integraron materiales desde cables ({len(dfc)} filas)")
 
+        # Guardar cables en datos_proyecto (útil para reportes/debug)
         ctx.datos_proyecto["cables_proyecto_df"] = df_cables
 
     # 5.2) Resumen global
@@ -345,23 +354,17 @@ def calcular_materiales(
     # 8) Materiales extra (manuales)
     df_resumen, dp_out = _integrar_materiales_extra(df_resumen, ctx.datos_proyecto, log)
 
-    # 8.1) Costos (ANEXO)  ✅ BIEN INDENTADO
+    # 8.1) Costos (ANEXO)  ✅ usando core/costos_materiales.py
     df_costos = None
     try:
-        df_precios = cargar_tabla_precios(archivo_materiales)
-
-        try:
-            df_costos = calcular_costos_desde_resumen(df_resumen, archivo_materiales)
-        except TypeError:
-            df_costos = calcular_costos_desde_resumen(df_resumen, df_precios)
-
-        if df_costos is not None and hasattr(df_costos, "empty") and df_costos.empty:
-            df_costos = None
-
+        if archivo_materiales:
+            df_costos = construir_costos_desde_resumen(df_resumen, archivo_materiales)
+            if df_costos is not None and hasattr(df_costos, "empty") and df_costos.empty:
+                df_costos = None
     except Exception:
         df_costos = None
 
-    # 9) Resultado final  ✅ UN SOLO RETURN
+    # 9) Resultado final
     return {
         "datos_proyecto": dp_out,
         "tension_ll": ctx.tension_ll,
@@ -372,7 +375,7 @@ def calcular_materiales(
         "df_estructuras_por_punto": df_estructuras_por_punto,
         "df_resumen_por_punto": df_resumen_por_punto,
 
-        # 👉 clave para el PDF completo
+        # ✅ CLAVE: esto lo consume pdf_exportador.py → pdf_utils.py
         "df_costos_materiales": df_costos,
 
         # debug
