@@ -263,39 +263,96 @@ def expand_wide_to_long(df_ancho: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["Punto", "Tipo", "CodigoEstructura", "Cantidad"])
 
 
-def _tokenizar_celda(celda: str) -> List[str]:
+def _tokenizar_celda(celda: str) -> List[Tuple[str, int]]:
+    """
+    Devuelve lista de (CodigoEstructura, Cantidad) desde una celda tipo:
+      - "A-I-4 A-I-4V"
+      - "2x A-I-4 A-I-4V"
+      - "2× A-I-4"
+      - "R-2 2x R-4"
+    """
     if not celda:
         return []
+
     t = " ".join(str(celda).split())
-    return [m.group(0).strip() for m in RE_TOKEN.finditer(t)]
+    t = t.replace("×", "x")  # unificar símbolo
+    tokens = t.split()
+
+    pares: List[Tuple[str, int]] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i].strip()
+
+        # Caso: "2x" y luego el código
+        if re.fullmatch(r"\d+x", tok, flags=re.I) and (i + 1) < len(tokens):
+            qty = int(re.findall(r"\d+", tok)[0])
+            siguiente = tokens[i + 1]
+            cods = [m.group(0).strip() for m in RE_TOKEN.finditer(siguiente)]
+            if cods:
+                pares.append((cods[0], qty))
+                i += 2
+                continue
+
+        # Caso: "2xA-I-4" (pegado)
+        m = RE_MULT.match(tok)
+        if m:
+            qty = int(m.group(1))
+            rest = m.group(2)
+            cods = [m2.group(0).strip() for m2 in RE_TOKEN.finditer(rest)]
+            if cods:
+                pares.append((cods[0], qty))
+                i += 1
+                continue
+
+        # Caso normal: token es código
+        cods = [m.group(0).strip() for m in RE_TOKEN.finditer(tok)]
+        if cods:
+            pares.append((cods[0], 1))
+
+        i += 1
+
+    # Consolidar duplicados sumando cantidades
+    acc: Dict[str, int] = {}
+    for c, q in pares:
+        c = c.strip()
+        if not c:
+            continue
+        acc[c] = acc.get(c, 0) + int(q)
+
+    return list(acc.items())
 
 
 def explotar_codigos_largos(df_largo: pd.DataFrame) -> pd.DataFrame:
     """
-    Convierte CodigoEstructura como "R-02 R-04" -> dos filas.
+    Convierte CodigoEstructura como "R-02 R-04" -> dos filas
+    y soporta multiplicidad "2x A-I-4" -> Cantidad=2.
     Espera columnas: Punto, Tipo, CodigoEstructura, Cantidad.
     """
     if df_largo is None or df_largo.empty:
         return df_largo
 
     df = df_largo.copy()
-
     col_code = "CodigoEstructura"
     col_qty = "Cantidad"
 
+    # tokens (codigo, qty)
     df["__tokens__"] = df[col_code].apply(_tokenizar_celda)
-    df = df.explode("__tokens__").dropna(subset=["__tokens__"])
-    df["__tokens__"] = df["__tokens__"].astype(str).str.strip()
-    df = df[df["__tokens__"].str.len() > 0].copy()
 
-    df[col_code] = df["__tokens__"]
+    df = df.explode("__tokens__").dropna(subset=["__tokens__"]).copy()
+    df[col_code] = df["__tokens__"].apply(lambda x: str(x[0]).strip())
+    df[col_qty] = df["__tokens__"].apply(lambda x: int(x[1]))
     df.drop(columns=["__tokens__"], inplace=True)
 
-    df[col_qty] = pd.to_numeric(df[col_qty], errors="coerce").fillna(1).astype(int)
+    # Limpieza final
+    df[col_code] = df[col_code].astype(str).str.strip()
+    df = df[df[col_code].str.len() > 0].copy()
 
+    # Agrupar y sumar cantidades
     group_cols = ["Punto", "Tipo", col_code]
     df = df.groupby(group_cols, as_index=False)[col_qty].sum()
+
     return df
+
 
 
 # -------------------------------------------------------------------
