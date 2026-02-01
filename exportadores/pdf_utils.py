@@ -238,6 +238,8 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
     df = df.sort_values(["Tiene_Precio", "Materiales"], ascending=[False, True])
 
     subtotal = df.loc[df["Tiene_Precio"] == True, "Costo Total"].fillna(0.0).sum()
+    iva = subtotal * 0.15
+    total = subtotal + iva
 
     def _money(v):
         if v is None or pd.isna(v):
@@ -263,6 +265,8 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
         ])
 
     data.append(["", "", "", "SUBTOTAL", _money(subtotal)])
+    data.append(["", "", "", "ISV 15%", _money(iva)])
+    data.append(["", "", "", "TOTAL", _money(total)])
 
     t = Table(
         data,
@@ -276,7 +280,7 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
         ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
         ("ALIGN", (1, 1), (1, -2), "CENTER"),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTNAME", (3, -1), (4, -1), "Helvetica-Bold"),
+        ("FONTNAME", (3, -3), (4, -1), "Helvetica-Bold"),
     ]))
 
     faltan = int((df["Tiene_Precio"] == False).sum())
@@ -818,6 +822,7 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
