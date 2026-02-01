@@ -84,14 +84,16 @@ def fondo_pagina(canvas, doc):
         ancho, alto = letter
 
         if os.path.exists(fondo):
-            alto_membrete = 2.0 * inch  # <-- ajustá aquí (1.6, 1.8, 2.2...)
+            h = 1.25 * inch          # ← TAMAÑO del membrete (más pequeño)
+            y = alto - h             # ← pegado arriba
             canvas.drawImage(
                 fondo,
-                0,
-                alto - alto_membrete,     # <-- lo pega arriba
+                0, y,
                 width=ancho,
-                height=alto_membrete,
-                mask="auto"
+                height=h,
+                preserveAspectRatio=True,
+                anchor='n',
+                mask="auto",
             )
 
         canvas.restoreState()
@@ -816,6 +818,7 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
