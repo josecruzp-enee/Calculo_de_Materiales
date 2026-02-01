@@ -869,9 +869,9 @@ def generar_pdf_completo(
     # ---------------------------
     # ANEXO C: Costos por Punto
     # ---------------------------
-    if df_mat_por_punto is not None and not df_mat_por_punto.empty:
-        salto_pagina_seguro(elems)
-        elems = extender_flowables(elems, tabla_costos_por_punto_pdf(df_mat_por_punto))
+    #if df_mat_por_punto is not None and not df_mat_por_punto.empty:
+    #    salto_pagina_seguro(elems)
+    #    elems = extender_flowables(elems, tabla_costos_por_punto_pdf(df_mat_por_punto))
 
     
     # ---------------------------
@@ -883,6 +883,7 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
