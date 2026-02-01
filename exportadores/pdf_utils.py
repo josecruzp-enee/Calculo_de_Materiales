@@ -391,6 +391,61 @@ def tabla_costos_estructuras_pdf(df_costos_estructuras: pd.DataFrame):
 
     return [Spacer(1, 8), titulo, Spacer(1, 8), t, Spacer(1, 8), nota]
 
+def tabla_costos_por_punto_pdf(df_mat_por_punto: pd.DataFrame):
+    titulo = Paragraph("ANEXO C – Costos por Punto", styles["Heading2"])
+
+    if df_mat_por_punto is None or df_mat_por_punto.empty:
+        return [titulo, Paragraph("No hay costos por punto disponibles.", styles["Normal"])]
+
+    elems = [titulo, Spacer(1, 8)]
+
+    df = df_mat_por_punto.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+
+    puntos = sorted(
+        df["Punto"].unique(),
+        key=lambda x: int(re.sub(r"\D", "", str(x)) or 0)
+    )
+
+    for p in puntos:
+        elems.append(Spacer(1, 6))
+        elems.append(Paragraph(f"<b>Punto {escape(str(p))}</b>", styles["Heading3"]))
+
+        df_p = df[df["Punto"] == p]
+
+        # --- separar MT / BT ---
+        df_mt = df_p[df_p["Materiales"].str.contains("MT|PRIMARIA", case=False, na=False)]
+        df_bt = df_p[~df_p.index.isin(df_mt.index)]
+
+        def _subtotal(df_x):
+            return df_x["Costo Total"].fillna(0).sum()
+
+        sub_mt = _subtotal(df_mt)
+        sub_bt = _subtotal(df_bt)
+        subtotal = sub_mt + sub_bt
+        impuesto = subtotal * 0.15
+        total = subtotal + impuesto
+
+        data = [
+            ["Concepto", "Monto (L)"],
+            ["Materiales MT", f"L {sub_mt:,.2f}"],
+            ["Materiales BT", f"L {sub_bt:,.2f}"],
+            ["SUBTOTAL", f"L {subtotal:,.2f}"],
+            ["Impuesto 15%", f"L {impuesto:,.2f}"],
+            ["TOTAL", f"L {total:,.2f}"],
+        ]
+
+        t = Table(data, colWidths=[3 * inch, 2 * inch])
+        t.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("FONTNAME", (0, 3), (-1, -1), "Helvetica-Bold"),
+            ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+        ]))
+
+        elems.append(t)
+
+    return elems
 
 
 
@@ -807,10 +862,16 @@ def generar_pdf_completo(
     # ---------------------------
     # ANEXO B: Costos por Estructura
     # ---------------------------
-    if df_costos_estructuras is not None and hasattr(df_costos_estructuras, "empty") and not df_costos_estructuras.empty:
-        salto_pagina_seguro(elems)
-        elems = extender_flowables(elems, tabla_costos_estructuras_pdf(df_costos_estructuras))
+    #if df_costos_estructuras is not None and hasattr(df_costos_estructuras, "empty") and not df_costos_estructuras.empty:
+    #   salto_pagina_seguro(elems)
+    #    elems = extender_flowables(elems, tabla_costos_estructuras_pdf(df_costos_estructuras))
 
+    # ---------------------------
+    # ANEXO C: Costos por Punto
+    # ---------------------------
+    if df_mat_por_punto is not None and not df_mat_por_punto.empty:
+        salto_pagina_seguro(elems)
+        elems = extender_flowables(elems, tabla_costos_por_punto_pdf(df_mat_por_punto))
 
     
     # ---------------------------
@@ -822,6 +883,7 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
