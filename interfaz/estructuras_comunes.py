@@ -37,6 +37,20 @@ CAT_COLS: List[str] = [
     "Luminarias",
 ]
 
+RE_TOKEN_ESTRUCT = re.compile(
+    r"""
+    (?:PC|PM|PT)-[A-Z0-9"'\-]+
+    |A-[A-Z0-9\-]+
+    |B-[A-Z0-9\-]+
+    |CT-[A-Z0-9\-]+
+    |TS-[A-Z0-9\-]+
+    |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
+    |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
+    |R-\d+[A-Z0-9\-]*
+    """,
+    re.VERBOSE | re.IGNORECASE,
+)
+
 
 # =============================================================================
 # Normalización de encabezados (ÚNICA etapa donde se toleran variantes)
@@ -200,11 +214,18 @@ def parse_item(piece: str) -> Tuple[str, int]:
 # =============================================================================
 def expand_wide_to_long(df_ancho: pd.DataFrame, solo_proyectadas: bool = True) -> pd.DataFrame:
     """
-    Devuelve columnas: Punto, codigodeestructura, cantidad.
+    Devuelve columnas (CONTRATO ÚNICO):
+      Punto | Tipo | CodigoEstructura | Cantidad
 
     Regla (P):
     - Si solo_proyectadas=True y el DF tiene marcas (P) en alguna celda => filtra por (P)
     - Si no hay ninguna marca (P) en todo el DF => NO filtra (asume ya filtrado)
+
+    Además:
+    - Explota múltiples códigos separados por espacios dentro de una misma celda:
+        "A-I-4 A-I-4V" -> dos filas
+    - Respeta multiplicidad:
+        "2x A-I-4 A-I-4V" -> A-I-4 cant=2, A-I-4V cant=1
     """
     df = normalizar_columnas(df_ancho, COLUMNAS_BASE).copy()
 
@@ -222,21 +243,41 @@ def expand_wide_to_long(df_ancho: pd.DataFrame, solo_proyectadas: bool = True) -
 
         for col in CAT_COLS:
             cell = str(r.get(col, "") or "")
+
+            # split por coma/;/saltos (como antes)
             for piece in split_cell_items(cell):
                 if solo_proyectadas and hay_marca_p and not es_proyectada(piece):
                     continue
 
-                code, qty = parse_item(piece)
-                if code:
+                code_raw, qty = parse_item(piece)  # aquí qty captura 2x si venía así
+                if not code_raw:
+                    continue
+
+                # 🔥 Explota por tokens (incluye casos "A-I-4 A-I-4V")
+                toks = [m.group(0).strip().upper() for m in RE_TOKEN_ESTRUCT.finditer(code_raw)]
+                if not toks:
+                    # fallback: si no matchea regex, al menos dividir por espacios
+                    toks = [t.strip().upper() for t in str(code_raw).split() if t.strip()]
+
+                for tok in toks:
                     rows.append(
                         {
                             "Punto": punto,
-                            "codigodeestructura": code,
-                            "cantidad": int(qty),
+                            "Tipo": col,
+                            "CodigoEstructura": tok,
+                            "Cantidad": int(qty),
                         }
                     )
 
-    return pd.DataFrame(rows, columns=["Punto", "codigodeestructura", "cantidad"])
+    df_out = pd.DataFrame(rows, columns=["Punto", "Tipo", "CodigoEstructura", "Cantidad"])
+    if df_out.empty:
+        return df_out
+
+    # Consolidar duplicados (mismo punto/tipo/código)
+    df_out["Cantidad"] = pd.to_numeric(df_out["Cantidad"], errors="coerce").fillna(1).astype(int)
+    df_out = df_out.groupby(["Punto", "Tipo", "CodigoEstructura"], as_index=False)["Cantidad"].sum()
+    return df_out
+
 
 
 # =============================================================================
@@ -251,8 +292,15 @@ def materializar_df_a_archivo(df_ancho: pd.DataFrame, etiqueta: str = "data") ->
     ts = int(time.time())
     ruta = os.path.join(tempfile.gettempdir(), f"estructuras_{etiqueta}_{ts}.xlsx")
 
-    df_ancho_norm = normalizar_columnas(df_ancho, COLUMNAS_BASE)
-    df_largo = expand_wide_to_long(df_ancho_norm, solo_proyectadas=True)
+    # Si viene ANCHO, lo normalizamos y lo convertimos a LARGO.
+    # Si viene LARGO ya con columnas del contrato, lo usamos directo.
+    if set(["Punto", "Tipo", "CodigoEstructura", "Cantidad"]).issubset(set(df_ancho.columns)):
+        df_largo = df_ancho.copy()
+        df_ancho_norm = pd.DataFrame(columns=COLUMNAS_BASE)
+    else:
+        df_ancho_norm = normalizar_columnas(df_ancho, COLUMNAS_BASE)
+        df_largo = expand_wide_to_long(df_ancho_norm, solo_proyectadas=True)
+
 
     try:
         writer = pd.ExcelWriter(ruta, engine="openpyxl")
