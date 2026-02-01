@@ -10,7 +10,7 @@ import streamlit as st
 
 from core.transformador_estructuras import coerce_df_estructuras_largo
 from interfaz.estructuras_comunes import expand_wide_to_long, materializar_df_a_archivo
-from entradas.entradas_dxf import explotar_codigos_largos
+
 
 
 # fuentes
@@ -114,7 +114,6 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
     # 2) convertir ANCHO → LARGO (único camino)
     
     df_largo = expand_wide_to_long(df_ancho, solo_proyectadas=True)
-    df_largo = explotar_codigos_largos(df_largo)
     ruta_tmp = materializar_df_a_archivo(df_largo, etiqueta=modo)
 
     return df_largo, ruta_tmp
