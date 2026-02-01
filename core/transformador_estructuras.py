@@ -164,45 +164,65 @@ def _postprocesar_largo(df_long: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 # Helpers de parsing de texto (B+)
 # =============================================================================
+_COD_ESTRUCT_RE = re.compile(r"\b[A-Z]{1,3}-[IVX]{1,4}-\d+[A-Z]?\b")
 
 _SPLIT_RE = re.compile(r"[,\n;|]+")
 
-# Códigos típicos de estructuras: A-I-4, B-III-4C, etc.
-_COD_ESTRUCT_RE = re.compile(r"\b[A-Z]{1,3}-[IVX]{1,4}-\d+[A-Z]?\b")
-
 
 def _split_codigos(s: str) -> list[str]:
-    """
-    Separa una celda con múltiples códigos.
-
-    Acepta separadores: coma, punto y coma, salto de línea, pipe.
-    Además, si un token trae 2+ códigos pegados por espacios (ej: "A-I-4 A-I-4V"),
-    extrae los códigos con regex sin romper tokens válidos con espacios (ej: "TS-50 KVA").
-    """
     if s is None:
         return []
     s = str(s).strip()
     if not s or s.lower() in ("nan", "none"):
         return []
 
-    # 1) split por separadores "fuertes"
     parts = [p.strip() for p in _SPLIT_RE.split(s) if p.strip()]
     if not parts:
         parts = [s]
 
-    # 2) si algún token contiene múltiples códigos tipo A-I-4 separados por espacio,
-    #    extraerlos con regex (evita partir "TS-50 KVA")
-    out: list[str] = []
+    out = []
     for p in parts:
-        p_up = p.upper().strip()
-
-        matches = _COD_ESTRUCT_RE.findall(p_up)
+        # Si trae 2+ códigos pegados por espacio: "A-I-4 A-I-4V"
+        matches = _COD_ESTRUCT_RE.findall(p.upper())
         if len(matches) >= 2:
             out.extend(matches)
         else:
             out.append(p.strip())
-
     return out
+
+
+
+_QTY_PATTERNS = [
+    # "COD x2" / "COD X 2"
+    re.compile(r"^(?P<cod>.+?)\s*[xX]\s*(?P<n>\d+)\s*$"),
+    # "2x COD"
+    re.compile(r"^(?P<n>\d+)\s*[xX]\s*(?P<cod>.+?)\s*$"),
+    # "COD (2)"
+    re.compile(r"^(?P<cod>.+?)\s*\(\s*(?P<n>\d+)\s*\)\s*$"),
+]
+
+
+def _parse_token(token: str) -> Tuple[str, int]:
+    """
+    Token -> (codigo, cantidad)
+    Soporta:
+      - "CT-N"
+      - "CT-N x2"
+      - "2x CT-N"
+      - "CT-N (2)"
+    """
+    t = str(token).strip()
+    if not t or t.lower() in ("nan", "none"):
+        return ("", 0)
+
+    for pat in _QTY_PATTERNS:
+        m = pat.match(t)
+        if m:
+            cod = str(m.group("cod")).strip()
+            n = int(m.group("n"))
+            return (cod.upper(), n if n > 0 else 1)
+
+    return (t.upper(), 1)
 
 
 def _parece_texto_en_celdas(df: pd.DataFrame, value_cols: list[str]) -> bool:
