@@ -127,54 +127,48 @@ def _normalizar_y_validar_contexto(datos_proyecto: dict, df_estructuras: pd.Data
 def _limpiar_y_contar_estructuras(df_estructuras: pd.DataFrame, log):
     log("🔍 Limpieza inicial de estructuras...")
 
-    # A) Precondición: debe venir algo
+    # A) Precondición
     assert df_estructuras is not None, "A: df_estructuras llegó como None"
     assert not df_estructuras.empty, "A: df_estructuras llegó vacío"
 
-    # B) Contrato de columnas (aceptamos ambos formatos)
-    cols = set(df_estructuras.columns)
-    assert (
-        ("CodigoEstructura" in cols and "Cantidad" in cols) or
-        ("codigodeestructura" in cols and "cantidad" in cols)
-    ), f"B: columnas inesperadas: {list(df_estructuras.columns)}"
+    # B) Coerción ÚNICA a contrato CORE (aquí se resuelve ANCHO vs LARGO UI vs LARGO CORE)
+    df = coerce_df_estructuras_largo(df_estructuras)
 
-    # C) Normalizar a contrato CORE
-    df = df_estructuras.rename(columns={
-        "CodigoEstructura": "codigodeestructura",
-        "Cantidad": "cantidad",
-    }).copy()
+    # C) Postcondición contrato CORE
+    assert df is not None and not df.empty, (
+        "B: coerce_df_estructuras_largo devolvió vacío. "
+        f"cols_in={list(df_estructuras.columns)}"
+    )
+    for c in ["Punto", "codigodeestructura", "cantidad"]:
+        assert c in df.columns, f"C: falta {c}. cols={list(df.columns)}"
 
-    # D) Postcondición: columnas core deben existir
-    assert "Punto" in df.columns, f"D: falta Punto. cols={list(df.columns)}"
-    assert "codigodeestructura" in df.columns, f"D: falta codigodeestructura. cols={list(df.columns)}"
-    assert "cantidad" in df.columns, f"D: falta cantidad. cols={list(df.columns)}"
-
+    # D) Normalización final (blindaje)
+    df = df.copy()
     df["Punto"] = df["Punto"].astype(str).str.strip()
     df["codigodeestructura"] = df["codigodeestructura"].astype(str).str.strip().str.upper()
     df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce").fillna(1).astype(int)
 
-    # E) Invariante: no deben existir códigos vacíos
+    # E) Invariante
     assert (df["codigodeestructura"].str.len() > 0).all(), "E: hay codigodeestructura vacío"
 
-    # F) Invariante: la limpieza NO puede dejarlo en cero sin explicación
+    # F) Limpieza (si esto vacía, el culpable es limpiar_df_estructuras)
     df_unicas = limpiar_df_estructuras(df, log)
     assert df_unicas is not None, "F: limpiar_df_estructuras devolvió None"
-
-    # Si aquí queda vacío, el culpable ES limpiar_df_estructuras
     assert not df_unicas.empty, (
         "F: limpiar_df_estructuras está vaciando TODO. "
-        f"Entrada rows={len(df)}; ejemplo={df['codigodeestructura'].head(10).tolist()}"
+        f"Entrada rows={len(df)}; ejemplo={df['codigodeestructura'].head(15).tolist()}"
     )
 
-    # G) Conteo: si esto queda vacío, el culpable es construir_estructuras_por_punto_y_conteo
+    # G) Conteo (si esto queda vacío, el culpable es construir_estructuras_por_punto_y_conteo)
     estructuras_por_punto, conteo, tmp = construir_estructuras_por_punto_y_conteo(df_unicas, log)
     assert isinstance(conteo, dict), "G: conteo no es dict"
     assert len(conteo) > 0, (
         "G: construir_estructuras_por_punto_y_conteo devolvió conteo vacío. "
-        f"Entrada rows={len(df_unicas)}; ejemplo={df_unicas['codigodeestructura'].head(10).tolist()}"
+        f"Entrada rows={len(df_unicas)}; ejemplo={df_unicas['codigodeestructura'].head(15).tolist()}"
     )
 
     return df_unicas, conteo, tmp
+
 
 # =============================================================================
 # Helpers: Materiales globales
