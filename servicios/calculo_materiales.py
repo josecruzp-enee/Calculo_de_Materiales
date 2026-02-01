@@ -124,45 +124,57 @@ def _normalizar_y_validar_contexto(datos_proyecto: dict, df_estructuras: pd.Data
 # Helpers: Limpieza / Conteo estructuras
 # =============================================================================
 
-def _limpiar_y_contar_estructuras(df_estructuras: pd.DataFrame, log) -> Tuple[pd.DataFrame, dict, pd.DataFrame]:
-    """
-    - Limpia estructuras
-    - Explota y construye conteo por estructura
-    Retorna:
-      df_estructuras_unicas, conteo, tmp_explotado
-    """
+def _limpiar_y_contar_estructuras(df_estructuras: pd.DataFrame, log):
     log("🔍 Limpieza inicial de estructuras...")
 
-    # ✅ PARCHE CONTRATO (antes de limpiar/contar)
-    if df_estructuras is None or df_estructuras.empty:
-        df_vacio = pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
-        return df_vacio, {}, df_vacio.copy()
+    # A) Precondición: debe venir algo
+    assert df_estructuras is not None, "A: df_estructuras llegó como None"
+    assert not df_estructuras.empty, "A: df_estructuras llegó vacío"
 
-    df_estructuras = df_estructuras.rename(columns={
+    # B) Contrato de columnas (aceptamos ambos formatos)
+    cols = set(df_estructuras.columns)
+    assert (
+        ("CodigoEstructura" in cols and "Cantidad" in cols) or
+        ("codigodeestructura" in cols and "cantidad" in cols)
+    ), f"B: columnas inesperadas: {list(df_estructuras.columns)}"
+
+    # C) Normalizar a contrato CORE
+    df = df_estructuras.rename(columns={
         "CodigoEstructura": "codigodeestructura",
         "Cantidad": "cantidad",
-    })
+    }).copy()
 
-    # Si viene con "Tipo", lo dejamos (no estorba), pero garantizamos llaves core:
-    if "codigodeestructura" in df_estructuras.columns:
-        df_estructuras["codigodeestructura"] = (
-            df_estructuras["codigodeestructura"].astype(str).str.strip().str.upper()
-        )
-    if "cantidad" in df_estructuras.columns:
-        df_estructuras["cantidad"] = pd.to_numeric(df_estructuras["cantidad"], errors="coerce").fillna(1).astype(int)
-        df_estructuras.loc[df_estructuras["cantidad"] < 1, "cantidad"] = 1
-    else:
-        df_estructuras["cantidad"] = 1
+    # D) Postcondición: columnas core deben existir
+    assert "Punto" in df.columns, f"D: falta Punto. cols={list(df.columns)}"
+    assert "codigodeestructura" in df.columns, f"D: falta codigodeestructura. cols={list(df.columns)}"
+    assert "cantidad" in df.columns, f"D: falta cantidad. cols={list(df.columns)}"
 
-    # (Opcional) punto limpio
-    if "Punto" in df_estructuras.columns:
-        df_estructuras["Punto"] = df_estructuras["Punto"].astype(str).str.strip()
+    df["Punto"] = df["Punto"].astype(str).str.strip()
+    df["codigodeestructura"] = df["codigodeestructura"].astype(str).str.strip().str.upper()
+    df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce").fillna(1).astype(int)
 
-    # --- ahora sí tu pipeline existente ---
-    df_estructuras_unicas = limpiar_df_estructuras(df_estructuras, log)
-    _, conteo, tmp_explotado = construir_estructuras_por_punto_y_conteo(df_estructuras_unicas, log)
+    # E) Invariante: no deben existir códigos vacíos
+    assert (df["codigodeestructura"].str.len() > 0).all(), "E: hay codigodeestructura vacío"
 
-    return df_estructuras_unicas, conteo, tmp_explotado
+    # F) Invariante: la limpieza NO puede dejarlo en cero sin explicación
+    df_unicas = limpiar_df_estructuras(df, log)
+    assert df_unicas is not None, "F: limpiar_df_estructuras devolvió None"
+
+    # Si aquí queda vacío, el culpable ES limpiar_df_estructuras
+    assert not df_unicas.empty, (
+        "F: limpiar_df_estructuras está vaciando TODO. "
+        f"Entrada rows={len(df)}; ejemplo={df['codigodeestructura'].head(10).tolist()}"
+    )
+
+    # G) Conteo: si esto queda vacío, el culpable es construir_estructuras_por_punto_y_conteo
+    estructuras_por_punto, conteo, tmp = construir_estructuras_por_punto_y_conteo(df_unicas, log)
+    assert isinstance(conteo, dict), "G: conteo no es dict"
+    assert len(conteo) > 0, (
+        "G: construir_estructuras_por_punto_y_conteo devolvió conteo vacío. "
+        f"Entrada rows={len(df_unicas)}; ejemplo={df_unicas['codigodeestructura'].head(10).tolist()}"
+    )
+
+    return df_unicas, conteo, tmp
 
 # =============================================================================
 # Helpers: Materiales globales
