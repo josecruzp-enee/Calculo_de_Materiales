@@ -112,18 +112,18 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
         return None, None
 
     # 2) convertir ANCHO → LARGO (único camino)
-    
     df_largo = coerce_df_estructuras_largo(df_ancho)
     if df_largo is None or df_largo.empty:
         st.error("No pude convertir estructuras a formato largo (Punto, codigodeestructura, cantidad).")
         st.write("Columnas recibidas:", list(df_ancho.columns))
         st.dataframe(df_ancho.head(10))
-    return None, None
+        return None, None
 
     ruta_tmp = materializar_df_a_archivo(df_largo, etiqueta=modo)
+
     # ✅ DEBUG ANTES DEL RETURN
     st.write("CK_A rows:", len(df_largo))
     st.write("CK_A cols:", list(df_largo.columns))
     st.dataframe(df_largo.head(10))
-    
-    return df_largo, ruta_tmp
+
+    return df_largo, ruta_tm
