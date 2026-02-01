@@ -166,6 +166,15 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     df2.drop_duplicates(subset=["Punto", "Estructura"], inplace=True)
     df2.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
     df2["cantidad"] = 1
+
+    # Expandir + coerción 1-D (contrato final: LARGO)
+    df_expandido = _expandir_estructuras(df)
+    st.write("DEBUG df antes:", len(df), list(df.columns))
+    st.write("DEBUG df_expandido:", len(df_expandido), list(df_expandido.columns))
+
+    assert df is not None and not df.empty, "DF entrada a finalizar llegó vacío"
+    assert df_expandido is not None and not df_expandido.empty, "_expandir_estructuras() está devolviendo vacío"
+
     return df2[["Punto", "codigodeestructura", "cantidad"]]
 
 # =============================================================================
