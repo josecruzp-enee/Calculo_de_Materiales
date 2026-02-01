@@ -132,12 +132,37 @@ def _limpiar_y_contar_estructuras(df_estructuras: pd.DataFrame, log) -> Tuple[pd
       df_estructuras_unicas, conteo, tmp_explotado
     """
     log("🔍 Limpieza inicial de estructuras...")
-    df_estructuras_unicas = limpiar_df_estructuras(df_estructuras, log)
 
+    # ✅ PARCHE CONTRATO (antes de limpiar/contar)
+    if df_estructuras is None or df_estructuras.empty:
+        df_vacio = pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+        return df_vacio, {}, df_vacio.copy()
+
+    df_estructuras = df_estructuras.rename(columns={
+        "CodigoEstructura": "codigodeestructura",
+        "Cantidad": "cantidad",
+    })
+
+    # Si viene con "Tipo", lo dejamos (no estorba), pero garantizamos llaves core:
+    if "codigodeestructura" in df_estructuras.columns:
+        df_estructuras["codigodeestructura"] = (
+            df_estructuras["codigodeestructura"].astype(str).str.strip().str.upper()
+        )
+    if "cantidad" in df_estructuras.columns:
+        df_estructuras["cantidad"] = pd.to_numeric(df_estructuras["cantidad"], errors="coerce").fillna(1).astype(int)
+        df_estructuras.loc[df_estructuras["cantidad"] < 1, "cantidad"] = 1
+    else:
+        df_estructuras["cantidad"] = 1
+
+    # (Opcional) punto limpio
+    if "Punto" in df_estructuras.columns:
+        df_estructuras["Punto"] = df_estructuras["Punto"].astype(str).str.strip()
+
+    # --- ahora sí tu pipeline existente ---
+    df_estructuras_unicas = limpiar_df_estructuras(df_estructuras, log)
     _, conteo, tmp_explotado = construir_estructuras_por_punto_y_conteo(df_estructuras_unicas, log)
 
     return df_estructuras_unicas, conteo, tmp_explotado
-
 
 # =============================================================================
 # Helpers: Materiales globales
