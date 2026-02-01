@@ -78,19 +78,30 @@ def quitar_saltos_finales(elems):
 def fondo_pagina(canvas, doc):
     try:
         canvas.saveState()
-        fondo = os.path.join(BASE_DIR, "data", "Membrete_SMART_EDS.png")
-        ancho, alto = letter
-        if os.path.exists(fondo):
+
+        img = os.path.join(BASE_DIR, "data", "Membrete_SMART_EDS.png")
+        if os.path.exists(img):
+            page_w, page_h = letter
+
+            # Altura del membrete en pulgadas (ajustá 1.3–2.0 si querés)
+            h = 1.6 * inch
+            w = page_w
+
+            # Dibujar pegado arriba
+            x = 0
+            y = page_h - h
+
             canvas.drawImage(
-                fondo, 0, 0,
-                width=ancho,
-                height=alto,
-                mask="auto"
+                img, x, y,
+                width=w,
+                height=h,
+                preserveAspectRatio=True,
+                mask="auto",
             )
+
         canvas.restoreState()
     except Exception as e:
-        print(f"⚠️ Error aplicando fondo: {e}")
-
+        print(f"⚠️ Error aplicando membrete: {e}")
 
 # ==========================================================
 # CALIBRES desde tabla de Cables (sin longitudes)
@@ -810,6 +821,7 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
