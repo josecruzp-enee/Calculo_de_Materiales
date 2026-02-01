@@ -93,6 +93,7 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
     modo = mapa.get(modo_raw, "desplegables")
 
     # 1) obtener ANCHO según fuente
+        # 1) obtener ANCHO según fuente
     if modo == "excel":
         df_ancho = cargar_desde_excel_ancho()
 
@@ -106,8 +107,22 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
         df_ancho = cargar_dxf_ancho()
 
     else:
-        df_ancho = listas_desplegables()  # importante: que esto devuelva df_ancho
+        # ✅ Desplegables devuelve LARGO + ruta
+        df_largo, ruta_tmp = listas_desplegables()
+        if df_largo is None or df_largo.empty:
+            return None, None
 
+        # Si no vino ruta, la generamos
+        ruta_tmp = ruta_tmp or materializar_df_a_archivo(df_largo, etiqueta=modo)
+
+        # ✅ DEBUG ANTES DEL RETURN
+        st.write("CK_A rows:", len(df_largo))
+        st.write("CK_A cols:", list(df_largo.columns))
+        st.dataframe(df_largo.head(10))
+
+        return df_largo, ruta_tmp
+
+    # --- desde aquí solo aplica a fuentes ANCHO ---
     if df_ancho is None or df_ancho.empty:
         return None, None
 
