@@ -114,6 +114,7 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
     # 2) convertir ANCHO → LARGO (único camino)
     
     df_largo = expand_wide_to_long(df_ancho, solo_proyectadas=True)
+    df_largo = coerce_df_estructuras_largo(df_largo)
     ruta_tmp = materializar_df_a_archivo(df_largo, etiqueta=modo)
 
     return df_largo, ruta_tmp
