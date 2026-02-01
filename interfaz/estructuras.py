@@ -126,4 +126,4 @@ def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame]
     st.write("CK_A cols:", list(df_largo.columns))
     st.dataframe(df_largo.head(10))
 
-    return df_largo, ruta_tm
+    return df_largo, ruta_tmp
