@@ -18,6 +18,7 @@ from typing import Dict, Optional, Tuple, Any, List
 import pandas as pd
 from core.costos_materiales import calcular_costos_desde_resumen
 from core.costos_estructuras import calcular_costos_por_estructura
+from servicios.normalizacion_estructuras import coerce_df_estructuras_largo
 
 
 from core.cables_materiales import materiales_desde_cables
