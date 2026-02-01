@@ -78,7 +78,7 @@ def quitar_saltos_finales(elems):
 def fondo_pagina(canvas, doc):
     try:
         canvas.saveState()
-        fondo = os.path.join(BASE_DIR, "data", "data/Smart.jpg")
+        fondo = os.path.join(BASE_DIR, "data", "Membrete_SMART_EDS.png")
         ancho, alto = letter
         if os.path.exists(fondo):
             canvas.drawImage(
@@ -810,6 +810,7 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
