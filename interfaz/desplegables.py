@@ -8,6 +8,41 @@ import streamlit as st
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
+import interfaz.desplegables as cat
+st.write("CATALOGO MODULO:", cat.__file__)
+
+from interfaz.desplegables import debug_catalogo_excel, RUTA_EXCEL
+
+with st.expander("🧪 Debug catálogo", expanded=True):
+    debug_catalogo_excel(RUTA_EXCEL)
+
+def debug_catalogo_excel(ruta_excel: str):
+    import os
+    import pandas as pd
+    import streamlit as st
+
+    st.write("RUTA:", ruta_excel)
+    st.write("EXISTE:", os.path.exists(ruta_excel))
+
+    if not os.path.exists(ruta_excel):
+        st.error("NO existe el Excel en esa ruta (en Cloud casi siempre es esto).")
+        return None
+
+    xls = pd.ExcelFile(ruta_excel)
+    st.write("HOJAS:", xls.sheet_names)
+
+    hoja = next((s for s in xls.sheet_names if s.strip().lower() in ("indice", "índice")), None)
+    st.write("HOJA indice:", hoja)
+
+    if not hoja:
+        st.error("No encuentro hoja indice/índice.")
+        return None
+
+    df = pd.read_excel(xls, sheet_name=hoja)
+    df.columns = df.columns.astype(str).str.replace("\xa0", " ").str.strip()
+    st.write("COLUMNAS:", list(df.columns))
+    st.dataframe(df.head(15))
+    return df
 
 
 # ========== Cargar catálogo desde "indice" ==========
@@ -281,3 +316,4 @@ def crear_desplegables(opciones):
 
     return seleccion
      la Hoja se llama data/Estructura_datos.xlsx
+
