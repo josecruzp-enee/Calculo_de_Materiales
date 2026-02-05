@@ -1,61 +1,155 @@
 # modulo/desplegables.py
 # -*- coding: utf-8 -*-
+
 from __future__ import annotations
 
 import os
-import pandas as pd
+from collections import Counter
+from typing import Dict, Any
 
+import pandas as pd
+import streamlit as st
+
+# =============================================================================
+# RUTA DEL CATÁLOGO
+# =============================================================================
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
-from modulo.desplegables import RUTA_EXCEL, cargar_opciones
-import os, pandas as pd, streamlit as st
 
-with st.expander("🧪 Debug catálogo", expanded=False):
-    st.write("Ruta:", RUTA_EXCEL)
-    st.write("Existe:", os.path.exists(RUTA_EXCEL))
-    if os.path.exists(RUTA_EXCEL):
-        xls = pd.ExcelFile(RUTA_EXCEL)
-        st.write("Hojas:", xls.sheet_names)
 
-def cargar_opciones(ruta_excel: str | None = None) -> dict:
-    ruta = ruta_excel or RUTA_EXCEL
+# =============================================================================
+# DEBUG (NO ejecutar en import)
+# =============================================================================
+def debug_catalogo_excel(ruta_excel: str = RUTA_EXCEL):
+    """
+    Debug visual del catálogo para Streamlit.
+    OJO: llamala desde tu UI (no en toplevel), por ejemplo:
+        with st.expander("🧪 Debug catálogo"):
+            debug_catalogo_excel()
+    """
+    st.subheader("🧪 DEBUG CATÁLOGO")
+    st.write("RUTA:", ruta_excel)
+    st.write("EXISTE:", os.path.exists(ruta_excel))
+    st.write("CWD:", os.getcwd())
 
-    xls = pd.ExcelFile(ruta)
+    # listar ./data si existe (útil en Cloud)
+    try:
+        st.write("Contenido ./data:", os.listdir("data") if os.path.isdir("data") else "NO existe ./data")
+    except Exception as e:
+        st.write("No pude listar ./data:", e)
 
-    hoja = next(
-        (s for s in xls.sheet_names if s.strip().lower() in ("indice", "índice")),
-        None
-    )
+    if not os.path.exists(ruta_excel):
+        st.error("❌ NO existe el Excel en esa ruta. En Cloud esto es lo #1.")
+        return None
+
+    try:
+        xls = pd.ExcelFile(ruta_excel)
+        st.write("HOJAS:", xls.sheet_names)
+    except Exception as e:
+        st.error(f"❌ No pude abrir el Excel: {e}")
+        return None
+
+    hoja = next((s for s in xls.sheet_names if s.strip().lower() in ("indice", "índice")), None)
+    st.write("HOJA indice detectada:", hoja)
+
     if not hoja:
-        raise ValueError("No existe hoja 'indice' / 'Índice'")
+        st.error("❌ No encuentro hoja indice/índice.")
+        return None
 
     df = pd.read_excel(xls, sheet_name=hoja)
     df.columns = df.columns.astype(str).str.replace("\xa0", " ").str.strip()
+    st.write("COLUMNAS:", list(df.columns))
+    st.dataframe(df.head(15))
+    return df
 
-    clas_col = "Clasificación" if "Clasificación" in df.columns else "Clasificacion"
-    cod_col  = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
-    desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
 
-    for c in (clas_col, cod_col, desc_col):
-        if c in df.columns:
-            df[c] = df[c].astype(str).str.replace("\xa0", " ").str.strip()
+# =============================================================================
+# CARGA DE OPCIONES DESDE "indice"
+# =============================================================================
+def _normalizar_cols(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df.columns = df.columns.astype(str).str.replace("\xa0", " ").str.strip()
+    return df
+
+
+def _resolver_columnas(df: pd.DataFrame):
+    cols = set(df.columns)
+
+    # clasificación
+    clas_col = "Clasificación" if "Clasificación" in cols else ("Clasificacion" if "Clasificacion" in cols else None)
+    # código
+    cod_col = (
+        "Código de Estructura" if "Código de Estructura" in cols
+        else ("Codigo de Estructura" if "Codigo de Estructura" in cols else None)
+    )
+    # descripción
+    desc_col = "Descripción" if "Descripción" in cols else ("Descripcion" if "Descripcion" in cols else None)
+
+    return clas_col, cod_col, desc_col
+
+
+def cargar_opciones(ruta_excel: str = RUTA_EXCEL) -> Dict[str, Dict[str, Any]]:
+    """
+    Lee hoja indice/índice del Excel catálogo y devuelve:
+      {
+        "Poste": {"valores":[...], "etiquetas":{codigo: "codigo – desc"}},
+        ...
+      }
+    """
+    if not os.path.exists(ruta_excel):
+        # Importante: no st.stop aquí, solo devolver vacío para que UI no reviente.
+        return {}
+
+    xls = pd.ExcelFile(ruta_excel)
+    hoja = next((s for s in xls.sheet_names if s.strip().lower() in ("indice", "índice")), None)
+    if not hoja:
+        return {}
+
+    df = pd.read_excel(xls, sheet_name=hoja)
+    df = _normalizar_cols(df)
+
+    clas_col, cod_col, desc_col = _resolver_columnas(df)
+    if not clas_col or not cod_col:
+        return {}
+
+    # normalizar valores
+    df[clas_col] = df[clas_col].astype(str).str.replace("\xa0", " ").str.strip()
+    df[cod_col] = df[cod_col].astype(str).str.replace("\xa0", " ").str.strip()
+    if desc_col and desc_col in df.columns:
+        df[desc_col] = df[desc_col].astype(str).str.replace("\xa0", " ").str.strip()
 
     opciones = {}
-    for clas in df[clas_col].dropna().unique():
-        sub = df[df[clas_col] == clas]
-        codigos = sub[cod_col].dropna().astype(str).tolist()
-        etiquetas = {
-            c: f"{c} – {sub[sub[cod_col] == c][desc_col].iloc[0]}"
-            for c in codigos
-        }
-        opciones[str(clas)] = {"valores": codigos, "etiquetas": etiquetas}
+    for clasificacion in df[clas_col].dropna().astype(str).unique():
+        clasificacion = str(clasificacion).replace("\xa0", " ").strip()
+        if not clasificacion:
+            continue
 
+        subset = df[df[clas_col] == clasificacion]
+
+        codigos = subset[cod_col].dropna().astype(str).str.strip().tolist()
+
+        etiquetas = {}
+        if desc_col and desc_col in subset.columns:
+            for _, row in subset.iterrows():
+                if pd.notna(row.get(cod_col)):
+                    cod = str(row[cod_col]).strip()
+                    desc = str(row.get(desc_col, "")).strip() if pd.notna(row.get(desc_col)) else ""
+                    etiquetas[cod] = f"{cod} – {desc}".strip()
+        else:
+            etiquetas = {str(c).strip(): str(c).strip() for c in codigos}
+
+        opciones[clasificacion] = {"valores": codigos, "etiquetas": etiquetas}
+
+    # Normaliza nombres de categoría para calzar con tu UI
     mapping = {
         "Poste": "Poste",
         "Primaria": "Primario",
+        "Primario": "Primario",
         "Secundaria": "Secundario",
+        "Secundario": "Secundario",
         "Retenidas": "Retenidas",
         "Conexiones a tierra": "Conexiones a tierra",
+        "Conexiones a tierra / Protección": "Conexiones a tierra",
         "Protección": "Protección",
         "Proteccion": "Protección",
         "Transformadores": "Transformadores",
@@ -63,5 +157,210 @@ def cargar_opciones(ruta_excel: str | None = None) -> dict:
         "Luminaria": "Luminarias",
     }
 
-    return {mapping.get(k, k): v for k, v in opciones.items()}
+    normalizado = {}
+    for k, v in opciones.items():
+        kk = mapping.get(str(k).replace("\xa0", " ").strip(), str(k).replace("\xa0", " ").strip())
+        normalizado[kk] = v
 
+    return normalizado
+
+
+# =============================================================================
+# Helpers de parseo (2x R-1  <->  Counter)
+# =============================================================================
+def _parse_str_to_counter(s: str) -> Counter:
+    if not s:
+        return Counter()
+    s = s.replace("+", ",")
+    parts = [p.strip() for p in s.split(",") if p.strip()]
+    c = Counter()
+    for p in parts:
+        low = p.lower()
+        if "x" in low:
+            try:
+                n, cod = low.split("x", 1)
+                n = int(n.strip())
+                cod = cod.strip().upper()
+                if cod:
+                    c[cod] += max(1, n)
+                continue
+            except Exception:
+                pass
+        c[p.upper()] += 1
+    return c
+
+
+def _counter_to_str(c: Counter) -> str:
+    if not c:
+        return ""
+    partes = []
+    for cod, n in c.items():
+        partes.append(f"{n}x {cod}" if n > 1 else cod)
+    return " , ".join(partes)
+
+
+# =============================================================================
+# UI: picker con cantidad
+# =============================================================================
+def _scoped_css_once():
+    if st.session_state.get("_xpicker_css", False):
+        return
+    st.session_state["_xpicker_css"] = True
+    st.markdown(
+        """
+        <style>
+        .xpicker .count-pill{
+            display:inline-block; min-width:28px; padding:2px 8px;
+            border-radius:999px; text-align:center; font-weight:600;
+            background:#f1f1f1; border:1px solid #e6e6e6;
+        }
+        .xpicker .row{
+            padding:6px 8px; border:1px solid #eee; border-radius:10px;
+            margin-bottom:6px; background:rgba(0,0,0,0.01);
+        }
+        .xpicker .stButton>button{
+            padding:4px 10px; border-radius:10px;
+        }
+        .xpicker .muted{ color:#666; font-size:12px; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _short(label: str, maxlen: int = 52) -> str:
+    return label if len(label) <= maxlen else label[:maxlen - 1] + "…"
+
+
+def _render_lista(contador: Counter, datos: dict, state_key: str):
+    if not contador:
+        return
+    st.caption("Seleccionado:")
+
+    for cod, n in sorted(contador.items()):
+        col1, col2, col3, col4 = st.columns([7, 2, 1, 1])
+        with col1:
+            desc = datos.get("etiquetas", {}).get(cod, cod)
+            st.markdown(
+                f"<div class='row'><strong>{cod}</strong> – "
+                f"<span class='muted'>{_short(desc)}</span></div>",
+                unsafe_allow_html=True,
+            )
+        with col2:
+            st.markdown(f"<div class='count-pill'>× {n}</div>", unsafe_allow_html=True)
+        with col3:
+            if st.button("−", key=f"{state_key}_menos_{cod}", help="Quitar 1"):
+                contador[cod] -= 1
+                if contador[cod] <= 0:
+                    del contador[cod]
+                st.rerun()
+        with col4:
+            if st.button("🗑️", key=f"{state_key}_del_{cod}", help="Eliminar"):
+                del contador[cod]
+                st.rerun()
+
+
+def _picker_con_cantidad(label: str, datos: dict, state_key: str, valores_previos: str = "") -> Counter:
+    if not datos or not datos.get("valores"):
+        st.info(f"No hay opciones para {label}.")
+        return Counter()
+
+    _scoped_css_once()
+
+    if state_key not in st.session_state:
+        st.session_state[state_key] = _parse_str_to_counter(valores_previos)
+
+    contador: Counter = st.session_state[state_key]
+
+    cols = st.columns([6, 2, 2])
+    with cols[0]:
+        codigo = st.selectbox(
+            label,
+            options=datos["valores"],
+            format_func=lambda x: datos.get("etiquetas", {}).get(x, x),
+            key=f"{state_key}_sel",
+        )
+    with cols[1]:
+        qty = st.number_input(
+            "Cantidad",
+            min_value=1, value=1, step=1,
+            key=f"{state_key}_qty",
+            label_visibility="collapsed",
+        )
+    with cols[2]:
+        if st.button("➕ Agregar", key=f"{state_key}_add", type="primary"):
+            contador[str(codigo).strip().upper()] += int(qty)
+
+    _render_lista(contador, datos, state_key)
+
+    st.session_state[state_key] = contador
+    return contador
+
+
+# =============================================================================
+# Componente principal
+# =============================================================================
+def crear_desplegables(opciones):
+    """
+    Devuelve dict para tu df_puntos (ancho):
+      {'Poste': '2x PC-40', 'Primario': 'A-I-5', ...}
+    """
+    with st.container():
+        st.markdown("<div class='xpicker'>", unsafe_allow_html=True)
+
+        seleccion = {}
+        df_actual = st.session_state.get("df_puntos", pd.DataFrame())
+        punto_actual = st.session_state.get("punto_en_edicion")
+
+        valores_previos = {}
+        if (not df_actual.empty) and (punto_actual in df_actual.get("Punto", pd.Series(dtype=str)).values):
+            fila = df_actual[df_actual["Punto"] == punto_actual].iloc[0].to_dict()
+            valores_previos = {k: v for k, v in fila.items() if k != "Punto"}
+
+        # Mezclar Conexiones a tierra + Protección
+        cat_tierra = opciones.get("Conexiones a tierra", {"valores": [], "etiquetas": {}})
+        cat_prot = opciones.get("Protección", {"valores": [], "etiquetas": {}})
+
+        valores_mix = []
+        vistos = set()
+        for v in (cat_tierra.get("valores", []) + cat_prot.get("valores", [])):
+            vv = str(v).strip()
+            if vv and vv not in vistos:
+                vistos.add(vv)
+                valores_mix.append(vv)
+
+        etiquetas_mix = {}
+        etiquetas_mix.update(cat_tierra.get("etiquetas", {}) or {})
+        etiquetas_mix.update(cat_prot.get("etiquetas", {}) or {})
+
+        cat_tierra_prot = {"valores": valores_mix, "etiquetas": etiquetas_mix}
+
+        col_izq, col_der = st.columns(2)
+
+        with col_izq:
+            c_poste = _picker_con_cantidad("Poste", opciones.get("Poste"), "cnt_poste", valores_previos.get("Poste", ""))
+            c_sec = _picker_con_cantidad("Secundario", opciones.get("Secundario"), "cnt_sec", valores_previos.get("Secundario", ""))
+            c_tierra = _picker_con_cantidad(
+                "Conexiones a tierra / Protección",
+                cat_tierra_prot,
+                "cnt_tierra_prot",
+                valores_previos.get("Conexiones a tierra", "")
+            )
+
+        with col_der:
+            c_pri = _picker_con_cantidad("Primario", opciones.get("Primario"), "cnt_pri", valores_previos.get("Primario", ""))
+            c_ret = _picker_con_cantidad("Retenidas", opciones.get("Retenidas"), "cnt_ret", valores_previos.get("Retenidas", ""))
+            c_trf = _picker_con_cantidad("Transformadores", opciones.get("Transformadores"), "cnt_trf", valores_previos.get("Transformadores", ""))
+            c_lum = _picker_con_cantidad("Luminarias", opciones.get("Luminarias"), "cnt_lum", valores_previos.get("Luminarias", ""))
+
+        seleccion["Poste"] = _counter_to_str(c_poste)
+        seleccion["Primario"] = _counter_to_str(c_pri)
+        seleccion["Secundario"] = _counter_to_str(c_sec)
+        seleccion["Retenidas"] = _counter_to_str(c_ret)
+        seleccion["Conexiones a tierra"] = _counter_to_str(c_tierra)
+        seleccion["Transformadores"] = _counter_to_str(c_trf)
+        seleccion["Luminarias"] = _counter_to_str(c_lum)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    return seleccion
