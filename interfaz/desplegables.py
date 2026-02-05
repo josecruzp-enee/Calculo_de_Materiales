@@ -7,7 +7,15 @@ import pandas as pd
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
+from modulo.desplegables import RUTA_EXCEL, cargar_opciones
+import os, pandas as pd, streamlit as st
 
+with st.expander("🧪 Debug catálogo", expanded=False):
+    st.write("Ruta:", RUTA_EXCEL)
+    st.write("Existe:", os.path.exists(RUTA_EXCEL))
+    if os.path.exists(RUTA_EXCEL):
+        xls = pd.ExcelFile(RUTA_EXCEL)
+        st.write("Hojas:", xls.sheet_names)
 
 def cargar_opciones(ruta_excel: str | None = None) -> dict:
     ruta = ruta_excel or RUTA_EXCEL
@@ -56,3 +64,4 @@ def cargar_opciones(ruta_excel: str | None = None) -> dict:
     }
 
     return {mapping.get(k, k): v for k, v in opciones.items()}
+
