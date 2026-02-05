@@ -15,6 +15,14 @@ from interfaz.desplegables import debug_catalogo_excel, RUTA_EXCEL
 
 with st.expander("🧪 Debug catálogo", expanded=True):
     debug_catalogo_excel(RUTA_EXCEL)
+import os, streamlit as st
+from modulo.desplegables import RUTA_EXCEL
+
+st.write("RUTA_EXCEL (desde modulo.desplegables) =", RUTA_EXCEL)
+st.write("EXISTE =", os.path.exists(RUTA_EXCEL))
+
+st.write("CWD =", os.getcwd())
+st.write("Contenido ./data =", os.listdir("data") if os.path.isdir("data") else "NO existe ./data")
 
 def debug_catalogo_excel(ruta_excel: str):
     import os
@@ -316,4 +324,5 @@ def crear_desplegables(opciones):
 
     return seleccion
      la Hoja se llama data/Estructura_datos.xlsx
+
 
