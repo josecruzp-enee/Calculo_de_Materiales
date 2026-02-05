@@ -80,7 +80,7 @@ from reportlab.lib.units import inch
 def fondo_pagina(canvas, doc):
     try:
         canvas.saveState()
-        fondo = os.path.join(BASE_DIR, "data", "MembreteSMART_EDS.png")
+        fondo = os.path.join(BASE_DIR, "data", "Imagen Encabezado.jpg")
         ancho, alto = letter
 
         if os.path.exists(fondo):
@@ -883,6 +883,7 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
 
 
 
