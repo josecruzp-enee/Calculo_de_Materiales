@@ -1,83 +1,47 @@
 # modulo/desplegables.py
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 
 import os
-from collections import Counter
 import pandas as pd
-import streamlit as st
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
-import interfaz.desplegables as cat
-st.write("CATALOGO MODULO:", cat.__file__)
 
-from interfaz.desplegables import debug_catalogo_excel, RUTA_EXCEL
 
-with st.expander("🧪 Debug catálogo", expanded=True):
-    debug_catalogo_excel(RUTA_EXCEL)
-import os, streamlit as st
-from modulo.desplegables import RUTA_EXCEL
+def cargar_opciones(ruta_excel: str | None = None) -> dict:
+    ruta = ruta_excel or RUTA_EXCEL
 
-st.write("RUTA_EXCEL (desde modulo.desplegables) =", RUTA_EXCEL)
-st.write("EXISTE =", os.path.exists(RUTA_EXCEL))
+    xls = pd.ExcelFile(ruta)
 
-st.write("CWD =", os.getcwd())
-st.write("Contenido ./data =", os.listdir("data") if os.path.isdir("data") else "NO existe ./data")
-
-def debug_catalogo_excel(ruta_excel: str):
-    import os
-    import pandas as pd
-    import streamlit as st
-
-    st.write("RUTA:", ruta_excel)
-    st.write("EXISTE:", os.path.exists(ruta_excel))
-
-    if not os.path.exists(ruta_excel):
-        st.error("NO existe el Excel en esa ruta (en Cloud casi siempre es esto).")
-        return None
-
-    xls = pd.ExcelFile(ruta_excel)
-    st.write("HOJAS:", xls.sheet_names)
-
-    hoja = next((s for s in xls.sheet_names if s.strip().lower() in ("indice", "índice")), None)
-    st.write("HOJA indice:", hoja)
-
+    hoja = next(
+        (s for s in xls.sheet_names if s.strip().lower() in ("indice", "índice")),
+        None
+    )
     if not hoja:
-        st.error("No encuentro hoja indice/índice.")
-        return None
+        raise ValueError("No existe hoja 'indice' / 'Índice'")
 
     df = pd.read_excel(xls, sheet_name=hoja)
     df.columns = df.columns.astype(str).str.replace("\xa0", " ").str.strip()
-    st.write("COLUMNAS:", list(df.columns))
-    st.dataframe(df.head(15))
-    return df
-
-
-# ========== Cargar catálogo desde "indice" ==========
-def cargar_opciones():
-    df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
-    df.columns = df.columns.str.strip()
 
     clas_col = "Clasificación" if "Clasificación" in df.columns else "Clasificacion"
     cod_col  = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
     desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
 
+    for c in (clas_col, cod_col, desc_col):
+        if c in df.columns:
+            df[c] = df[c].astype(str).str.replace("\xa0", " ").str.strip()
+
     opciones = {}
-    for clasificacion in df[clas_col].dropna().astype(str).unique():
-        clasificacion = clasificacion.strip()
-        subset = df[df[clas_col].astype(str).str.strip() == clasificacion]
-
-        codigos = subset[cod_col].dropna().astype(str).str.strip().tolist()
-
+    for clas in df[clas_col].dropna().unique():
+        sub = df[df[clas_col] == clas]
+        codigos = sub[cod_col].dropna().astype(str).tolist()
         etiquetas = {
-            str(row[cod_col]).strip(): f"{str(row[cod_col]).strip()} – {str(row[desc_col]).strip() if pd.notna(row[desc_col]) else ''}"
-            for _, row in subset.iterrows()
-            if pd.notna(row[cod_col])
+            c: f"{c} – {sub[sub[cod_col] == c][desc_col].iloc[0]}"
+            for c in codigos
         }
+        opciones[str(clas)] = {"valores": codigos, "etiquetas": etiquetas}
 
-        opciones[clasificacion] = {"valores": codigos, "etiquetas": etiquetas}
-
-    # normaliza nombres a los usados en tu UI
     mapping = {
         "Poste": "Poste",
         "Primaria": "Primario",
@@ -88,241 +52,7 @@ def cargar_opciones():
         "Proteccion": "Protección",
         "Transformadores": "Transformadores",
         "Luminarias": "Luminarias",
+        "Luminaria": "Luminarias",
     }
 
-    normalizado = {}
-    for k, v in opciones.items():
-        kk = mapping.get(k, k)
-        normalizado[kk] = v
-
-    return normalizado
-
-
-# ========== Helpers de parseo (2x R-1  <->  Counter) ==========
-def _parse_str_to_counter(s: str) -> Counter:
-    if not s:
-        return Counter()
-    s = s.replace("+", ",")
-    parts = [p.strip() for p in s.split(",") if p.strip()]
-    c = Counter()
-    for p in parts:
-        low = p.lower()
-        if "x" in low:
-            try:
-                n, cod = low.split("x", 1)
-                n = int(n.strip())
-                cod = cod.strip().upper()
-                if cod:
-                    c[cod] += max(1, n)
-                continue
-            except Exception:
-                pass
-        c[p.upper()] += 1
-    return c
-
-
-def _counter_to_str(c: Counter) -> str:
-    if not c:
-        return ""
-    partes = []
-    for cod, n in c.items():
-        partes.append(f"{n}x {cod}" if n > 1 else cod)
-    return " , ".join(partes)
-
-
-# ========== UI: picker con cantidad (bonito y compacto) ==========
-def _scoped_css_once():
-    if st.session_state.get("_xpicker_css", False):
-        return
-    st.session_state["_xpicker_css"] = True
-    st.markdown(
-        """
-        <style>
-        /* Estilos SOLO dentro de .xpicker para no tocar tu tema global */
-        .xpicker .count-pill{
-            display:inline-block; min-width:28px; padding:2px 8px;
-            border-radius:999px; text-align:center; font-weight:600;
-            background:#f1f1f1; border:1px solid #e6e6e6;
-        }
-        .xpicker .row{
-            padding:6px 8px; border:1px solid #eee; border-radius:10px;
-            margin-bottom:6px; background:rgba(0,0,0,0.01);
-        }
-        .xpicker .stButton>button{
-            padding:4px 10px; border-radius:10px;
-        }
-        .xpicker .muted{ color:#666; font-size:12px; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _short(label: str, maxlen: int = 52) -> str:
-    return label if len(label) <= maxlen else label[:maxlen - 1] + "…"
-
-
-def _render_lista(contador: Counter, datos: dict, state_key: str):
-    """Lista bonita con código, descripción corta, cantidad (píldora) y acciones."""
-    if not contador:
-        return
-    st.caption("Seleccionado:")
-
-    for cod, n in sorted(contador.items()):
-        col1, col2, col3, col4 = st.columns([7, 2, 1, 1])
-        with col1:
-            desc = datos.get("etiquetas", {}).get(cod, cod)
-            st.markdown(
-                f"<div class='row'><strong>{cod}</strong> – "
-                f"<span class='muted'>{_short(desc)}</span></div>",
-                unsafe_allow_html=True,
-            )
-        with col2:
-            st.markdown(f"<div class='count-pill'>× {n}</div>", unsafe_allow_html=True)
-        with col3:
-            if st.button("−", key=f"{state_key}_menos_{cod}", help="Quitar 1"):
-                contador[cod] -= 1
-                if contador[cod] <= 0:
-                    del contador[cod]
-                st.rerun()
-        with col4:
-            if st.button("🗑️", key=f"{state_key}_del_{cod}", help="Eliminar"):
-                del contador[cod]
-                st.rerun()
-
-
-def _picker_con_cantidad(label: str, datos: dict, state_key: str, valores_previos: str = "") -> Counter:
-    """
-    Línea compacta: Select | Cantidad | ➕ Agregar
-    + lista seleccionada con píldoras y acciones.
-    """
-    if not datos or not datos.get("valores"):
-        st.info(f"No hay opciones para {label}.")
-        return Counter()
-
-    _scoped_css_once()
-
-    # Estado inicial (si vienes de "Editar Punto")
-    if state_key not in st.session_state:
-        st.session_state[state_key] = _parse_str_to_counter(valores_previos)
-
-    contador: Counter = st.session_state[state_key]
-
-    # Picker compacto
-    cols = st.columns([6, 2, 2])
-    with cols[0]:
-        codigo = st.selectbox(
-            label,
-            options=datos["valores"],
-            format_func=lambda x: datos.get("etiquetas", {}).get(x, x),
-            key=f"{state_key}_sel",
-        )
-    with cols[1]:
-        qty = st.number_input(
-            "Cantidad",
-            min_value=1, value=1, step=1,
-            key=f"{state_key}_qty",
-            label_visibility="collapsed",
-        )
-    with cols[2]:
-        if st.button("➕ Agregar", key=f"{state_key}_add", type="primary"):
-            contador[str(codigo).strip().upper()] += int(qty)
-
-    _render_lista(contador, datos, state_key)
-
-    st.session_state[state_key] = contador
-    return contador
-
-
-# ========== Componente principal que usa interfaz/estructuras.py ==========
-def crear_desplegables(opciones):
-    """
-    Devuelve un dict igual al que ya guardas en df_puntos:
-      {'Poste': '2x PC-40', 'Primario': 'A-I-5', ...}
-    """
-    with st.container():  # scope para el CSS local
-        st.markdown("<div class='xpicker'>", unsafe_allow_html=True)
-
-        seleccion = {}
-        df_actual = st.session_state.get("df_puntos", pd.DataFrame())
-        punto_actual = st.session_state.get("punto_en_edicion")
-
-        # Valores previos si se está editando
-        valores_previos = {}
-        if (not df_actual.empty) and (punto_actual in df_actual.get("Punto", pd.Series(dtype=str)).values):
-            fila = df_actual[df_actual["Punto"] == punto_actual].iloc[0].to_dict()
-            valores_previos = {k: v for k, v in fila.items() if k != "Punto"}
-
-        # --- Mezclar catálogo: Conexiones a tierra + Protección ---
-        cat_tierra = opciones.get("Conexiones a tierra", {"valores": [], "etiquetas": {}})
-        cat_prot   = opciones.get("Protección", {"valores": [], "etiquetas": {}})
-
-        # Merge sin duplicados, preservando etiquetas
-        valores_mix = []
-        vistos = set()
-        for v in (cat_tierra.get("valores", []) + cat_prot.get("valores", [])):
-            vv = str(v).strip()
-            if vv and vv not in vistos:
-                vistos.add(vv)
-                valores_mix.append(vv)
-
-        etiquetas_mix = {}
-        etiquetas_mix.update(cat_tierra.get("etiquetas", {}) or {})
-        etiquetas_mix.update(cat_prot.get("etiquetas", {}) or {})
-
-        cat_tierra_prot = {"valores": valores_mix, "etiquetas": etiquetas_mix}
-
-        # Estructura en dos columnas (como tu layout)
-        col_izq, col_der = st.columns(2)
-
-        with col_izq:
-            c_poste = _picker_con_cantidad(
-                "Poste", opciones.get("Poste"), "cnt_poste",
-                valores_previos.get("Poste", "")
-            )
-            c_sec = _picker_con_cantidad(
-                "Secundario", opciones.get("Secundario"), "cnt_sec",
-                valores_previos.get("Secundario", "")
-            )
-
-            c_tierra = _picker_con_cantidad(
-                "Conexiones a tierra / Protección",
-                cat_tierra_prot,
-                "cnt_tierra_prot",  # 👈 antes era "cnt_tierra"
-                valores_previos.get("Conexiones a tierra", "")
-            )
-
-        with col_der:
-            c_pri = _picker_con_cantidad(
-                "Primario", opciones.get("Primario"), "cnt_pri",
-                valores_previos.get("Primario", "")
-            )
-            c_ret = _picker_con_cantidad(
-                "Retenidas", opciones.get("Retenidas"), "cnt_ret",
-                valores_previos.get("Retenidas", "")
-            )
-            c_trf = _picker_con_cantidad(
-                "Transformadores", opciones.get("Transformadores"), "cnt_trf",
-                valores_previos.get("Transformadores", "")
-            )
-
-            c_lum = _picker_con_cantidad(
-                "Luminarias", opciones.get("Luminarias"), "cnt_lum",
-                valores_previos.get("Luminarias", "")
-            )
-
-        # Salida final en el formato que ya consume tu app
-        seleccion["Poste"] = _counter_to_str(c_poste)
-        seleccion["Primario"] = _counter_to_str(c_pri)
-        seleccion["Secundario"] = _counter_to_str(c_sec)
-        seleccion["Retenidas"] = _counter_to_str(c_ret)
-        seleccion["Conexiones a tierra"] = _counter_to_str(c_tierra)
-        seleccion["Transformadores"] = _counter_to_str(c_trf)
-        seleccion["Luminarias"] = _counter_to_str(c_lum)
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    return seleccion
-     la Hoja se llama data/Estructura_datos.xlsx
-
-
+    return {mapping.get(k, k): v for k, v in opciones.items()}
