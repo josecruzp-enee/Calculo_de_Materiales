@@ -5,175 +5,24 @@ import os
 from collections import Counter
 import pandas as pd
 import streamlit as st
-from interfaz.desplegables import debug_catalogo_excel with st.expander("🧪 Debug catálogo", expanded=True): debug_catalogo_excel() 
+
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
-
-def debug_catalogo_excel() -> dict:
-    """
-    Debug visual del catálogo (hoja 'indice') para encontrar por qué llegan options vacías.
-    Devuelve también el dict 'opciones' por si lo querés inspeccionar.
-    """
-    st.subheader("🧪 DEBUG CATÁLOGO (Estructura_datos.xlsx → indice)")
-
-    st.write("📌 RUTA_EXCEL:", RUTA_EXCEL)
-    st.write("📌 Existe archivo:", os.path.exists(RUTA_EXCEL))
-
-    try:
-        xls = pd.ExcelFile(RUTA_EXCEL)
-        st.write("📄 Hojas disponibles:", xls.sheet_names)
-    except Exception as e:
-        st.error(f"❌ No pude abrir el Excel: {e}")
-        return {}
-
-    try:
-        df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
-    except Exception as e:
-        st.error(f"❌ No pude leer hoja 'indice': {e}")
-        return {}
-
-    st.write("📌 Columnas crudas:", list(df.columns))
-    df.columns = df.columns.astype(str).str.replace("\xa0", " ").str.strip()
-    st.write("📌 Columnas normalizadas:", list(df.columns))
-
-    # detectar columnas
-    clas_col = "Clasificación" if "Clasificación" in df.columns else "Clasificacion"
-    cod_col  = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
-    desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
-
-    st.write("✅ Usando columnas:", {"clas": clas_col, "cod": cod_col, "desc": desc_col})
-
-    # normalizar valores de clasificación (aquí es donde mueren muchos)
-    df[clas_col] = df[clas_col].astype(str).str.replace("\xa0", " ").str.strip()
-    df[cod_col]  = df[cod_col].astype(str).str.replace("\xa0", " ").str.strip()
-    if desc_col in df.columns:
-        df[desc_col] = df[desc_col].astype(str).str.replace("\xa0", " ").str.strip()
-
-    st.write("🔎 Top 10 filas (clas/cod/desc):")
-    st.dataframe(df[[clas_col, cod_col, desc_col]].head(10))
-
-    st.write("🔎 Clasificaciones únicas (repr para ver espacios invisibles):")
-    uniques = sorted({repr(x) for x in df[clas_col].dropna().unique().tolist()})
-    st.write(uniques)
-
-    # conteo por clasificación
-    st.write("📊 Conteo por clasificación:")
-    conteo = df[clas_col].value_counts(dropna=False)
-    st.dataframe(conteo)
-
-    # construir opciones y reportar tamaños
-    mapping = {
-        "Poste": "Poste",
-        "Primaria": "Primario",
-        "Secundaria": "Secundario",
-        "Retenidas": "Retenidas",
-        "Conexiones a tierra": "Conexiones a tierra",
-        "Protección": "Protección",
-        "Proteccion": "Protección",
-        "Transformadores": "Transformadores",
-        "Luminarias": "Luminarias",
-        "Luminaria": "Luminarias",  # 👈 por si tu Excel usa "Luminaria"
-    }
-
-    opciones = {}
-    for clasificacion in df[clas_col].dropna().astype(str).unique():
-        clasificacion = str(clasificacion).replace("\xa0", " ").strip()
-        subset = df[df[clas_col] == clasificacion]
-
-        codigos = subset[cod_col].dropna().astype(str).str.strip().tolist()
-        etiquetas = {
-            str(row[cod_col]).strip(): f"{str(row[cod_col]).strip()} – {str(row[desc_col]).strip() if pd.notna(row[desc_col]) else ''}"
-            for _, row in subset.iterrows()
-            if pd.notna(row[cod_col])
-        }
-
-        kk = mapping.get(clasificacion, clasificacion)
-        opciones[kk] = {"valores": codigos, "etiquetas": etiquetas}
-
-    st.write("✅ Keys finales en opciones:", list(opciones.keys()))
-    st.write("✅ Tamaños por key:")
-    st.dataframe(pd.DataFrame(
-        [{"key": k, "n": len(v.get("valores", []))} for k, v in opciones.items()]
-    ))
-
-    # alertas rápidas
-    esperadas = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Protección", "Transformadores", "Luminarias"]
-    faltan = [k for k in esperadas if k not in opciones or len(opciones[k].get("valores", [])) == 0]
-    if faltan:
-        st.error(f"❌ Categorías faltantes o vacías: {faltan}")
-    else:
-        st.success("✅ Catálogo OK: todas las categorías tienen opciones.")
-
-    return opciones
 
 
 # ========== Cargar catálogo desde "indice" ==========
 def cargar_opciones():
-    import os
-    import pandas as pd
-    import streamlit as st
-
-    # =========================
-    # DEBUG CATÁLOGO (EXCEL)
-    # =========================
-    st.write("🧪 DEBUG CATÁLOGO")
-    st.write("RUTA_EXCEL:", RUTA_EXCEL)
-    st.write("EXISTE:", os.path.exists(RUTA_EXCEL))
-
-    if os.path.exists(RUTA_EXCEL):
-        try:
-            xls = pd.ExcelFile(RUTA_EXCEL)
-            st.write("HOJAS DISPONIBLES:", xls.sheet_names)
-
-            # intenta encontrar la hoja "indice" aunque tenga mayúsculas/acentos/espacios
-            sheets_norm = {str(s).strip().lower(): s for s in xls.sheet_names}
-            hoja_indice = sheets_norm.get("indice") or sheets_norm.get("índice") or sheets_norm.get("indice ")  # por si acaso
-            st.write("HOJA INDICE detectada:", hoja_indice)
-
-            if hoja_indice:
-                df0 = pd.read_excel(xls, sheet_name=hoja_indice, nrows=20)
-                df0.columns = [str(c).strip() for c in df0.columns]
-                st.write("COLUMNAS (indice):", df0.columns.tolist())
-                st.write("MUESTRA (primeras filas):")
-                st.dataframe(df0)
-            else:
-                st.error("❌ No encontré una hoja llamada 'indice' (o 'Índice'). Revisá el nombre exacto.")
-        except Exception as e:
-            st.error(f"❌ Error abriendo el Excel en RUTA_EXCEL: {e}")
-            st.stop()
-    else:
-        st.error("❌ El archivo NO existe en esa ruta. Revisá nombre exacto y mayúsculas/minúsculas en /data.")
-        st.stop()
-
-    # =========================
-    # CARGA REAL (tu lógica)
-    # =========================
-    # usa el nombre detectado de la hoja para evitar fallos por acentos/mayúsculas
-    df = pd.read_excel(RUTA_EXCEL, sheet_name=hoja_indice)
+    df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
     df.columns = df.columns.str.strip()
 
     clas_col = "Clasificación" if "Clasificación" in df.columns else "Clasificacion"
     cod_col  = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
     desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
 
-    st.write("DEBUG clas_col:", clas_col)
-    st.write("DEBUG cod_col:", cod_col)
-    st.write("DEBUG desc_col:", desc_col)
-
-    # valores únicos de clasificación (para ver si viene con espacios raros)
-    try:
-        unicos = df[clas_col].dropna().astype(str).unique().tolist()
-        st.write("CLASIFICACIONES ÚNICAS (raw):", unicos[:40])
-        # también una versión normalizada
-        unicos_norm = [str(x).replace("\xa0", " ").strip() for x in unicos]
-        st.write("CLASIFICACIONES ÚNICAS (norm):", unicos_norm[:40])
-    except Exception as e:
-        st.error(f"❌ No pude leer columna de clasificación: {e}")
-
     opciones = {}
     for clasificacion in df[clas_col].dropna().astype(str).unique():
-        clasificacion = str(clasificacion).replace("\xa0", " ").strip()
-        subset = df[df[clas_col].astype(str).apply(lambda x: str(x).replace("\xa0"," ").strip()) == clasificacion]
+        clasificacion = clasificacion.strip()
+        subset = df[df[clas_col].astype(str).str.strip() == clasificacion]
 
         codigos = subset[cod_col].dropna().astype(str).str.strip().tolist()
 
@@ -185,6 +34,7 @@ def cargar_opciones():
 
         opciones[clasificacion] = {"valores": codigos, "etiquetas": etiquetas}
 
+    # normaliza nombres a los usados en tu UI
     mapping = {
         "Poste": "Poste",
         "Primaria": "Primario",
@@ -195,22 +45,14 @@ def cargar_opciones():
         "Proteccion": "Protección",
         "Transformadores": "Transformadores",
         "Luminarias": "Luminarias",
-        "Luminaria": "Luminarias",  # 👈 por si viene singular
     }
 
     normalizado = {}
     for k, v in opciones.items():
-        kk = mapping.get(str(k).replace("\xa0"," ").strip(), str(k).replace("\xa0"," ").strip())
+        kk = mapping.get(k, k)
         normalizado[kk] = v
 
-    # DEBUG FINAL: conteo por categoría ya normalizada
-    st.write("✅ CATEGORÍAS NORMALIZADAS:", list(normalizado.keys()))
-    for cat in ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Protección", "Transformadores", "Luminarias"]:
-        n = len(normalizado.get(cat, {}).get("valores", []) or [])
-        st.write(f"CAT {cat}: {n} opciones")
-
     return normalizado
-
 
 
 # ========== Helpers de parseo (2x R-1  <->  Counter) ==========
@@ -438,8 +280,4 @@ def crear_desplegables(opciones):
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
-
-
-
-
-
+     la Hoja se llama data/Estructura_datos.xlsx
