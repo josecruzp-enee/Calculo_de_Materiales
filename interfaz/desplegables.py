@@ -5,7 +5,7 @@ import os
 from collections import Counter
 import pandas as pd
 import streamlit as st
-
+from interfaz.desplegables import debug_catalogo_excel with st.expander("🧪 Debug catálogo", expanded=True): debug_catalogo_excel() 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
 
@@ -438,6 +438,7 @@ def crear_desplegables(opciones):
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
 
 
 
