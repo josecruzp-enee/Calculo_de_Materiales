@@ -172,6 +172,47 @@ def _fila_categoria_ui(cat_key: str, valores: list[str], etiquetas: dict, key_pr
             _add_item(cat_key, sel, qty)
 
 
+import os
+import pandas as pd
+import streamlit as st
+from pathlib import Path
+
+from modulo.desplegables import cargar_opciones, RUTA_EXCEL
+
+def _debug_catalogo_cloud():
+    st.write("CWD:", os.getcwd())
+    st.write("RUTA_EXCEL (modulo):", RUTA_EXCEL)
+    st.write("EXISTE:", os.path.exists(RUTA_EXCEL))
+
+    # listar data real del repo
+    repo_root = Path(__file__).resolve().parents[1]  # .../Calculo_de_Materiales
+    data_dir = repo_root / "data"
+    st.write("repo_root:", str(repo_root))
+    st.write("data_dir existe:", data_dir.exists())
+    if data_dir.exists():
+        st.write("data_dir contenido:", sorted([p.name for p in data_dir.iterdir()]))
+
+    # si existe, ver hojas y columnas
+    if os.path.exists(RUTA_EXCEL):
+        xls = pd.ExcelFile(RUTA_EXCEL)
+        st.write("Hojas Excel:", xls.sheet_names)
+        hoja = next((s for s in xls.sheet_names if s.strip().lower() in ("indice","índice")), None)
+        st.write("Hoja índice detectada:", hoja)
+        if hoja:
+            df = pd.read_excel(xls, sheet_name=hoja, nrows=5)
+            st.write("Columnas índice:", list(df.columns))
+            st.dataframe(df)
+
+with st.expander("🧪 Debug catálogo (Cloud)", expanded=True):
+    _debug_catalogo_cloud()
+
+# luego ya cargas opciones normal
+opciones = cargar_opciones()
+st.write("Keys opciones:", list(opciones.keys()))
+st.write("Tamaños:", {k: len(v.get("valores", [])) for k, v in opciones.items()})
+
+
+
 # =============================================================================
 # Entrada principal (modo Desplegables)
 # =============================================================================
