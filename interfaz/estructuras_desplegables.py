@@ -177,7 +177,7 @@ import pandas as pd
 import streamlit as st
 from pathlib import Path
 
-from modulo.desplegables import cargar_opciones, RUTA_EXCEL
+from interfaz.desplegables import cargar_opciones, RUTA_EXCEL
 
 def _debug_catalogo_cloud():
     st.write("CWD:", os.getcwd())
