@@ -9,6 +9,103 @@ import streamlit as st
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 RUTA_EXCEL = os.path.join(REPO_ROOT, "data", "Estructura_datos.xlsx")
 
+def debug_catalogo_excel() -> dict:
+    """
+    Debug visual del catálogo (hoja 'indice') para encontrar por qué llegan options vacías.
+    Devuelve también el dict 'opciones' por si lo querés inspeccionar.
+    """
+    st.subheader("🧪 DEBUG CATÁLOGO (Estructura_datos.xlsx → indice)")
+
+    st.write("📌 RUTA_EXCEL:", RUTA_EXCEL)
+    st.write("📌 Existe archivo:", os.path.exists(RUTA_EXCEL))
+
+    try:
+        xls = pd.ExcelFile(RUTA_EXCEL)
+        st.write("📄 Hojas disponibles:", xls.sheet_names)
+    except Exception as e:
+        st.error(f"❌ No pude abrir el Excel: {e}")
+        return {}
+
+    try:
+        df = pd.read_excel(RUTA_EXCEL, sheet_name="indice")
+    except Exception as e:
+        st.error(f"❌ No pude leer hoja 'indice': {e}")
+        return {}
+
+    st.write("📌 Columnas crudas:", list(df.columns))
+    df.columns = df.columns.astype(str).str.replace("\xa0", " ").str.strip()
+    st.write("📌 Columnas normalizadas:", list(df.columns))
+
+    # detectar columnas
+    clas_col = "Clasificación" if "Clasificación" in df.columns else "Clasificacion"
+    cod_col  = "Código de Estructura" if "Código de Estructura" in df.columns else "Codigo de Estructura"
+    desc_col = "Descripción" if "Descripción" in df.columns else "Descripcion"
+
+    st.write("✅ Usando columnas:", {"clas": clas_col, "cod": cod_col, "desc": desc_col})
+
+    # normalizar valores de clasificación (aquí es donde mueren muchos)
+    df[clas_col] = df[clas_col].astype(str).str.replace("\xa0", " ").str.strip()
+    df[cod_col]  = df[cod_col].astype(str).str.replace("\xa0", " ").str.strip()
+    if desc_col in df.columns:
+        df[desc_col] = df[desc_col].astype(str).str.replace("\xa0", " ").str.strip()
+
+    st.write("🔎 Top 10 filas (clas/cod/desc):")
+    st.dataframe(df[[clas_col, cod_col, desc_col]].head(10))
+
+    st.write("🔎 Clasificaciones únicas (repr para ver espacios invisibles):")
+    uniques = sorted({repr(x) for x in df[clas_col].dropna().unique().tolist()})
+    st.write(uniques)
+
+    # conteo por clasificación
+    st.write("📊 Conteo por clasificación:")
+    conteo = df[clas_col].value_counts(dropna=False)
+    st.dataframe(conteo)
+
+    # construir opciones y reportar tamaños
+    mapping = {
+        "Poste": "Poste",
+        "Primaria": "Primario",
+        "Secundaria": "Secundario",
+        "Retenidas": "Retenidas",
+        "Conexiones a tierra": "Conexiones a tierra",
+        "Protección": "Protección",
+        "Proteccion": "Protección",
+        "Transformadores": "Transformadores",
+        "Luminarias": "Luminarias",
+        "Luminaria": "Luminarias",  # 👈 por si tu Excel usa "Luminaria"
+    }
+
+    opciones = {}
+    for clasificacion in df[clas_col].dropna().astype(str).unique():
+        clasificacion = str(clasificacion).replace("\xa0", " ").strip()
+        subset = df[df[clas_col] == clasificacion]
+
+        codigos = subset[cod_col].dropna().astype(str).str.strip().tolist()
+        etiquetas = {
+            str(row[cod_col]).strip(): f"{str(row[cod_col]).strip()} – {str(row[desc_col]).strip() if pd.notna(row[desc_col]) else ''}"
+            for _, row in subset.iterrows()
+            if pd.notna(row[cod_col])
+        }
+
+        kk = mapping.get(clasificacion, clasificacion)
+        opciones[kk] = {"valores": codigos, "etiquetas": etiquetas}
+
+    st.write("✅ Keys finales en opciones:", list(opciones.keys()))
+    st.write("✅ Tamaños por key:")
+    st.dataframe(pd.DataFrame(
+        [{"key": k, "n": len(v.get("valores", []))} for k, v in opciones.items()]
+    ))
+
+    # alertas rápidas
+    esperadas = ["Poste", "Primario", "Secundario", "Retenidas", "Conexiones a tierra", "Protección", "Transformadores", "Luminarias"]
+    faltan = [k for k in esperadas if k not in opciones or len(opciones[k].get("valores", [])) == 0]
+    if faltan:
+        st.error(f"❌ Categorías faltantes o vacías: {faltan}")
+    else:
+        st.success("✅ Catálogo OK: todas las categorías tienen opciones.")
+
+    return opciones
+
 
 # ========== Cargar catálogo desde "indice" ==========
 def cargar_opciones():
@@ -341,6 +438,7 @@ def crear_desplegables(opciones):
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
 
 
 
