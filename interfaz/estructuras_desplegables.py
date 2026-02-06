@@ -21,31 +21,28 @@ from interfaz.estructuras_comunes import (
 # Catálogo (desde modulo.desplegables)
 # =============================================================================
 def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
-    try:
-        from modulo.desplegables import cargar_opciones  # type: ignore
-        opciones = cargar_opciones()
-        # Asegurar llaves mínimas usadas por la UI
-        for key in [
-            "Poste", "Primario", "Secundario", "Retenidas",
-            "Conexiones a tierra", "Transformadores", "Luminarias",
-            "Protección", "Proteccion",
-        ]:
-            opciones.setdefault(key, {"valores": [], "etiquetas": {}})
-            opciones[key].setdefault("valores", [])
-            opciones[key].setdefault("etiquetas", {})
-        return opciones
-    except Exception:
-        # Fallback mínimo (solo para no romper la UI)
-        return {
-            "Poste": {"valores": [], "etiquetas": {}},
-            "Primario": {"valores": [], "etiquetas": {}},
-            "Secundario": {"valores": [], "etiquetas": {}},
-            "Retenidas": {"valores": [], "etiquetas": {}},
-            "Conexiones a tierra": {"valores": [], "etiquetas": {}},
-            "Transformadores": {"valores": [], "etiquetas": {}},
-            "Luminarias": {"valores": [], "etiquetas": {}},
-            "Protección": {"valores": [], "etiquetas": {}},
-        }
+    """
+    Carga el catálogo REAL desde interfaz.desplegables y asegura llaves mínimas
+    para que la UI nunca reviente.
+    """
+    from interfaz.desplegables import cargar_opciones, RUTA_EXCEL
+
+    opciones = cargar_opciones(RUTA_EXCEL) or {}
+
+    # Asegurar llaves mínimas usadas por la UI
+    for key in [
+        "Poste", "Primario", "Secundario", "Retenidas",
+        "Conexiones a tierra", "Transformadores", "Luminarias",
+        "Protección", "Proteccion",
+    ]:
+        opciones.setdefault(key, {"valores": [], "etiquetas": {}})
+        if not isinstance(opciones[key], dict):
+            opciones[key] = {"valores": [], "etiquetas": {}}
+        opciones[key].setdefault("valores", [])
+        opciones[key].setdefault("etiquetas", {})
+
+    return opciones
+
 
 
 def _pick_vals_labels(opciones: dict, prefer: list[str], fuzzy: list[str] | None = None):
