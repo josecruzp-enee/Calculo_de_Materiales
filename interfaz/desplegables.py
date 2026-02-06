@@ -85,32 +85,31 @@ def _resolver_columnas(df: pd.DataFrame):
     # 1) Clasificación
     clas_col = None
     for k in cols:
-        if "clasific" in k:  # "clasificación"
+        if "clasific" in k:
             clas_col = cols[k]
             break
 
     # 2) Código
     cod_col = None
     for k in cols:
-        # tu caso exacto: "código de estructura"
         if "codigo de estructura" in k or ("codigo" in k and "estructura" in k):
             cod_col = cols[k]
             break
     if not cod_col:
-        # fallback: cualquier columna que contenga "codigo"
         for k in cols:
             if "codigo" in k:
                 cod_col = cols[k]
                 break
 
-    # 3) Descripción (ojo: tu excel tiene "Descripción " con espacio)
+    # 3) Descripción
     desc_col = None
     for k in cols:
-        if "descrip" in k:  # "descripción"
+        if "descrip" in k:
             desc_col = cols[k]
             break
 
     return clas_col, cod_col, desc_col
+
 
 
 import streamlit as st
@@ -390,5 +389,6 @@ def crear_desplegables(opciones):
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
 
 
