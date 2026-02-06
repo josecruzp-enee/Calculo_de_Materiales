@@ -140,18 +140,43 @@ def _limpiar_listado(valor: str) -> list[str]:
 
 def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Si 'codigodeestructura' existe -> respeta como LARGO.
-    Si no, crea df_expandido con una fila por (Punto, codigodeestructura) desde columnas ANCHO.
-    """
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+    Devuelve SIEMPRE un DF LARGO con columnas:
+      ['Punto', 'codigodeestructura', 'cantidad']
 
+    - Si ya viene largo (tiene 'codigodeestructura'): solo limpia y normaliza.
+    - Si viene ancho: construye lista, explode, limpia y normaliza.
+    """
+    # Contrato vacío
+    cols_out = ["Punto", "codigodeestructura", "cantidad"]
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame(columns=cols_out)
+
+    # --- Caso 1: ya viene LARGO ---
     if "codigodeestructura" in df.columns:
         base = df.copy()
+
+        # asegurar columnas
+        if "Punto" not in base.columns:
+            base["Punto"] = ""
         if "cantidad" not in base.columns:
             base["cantidad"] = 1
-        return base
 
+        # limpiar
+        base["codigodeestructura"] = (
+            base["codigodeestructura"].astype(str).str.strip().str.upper()
+        )
+        base = base[base["codigodeestructura"].ne("")]
+        base["cantidad"] = pd.to_numeric(base["cantidad"], errors="coerce").fillna(1).astype(int)
+
+        # dedupe por punto+estructura (sumar cantidades si hay repetidos)
+        base = (
+            base.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
+            .sum()
+        )
+
+        return base[cols_out]
+
+    # --- Caso 2: viene ANCHO ---
     df2 = df.copy()
 
     if "Punto" not in df2.columns:
@@ -161,22 +186,21 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
         lambda fila: sum((_limpiar_listado(fila.get(c, "")) for c in COLUMNAS_ESTRUCTURAS), []),
         axis=1
     )
+
     df2 = df2.explode("Estructura", ignore_index=True)
     df2 = df2[df2["Estructura"].notna() & (df2["Estructura"].astype(str).str.strip() != "")]
     df2["Estructura"] = df2["Estructura"].astype(str).str.strip().str.upper()
-    df2.drop_duplicates(subset=["Punto", "Estructura"], inplace=True)
+
     df2.rename(columns={"Estructura": "codigodeestructura"}, inplace=True)
     df2["cantidad"] = 1
 
-    # Expandir + coerción 1-D (contrato final: LARGO)
-    return df2
-    st.write("DEBUG df antes:", len(df), list(df.columns))
-    st.write("DEBUG df_expandido:", len(df_expandido), list(df_expandido.columns))
+    df2 = (
+        df2.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
+        .sum()
+    )
 
-    assert df is not None and not df.empty, "DF entrada a finalizar llegó vacío"
-    assert df_expandido is not None and not df_expandido.empty, "_expandir_estructuras() está devolviendo vacío"
+    return df2[cols_out]
 
-    return df2[["Punto", "codigodeestructura", "cantidad"]]
 
 # =============================================================================
 # UI de conteo rápido
