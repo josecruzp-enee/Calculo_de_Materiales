@@ -143,37 +143,46 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     Devuelve SIEMPRE un DF LARGO con columnas:
       ['Punto', 'codigodeestructura', 'cantidad']
 
-    - Si ya viene largo (tiene 'codigodeestructura'): solo limpia y normaliza.
-    - Si viene ancho: construye lista, explode, limpia y normaliza.
+    - Si ya viene largo (acepta variantes: 'codigodeestructura' o 'CodigoEstructura'):
+      limpia, normaliza y agrupa.
+    - Si viene ancho: construye lista desde COLUMNAS_ESTRUCTURAS, explode, limpia y agrupa.
     """
-    # Contrato vacío
     cols_out = ["Punto", "codigodeestructura", "cantidad"]
+
+    # Contrato vacío
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame(columns=cols_out)
 
-    # --- Caso 1: ya viene LARGO ---
-    if "codigodeestructura" in df.columns:
-        base = df.copy()
+    # Copia y soportar variantes típicas del UI
+    base = df.copy()
+    base = base.rename(columns={
+        "CodigoEstructura": "codigodeestructura",
+        "CódigoEstructura": "codigodeestructura",
+        "Cantidad": "cantidad",
+    })
 
-        # asegurar columnas
+    # --- Caso 1: ya viene LARGO ---
+    if "codigodeestructura" in base.columns:
         if "Punto" not in base.columns:
             base["Punto"] = ""
         if "cantidad" not in base.columns:
             base["cantidad"] = 1
 
-        # limpiar
-        base["codigodeestructura"] = (
-            base["codigodeestructura"].astype(str).str.strip().str.upper()
-        )
-        base = base[base["codigodeestructura"].ne("")]
-        base["cantidad"] = pd.to_numeric(base["cantidad"], errors="coerce").fillna(1).astype(int)
+        base["Punto"] = base["Punto"].astype(str).str.strip()
+        base["codigodeestructura"] = base["codigodeestructura"].astype(str).str.strip().str.upper()
 
-        # dedupe por punto+estructura (sumar cantidades si hay repetidos)
+        # quitar vacíos
+        base = base[base["codigodeestructura"].ne("")]
+
+        # cantidad segura
+        base["cantidad"] = pd.to_numeric(base["cantidad"], errors="coerce").fillna(1).astype(int)
+        base = base[base["cantidad"] > 0]
+
+        # dedupe por punto+estructura
         base = (
             base.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
             .sum()
         )
-
         return base[cols_out]
 
     # --- Caso 2: viene ANCHO ---
@@ -200,6 +209,7 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return df2[cols_out]
+
 
 
 # =============================================================================
