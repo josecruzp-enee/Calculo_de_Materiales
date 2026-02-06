@@ -207,7 +207,8 @@ with st.expander("🧪 Debug catálogo (Cloud)", expanded=True):
     _debug_catalogo_cloud()
 
 # luego ya cargas opciones normal
-opciones = cargar_opciones()
+from interfaz.desplegables import cargar_opciones, RUTA_EXCEL
+opciones = cargar_opciones(RUTA_EXCEL)
 st.write("Keys opciones:", list(opciones.keys()))
 st.write("Tamaños:", {k: len(v.get("valores", [])) for k, v in opciones.items()})
 
