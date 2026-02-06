@@ -169,7 +169,7 @@ def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     df2["cantidad"] = 1
 
     # Expandir + coerción 1-D (contrato final: LARGO)
-    df_expandido = _expandir_estructuras(df)
+    return df2
     st.write("DEBUG df antes:", len(df), list(df.columns))
     st.write("DEBUG df_expandido:", len(df_expandido), list(df_expandido.columns))
 
