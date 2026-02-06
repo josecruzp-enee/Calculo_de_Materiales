@@ -10,6 +10,7 @@ import streamlit as st
 
 from servicios.calculo_materiales import calcular_materiales
 from exportadores.pdf_exportador import generar_pdfs
+import traceback
 
 # =============================================================================
 # Regex precompiladas
@@ -252,6 +253,8 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
     except Exception as e:
         st.session_state["calculo_finalizado"] = False
         st.error(f"❌ Error al calcular: {type(e).__name__}: {e}")
+        st.code(traceback.format_exc())
+        st.stop()
 
 # =============================================================================
 # Sección EXPORTACIÓN: SOLO genera PDFs desde resultado_calculo (NO recalcula)
