@@ -248,6 +248,13 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
         else:
             df_expandido = _expandir_estructuras(df)
 
+        # ✅ Normalizar nombres de columnas (soporta variantes del UI)
+        df_expandido = df_expandido.rename(columns={
+            "CodigoEstructura": "codigodeestructura",
+            "CódigoEstructura": "codigodeestructura",
+            "Cantidad": "cantidad",
+        })
+
         df_expandido = forzar_expandido_para_groupby(df_expandido)
 
         # =============================================================
@@ -263,7 +270,6 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
                 .str.replace("\u00a0", " ", regex=False)  # NBSP
                 .str.strip()
             )
-
             # Quitar filas sin código
             df_expandido = df_expandido[df_expandido["codigodeestructura"].ne("")]
 
