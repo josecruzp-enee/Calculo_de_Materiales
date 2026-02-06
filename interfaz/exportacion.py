@@ -286,7 +286,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
         if "cantidad" in df_expandido.columns:
             df_expandido["cantidad"] = (
                 pd.to_numeric(df_expandido["cantidad"], errors="coerce")
-                .fillna(0)
+                .fillna(1)
                 .astype(int)
             )
             df_expandido = df_expandido[df_expandido["cantidad"] > 0]
