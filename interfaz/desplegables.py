@@ -88,28 +88,29 @@ def _resolver_columnas(df: pd.DataFrame):
     return clas_col, cod_col, desc_col
 
 
+import streamlit as st
+
 def cargar_opciones(ruta_excel: str = RUTA_EXCEL) -> Dict[str, Dict[str, Any]]:
-    """
-    Lee hoja indice/índice del Excel catálogo y devuelve:
-      {
-        "Poste": {"valores":[...], "etiquetas":{codigo: "codigo – desc"}},
-        ...
-      }
-    """
     if not os.path.exists(ruta_excel):
-        # Importante: no st.stop aquí, solo devolver vacío para que UI no reviente.
+        st.error(f"CATÁLOGO: NO existe el archivo -> {ruta_excel}")
         return {}
 
     xls = pd.ExcelFile(ruta_excel)
+    st.write("CATÁLOGO: hojas detectadas:", xls.sheet_names)
+
     hoja = next((s for s in xls.sheet_names if s.strip().lower() in ("indice", "índice")), None)
     if not hoja:
+        st.error("CATÁLOGO: No encontré hoja llamada 'indice' o 'índice'")
         return {}
 
     df = pd.read_excel(xls, sheet_name=hoja)
     df = _normalizar_cols(df)
 
     clas_col, cod_col, desc_col = _resolver_columnas(df)
+    st.write("CATÁLOGO: columnas resueltas:", {"clas": clas_col, "cod": cod_col, "desc": desc_col})
+
     if not clas_col or not cod_col:
+        st.error("CATÁLOGO: No pude resolver columnas (clasificación/código). Revisar nombres de columnas en la hoja índice.")
         return {}
 
     # normalizar valores
@@ -364,3 +365,4 @@ def crear_desplegables(opciones):
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
