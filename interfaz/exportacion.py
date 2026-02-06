@@ -240,23 +240,46 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
 
     try:
         # =============================================================
-        # 1) Construir df_estructuras (LARGO) SIN doble expansión
+        # 1) Construir df_estructuras (LARGO) sin doble expansión
         # =============================================================
         cols = set(map(str, df.columns))
         if {"Punto", "codigodeestructura", "cantidad"}.issubset(cols):
-            # Ya viene en formato LARGO
             df_expandido = df.copy()
         else:
-            # Viene ANCHO → expandir
             df_expandido = _expandir_estructuras(df)
 
         df_expandido = forzar_expandido_para_groupby(df_expandido)
 
+        # =============================================================
+        # 1.1) Normalización dura (evita que limpieza interna deje 0 filas)
+        # =============================================================
+        if "Punto" in df_expandido.columns:
+            df_expandido["Punto"] = df_expandido["Punto"].astype(str).str.strip()
+
+        if "codigodeestructura" in df_expandido.columns:
+            df_expandido["codigodeestructura"] = (
+                df_expandido["codigodeestructura"]
+                .astype(str)
+                .str.replace("\u00a0", " ", regex=False)  # NBSP
+                .str.strip()
+            )
+
+            # Quitar filas sin código
+            df_expandido = df_expandido[df_expandido["codigodeestructura"].ne("")]
+
+        if "cantidad" in df_expandido.columns:
+            df_expandido["cantidad"] = (
+                pd.to_numeric(df_expandido["cantidad"], errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
+            df_expandido = df_expandido[df_expandido["cantidad"] > 0]
+
         if df_expandido.empty:
-            st.error("❌ No se pudo construir df_estructuras: quedó vacío.")
+            st.error("❌ Después de normalizar, no quedaron estructuras válidas (código/cantidad).")
             st.write("DEBUG df (entrada) shape:", df.shape)
             st.write("DEBUG df (entrada) cols:", list(df.columns))
-            st.write("DEBUG df (entrada) head:", df.head(20))
+            st.write("DEBUG df (entrada) head:", df.head(30))
             st.stop()
 
         # Guardar contrato definitivo
@@ -276,7 +299,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
             )
 
         # =============================================================
-        # 3) Resolver ruta de materiales (sin tocar app.py)
+        # 3) Ruta de materiales
         # =============================================================
         ruta_materiales = st.session_state.get("ruta_datos_materiales")
         if not ruta_materiales:
@@ -315,6 +338,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
         st.error(f"❌ Error al calcular: {type(e).__name__}: {e}")
         st.code(traceback.format_exc())
         st.stop()
+
 
 # =============================================================================
 # Sección EXPORTACIÓN: SOLO genera PDFs desde resultado_calculo (NO recalcula)
