@@ -73,17 +73,42 @@ def _normalizar_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _resolver_columnas(df: pd.DataFrame):
-    cols = set(df.columns)
+    """
+    Encuentra columnas de: Clasificación, Código, Descripción
+    soportando variaciones del Excel (tildes, espacios, nombres largos).
+    """
+    def norm(s: str) -> str:
+        return str(s).strip().lower()
 
-    # clasificación
-    clas_col = "Clasificación" if "Clasificación" in cols else ("Clasificacion" if "Clasificacion" in cols else None)
-    # código
-    cod_col = (
-        "Código de Estructura" if "Código de Estructura" in cols
-        else ("Codigo de Estructura" if "Codigo de Estructura" in cols else None)
-    )
-    # descripción
-    desc_col = "Descripción" if "Descripción" in cols else ("Descripcion" if "Descripcion" in cols else None)
+    cols = {norm(c): c for c in df.columns}  # mapa normalizado -> original
+
+    # 1) Clasificación
+    clas_col = None
+    for k in cols:
+        if "clasific" in k:  # "clasificación"
+            clas_col = cols[k]
+            break
+
+    # 2) Código
+    cod_col = None
+    for k in cols:
+        # tu caso exacto: "código de estructura"
+        if "codigo de estructura" in k or ("codigo" in k and "estructura" in k):
+            cod_col = cols[k]
+            break
+    if not cod_col:
+        # fallback: cualquier columna que contenga "codigo"
+        for k in cols:
+            if "codigo" in k:
+                cod_col = cols[k]
+                break
+
+    # 3) Descripción (ojo: tu excel tiene "Descripción " con espacio)
+    desc_col = None
+    for k in cols:
+        if "descrip" in k:  # "descripción"
+            desc_col = cols[k]
+            break
 
     return clas_col, cod_col, desc_col
 
@@ -365,4 +390,5 @@ def crear_desplegables(opciones):
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
 
