@@ -21,10 +21,6 @@ from interfaz.estructuras_comunes import (
 # Catálogo (desde modulo.desplegables)
 # =============================================================================
 def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
-    """
-    Carga el catálogo REAL desde interfaz.desplegables y asegura llaves mínimas
-    para que la UI nunca reviente.
-    """
     from interfaz.desplegables import cargar_opciones, RUTA_EXCEL
 
     opciones = cargar_opciones(RUTA_EXCEL) or {}
@@ -42,6 +38,7 @@ def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
         opciones[key].setdefault("etiquetas", {})
 
     return opciones
+
 
 
 
