@@ -239,37 +239,69 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
         return
 
     try:
-        # Expandir + coerción 1-D (contrato final: LARGO)
-        df_expandido = _expandir_estructuras(df)
+        # =============================================================
+        # 1) Construir df_estructuras (LARGO) SIN doble expansión
+        # =============================================================
+        cols = set(map(str, df.columns))
+        if {"Punto", "codigodeestructura", "cantidad"}.issubset(cols):
+            # Ya viene en formato LARGO
+            df_expandido = df.copy()
+        else:
+            # Viene ANCHO → expandir
+            df_expandido = _expandir_estructuras(df)
+
         df_expandido = forzar_expandido_para_groupby(df_expandido)
 
-        # Guardar el contrato de entrada definitivo (por consistencia del pipeline)
+        if df_expandido.empty:
+            st.error("❌ No se pudo construir df_estructuras: quedó vacío.")
+            st.write("DEBUG df (entrada) shape:", df.shape)
+            st.write("DEBUG df (entrada) cols:", list(df.columns))
+            st.write("DEBUG df (entrada) head:", df.head(20))
+            st.stop()
+
+        # Guardar contrato definitivo
         st.session_state["df_estructuras"] = df_expandido
 
-        # sincronizar materiales extra
+        # =============================================================
+        # 2) Sincronizar materiales extra
+        # =============================================================
         st.session_state.setdefault("datos_proyecto", {})
         if st.session_state.get("materiales_extra"):
-            st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(st.session_state["materiales_extra"])
+            st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(
+                st.session_state["materiales_extra"]
+            )
         else:
             st.session_state["datos_proyecto"]["materiales_extra"] = pd.DataFrame(
                 columns=["Materiales", "Unidad", "Cantidad"]
             )
 
-        ruta_materiales = st.session_state.get("ruta_datos_materiales")  # viene del app.py
+        # =============================================================
+        # 3) Resolver ruta de materiales (sin tocar app.py)
+        # =============================================================
+        ruta_materiales = st.session_state.get("ruta_datos_materiales")
         if not ruta_materiales:
-            raise ValueError("No está definida la ruta del archivo de materiales (ruta_datos_materiales).")
+            raise ValueError(
+                "No está definida la ruta del archivo de materiales (ruta_datos_materiales)."
+            )
 
-        # ✅ Cables desde la UI (si existen)
+        # =============================================================
+        # 4) Cables (si existen)
+        # =============================================================
         df_cables = st.session_state.get("cables_proyecto_df")
-        st.write("DEBUG df_expandido shape:", None if df_expandido is None else df_expandido.shape)
-        st.write("DEBUG df_expandido cols:", None if df_expandido is None else list(df_expandido.columns))
-        st.write("DEBUG df_expandido head:", None if df_expandido is None else df_expandido.head(10))
 
+        # Debug útil
+        st.write("DEBUG df_expandido shape:", df_expandido.shape)
+        st.write("DEBUG df_expandido cols:", list(df_expandido.columns))
+        st.write("DEBUG df_expandido head:", df_expandido.head(10))
+
+        # =============================================================
+        # 5) Calcular materiales
+        # =============================================================
         resultado = calcular_materiales(
             estructuras_df=df_expandido,
             archivo_materiales=ruta_materiales,
             datos_proyecto=st.session_state.get("datos_proyecto", {}),
-            df_cables=df_cables,  # ✅ aquí se integran al resumen
+            df_cables=df_cables,
         )
 
         st.session_state["resultado_calculo"] = resultado
@@ -277,6 +309,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
         st.session_state.pop("pdfs_generados", None)
 
         st.success("🎉 Cálculo finalizado con éxito. Ahora puedes exportar los reportes.")
+
     except Exception as e:
         st.session_state["calculo_finalizado"] = False
         st.error(f"❌ Error al calcular: {type(e).__name__}: {e}")
