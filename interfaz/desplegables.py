@@ -78,7 +78,10 @@ def _resolver_columnas(df: pd.DataFrame):
     soportando variaciones del Excel (tildes, espacios, nombres largos).
     """
     def norm(s: str) -> str:
-        return str(s).strip().lower()
+        s = str(s).strip().lower()
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(ch for ch in s if not unicodedata.combining(ch))  # quita tildes
+        return s
 
     cols = {norm(c): c for c in df.columns}  # mapa normalizado -> original
 
@@ -389,6 +392,7 @@ def crear_desplegables(opciones):
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
 
 
 
