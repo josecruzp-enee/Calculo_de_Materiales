@@ -293,6 +293,9 @@ def seccion_exportacion(
     ruta_datos_materiales: str
 ) -> None:
     st.subheader("6. 📂 Exportación de Reportes")
+    # ✅ Parche: asegurar que "Finalizar" encuentre la ruta sin tocar app.py
+    if isinstance(ruta_datos_materiales, str) and ruta_datos_materiales.strip():
+        st.session_state["ruta_datos_materiales"] = ruta_datos_materiales.strip()
 
     resultado = st.session_state.get("resultado_calculo")
     if not resultado:
