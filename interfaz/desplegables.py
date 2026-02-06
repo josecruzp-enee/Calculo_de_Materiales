@@ -9,7 +9,7 @@ from typing import Dict, Any
 
 import pandas as pd
 import streamlit as st
-
+import unicodedata
 # =============================================================================
 # RUTA DEL CATÁLOGO
 # =============================================================================
@@ -392,6 +392,7 @@ def crear_desplegables(opciones):
         st.markdown("</div>", unsafe_allow_html=True)
 
     return seleccion
+
 
 
 
