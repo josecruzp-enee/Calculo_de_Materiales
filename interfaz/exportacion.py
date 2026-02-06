@@ -237,6 +237,9 @@ def seccion_finalizar_calculo(df: pd.DataFrame) -> None:
 
         # ✅ Cables desde la UI (si existen)
         df_cables = st.session_state.get("cables_proyecto_df")
+        st.write("DEBUG df_expandido shape:", None if df_expandido is None else df_expandido.shape)
+        st.write("DEBUG df_expandido cols:", None if df_expandido is None else list(df_expandido.columns))
+        st.write("DEBUG df_expandido head:", None if df_expandido is None else df_expandido.head(10))
 
         resultado = calcular_materiales(
             estructuras_df=df_expandido,
