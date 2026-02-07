@@ -110,6 +110,19 @@ def main() -> None:
     renderizar_encabezado()
     inicializar_estado()
 
+    # ---------------------------
+    #   Selector de membrete PDF
+    # ---------------------------
+    if "membrete_pdf" not in st.session_state:
+        st.session_state["membrete_pdf"] = "SMART"
+
+    st.radio(
+        "Membrete del PDF",
+        ["SMART", "ENEE"],
+        key="membrete_pdf",
+        horizontal=True,
+    )
+    
     # Navegación
     seccion = _nav_estado_actual()
     _barra_nav_botones(seccion)
@@ -191,6 +204,7 @@ def main() -> None:
                 modo_carga=st.session_state.get("modo_carga_seleccionado"),
                 ruta_estructuras=ruta_e,
                 ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
+                membrete_pdf=st.session_state.get("membrete_pdf", "SMART"),
             )
 
     elif seccion == "mapa_kml":
@@ -199,3 +213,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
