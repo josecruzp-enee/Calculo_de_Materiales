@@ -388,7 +388,8 @@ def seccion_exportacion(
     if generar:
         try:
             with st.spinner("⏳ Generando reportes, por favor espere..."):
-                pdfs = generar_pdfs(resultado)
+                membrete_pdf = st.session_state.get("membrete_pdf", "SMART")
+                pdfs = generar_pdfs(resultado, membrete_pdf=membrete_pdf)
             st.session_state["pdfs_generados"] = pdfs
             st.success("✅ Reportes generados correctamente")
         except Exception as e:
