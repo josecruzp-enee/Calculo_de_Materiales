@@ -387,14 +387,19 @@ def seccion_exportacion(
         st.session_state["membrete_pdf_val"] = "SMART"
 
     opciones = ["SMART", "ENEE"]
-    idx = 0 if st.session_state["membrete_pdf_val"] == "SMART" else 1
+
+    # ✅ sincronizar widget (membrete_pdf_sel) con el valor lógico
+    # - si existe el widget y difiere, lo forzamos
+    # - si no existe, lo inicializamos
+    if st.session_state.get("membrete_pdf_sel") != st.session_state["membrete_pdf_val"]:
+        st.session_state["membrete_pdf_sel"] = st.session_state["membrete_pdf_val"]
 
     with st.form("form_generar_pdfs"):
         membrete_pdf = st.selectbox(
             "Membrete",
             opciones,
-            index=idx,
             key="membrete_pdf_sel",
+            index=opciones.index(st.session_state["membrete_pdf_sel"]),
         )
         generar = st.form_submit_button("📥 Generar Reportes PDF")
 
@@ -430,21 +435,46 @@ def seccion_exportacion(
     st.markdown("### 📥 Descarga de Reportes Generados")
 
     if pdfs.get("materiales"):
-        st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"],
-                           "Resumen_Materiales.pdf", "application/pdf", key="dl_mat")
+        st.download_button(
+            "📄 Descargar PDF de Materiales",
+            pdfs["materiales"],
+            "Resumen_Materiales.pdf",
+            "application/pdf",
+            key="dl_mat"
+        )
 
     if pdfs.get("estructuras_global"):
-        st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"],
-                           "Resumen_Estructuras.pdf", "application/pdf", key="dl_estr_glob")
+        st.download_button(
+            "📄 Descargar PDF de Estructuras (Global)",
+            pdfs["estructuras_global"],
+            "Resumen_Estructuras.pdf",
+            "application/pdf",
+            key="dl_estr_glob"
+        )
 
     if pdfs.get("estructuras_por_punto"):
-        st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"],
-                           "Estructuras_Por_Punto.pdf", "application/pdf", key="dl_estr_punto")
+        st.download_button(
+            "📄 Descargar PDF de Estructuras por Punto",
+            pdfs["estructuras_por_punto"],
+            "Estructuras_Por_Punto.pdf",
+            "application/pdf",
+            key="dl_estr_punto"
+        )
 
     if pdfs.get("materiales_por_punto"):
-        st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"],
-                           "Materiales_Por_Punto.pdf", "application/pdf", key="dl_mat_punto")
+        st.download_button(
+            "📄 Descargar PDF de Materiales por Punto",
+            pdfs["materiales_por_punto"],
+            "Materiales_Por_Punto.pdf",
+            "application/pdf",
+            key="dl_mat_punto"
+        )
 
     if pdfs.get("completo"):
-        st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
-                           "Informe_Completo.pdf", "application/pdf", key="dl_full")
+        st.download_button(
+            "📄 Descargar Informe Completo",
+            pdfs["completo"],
+            "Informe_Completo.pdf",
+            "application/pdf",
+            key="dl_full"
+        )
