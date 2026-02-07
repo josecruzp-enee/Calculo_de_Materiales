@@ -382,30 +382,23 @@ def seccion_exportacion(
         df_expandido = forzar_expandido_para_groupby(_expandir_estructuras(df))
         _vista_previa_conteo(df_expandido)
 
-    # ✅ estado "lógico" del membrete (NO tocar st.session_state["membrete_pdf"])
+    # ✅ fuente de verdad del membrete (el widget escribe aquí)
     if "membrete_pdf_val" not in st.session_state:
         st.session_state["membrete_pdf_val"] = "SMART"
 
-    opciones = ["SMART", "ENEE"]
-
-    # ✅ sincronizar widget (membrete_pdf_sel) con el valor lógico
-    # - si existe el widget y difiere, lo forzamos
-    # - si no existe, lo inicializamos
-    if st.session_state.get("membrete_pdf_sel") != st.session_state["membrete_pdf_val"]:
-        st.session_state["membrete_pdf_sel"] = st.session_state["membrete_pdf_val"]
-
     with st.form("form_generar_pdfs"):
-        membrete_pdf = st.selectbox(
+        st.selectbox(
             "Membrete",
-            opciones,
-            key="membrete_pdf_sel",
-            index=opciones.index(st.session_state["membrete_pdf_sel"]),
+            ["SMART", "ENEE"],
+            key="membrete_pdf_val",  # ✅ NO usar membrete_pdf_sel
+            index=0,
         )
         generar = st.form_submit_button("📥 Generar Reportes PDF")
 
-    # ✅ si cambió la selección, invalidar PDFs viejos
-    if membrete_pdf != st.session_state.get("membrete_pdf_val"):
-        st.session_state["membrete_pdf_val"] = membrete_pdf
+    membrete_pdf = st.session_state["membrete_pdf_val"]
+
+    # ✅ si cambió el membrete desde la última generación, invalidar PDFs
+    if st.session_state.get("membrete_pdf_generado_con") and st.session_state["membrete_pdf_generado_con"] != membrete_pdf:
         st.session_state.pop("pdfs_generados", None)
         st.session_state.pop("membrete_pdf_generado_con", None)
 
@@ -423,13 +416,6 @@ def seccion_exportacion(
     pdfs = st.session_state.get("pdfs_generados")
     if not pdfs:
         st.info("Presiona **Generar Reportes PDF** para preparar las descargas.")
-        return
-
-    # ✅ seguridad: si el pdf fue generado con otro membrete, obligar regeneración
-    if st.session_state.get("membrete_pdf_generado_con") != st.session_state.get("membrete_pdf_val"):
-        st.session_state.pop("pdfs_generados", None)
-        st.session_state.pop("membrete_pdf_generado_con", None)
-        st.warning("⚠️ Cambiaste el membrete. Volvé a presionar **Generar Reportes PDF**.")
         return
 
     st.markdown("### 📥 Descarga de Reportes Generados")
