@@ -81,7 +81,9 @@ def fondo_pagina(canvas, doc):
             "ENEE":  os.path.join(BASE_DIR, "data", "membrete_enee.jpg"),
         }
 
-        fondo = os.path.join(BASE_DIR, "data", "membrete_enee.jpg" if doc.__dict__.get("membrete_pdf","SMART")=="ENEE" else "Membrete_smart.png")
+        membrete = getattr(doc, "membrete_pdf", None) or getattr(doc, "membrete_pdf_val", None) or "SMART"
+        fondo = os.path.join(BASE_DIR, "data", "membrete_enee.jpg" if str(membrete).upper() == "ENEE" else "Membrete_smart.png")
+
 
 
         ancho, alto = letter
