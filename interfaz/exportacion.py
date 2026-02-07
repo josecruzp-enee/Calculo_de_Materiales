@@ -366,6 +366,7 @@ def seccion_exportacion(
     ruta_datos_materiales: str
 ) -> None:
     st.subheader("6. 📂 Exportación de Reportes")
+
     # ✅ Parche: asegurar que "Finalizar" encuentre la ruta sin tocar app.py
     if isinstance(ruta_datos_materiales, str) and ruta_datos_materiales.strip():
         st.session_state["ruta_datos_materiales"] = ruta_datos_materiales.strip()
@@ -384,13 +385,12 @@ def seccion_exportacion(
 
     with st.form("form_generar_pdfs"):
         membrete_pdf = st.selectbox(
-        "Membrete",
-        ["SMART", "ENEE"],
-        index=0 if st.session_state.get("membrete_pdf", "SMART") == "SMART" else 1,
+            "Membrete",
+            ["SMART", "ENEE"],
+            key="membrete_pdf",   # ✅ la key la maneja el widget
+            index=0,
         )
         generar = st.form_submit_button("📥 Generar Reportes PDF")
-
-    st.session_state["membrete_pdf"] = membrete_pdf
 
     if generar:
         try:
