@@ -65,38 +65,30 @@ def quitar_saltos_finales(elems):
 # ==========================
 def fondo_pagina(canvas, doc):
     """
-    Dibuja el membrete como fondo superior.
-    Selección vía st.session_state["membrete_pdf"]:
-      - "SMART" -> data/Membrete_smart.png
-      - "ENEE"  -> data/membrete_enee.jpg
-    Ajuste de tamaño vía st.session_state["membrete_altura_in"]:
-      - altura en pulgadas (float). Default: 1.10
+    Dibuja el membrete seleccionado en la parte superior.
+    Usa st.session_state["membrete_pdf"] con valores tipo: "SMART" / "ENEE".
     """
     try:
+        import streamlit as st
+
         canvas.saveState()
 
-        # --- Import local para no amarrar reportlab a streamlit si no está ---
-        try:
-            import streamlit as st
-            membrete = str(st.session_state.get("membrete_pdf", "SMART")).strip().upper()
-            h_in = float(st.session_state.get("membrete_altura_in", 1.10))
-        except Exception:
-            membrete = "SMART"
-            h_in = 1.10
+        # --- Selección de membrete ---
+        sel = str(st.session_state.get("membrete_pdf", "SMART")).strip().upper()
 
-        # --- Resolver archivo según opción ---
-        if membrete == "ENEE":
-            archivo = "membrete_enee.jpg"
-        else:
-            archivo = "Membrete_smart.png"   # tu nombre nuevo
+        mapa = {
+            "SMART": os.path.join(BASE_DIR, "data", "Membrete_smart.png"),
+            "ENEE":  os.path.join(BASE_DIR, "data", "membrete_enee.jpg"),
+        }
 
-        fondo = os.path.join(BASE_DIR, "data", archivo)
+        fondo = mapa.get(sel, mapa["SMART"])
 
         ancho, alto = letter
-        h = max(0.6, min(2.0, h_in)) * inch   # límite defensivo
-        y = alto - h
 
         if os.path.exists(fondo):
+            # Ajuste de tamaño: reduce un poco el logo (altura)
+            h = 1.05 * inch     # <-- antes 1.25; ajustá aquí si querés más/menos
+            y = alto - h
             canvas.drawImage(
                 fondo,
                 0, y,
@@ -108,8 +100,14 @@ def fondo_pagina(canvas, doc):
             )
 
         canvas.restoreState()
+
     except Exception as e:
+        try:
+            canvas.restoreState()
+        except Exception:
+            pass
         print(f"⚠️ Error aplicando fondo: {e}")
+
 
 
 
