@@ -383,7 +383,14 @@ def seccion_exportacion(
         _vista_previa_conteo(df_expandido)
 
     with st.form("form_generar_pdfs"):
-        generar = st.form_submit_button("📥 Generar Reportes PDF")
+        membrete_pdf = st.selectbox(
+        "Membrete para los PDFs",
+        ["SMART", "ENEE"],
+        index=0 if st.session_state.get("membrete_pdf", "SMART") == "SMART" else 1,
+    )
+    st.session_state["membrete_pdf"] = membrete_pdf
+
+    generar = st.form_submit_button("📥 Generar Reportes PDF")
 
     if generar:
         try:
