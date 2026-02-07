@@ -367,7 +367,6 @@ def seccion_exportacion(
 ) -> None:
     st.subheader("6. 📂 Exportación de Reportes")
 
-    # ✅ Parche: asegurar que "Finalizar" encuentre la ruta sin tocar app.py
     if isinstance(ruta_datos_materiales, str) and ruta_datos_materiales.strip():
         st.session_state["ruta_datos_materiales"] = ruta_datos_materiales.strip()
 
@@ -383,7 +382,7 @@ def seccion_exportacion(
         df_expandido = forzar_expandido_para_groupby(_expandir_estructuras(df))
         _vista_previa_conteo(df_expandido)
 
-    # ✅ key lógica propia (NO usada por widgets en otros módulos)
+    # ✅ estado "lógico" del membrete (NO tocar st.session_state["membrete_pdf"])
     if "membrete_pdf_val" not in st.session_state:
         st.session_state["membrete_pdf_val"] = "SMART"
 
@@ -395,19 +394,23 @@ def seccion_exportacion(
             "Membrete",
             opciones,
             index=idx,
-            key="membrete_pdf_sel",  # ✅ key única del widget
+            key="membrete_pdf_sel",
         )
         generar = st.form_submit_button("📥 Generar Reportes PDF")
 
-    # ✅ Persistir en key lógica segura
-    st.session_state["membrete_pdf_val"] = membrete_pdf
+    # ✅ si cambió la selección, invalidar PDFs viejos
+    if membrete_pdf != st.session_state.get("membrete_pdf_val"):
+        st.session_state["membrete_pdf_val"] = membrete_pdf
+        st.session_state.pop("pdfs_generados", None)
+        st.session_state.pop("membrete_pdf_generado_con", None)
 
     if generar:
         try:
             with st.spinner("⏳ Generando reportes, por favor espere..."):
                 pdfs = generar_pdfs(resultado, membrete_pdf=membrete_pdf)
             st.session_state["pdfs_generados"] = pdfs
-            st.success("✅ Reportes generados correctamente")
+            st.session_state["membrete_pdf_generado_con"] = membrete_pdf
+            st.success(f"✅ Reportes generados correctamente ({membrete_pdf})")
         except Exception as e:
             st.error(f"❌ Error al generar PDFs: {type(e).__name__}: {e}")
             return
@@ -417,45 +420,31 @@ def seccion_exportacion(
         st.info("Presiona **Generar Reportes PDF** para preparar las descargas.")
         return
 
+    # ✅ seguridad: si el pdf fue generado con otro membrete, obligar regeneración
+    if st.session_state.get("membrete_pdf_generado_con") != st.session_state.get("membrete_pdf_val"):
+        st.session_state.pop("pdfs_generados", None)
+        st.session_state.pop("membrete_pdf_generado_con", None)
+        st.warning("⚠️ Cambiaste el membrete. Volvé a presionar **Generar Reportes PDF**.")
+        return
+
     st.markdown("### 📥 Descarga de Reportes Generados")
 
     if pdfs.get("materiales"):
-        st.download_button(
-            "📄 Descargar PDF de Materiales",
-            pdfs["materiales"],
-            "Resumen_Materiales.pdf",
-            "application/pdf",
-            key="dl_mat"
-        )
+        st.download_button("📄 Descargar PDF de Materiales", pdfs["materiales"],
+                           "Resumen_Materiales.pdf", "application/pdf", key="dl_mat")
+
     if pdfs.get("estructuras_global"):
-        st.download_button(
-            "📄 Descargar PDF de Estructuras (Global)",
-            pdfs["estructuras_global"],
-            "Resumen_Estructuras.pdf",
-            "application/pdf",
-            key="dl_estr_glob"
-        )
+        st.download_button("📄 Descargar PDF de Estructuras (Global)", pdfs["estructuras_global"],
+                           "Resumen_Estructuras.pdf", "application/pdf", key="dl_estr_glob")
+
     if pdfs.get("estructuras_por_punto"):
-        st.download_button(
-            "📄 Descargar PDF de Estructuras por Punto",
-            pdfs["estructuras_por_punto"],
-            "Estructuras_Por_Punto.pdf",
-            "application/pdf",
-            key="dl_estr_punto"
-        )
+        st.download_button("📄 Descargar PDF de Estructuras por Punto", pdfs["estructuras_por_punto"],
+                           "Estructuras_Por_Punto.pdf", "application/pdf", key="dl_estr_punto")
+
     if pdfs.get("materiales_por_punto"):
-        st.download_button(
-            "📄 Descargar PDF de Materiales por Punto",
-            pdfs["materiales_por_punto"],
-            "Materiales_Por_Punto.pdf",
-            "application/pdf",
-            key="dl_mat_punto"
-        )
+        st.download_button("📄 Descargar PDF de Materiales por Punto", pdfs["materiales_por_punto"],
+                           "Materiales_Por_Punto.pdf", "application/pdf", key="dl_mat_punto")
+
     if pdfs.get("completo"):
-        st.download_button(
-            "📄 Descargar Informe Completo",
-            pdfs["completo"],
-            "Informe_Completo.pdf",
-            "application/pdf",
-            key="dl_full"
-        )
+        st.download_button("📄 Descargar Informe Completo", pdfs["completo"],
+                           "Informe_Completo.pdf", "application/pdf", key="dl_full")
