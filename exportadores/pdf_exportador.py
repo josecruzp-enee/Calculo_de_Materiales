@@ -21,7 +21,7 @@ _REQUERIDAS = (
 )
 
 
-def generar_pdfs(resultados: dict) -> dict:
+def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
     """
     Recibe resultados ya calculados y devuelve bytes de PDFs.
     """
