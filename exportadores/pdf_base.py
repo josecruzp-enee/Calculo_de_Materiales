@@ -64,27 +64,53 @@ def quitar_saltos_finales(elems):
 # FONDO DE PÁGINA (MEMBRETE)
 # ==========================
 def fondo_pagina(canvas, doc):
+    """
+    Dibuja el membrete como fondo superior.
+    Selección vía st.session_state["membrete_pdf"]:
+      - "SMART" -> data/Membrete_smart.png
+      - "ENEE"  -> data/membrete_enee.jpg
+    Ajuste de tamaño vía st.session_state["membrete_altura_in"]:
+      - altura en pulgadas (float). Default: 1.10
+    """
     try:
         canvas.saveState()
-        fondo = os.path.join(BASE_DIR, "data", "MembreteSMART_EDS.png")
+
+        # --- Import local para no amarrar reportlab a streamlit si no está ---
+        try:
+            import streamlit as st
+            membrete = str(st.session_state.get("membrete_pdf", "SMART")).strip().upper()
+            h_in = float(st.session_state.get("membrete_altura_in", 1.10))
+        except Exception:
+            membrete = "SMART"
+            h_in = 1.10
+
+        # --- Resolver archivo según opción ---
+        if membrete == "ENEE":
+            archivo = "membrete_enee.jpg"
+        else:
+            archivo = "Membrete_smart.png"   # tu nombre nuevo
+
+        fondo = os.path.join(BASE_DIR, "data", archivo)
+
         ancho, alto = letter
+        h = max(0.6, min(2.0, h_in)) * inch   # límite defensivo
+        y = alto - h
 
         if os.path.exists(fondo):
-            h = 1.25 * inch
-            y = alto - h
             canvas.drawImage(
                 fondo,
                 0, y,
                 width=ancho,
                 height=h,
                 preserveAspectRatio=True,
-                anchor='n',
+                anchor="n",
                 mask="auto",
             )
 
         canvas.restoreState()
     except Exception as e:
         print(f"⚠️ Error aplicando fondo: {e}")
+
 
 
 # ==========================================================
