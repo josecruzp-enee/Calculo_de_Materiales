@@ -1,25 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-analizador.py  (versión +potente)
+analizador.py (compacto + útil)
 
-Qué agrega vs tu versión:
-✅ 1) Imports detallados (import/from import + alias + símbolos)
-✅ 2) Mapa de símbolos por módulo: funciones, clases, constantes (UPPERCASE)
-✅ 3) Detección de ciclos de import (SCC) + reporte legible
-✅ 4) Call graph mejorado (resuelve llamadas a funciones importadas y alias tipo mx.foo())
-✅ 5) Diagnóstico de imports rotos:
-      - "from X import Y" pero Y no existe en X
-      - "import X as a" y luego "a.foo()" pero foo no existe en X (si X es local)
-✅ 6) Reporte extra: DIAGNOSTICO_IMPORTS.txt
+Objetivo:
+- Describir cómo está relacionada tu app (imports internos + call graph).
+- Detectar ciclos de imports (SCC) y from-import rotos / alias.attr rotos.
+- Exportar TXT + DIAG + opcional JSON/DOT + UI streamlit (opcional).
 
-Uso (CLI):
-    python analizador.py --base modulo core servicios interfaz exportadores --incluir app.py \
-        --salida MAPA_FUNCIONES.txt --diag DIAGNOSTICO_IMPORTS.txt \
-        --json MAPA_FUNCIONES.json \
-        --dot-imports imports.dot --dot-llamadas llamadas.dot
-
-Uso (Streamlit):
-    streamlit run analizador.py -- --base modulo core servicios interfaz exportadores --incluir app.py --ui
+Uso:
+  python analizador.py --base modulo interfaz core servicios exportadores --incluir app.py
+  python analizador.py --base modulo interfaz core --incluir app.py --ui
 """
 
 import os
@@ -32,7 +22,9 @@ from datetime import datetime
 from typing import Dict, List, Set, Tuple, Optional, Any
 
 
-# ---------- Config predeterminada ----------
+# ==========================
+# Config predeterminada
+# ==========================
 BASES_PREDETERMINADAS = ["modulo"]
 INCLUIR_PREDETERMINADOS = ["app.py"]
 SALIDA_PREDETERMINADA = "MAPA_FUNCIONES.txt"
@@ -45,7 +37,9 @@ PATRONES_SESSION_STATE = [
 ]
 
 
-# ---------- Utilidades de E/S ----------
+# ==========================
+# Utilidades E/S
+# ==========================
 def leer_texto(ruta: str) -> str:
     with open(ruta, "r", encoding="utf-8") as f:
         return f.read()
@@ -80,125 +74,115 @@ def recorrer_archivos_python(bases: List[str], incluir_archivos: List[str]) -> L
     return sorted(salida)
 
 
-def _is_upper_name(name: str) -> bool:
+def es_mayuscula_constante(name: str) -> bool:
     s = str(name).strip()
     return bool(s) and s.upper() == s and any(c.isalpha() for c in s)
 
 
-# ---------- AST Parser ----------
+# ==========================
+# AST Parser
+# ==========================
 class InfoArchivo(ast.NodeVisitor):
     """
     Extrae:
-      - imports simples + imports detallados
-      - funciones/clases/constantes (UPPERCASE)
+      - símbolos definidos: funciones, clases, constantes (UPPERCASE)
+      - imports detallados
       - session_state keys (regex)
-      - llamadas por función (captura nombres y atributos)
-      - llamadas en __main__
-      - además: "usos de alias" a nivel de atributos (a.foo)
+      - llamadas por función y toplevel
+      - llamadas dentro de if __name__ == "__main__"
+    Llamadas capturadas como:
+      - foo()          -> ("foo", None)
+      - mx.foo()       -> ("mx", "foo")
+      - a.b.c()        -> ("a.b", "c")
     """
 
     def __init__(self, modulo: str, fuente: str):
         self.modulo = modulo
         self.fuente = fuente
 
-        # símbolos definidos en el archivo
         self.funciones: Set[str] = set()
         self.clases: Set[str] = set()
         self.constantes: Set[str] = set()
 
-        # imports: lista simple (como antes) + detallado
         self.imports: Set[str] = set()
-        # Ejemplo: {"kind":"from","module":"modulo.x","names":[("foo",None),("bar","b")]}
-        #          {"kind":"import","module":"pandas","as":"pd"}
         self.imports_detallados: List[dict] = []
 
-        # calls
         self.llamadas_por_funcion: Dict[str, Set[Tuple[str, Optional[str]]]] = {}
-        # cada llamada la guardamos como:
-        #   ("foo", None) para foo()
-        #   ("mx", "bar") para mx.bar()
         self.llamadas_toplevel: Set[Tuple[str, Optional[str]]] = set()
         self.llamadas_en_main: Set[Tuple[str, Optional[str]]] = set()
 
-        # session_state
         self.claves_session: Set[str] = set()
-
         self._funcion_actual: Optional[str] = None
 
-        # claves de session_state por regex (complemento al AST)
         for pat in PATRONES_SESSION_STATE:
             for m in re.findall(pat, fuente):
                 self.claves_session.add(m)
 
-    # ---------------- imports ----------------
+    # --------- helpers ---------
+    def _cadena_atributos(self, nodo) -> Optional[List[str]]:
+        if isinstance(nodo, ast.Name):
+            return [nodo.id]
+        if isinstance(nodo, ast.Attribute):
+            base = self._cadena_atributos(nodo.value)
+            if not base:
+                return [nodo.attr]
+            return base + [nodo.attr]
+        return None
+
+    # --------- imports ---------
     def visit_Import(self, nodo: ast.Import):
         for alias in nodo.names:
             name = alias.name
-            asname = alias.asname
+            asname = alias.asname or ""
             self.imports.add(name)
-            self.imports_detallados.append(
-                {"kind": "import", "module": name, "as": asname or ""}
-            )
+            self.imports_detallados.append({"kind": "import", "module": name, "as": asname})
         self.generic_visit(nodo)
 
     def visit_ImportFrom(self, nodo: ast.ImportFrom):
         mod = nodo.module or ""
         if mod:
             self.imports.add(mod)
-        names: List[Tuple[str, str]] = []
-        for alias in nodo.names:
-            # alias.name puede ser "*"
-            names.append((alias.name, alias.asname or ""))
+        names: List[Tuple[str, str]] = [(a.name, a.asname or "") for a in nodo.names]
         self.imports_detallados.append(
             {"kind": "from", "module": mod, "level": int(nodo.level or 0), "names": names}
         )
         self.generic_visit(nodo)
 
-    # --------------- defs --------------------
+    # --------- defs ----------
     def visit_FunctionDef(self, nodo: ast.FunctionDef):
-        nombre = nodo.name
-        self.funciones.add(nombre)
-        anterior = self._funcion_actual
-        self._funcion_actual = nombre
+        self.funciones.add(nodo.name)
+        prev = self._funcion_actual
+        self._funcion_actual = nodo.name
         self.generic_visit(nodo)
-        self._funcion_actual = anterior
+        self._funcion_actual = prev
 
     def visit_AsyncFunctionDef(self, nodo: ast.AsyncFunctionDef):
-        nombre = nodo.name
-        self.funciones.add(nombre)
-        anterior = self._funcion_actual
-        self._funcion_actual = nombre
+        self.funciones.add(nodo.name)
+        prev = self._funcion_actual
+        self._funcion_actual = nodo.name
         self.generic_visit(nodo)
-        self._funcion_actual = anterior
+        self._funcion_actual = prev
 
     def visit_ClassDef(self, nodo: ast.ClassDef):
         self.clases.add(nodo.name)
         self.generic_visit(nodo)
 
     def visit_Assign(self, nodo: ast.Assign):
-        # constantes top-level: UPPERCASE = ...
         if self._funcion_actual is None:
             for t in nodo.targets:
-                if isinstance(t, ast.Name) and _is_upper_name(t.id):
+                if isinstance(t, ast.Name) and es_mayuscula_constante(t.id):
                     self.constantes.add(t.id)
         self.generic_visit(nodo)
 
-    # --------------- calls -------------------
+    # --------- calls ----------
     def visit_Call(self, nodo: ast.Call):
         llamada: Optional[Tuple[str, Optional[str]]] = None
+        chain = self._cadena_atributos(nodo.func)
 
-        # foo()
-        if isinstance(nodo.func, ast.Name):
-            llamada = (nodo.func.id, None)
-
-        # mx.foo()
-        elif isinstance(nodo.func, ast.Attribute):
-            # nodo.func.value puede ser Name (mx) u otro (obj.attr.attr)
-            if isinstance(nodo.func.value, ast.Name):
-                llamada = (nodo.func.value.id, nodo.func.attr)
-            else:
-                # capturamos al menos el attr final
-                llamada = (nodo.func.attr, None)
+        if chain and len(chain) == 1:
+            llamada = (chain[0], None)
+        elif chain and len(chain) >= 2:
+            llamada = (".".join(chain[:-1]), chain[-1])
 
         if llamada:
             if self._funcion_actual:
@@ -209,32 +193,26 @@ class InfoArchivo(ast.NodeVisitor):
         self.generic_visit(nodo)
 
 
-def _resolver_importfrom_absoluto(modulo_actual: str, imp: dict) -> str:
+def resolver_from_absoluto(modulo_actual: str, imp: dict) -> str:
     """
-    Convierte imports relativos 'from .x import y' a módulo absoluto aproximado:
-      - modulo_actual: "modulo.sub.archivo"
-      - level=1: sube 1 paquete -> "modulo.sub"
-      - + module: "x" -> "modulo.sub.x"
-    Nota: es heurístico y suficiente para proyectos python-package típicos.
+    from .x import y -> resuelve aproximado a módulo absoluto.
     """
-    kind = imp.get("kind")
-    if kind != "from":
+    if imp.get("kind") != "from":
         return ""
 
-    mod = imp.get("module", "") or ""
+    mod = (imp.get("module") or "").strip()
     level = int(imp.get("level") or 0)
     if level <= 0:
         return mod
 
     partes = modulo_actual.split(".")
-    # quitar el último segmento (archivo)
     if partes:
-        partes = partes[:-1]
-    # subir 'level' paquetes
-    subir = max(level, 0)
+        partes = partes[:-1]  # quitar archivo
+    subir = min(level, len(partes))
     if subir > 0:
-        partes = partes[:-subir] if subir <= len(partes) else []
+        partes = partes[:-subir]
     base = ".".join([p for p in partes if p])
+
     if not base:
         return mod
     if not mod:
@@ -246,51 +224,61 @@ def analizar_archivo(ruta: str) -> InfoArchivo:
     src = leer_texto(ruta)
     modulo = nombre_modulo_relativo(ruta)
     arbol = ast.parse(src, filename=ruta)
+
     info = InfoArchivo(modulo, src)
     info.visit(arbol)
 
     # detectar if __name__ == "__main__" y extraer calls dentro
-    try:
-        for nodo in arbol.body:
-            if isinstance(nodo, ast.If):
-                cond = nodo.test
-                if isinstance(cond, ast.Compare):
-                    left = cond.left
-                    comparadores = cond.comparators
-                    if isinstance(left, ast.Name) and left.id == "__name__" and comparadores:
-                        right = comparadores[0]
-                        if isinstance(right, ast.Constant) and right.value == "__main__":
-                            class VisitanteMain(ast.NodeVisitor):
-                                def __init__(self, contenedor: InfoArchivo):
-                                    self.c = contenedor
+    for nodo in arbol.body:
+        if isinstance(nodo, ast.If) and isinstance(nodo.test, ast.Compare):
+            left = nodo.test.left
+            comps = nodo.test.comparators
+            if (
+                isinstance(left, ast.Name)
+                and left.id == "__name__"
+                and comps
+                and isinstance(comps[0], ast.Constant)
+                and comps[0].value == "__main__"
+            ):
 
-                                def visit_Call(self, llamada: ast.Call):
-                                    tup = None
-                                    if isinstance(llamada.func, ast.Name):
-                                        tup = (llamada.func.id, None)
-                                    elif isinstance(llamada.func, ast.Attribute):
-                                        if isinstance(llamada.func.value, ast.Name):
-                                            tup = (llamada.func.value.id, llamada.func.attr)
-                                        else:
-                                            tup = (llamada.func.attr, None)
-                                    if tup:
-                                        self.c.llamadas_en_main.add(tup)
-                                    self.generic_visit(llamada)
+                class VisitanteMain(ast.NodeVisitor):
+                    def __init__(self, cont: InfoArchivo):
+                        self.c = cont
 
-                            vm = VisitanteMain(info)
-                            for stmt in nodo.body:
-                                vm.visit(stmt)
-    except Exception:
-        pass
+                    def _cadena_atributos(self, n):
+                        if isinstance(n, ast.Name):
+                            return [n.id]
+                        if isinstance(n, ast.Attribute):
+                            base = self._cadena_atributos(n.value)
+                            if not base:
+                                return [n.attr]
+                            return base + [n.attr]
+                        return None
+
+                    def visit_Call(self, call: ast.Call):
+                        chain = self._cadena_atributos(call.func)
+                        if chain and len(chain) == 1:
+                            self.c.llamadas_en_main.add((chain[0], None))
+                        elif chain and len(chain) >= 2:
+                            self.c.llamadas_en_main.add((".".join(chain[:-1]), chain[-1]))
+                        self.generic_visit(call)
+
+                vm = VisitanteMain(info)
+                for stmt in nodo.body:
+                    vm.visit(stmt)
 
     return info
 
 
-# ---------- Construcción del mapa ----------
+# ==========================
+# Construcción del mapa
+# ==========================
 def construir_mapa_proyecto(bases: List[str], incluir_archivos: List[str]) -> Dict[str, dict]:
     archivos = recorrer_archivos_python(bases, incluir_archivos)
     proyecto: Dict[str, dict] = {}
+
     for ruta in archivos:
+        mod = nombre_modulo_relativo(ruta)
         try:
             info = analizar_archivo(ruta)
             proyecto[info.modulo] = {
@@ -306,7 +294,7 @@ def construir_mapa_proyecto(bases: List[str], incluir_archivos: List[str]) -> Di
                 "claves_session": sorted(info.claves_session),
             }
         except Exception as e:
-            proyecto[nombre_modulo_relativo(ruta)] = {
+            proyecto[mod] = {
                 "ruta": ruta,
                 "error_parseo": f"{type(e).__name__}: {e}",
                 "funciones": [],
@@ -319,42 +307,34 @@ def construir_mapa_proyecto(bases: List[str], incluir_archivos: List[str]) -> Di
                 "llamadas_en_main": [],
                 "claves_session": [],
             }
+
     return proyecto
 
 
-def _indice_simbolos(proyecto: Dict[str, dict]) -> Dict[str, Set[str]]:
-    """
-    Devuelve dict: modulo -> set(symbols definidos)
-    """
+def indice_simbolos(proyecto: Dict[str, dict]) -> Dict[str, Set[str]]:
     out: Dict[str, Set[str]] = {}
     for mod, d in proyecto.items():
-        syms = set(d.get("funciones", [])) | set(d.get("clases", [])) | set(d.get("constantes", []))
-        out[mod] = syms
+        out[mod] = set(d.get("funciones", [])) | set(d.get("clases", [])) | set(d.get("constantes", []))
     return out
 
 
 def filtrar_imports_internos(proyecto: Dict[str, dict]) -> List[Tuple[str, str]]:
-    """
-    Imports internos (módulo → módulo) solo entre módulos locales.
-    Ahora usa imports_detallados y resuelve from-import relativo.
-    """
     modulos = set(proyecto.keys())
-    aristas = set()
+    aristas: Set[Tuple[str, str]] = set()
 
     for mod, datos in proyecto.items():
-        # usar detallados (mejor)
         for imp in datos.get("imports_detallados", []):
             if imp.get("kind") == "import":
-                m = imp.get("module", "")
-                # match directo o prefijo
+                m = (imp.get("module") or "").strip()
                 if m in modulos:
                     aristas.add((mod, m))
                 else:
                     for local in modulos:
                         if local.startswith(m + "."):
                             aristas.add((mod, local))
+
             elif imp.get("kind") == "from":
-                abs_mod = _resolver_importfrom_absoluto(mod, imp)
+                abs_mod = resolver_from_absoluto(mod, imp)
                 if abs_mod in modulos:
                     aristas.add((mod, abs_mod))
                 else:
@@ -365,94 +345,93 @@ def filtrar_imports_internos(proyecto: Dict[str, dict]) -> List[Tuple[str, str]]
     return sorted(aristas)
 
 
-def _build_import_context(mod: str, datos: dict) -> dict:
-    """
-    Construye contexto de import para resolver llamadas:
-      - imported_funcs: nombre -> modulo_origen (solo from-import)
-      - alias_modules: alias -> modulo (import X as a) / (from X import Y as a, si Y es módulo local)
-      - direct_modules: set(modulos importados sin alias) (import X)
-    """
-    imported_funcs: Dict[str, str] = {}
-    alias_modules: Dict[str, str] = {}
-    direct_modules: Set[str] = set()
+def build_contexto_import(mod: str, datos: dict) -> dict:
+    imported: Dict[str, str] = {}   # foo -> modulo_origen (from-import)
+    alias_mod: Dict[str, str] = {}  # alias -> modulo (import X as alias)
+    direct: Set[str] = set()        # import X (sin alias)
 
     for imp in datos.get("imports_detallados", []):
         kind = imp.get("kind")
         if kind == "import":
-            m = imp.get("module", "") or ""
-            a = imp.get("as", "") or ""
+            m = (imp.get("module") or "").strip()
+            a = (imp.get("as") or "").strip()
             if a:
-                alias_modules[a] = m
+                alias_mod[a] = m
             else:
-                direct_modules.add(m)
-        elif kind == "from":
-            abs_mod = _resolver_importfrom_absoluto(mod, imp)
-            for name, asname in imp.get("names", []):
-                if name == "*":
-                    continue
-                local_name = asname or name
-                imported_funcs[local_name] = abs_mod
+                direct.add(m)
 
-    return {
-        "imported_funcs": imported_funcs,
-        "alias_modules": alias_modules,
-        "direct_modules": direct_modules,
-    }
+        elif kind == "from":
+            abs_mod = resolver_from_absoluto(mod, imp)
+            for name, asname in imp.get("names", []):
+                if name == "*" or not name:
+                    continue
+                imported[(asname or name)] = abs_mod
+
+    return {"imported": imported, "alias_mod": alias_mod, "direct": direct}
 
 
 def inferir_aristas_llamadas(proyecto: Dict[str, dict]) -> List[Tuple[str, str]]:
-    """
-    Call graph mejorado:
-    - Si llamó foo() y foo vino por "from X import foo", conectamos mod.f -> X.foo
-    - Si llamó alias.foo() y alias vino de "import X as alias", conectamos mod.f -> X.foo
-    - Si no se puede resolver: fallback a tu heurística de "nombre único"
-    """
-    # dueños por nombre (fallback)
-    nombre_a_duenios: Dict[str, List[Tuple[str, str]]] = {}
-    for mod, datos in proyecto.items():
-        for f in datos.get("funciones", []):
-            nombre_a_duenios.setdefault(f, []).append((mod, f))
+    modulos = set(proyecto.keys())
+
+    # fallback: dueño único por nombre (solo para foo())
+    owners: Dict[str, List[Tuple[str, str]]] = {}
+    for m, d in proyecto.items():
+        for f in d.get("funciones", []):
+            owners.setdefault(f, []).append((m, f))
+
+    def resolver_base_a_modulo_local(base: str) -> Optional[str]:
+        b = (base or "").strip()
+        if not b:
+            return None
+        if b in modulos:
+            return b
+        # si base es prefijo de un módulo local (base.*)
+        candidatos = [m for m in modulos if m.startswith(b + ".")]
+        if candidatos:
+            return sorted(candidatos, key=len)[0]
+        return None
 
     aristas: Set[Tuple[str, str]] = set()
 
     for mod, datos in proyecto.items():
-        ctx = _build_import_context(mod, datos)
+        if "error_parseo" in datos:
+            continue
 
-        imported_funcs = ctx["imported_funcs"]
-        alias_modules = ctx["alias_modules"]
+        ctx = build_contexto_import(mod, datos)
+        imported = ctx["imported"]
+        alias_mod = ctx["alias_mod"]
 
         for llamante, llamados in datos.get("llamadas_por_funcion", {}).items():
+            origen = f"{mod}.{llamante}"
             for base, attr in llamados:
-                # caso foo()
+                # foo()
                 if attr is None:
-                    # resolver si viene de from-import
-                    if base in imported_funcs:
-                        origen = imported_funcs[base]
-                        aristas.add((f"{mod}.{llamante}", f"{origen}.{base}"))
+                    if base in imported:
+                        aristas.add((origen, f"{imported[base]}.{base}"))
                         continue
-
-                    # fallback si es único
-                    duenos = nombre_a_duenios.get(base, [])
+                    duenos = owners.get(base, [])
                     if len(duenos) == 1:
                         tmod, tfunc = duenos[0]
-                        aristas.add((f"{mod}.{llamante}", f"{tmod}.{tfunc}"))
+                        aristas.add((origen, f"{tmod}.{tfunc}"))
                     continue
 
-                # caso alias.foo()
-                if base in alias_modules:
-                    origen_mod = alias_modules[base]
-                    aristas.add((f"{mod}.{llamante}", f"{origen_mod}.{attr}"))
+                # base.attr()
+                if base in alias_mod:
+                    aristas.add((origen, f"{alias_mod[base]}.{attr}"))
                     continue
 
-                # si hacen "X.foo()" sin alias (import X)
-                # es más raro porque base sería "X" (Name) y attr sería foo
-                # pero sin map de "X" a módulo real no podemos asegurar; lo dejamos sin resolver
+                mod_local = resolver_base_a_modulo_local(base)
+                if mod_local:
+                    aristas.add((origen, f"{mod_local}.{attr}"))
+                    continue
 
     return sorted(aristas)
 
 
-# ---------- Ciclos de import (SCC Tarjan) ----------
-def _tarjan_scc(nodes: List[str], edges: List[Tuple[str, str]]) -> List[List[str]]:
+# ==========================
+# SCC (Tarjan)
+# ==========================
+def tarjan_scc(nodes: List[str], edges: List[Tuple[str, str]]) -> List[List[str]]:
     g: Dict[str, List[str]] = {n: [] for n in nodes}
     for a, b in edges:
         if a in g:
@@ -494,54 +473,44 @@ def _tarjan_scc(nodes: List[str], edges: List[Tuple[str, str]]) -> List[List[str
         if n not in idx:
             strongconnect(n)
 
-    # solo ciclos reales: tamaño>1 o self-loop
-    out: List[List[str]] = []
+    # filtrar ciclos reales
     edge_set = set(edges)
+    out: List[List[str]] = []
     for comp in sccs:
         if len(comp) > 1:
             out.append(comp)
-        elif len(comp) == 1:
-            v = comp[0]
-            if (v, v) in edge_set:
-                out.append(comp)
+        elif len(comp) == 1 and (comp[0], comp[0]) in edge_set:
+            out.append(comp)
     return out
 
 
-# ---------- Diagnóstico de imports rotos ----------
+# ==========================
+# Diagnóstico imports rotos
+# ==========================
 def diagnosticar_imports(proyecto: Dict[str, dict]) -> Dict[str, Any]:
-    """
-    Retorna dict con:
-      - rotos_from_import: lista de (mod_archivo, from_mod, symbol, sugerencias)
-      - rotos_alias_attr: lista de (mod_archivo, alias, target_mod, attr, sugerencias)
-      - ciclos_import: lista de SCCs
-    """
     modulos = set(proyecto.keys())
-    symbols_by_mod = _indice_simbolos(proyecto)
+    symbols_by_mod = indice_simbolos(proyecto)
 
-    rotos_from: List[dict] = []
-    rotos_alias_attr: List[dict] = []
-
-    # índice inverso: símbolo -> módulos que lo definen
     owners: Dict[str, List[str]] = {}
     for m, syms in symbols_by_mod.items():
         for s in syms:
             owners.setdefault(s, []).append(m)
 
-    # analizar archivo por archivo
+    rotos_from: List[dict] = []
+    rotos_alias_attr: List[dict] = []
+
     for mod, d in proyecto.items():
         if "error_parseo" in d:
             continue
 
-        ctx = _build_import_context(mod, d)
+        ctx = build_contexto_import(mod, d)
+        alias_modules = ctx["alias_mod"]
 
-        # 1) from X import Y
+        # 1) from X import Y (X local)
         for imp in d.get("imports_detallados", []):
             if imp.get("kind") != "from":
                 continue
-            abs_from = _resolver_importfrom_absoluto(mod, imp)
-            if not abs_from:
-                continue
-            # solo chequeamos si el módulo from es local (existe en el proyecto)
+            abs_from = resolver_from_absoluto(mod, imp)
             if abs_from not in modulos:
                 continue
 
@@ -558,8 +527,7 @@ def diagnosticar_imports(proyecto: Dict[str, dict]) -> Dict[str, Any]:
                         "sugerencias": owners.get(name, [])[:10],
                     })
 
-        # 2) alias.foo() cuando alias viene de "import X as alias"
-        alias_modules = ctx["alias_modules"]
+        # 2) alias.attr() (alias -> módulo local), verificar attr existe
         for llamante, llamados in d.get("llamadas_por_funcion", {}).items():
             for base, attr in llamados:
                 if attr is None:
@@ -567,7 +535,6 @@ def diagnosticar_imports(proyecto: Dict[str, dict]) -> Dict[str, Any]:
                 if base not in alias_modules:
                     continue
                 target_mod = alias_modules[base]
-                # si target_mod es local, podemos verificar attr existe
                 if target_mod in modulos:
                     defined = symbols_by_mod.get(target_mod, set())
                     if attr not in defined:
@@ -580,28 +547,29 @@ def diagnosticar_imports(proyecto: Dict[str, dict]) -> Dict[str, Any]:
                             "sugerencias": owners.get(attr, [])[:10],
                         })
 
-    # ciclos de import
     aristas_imports = filtrar_imports_internos(proyecto)
-    sccs = _tarjan_scc(sorted(list(modulos)), aristas_imports)
+    ciclos = tarjan_scc(sorted(list(modulos)), aristas_imports)
 
     return {
         "rotos_from_import": rotos_from,
         "rotos_alias_attr": rotos_alias_attr,
-        "ciclos_import": sccs,
+        "ciclos_import": ciclos,
         "aristas_imports": aristas_imports,
     }
 
 
-# ---------- Salidas ----------
-def escribir_txt(
-    proyecto: Dict[str, dict],
-    aristas_llamadas: List[Tuple[str, str]],
-    aristas_imports: List[Tuple[str, str]],
-    ruta_salida: str
-):
+# ==========================
+# Salidas
+# ==========================
+def escribir_txt(proyecto: Dict[str, dict],
+                aristas_llamadas: List[Tuple[str, str]],
+                aristas_imports: List[Tuple[str, str]],
+                ruta_salida: str):
+
+    now = datetime.now()
     lineas: List[str] = []
     lineas.append("MAPA AUTOMÁTICO DEL PROYECTO")
-    lineas.append(f"Generado: {datetime.now():%Y-%m-%d %H:%M:%S}")
+    lineas.append(f"Generado: {now:%Y-%m-%d %H:%M:%S}")
     lineas.append("=" * 100)
     lineas.append("")
 
@@ -614,34 +582,22 @@ def escribir_txt(
             lineas.append("")
             continue
 
-        # imports
-        if datos.get("imports"):
-            lineas.append("🔗 Imports:")
-            lineas.append("   " + ", ".join(sorted(datos["imports"])))
-        else:
-            lineas.append("🔗 Imports: (ninguno)")
+        imps = datos.get("imports", [])
+        lineas.append("🔗 Imports: " + (", ".join(imps) if imps else "(ninguno)"))
 
-        # símbolos
         funcs = datos.get("funciones", [])
         clases = datos.get("clases", [])
         consts = datos.get("constantes", [])
 
-        if funcs:
-            lineas.append(f"⚙️  Funciones ({len(funcs)}): " + ", ".join(funcs))
-        else:
-            lineas.append("⚙️  Funciones: (ninguna)")
-
+        lineas.append(f"⚙️  Funciones ({len(funcs)}): " + (", ".join(funcs) if funcs else "(ninguna)"))
         if clases:
             lineas.append(f"🏷️  Clases ({len(clases)}): " + ", ".join(clases))
-
         if consts:
             lineas.append(f"🔒 Constantes ({len(consts)}): " + ", ".join(consts))
 
-        # session_state
         if datos.get("claves_session"):
             lineas.append("🔑 st.session_state keys: " + ", ".join(datos["claves_session"]))
 
-        # llamadas
         if datos.get("llamadas_toplevel"):
             lineas.append("▶️ Llamadas toplevel: " + ", ".join([f"{a}.{b}" if b else a for a, b in datos["llamadas_toplevel"]]))
         if datos.get("llamadas_en_main"):
@@ -672,9 +628,10 @@ def escribir_txt(
 
 
 def escribir_diag(diag: Dict[str, Any], ruta_salida: str):
+    now = datetime.now()
     lineas: List[str] = []
     lineas.append("DIAGNÓSTICO DE IMPORTS / ACOPLAMIENTO")
-    lineas.append(f"Generado: {datetime.now():%Y-%m-%d %H:%M:%S}")
+    lineas.append(f"Generado: {now:%Y-%m-%d %H:%M:%S}")
     lineas.append("=" * 100)
     lineas.append("")
 
@@ -688,8 +645,7 @@ def escribir_diag(diag: Dict[str, Any], ruta_salida: str):
                 lineas.append(f"  {i:02d}) " + " → ".join(comp) + " → " + comp[0])
         lineas.append("")
     else:
-        lineas.append("♻️  Ciclos de import: (no se detectaron)")
-        lineas.append("")
+        lineas.append("♻️  Ciclos de import: (no se detectaron)\n")
 
     rotos_from = diag.get("rotos_from_import", [])
     if rotos_from:
@@ -701,8 +657,7 @@ def escribir_diag(diag: Dict[str, Any], ruta_salida: str):
             lineas.append(f"  - {x['archivo']}: from {x['from_mod']} import {x['symbol']}{alias}{sug_txt}")
         lineas.append("")
     else:
-        lineas.append("❌ from-import rotos: (no encontrados)")
-        lineas.append("")
+        lineas.append("❌ from-import rotos: (no encontrados)\n")
 
     rotos_alias = diag.get("rotos_alias_attr", [])
     if rotos_alias:
@@ -711,20 +666,23 @@ def escribir_diag(diag: Dict[str, Any], ruta_salida: str):
             sug = x.get("sugerencias", [])
             sug_txt = (" | sugerencias: " + ", ".join(sug)) if sug else ""
             lineas.append(
-                f"  - {x['archivo']}::{x['funcion']}: {x['alias']}.{x['attr']}  "
+                f"  - {x['archivo']}::{x['funcion']}: {x['alias']}.{x['attr']} "
                 f"(alias -> {x['target_mod']}){sug_txt}"
             )
         lineas.append("")
     else:
-        lineas.append("❌ alias.attr() rotos: (no encontrados)")
-        lineas.append("")
+        lineas.append("❌ alias.attr() rotos: (no encontrados)\n")
 
     with open(ruta_salida, "w", encoding="utf-8") as f:
         f.write("\n".join(lineas))
     print(f"✅ DIAG: {ruta_salida}")
 
 
-def escribir_json(proyecto: Dict[str, dict], aristas_llamadas, aristas_imports, diag: Dict[str, Any], ruta_salida: str):
+def escribir_json(proyecto: Dict[str, dict],
+                 aristas_llamadas,
+                 aristas_imports,
+                 diag: Dict[str, Any],
+                 ruta_salida: str):
     datos = {
         "generado_en": datetime.now().isoformat(),
         "proyecto": proyecto,
@@ -744,11 +702,12 @@ def escribir_dot(aristas: List[Tuple[str, str]], ruta_salida: str, dirigido: boo
         nodos.add(b)
     tipo = "digraph" if dirigido else "graph"
     flecha = "->" if dirigido else "--"
+
     lineas = [f"{tipo} G {{", "  rankdir=LR;", "  node [shape=box, fontsize=10];"]
     if etiqueta:
-        # escapar comillas básicas
         et = etiqueta.replace('"', '\\"')
         lineas.append(f'  labelloc="t"; label="{et}";')
+
     for n in sorted(nodos):
         nn = n.replace('"', '\\"')
         lineas.append(f'  "{nn}";')
@@ -757,6 +716,7 @@ def escribir_dot(aristas: List[Tuple[str, str]], ruta_salida: str, dirigido: boo
         bb = b.replace('"', '\\"')
         lineas.append(f'  "{aa}" {flecha} "{bb}";')
     lineas.append("}")
+
     with open(ruta_salida, "w", encoding="utf-8") as f:
         f.write("\n".join(lineas))
     print(f"✅ DOT: {ruta_salida}")
@@ -764,7 +724,7 @@ def escribir_dot(aristas: List[Tuple[str, str]], ruta_salida: str, dirigido: boo
 
 def depurar_imports(proyecto: Dict[str, dict]):
     import importlib
-    print("\n--- Depuración de imports (puede ignorarse en CI) ---")
+    print("\n--- Depuración de imports ---")
     for mod in sorted(proyecto.keys()):
         try:
             importlib.import_module(mod)
@@ -772,9 +732,12 @@ def depurar_imports(proyecto: Dict[str, dict]):
             print(f"❌ ImportError en {mod}: {e}")
 
 
-# ---------- Modo Streamlit (opcional) ----------
+# ==========================
+# UI Streamlit (opcional)
+# ==========================
 def renderizar_streamlit(proyecto, aristas_llamadas, aristas_imports, diag):
     import streamlit as st
+
     st.set_page_config(page_title="Analizador", layout="wide")
     st.title("🔎 Analizador (imports, símbolos, llamadas, diagnóstico)")
     st.caption(f"Generado: {datetime.now():%Y-%m-%d %H:%M:%S}")
@@ -789,78 +752,53 @@ def renderizar_streamlit(proyecto, aristas_llamadas, aristas_imports, diag):
         "alias.attr rotos": len(diag.get("rotos_alias_attr", [])),
     })
 
-    st.subheader("Diagnóstico")
     with st.expander("♻️ Ciclos de import"):
         ciclos = diag.get("ciclos_import", [])
-        if not ciclos:
-            st.info("No se detectaron ciclos.")
-        else:
-            st.code("\n".join(
-                [(" → ".join(c) + " → " + c[0]) if len(c) > 1 else (c[0] + " ↺")
-                 for c in ciclos]
-            ))
+        st.code("\n".join(
+            [(" → ".join(c) + " → " + c[0]) if len(c) > 1 else (c[0] + " ↺") for c in ciclos]
+        ) or "(ninguno)")
 
     with st.expander("❌ from-import rotos"):
         rotos = diag.get("rotos_from_import", [])
-        if not rotos:
-            st.info("No se encontraron.")
-        else:
-            st.code("\n".join([
-                f"{r['archivo']}: from {r['from_mod']} import {r['symbol']}"
-                + (f" as {r['as']}" if r.get("as") else "")
-                + (f" | sugerencias: {', '.join(r.get('sugerencias', []))}" if r.get("sugerencias") else "")
-                for r in rotos
-            ]))
+        st.code("\n".join([
+            f"{r['archivo']}: from {r['from_mod']} import {r['symbol']}"
+            + (f" as {r['as']}" if r.get("as") else "")
+            + (f" | sugerencias: {', '.join(r.get('sugerencias', []))}" if r.get("sugerencias") else "")
+            for r in rotos
+        ]) or "(ninguno)")
 
     with st.expander("❌ alias.attr rotos"):
         rotos = diag.get("rotos_alias_attr", [])
-        if not rotos:
-            st.info("No se encontraron.")
-        else:
-            st.code("\n".join([
-                f"{r['archivo']}::{r['funcion']}: {r['alias']}.{r['attr']} (alias -> {r['target_mod']})"
-                + (f" | sugerencias: {', '.join(r.get('sugerencias', []))}" if r.get("sugerencias") else "")
-                for r in rotos
-            ]))
+        st.code("\n".join([
+            f"{r['archivo']}::{r['funcion']}: {r['alias']}.{r['attr']} (alias -> {r['target_mod']})"
+            + (f" | sugerencias: {', '.join(r.get('sugerencias', []))}" if r.get("sugerencias") else "")
+            for r in rotos
+        ]) or "(ninguno)")
 
-    st.subheader("Módulos (tabla)")
-    import pandas as pd
-    filas = []
-    for mod, d in sorted(proyecto.items()):
-        filas.append({
-            "módulo": mod,
-            "ruta": d.get("ruta", "?"),
-            "funciones": len(d.get("funciones", [])),
-            "clases": len(d.get("clases", [])),
-            "constantes": len(d.get("constantes", [])),
-            "imports": len(d.get("imports", [])),
-            "keys_session": len(d.get("claves_session", [])),
-            "error_parseo": d.get("error_parseo", ""),
-        })
-    st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
-
-    with st.expander("📊 Imports internos (pares módulo → módulo)"):
+    with st.expander("📊 Imports internos"):
         st.code("\n".join([f"{a} -> {b}" for a, b in aristas_imports]) or "(vacío)")
 
-    with st.expander("🕸️ Call graph (pares mod.func → mod.func)"):
+    with st.expander("🕸️ Call graph (mod.func -> mod.func)"):
         st.code("\n".join([f"{a} -> {b}" for a, b in aristas_llamadas]) or "(vacío)")
 
 
-# ---------- Main ----------
+# ==========================
+# Main
+# ==========================
 def principal():
     ap = argparse.ArgumentParser(description="Analizador de proyecto (imports/símbolos/calls + diagnóstico)")
     ap.add_argument("--base", nargs="*", default=BASES_PREDETERMINADAS,
-                    help="Carpetas base a analizar (ej: modulo core servicios interfaz exportadores)")
+                    help="Carpetas base (ej: modulo interfaz core servicios exportadores)")
     ap.add_argument("--incluir", nargs="*", default=INCLUIR_PREDETERMINADOS,
-                    help="Archivos .py extra a incluir (default: app.py)")
+                    help="Archivos .py extra (default: app.py)")
     ap.add_argument("--salida", default=SALIDA_PREDETERMINADA,
-                    help="Reporte TXT principal (default: MAPA_FUNCIONES.txt)")
+                    help="Reporte TXT principal")
     ap.add_argument("--diag", default=DIAG_PREDETERMINADO,
-                    help="Reporte TXT diagnóstico (default: DIAGNOSTICO_IMPORTS.txt)")
-    ap.add_argument("--json", default="", help="Ruta opcional para JSON")
-    ap.add_argument("--dot-imports", default="", help="Ruta DOT para grafo de imports internos")
-    ap.add_argument("--dot-llamadas", default="", help="Ruta DOT para call graph")
-    ap.add_argument("--depurar-imports", action="store_true", help="Intentar importar módulos y listar ImportError")
+                    help="Reporte TXT diagnóstico")
+    ap.add_argument("--json", default="", help="Ruta opcional JSON")
+    ap.add_argument("--dot-imports", default="", help="Ruta DOT imports internos")
+    ap.add_argument("--dot-llamadas", default="", help="Ruta DOT call graph")
+    ap.add_argument("--depurar-imports", action="store_true", help="Intentar importar módulos (diagnóstico runtime)")
     ap.add_argument("--ui", action="store_true", help="Render Streamlit (streamlit run ... -- --ui)")
     args = ap.parse_args()
 
