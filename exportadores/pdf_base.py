@@ -73,17 +73,11 @@ def fondo_pagina(canvas, doc):
 
         canvas.saveState()
 
-        # --- Selección de membrete ---
-        sel = str(st.session_state.get("membrete_pdf", "SMART")).strip().upper()
+        
 
-        mapa = {
-            "SMART": os.path.join(BASE_DIR, "data", "Membrete_smart.png"),
-            "ENEE":  os.path.join(BASE_DIR, "data", "membrete_enee.jpg"),
-        }
+        membrete = str(getattr(doc, "membrete_pdf", None) or getattr(doc, "membrete_pdf_val", None) or "SMART").upper()
 
-        membrete = getattr(doc, "membrete_pdf", None) or getattr(doc, "membrete_pdf_val", None) or "SMART"
-        fondo = os.path.join(BASE_DIR, "data", "membrete_enee.jpg" if str(membrete).upper() == "ENEE" else "Membrete_smart.png")
-
+        fondo = os.path.join(BASE_DIR,"data","membrete_enee.jpg" if membrete == "ENEE" else "Membrete_smart.png")
 
 
         ancho, alto = letter
