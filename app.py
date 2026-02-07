@@ -204,7 +204,7 @@ def main() -> None:
                 modo_carga=st.session_state.get("modo_carga_seleccionado"),
                 ruta_estructuras=ruta_e,
                 ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
-                membrete_pdf=st.session_state.get("membrete_pdf", "SMART"),
+               
             )
 
     elif seccion == "mapa_kml":
@@ -213,4 +213,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
