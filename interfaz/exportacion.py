@@ -384,18 +384,17 @@ def seccion_exportacion(
 
     with st.form("form_generar_pdfs"):
         membrete_pdf = st.selectbox(
-        "Membrete para los PDFs",
+        "Membrete",
         ["SMART", "ENEE"],
         index=0 if st.session_state.get("membrete_pdf", "SMART") == "SMART" else 1,
-    )
-    st.session_state["membrete_pdf"] = membrete_pdf
-
+        )
         generar = st.form_submit_button("📥 Generar Reportes PDF")
+
+    st.session_state["membrete_pdf"] = membrete_pdf
 
     if generar:
         try:
             with st.spinner("⏳ Generando reportes, por favor espere..."):
-                membrete_pdf = st.session_state.get("membrete_pdf", "SMART")
                 pdfs = generar_pdfs(resultado, membrete_pdf=membrete_pdf)
             st.session_state["pdfs_generados"] = pdfs
             st.success("✅ Reportes generados correctamente")
