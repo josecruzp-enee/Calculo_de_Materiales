@@ -383,24 +383,24 @@ def seccion_exportacion(
         df_expandido = forzar_expandido_para_groupby(_expandir_estructuras(df))
         _vista_previa_conteo(df_expandido)
 
-    # ✅ valor por defecto "lógico"
-    if "membrete_pdf" not in st.session_state:
-        st.session_state["membrete_pdf"] = "SMART"
+    # ✅ key lógica propia (NO usada por widgets en otros módulos)
+    if "membrete_pdf_val" not in st.session_state:
+        st.session_state["membrete_pdf_val"] = "SMART"
 
     opciones = ["SMART", "ENEE"]
-    idx = 0 if st.session_state["membrete_pdf"] == "SMART" else 1
+    idx = 0 if st.session_state["membrete_pdf_val"] == "SMART" else 1
 
     with st.form("form_generar_pdfs"):
         membrete_pdf = st.selectbox(
             "Membrete",
             opciones,
             index=idx,
-            key="membrete_pdf_sel",  # ✅ key única del widget (evita colisión global)
+            key="membrete_pdf_sel",  # ✅ key única del widget
         )
         generar = st.form_submit_button("📥 Generar Reportes PDF")
 
-    # ✅ persistir selección en una key lógica (NO de widget)
-    st.session_state["membrete_pdf"] = membrete_pdf
+    # ✅ Persistir en key lógica segura
+    st.session_state["membrete_pdf_val"] = membrete_pdf
 
     if generar:
         try:
