@@ -66,25 +66,38 @@ def quitar_saltos_finales(elems):
 def fondo_pagina(canvas, doc):
     """
     Dibuja el membrete seleccionado en la parte superior.
-    Usa st.session_state["membrete_pdf"] con valores tipo: "SMART" / "ENEE".
+    Lee primero st.session_state (si existe) y si no, usa atributos del doc.
     """
     try:
         import streamlit as st
 
         canvas.saveState()
 
-        
+        # 1) prioridad: session_state (tu radio/select)
+        membrete = None
+        try:
+            if "membrete_pdf" in st.session_state:
+                membrete = st.session_state.get("membrete_pdf")
+            elif "membrete_pdf_val" in st.session_state:
+                membrete = st.session_state.get("membrete_pdf_val")
+        except Exception:
+            membrete = None
 
-        membrete = str(getattr(doc, "membrete_pdf", None) or getattr(doc, "membrete_pdf_val", None) or "SMART").upper()
+        # 2) fallback: atributos del doc
+        if not membrete:
+            membrete = getattr(doc, "membrete_pdf", None) or getattr(doc, "membrete_pdf_val", None)
 
-        fondo = os.path.join(BASE_DIR,"data","membrete_enee.jpg" if membrete == "ENEE" else "Membrete_smart.png")
+        membrete = str(membrete or "SMART").strip().upper()
 
+        fondo = os.path.join(
+            BASE_DIR, "data",
+            "membrete_enee.jpg" if membrete == "ENEE" else "Membrete_smart.png"
+        )
 
         ancho, alto = letter
 
         if os.path.exists(fondo):
-            # Ajuste de tamaño: reduce un poco el logo (altura)
-            h = 1.05 * inch     # <-- antes 1.25; ajustá aquí si querés más/menos
+            h = 1.05 * inch
             y = alto - h
             canvas.drawImage(
                 fondo,
@@ -104,6 +117,7 @@ def fondo_pagina(canvas, doc):
         except Exception:
             pass
         print(f"⚠️ Error aplicando fondo: {e}")
+
 
 
 
