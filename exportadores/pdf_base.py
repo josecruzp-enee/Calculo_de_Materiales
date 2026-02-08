@@ -97,17 +97,31 @@ def fondo_pagina(canvas, doc):
         ancho, alto = letter
 
         if os.path.exists(fondo):
-            h = 1.05 * inch
-            y = alto - h
-            canvas.drawImage(
-                fondo,
-                0, y,
-                width=ancho,
-                height=h,
-                preserveAspectRatio=True,
-                anchor="n",
-                mask="auto",
-            )
+    if membrete == "ENEE":
+        # ENEE = fondo completo (hoja membretada / marca de agua)
+        canvas.drawImage(
+            fondo,
+            0, 0,
+            width=ancho,
+            height=alto,
+            preserveAspectRatio=True,
+            anchor="c",
+            mask="auto",
+        )
+    else:
+        # SMART = solo encabezado (membrete)
+        h = 1.05 * inch
+        y = alto - h
+        canvas.drawImage(
+            fondo,
+            0, y,
+            width=ancho,
+            height=h,
+            preserveAspectRatio=True,
+            anchor="n",
+            mask="auto",
+        )
+
 
         canvas.restoreState()
 
