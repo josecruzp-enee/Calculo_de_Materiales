@@ -65,8 +65,9 @@ def quitar_saltos_finales(elems):
 # ==========================
 def fondo_pagina(canvas, doc):
     """
-    Dibuja el membrete seleccionado en la parte superior.
-    Lee primero st.session_state (si existe) y si no, usa atributos del doc.
+    Dibuja el membrete seleccionado.
+    - ENEE: fondo completo de página
+    - SMART: solo encabezado (membrete superior)
     """
     try:
         import streamlit as st
@@ -98,30 +99,29 @@ def fondo_pagina(canvas, doc):
 
         if os.path.exists(fondo):
             if membrete == "ENEE":
-        # ENEE = fondo completo (hoja membretada / marca de agua)
-        canvas.drawImage(
-            fondo,
-            0, 0,
-            width=ancho,
-            height=alto,
-            preserveAspectRatio=True,
-            anchor="c",
-            mask="auto",
-        )
-    else:
-        # SMART = solo encabezado (membrete)
-        h = 1.05 * inch
-        y = alto - h
-        canvas.drawImage(
-            fondo,
-            0, y,
-            width=ancho,
-            height=h,
-            preserveAspectRatio=True,
-            anchor="n",
-            mask="auto",
-        )
-
+                # ENEE = fondo completo (hoja membretada / marca de agua)
+                canvas.drawImage(
+                    fondo,
+                    0, 0,
+                    width=ancho,
+                    height=alto,
+                    preserveAspectRatio=True,
+                    anchor="c",
+                    mask="auto",
+                )
+            else:
+                # SMART = solo encabezado (membrete)
+                h = 1.05 * inch
+                y = alto - h
+                canvas.drawImage(
+                    fondo,
+                    0, y,
+                    width=ancho,
+                    height=h,
+                    preserveAspectRatio=True,
+                    anchor="n",
+                    mask="auto",
+                )
 
         canvas.restoreState()
 
