@@ -97,7 +97,7 @@ def fondo_pagina(canvas, doc):
         ancho, alto = letter
 
         if os.path.exists(fondo):
-    if membrete == "ENEE":
+            if membrete == "ENEE":
         # ENEE = fondo completo (hoja membretada / marca de agua)
         canvas.drawImage(
             fondo,
