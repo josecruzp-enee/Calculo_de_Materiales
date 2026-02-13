@@ -30,11 +30,23 @@ def _conteo_desde_df_estructuras(df_eg):
     dfe = df_eg.copy()
     dfe.columns = [str(c).strip() for c in dfe.columns]
 
-    # alias defensivos
-    if "codigodeestructura" not in dfe.columns:
-        if "Código de Estructura" in dfe.columns:
+    # alias defensivos (compatibilidad refactor)
+    # Caso crítico: existe 'codigodeestructura' pero viene vacío; en ese caso
+    # debemos preferir 'CodigoEstructura' si tiene datos.
+    if "codigodeestructura" in dfe.columns:
+        col_base = dfe["codigodeestructura"].astype(str).str.strip()
+        base_vacia = col_base.eq("").all()
+    else:
+        base_vacia = True
+
+    if base_vacia:
+        if "CodigoEstructura" in dfe.columns and not dfe["CodigoEstructura"].astype(str).str.strip().eq("").all():
+            dfe["codigodeestructura"] = dfe["CodigoEstructura"]
+        elif "CódigoEstructura" in dfe.columns and not dfe["CódigoEstructura"].astype(str).str.strip().eq("").all():
+            dfe["codigodeestructura"] = dfe["CódigoEstructura"]
+        elif "Código de Estructura" in dfe.columns and not dfe["Código de Estructura"].astype(str).str.strip().eq("").all():
             dfe["codigodeestructura"] = dfe["Código de Estructura"]
-        elif "Estructura" in dfe.columns:
+        elif "Estructura" in dfe.columns and not dfe["Estructura"].astype(str).str.strip().eq("").all():
             dfe["codigodeestructura"] = dfe["Estructura"]
         else:
             dfe["codigodeestructura"] = ""
@@ -61,6 +73,7 @@ def _conteo_desde_df_estructuras(df_eg):
             conteo[cod] = conteo.get(cod, 0) + qty
 
     return conteo
+
 
 
 def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
