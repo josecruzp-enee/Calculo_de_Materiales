@@ -122,6 +122,93 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     return [Spacer(1, 8), titulo, Spacer(1, 8), t, Spacer(1, 8), nota]
 
+# ==========================================================
+# ANEXO B: MANO DE OBRA POR ESTRUCTURA (TABLA)
+# ==========================================================
+def tabla_mano_obra_estructuras_pdf(df_mo: pd.DataFrame):
+    titulo = Paragraph("ANEXO B – Mano de Obra por Estructura", styles["Heading2"])
+
+    if df_mo is None or df_mo.empty:
+        return [titulo, Paragraph("No hay datos de mano de obra disponibles.", styles["Normal"])]
+
+    df = df_mo.copy()
+    df.columns = [str(c).replace("\u00A0", " ").strip() for c in df.columns]
+
+    # Normalizar nombres flexibles (por si cambian desde servicios)
+    if "codigodeestructura" not in df.columns:
+        if "Estructura" in df.columns:
+            df["codigodeestructura"] = df["Estructura"]
+        else:
+            df["codigodeestructura"] = ""
+
+    if "Descripcion" not in df.columns:
+        if "Descripción" in df.columns:
+            df["Descripcion"] = df["Descripción"]
+        else:
+            df["Descripcion"] = ""
+
+    if "Cantidad" not in df.columns:
+        df["Cantidad"] = 0
+
+    # Columnas MO (preferidas) con fallback a Costo Unitario/Total si existieran
+    if "MO Unitario" not in df.columns:
+        df["MO Unitario"] = df.get("Costo Unitario", 0.0)
+    if "MO Total" not in df.columns:
+        df["MO Total"] = df.get("Costo Total", 0.0)
+
+    # Tipos
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0).astype(int)
+    df["MO Unitario"] = pd.to_numeric(df["MO Unitario"], errors="coerce").fillna(0.0)
+    df["MO Total"] = pd.to_numeric(df["MO Total"], errors="coerce").fillna(0.0)
+
+    df = df.sort_values(["codigodeestructura"], ascending=[True])
+
+    def _money(v):
+        if v is None or pd.isna(v):
+            return ""
+        return f"L {float(v):,.2f}"
+
+    data = [["Estructura", "Descripción", "Cantidad", "MO Unitario", "MO Total"]]
+
+    for _, r in df.iterrows():
+        cod = str(r.get("codigodeestructura", "") or "").strip()
+        desc = str(r.get("Descripcion", "") or "").strip()
+        cant = int(r.get("Cantidad", 0) or 0)
+
+        data.append([
+            Paragraph(escape(cod), styleN),
+            Paragraph(escape(desc), styleN),
+            f"{cant:d}",
+            _money(r.get("MO Unitario", 0.0)),
+            _money(r.get("MO Total", 0.0)),
+        ])
+
+    total_general = float(df["MO Total"].sum())
+    data.append(["", "", "", "TOTAL", _money(total_general)])
+
+    t = Table(
+        data,
+        repeatRows=1,
+        colWidths=[1.1 * inch, 3.1 * inch, 0.8 * inch, 1.2 * inch, 1.2 * inch],
+    )
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (2, 1), (2, -2), "CENTER"),
+        ("ALIGN", (3, 1), (4, -1), "RIGHT"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (3, -1), (4, -1), "Helvetica-Bold"),
+    ]))
+
+    nota = Paragraph(
+        "Nota: La mano de obra por estructura se toma directamente de la hoja 'indice' (columna 'Precio') "
+        "como costo unitario de MO, multiplicado por la cantidad de estructuras.",
+        styles["Normal"]
+    )
+
+    return [Spacer(1, 8), titulo, Spacer(1, 8), t, Spacer(1, 8), nota]
+
 
 # ==========================================================
 # ANEXO B: COSTOS POR ESTRUCTURA (TABLA)
