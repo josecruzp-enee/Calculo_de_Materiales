@@ -26,7 +26,11 @@ from exportadores.pdf_base import (
 )
 
 from exportadores.pdf_reportes_simples import _tabla_estructuras_por_punto
-from exportadores.pdf_anexos_costos import (tabla_costos_materiales_pdf, tabla_mano_obra_estructuras_pdf,)
+from exportadores.pdf_anexos_costos import (
+    tabla_costos_materiales_pdf,
+    tabla_mano_obra_estructuras_pdf,
+)
+
 
 
 
