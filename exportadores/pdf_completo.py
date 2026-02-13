@@ -207,12 +207,7 @@ def generar_pdf_completo(
 
     # (B y C siguen comentados en tu original; los dejamos igual)
 
-    quitar_saltos_finales(elems)
-    doc.build(elems)
-
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
+    
 
     # ---------------------------
     # ANEXO B: Mano de Obra por Estructura (NO depende de materiales)
@@ -228,3 +223,10 @@ def generar_pdf_completo(
                 doc_width=doc.width
             )
         )
+    quitar_saltos_finales(elems)
+    doc.build(elems)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+        
+    return pdf_bytes
