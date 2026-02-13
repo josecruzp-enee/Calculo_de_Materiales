@@ -12,13 +12,57 @@ from exportadores.pdf_utils import (
     generar_pdf_completo,
 )
 
+from core.costos_mano_obra import calcular_mo_desde_indice
+
 _REQUERIDAS = (
     "datos_proyecto",
     "df_resumen",
     "df_estructuras_resumen",
     "df_estructuras_por_punto",
     "df_resumen_por_punto",
+    # ✅ esta ruta debe venir en resultados (o ponela con el nombre que ya uses)
+    "ruta_datos_materiales",
 )
+
+def _conteo_desde_df_estructuras(df_eg):
+    """
+    Construye dict {codigo: cantidad} desde df_estructuras_resumen.
+    Espera columnas: 'codigodeestructura' y 'Cantidad' (o tolera variantes comunes).
+    """
+    dfe = df_eg.copy()
+    dfe.columns = [str(c).strip() for c in dfe.columns]
+
+    # alias defensivos
+    if "codigodeestructura" not in dfe.columns:
+        if "Código de Estructura" in dfe.columns:
+            dfe["codigodeestructura"] = dfe["Código de Estructura"]
+        elif "Estructura" in dfe.columns:
+            dfe["codigodeestructura"] = dfe["Estructura"]
+        else:
+            dfe["codigodeestructura"] = ""
+
+    if "Cantidad" not in dfe.columns:
+        if "cantidad" in dfe.columns:
+            dfe["Cantidad"] = dfe["cantidad"]
+        else:
+            dfe["Cantidad"] = 0
+
+    dfe["codigodeestructura"] = dfe["codigodeestructura"].astype(str).str.strip()
+    dfe["Cantidad"] = dfe["Cantidad"].fillna(0)
+
+    conteo = {}
+    for _, r in dfe.iterrows():
+        cod = str(r.get("codigodeestructura", "")).strip()
+        if not cod:
+            continue
+        try:
+            qty = int(float(r.get("Cantidad", 0) or 0))
+        except Exception:
+            qty = 0
+        if qty > 0:
+            conteo[cod] = conteo.get(cod, 0) + qty
+
+    return conteo
 
 
 def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
@@ -40,12 +84,23 @@ def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
     df_ep = resultados.get("df_estructuras_por_punto")
     df_mpp = resultados.get("df_resumen_por_punto")
 
-    # ✅ costos vienen calculados desde servicios (si aplica)
-    df_costos = resultados.get("df_costos_materiales", None)
-    df_costos_estructuras = resultados.get("df_costos_estructuras", None)
-
     if any(x is None for x in (df_resumen, df_eg, df_ep, df_mpp)):
         raise ValueError("Uno o más DataFrames vienen como None en 'resultados'.")
+
+    # ✅ costos materiales (si aplica)
+    df_costos = resultados.get("df_costos_materiales", None)
+
+    # ✅ ruta Excel base (Estructura_datos.xlsx)
+    ruta_datos_materiales = resultados.get("ruta_datos_materiales")
+
+    # ✅ conteo para MO desde resumen de estructuras
+    conteo_estructuras = _conteo_desde_df_estructuras(df_eg)
+
+    # ✅ MO desde indice (Precio)
+    df_mo_estructuras = calcular_mo_desde_indice(
+        archivo_materiales=ruta_datos_materiales,
+        conteo=conteo_estructuras
+    )
 
     pdf_materiales = generar_pdf_materiales(df_resumen, nombre, dp)
     pdf_estructuras_global = generar_pdf_estructuras_global(df_eg, nombre)
@@ -59,7 +114,7 @@ def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
         df_mpp,
         dp,
         df_costos=df_costos,
-        df_costos_estructuras=df_costos_estructuras,
+        df_mo_estructuras=df_mo_estructuras,  # ✅ ANEXO B (MO)
     )
 
     return {
