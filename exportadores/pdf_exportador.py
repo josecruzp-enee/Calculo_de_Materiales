@@ -20,8 +20,6 @@ _REQUERIDAS = (
     "df_estructuras_resumen",
     "df_estructuras_por_punto",
     "df_resumen_por_punto",
-    # ✅ esta ruta debe venir en resultados (o ponela con el nombre que ya uses)
-    "ruta_datos_materiales",
 )
 
 def _conteo_desde_df_estructuras(df_eg):
