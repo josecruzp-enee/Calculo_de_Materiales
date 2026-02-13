@@ -217,9 +217,10 @@ def generar_pdf_completo(
     # ---------------------------
     # ANEXO B: Mano de Obra por Estructura (NO depende de materiales)
     # ---------------------------
-    if df_costos_estructuras is not None and hasattr(df_costos_estructuras, "empty") and not df_costos_estructuras.empty:
+    if df_mo_estructuras is not None and hasattr(df_mo_estructuras, "empty") and not df_mo_estructuras.empty:
         salto_pagina_seguro(elems)
-        elems = extender_flowables(elems, tabla_mano_obra_estructuras_pdf(df_costos_estructuras))
+        elems = extender_flowables(elems, tabla_mano_obra_estructuras_pdf(df_mo_estructuras))
+
 
     quitar_saltos_finales(elems)
     doc.build(elems)
