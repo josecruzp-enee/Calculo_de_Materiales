@@ -214,19 +214,11 @@ def generar_pdf_completo(
     # ---------------------------
     if df_costos_estructuras is not None and hasattr(df_costos_estructuras, "empty") and not df_costos_estructuras.empty:
         salto_pagina_seguro(elems)
-        elems = extender_flowables(
-            elems,
-            tabla_mano_obra_estructuras_pdf(
-                df_costos_estructuras,
-                styles=styles,
-                styleN=styleN,
-                doc_width=doc.width
-            )
-        )
+        elems = extender_flowables(elems, tabla_mano_obra_estructuras_pdf(df_costos_estructuras))
+
     quitar_saltos_finales(elems)
     doc.build(elems)
 
     pdf_bytes = buffer.getvalue()
     buffer.close()
-        
     return pdf_bytes
