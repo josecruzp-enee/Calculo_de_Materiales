@@ -26,7 +26,8 @@ from exportadores.pdf_base import (
 )
 
 from exportadores.pdf_reportes_simples import _tabla_estructuras_por_punto
-from exportadores.pdf_anexos_costos import tabla_costos_materiales_pdf
+from exportadores.pdf_anexos_costos import (tabla_costos_materiales_pdf, tabla_mano_obra_estructuras_pdf,)
+
 
 
 def generar_pdf_completo(
@@ -212,3 +213,18 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+    # ---------------------------
+    # ANEXO B: Mano de Obra por Estructura (NO depende de materiales)
+    # ---------------------------
+    if df_costos_estructuras is not None and hasattr(df_costos_estructuras, "empty") and not df_costos_estructuras.empty:
+        salto_pagina_seguro(elems)
+        elems = extender_flowables(
+            elems,
+            tabla_mano_obra_estructuras_pdf(
+                df_costos_estructuras,
+                styles=styles,
+                styleN=styleN,
+                doc_width=doc.width
+            )
+        )
