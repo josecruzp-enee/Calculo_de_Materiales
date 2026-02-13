@@ -41,7 +41,7 @@ def generar_pdf_completo(
     df_mat_por_punto,
     datos_proyecto,
     df_costos=None,
-    df_mo_estructuras=None 
+    df_mo_estructuras=None, 
     df_costos_estructuras=None
 ):
     """
