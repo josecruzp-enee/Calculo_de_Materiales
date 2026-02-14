@@ -298,6 +298,9 @@ def _integrar_materiales_extra(df_resumen: pd.DataFrame, datos_proyecto: dict, l
 # API pública (orquestador)
 # =============================================================================
 
+from core.costos_mano_obra import calcular_mo_desde_indice
+
+
 def calcular_materiales(
     archivo_estructuras=None,
     archivo_materiales=None,
@@ -305,29 +308,39 @@ def calcular_materiales(
     datos_proyecto: Optional[dict] = None,
     df_cables: Optional[pd.DataFrame] = None,
 ) -> Dict[str, Any]:
-    """
-    Orquesta todo el pipeline y retorna el dict de resultados.
-    """
+
     log = get_logger()
 
+    # -------------------------------------------------
     # 1) Entradas
+    # -------------------------------------------------
     dp_in, df_estructuras = _cargar_entradas(
         archivo_estructuras=archivo_estructuras,
         estructuras_df=estructuras_df,
         datos_proyecto=datos_proyecto,
     )
 
+    # -------------------------------------------------
     # 2) Normalización / validación
+    # -------------------------------------------------
     ctx = _normalizar_y_validar_contexto(dp_in, df_estructuras, log)
 
+    # -------------------------------------------------
     # 3) Limpieza + conteo
-    _, conteo, tmp_explotado = _limpiar_y_contar_estructuras(ctx.df_estructuras, log)
+    # -------------------------------------------------
+    _, conteo, tmp_explotado = _limpiar_y_contar_estructuras(
+        ctx.df_estructuras, log
+    )
 
+    # -------------------------------------------------
     # 4) Índice + conectores
+    # -------------------------------------------------
     df_indice = cargar_indice_normalizado(archivo_materiales, log)
     tabla_conectores_mt = cargar_conectores_mt(archivo_materiales)
 
-    # 5) Materiales globales (estructuras)
+    # -------------------------------------------------
+    # 5) Materiales globales
+    # -------------------------------------------------
     df_total = _calcular_materiales_globales(
         archivo_materiales=archivo_materiales,
         conteo=conteo,
@@ -336,37 +349,40 @@ def calcular_materiales(
         tabla_conectores_mt=tabla_conectores_mt,
     )
 
-    # 5.1) Materiales desde cables (UI)
+    # Materiales desde cables
     df_mat_cables = materiales_desde_cables(df_cables)
     if df_mat_cables is not None and not df_mat_cables.empty:
         dfc = df_mat_cables.copy()
 
         if "Codigo" in dfc.columns and "Materiales" not in dfc.columns:
             dfc["Materiales"] = dfc["Codigo"].astype(str).str.strip()
+
         if "Unidad" not in dfc.columns:
             dfc["Unidad"] = "m"
+
         if "Cantidad" not in dfc.columns and "Total Cable (m)" in dfc.columns:
-            dfc["Cantidad"] = pd.to_numeric(dfc["Total Cable (m)"], errors="coerce").fillna(0.0)
+            dfc["Cantidad"] = pd.to_numeric(
+                dfc["Total Cable (m)"], errors="coerce"
+            ).fillna(0.0)
 
-        for col in ["Materiales", "Unidad", "Cantidad"]:
-            if col not in dfc.columns:
-                dfc[col] = "" if col != "Cantidad" else 0.0
-
-        dfc = dfc[["Materiales", "Unidad", "Cantidad"]].copy()
+        dfc = dfc[["Materiales", "Unidad", "Cantidad"]]
         df_total = pd.concat([df_total, dfc], ignore_index=True)
 
         ctx.datos_proyecto["cables_proyecto_df"] = df_cables
         log(f"✅ Materiales desde cables integrados ({len(dfc)} filas)")
 
-    # 5.2) Resumen global
     df_resumen = _resumir_materiales_globales(df_total)
 
+    # -------------------------------------------------
     # 6) Estructuras
+    # -------------------------------------------------
     df_estructuras_resumen, df_estructuras_por_punto = _construir_dfs_estructuras(
         df_indice, conteo, tmp_explotado, log
     )
 
+    # -------------------------------------------------
     # 7) Materiales por punto
+    # -------------------------------------------------
     df_resumen_por_punto = _calcular_materiales_por_punto(
         archivo_materiales=archivo_materiales,
         tmp_explotado=tmp_explotado,
@@ -376,29 +392,28 @@ def calcular_materiales(
         log=log,
     )
 
-    # 8) Materiales extra (manuales)
-    df_resumen, dp_out = _integrar_materiales_extra(df_resumen, ctx.datos_proyecto, log)
+    # -------------------------------------------------
+    # 8) Materiales extra
+    # -------------------------------------------------
+    df_resumen, dp_out = _integrar_materiales_extra(
+        df_resumen, ctx.datos_proyecto, log
+    )
 
-    # 8.1) COSTOS (ANEXO) 
-    #Costos de Materiales
+    # -------------------------------------------------
+    # 8.1 COSTOS MATERIALES
+    # -------------------------------------------------
     df_costos = None
     if archivo_materiales:
         try:
-            df_costos = calcular_costos_desde_resumen(df_resumen, archivo_materiales)
-
-            if df_costos is None or df_costos.empty:
-                log("⚠️ df_costos vacío (no hubo match de precios)")
-                df_costos = None
-            else:
-                log(f"✅ Costos calculados: {len(df_costos)} filas")
-                if "Tiene_Precio" in df_costos.columns:
-                    log(f"✅ Filas con precio: {int(df_costos['Tiene_Precio'].sum())}")
-
+            df_costos = calcular_costos_desde_resumen(
+                df_resumen, archivo_materiales
+            )
         except Exception as e:
-            log(f"❌ Error calculando costos: {type(e).__name__}: {e}")
-            df_costos = None
-   
-    #Costos de Estructuras
+            log(f"❌ Error costos materiales: {type(e).__name__}: {e}")
+
+    # -------------------------------------------------
+    # 8.2 COSTOS ESTRUCTURAS
+    # -------------------------------------------------
     df_costos_estructuras = None
     try:
         if archivo_materiales:
@@ -411,27 +426,40 @@ def calcular_materiales(
                 df_indice=df_indice,
             )
     except Exception as e:
-        log(f"❌ Error costos por estructura: {type(e).__name__}: {e}")
-        df_costos_estructuras = None
+        log(f"❌ Error costos estructuras: {type(e).__name__}: {e}")
 
+    # -------------------------------------------------
+    # 8.3 ✅ MANO DE OBRA (AQUÍ DEBE IR)
+    # -------------------------------------------------
+    df_mo_estructuras = None
+    try:
+        if archivo_materiales:
+            df_mo_estructuras = calcular_mo_desde_indice(
+                archivo_materiales=archivo_materiales,
+                conteo=conteo,
+            )
+            if df_mo_estructuras is not None and not df_mo_estructuras.empty:
+                log(f"✅ Mano de obra calculada: {len(df_mo_estructuras)} filas")
+    except Exception as e:
+        log(f"❌ Error mano de obra: {type(e).__name__}: {e}")
 
-
-    
-    # 9) Resultado final
+    # -------------------------------------------------
+    # 9) RESULTADO FINAL
+    # -------------------------------------------------
     return {
         "datos_proyecto": dp_out,
         "tension_ll": ctx.tension_ll,
         "calibre_mt": ctx.calibre_mt,
-        
+
         "df_resumen": df_resumen,
         "df_estructuras_resumen": df_estructuras_resumen,
         "df_estructuras_por_punto": df_estructuras_por_punto,
         "df_resumen_por_punto": df_resumen_por_punto,
 
-        # 👇 ESTA ERA LA PIEZA QUE NO ESTABA LLEGANDO BIEN
         "df_costos_materiales": df_costos,
         "df_costos_estructuras": df_costos_estructuras,
-        # debug
+        "df_mo_estructuras": df_mo_estructuras,
+
         "conteo": conteo,
         "tmp_explotado": tmp_explotado,
     }
