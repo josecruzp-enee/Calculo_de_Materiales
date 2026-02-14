@@ -108,12 +108,8 @@ def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
     conteo_estructuras = _conteo_desde_df_estructuras(df_eg)
 
     # ✅ MO desde indice (Precio)
-    df_mo_estructuras = None
-    if ruta_datos_materiales:
-        df_mo_estructuras = calcular_mo_desde_indice(
-            archivo_materiales=ruta_datos_materiales,
-            conteo=conteo_estructuras
-    )
+    df_mo_estructuras = resultados.get("df_mo_estructuras")
+
 # si no hay ruta, se omite MO y el PDF igual se genera
 
 
