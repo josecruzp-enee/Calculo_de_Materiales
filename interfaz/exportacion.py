@@ -383,12 +383,15 @@ def seccion_exportacion(
         _vista_previa_conteo(df_expandido)
 
     # ✅ estado "lógico" del membrete (NO tocar st.session_state["membrete_pdf"])
-    if "membrete_pdf_val" not in st.session_state:
-        st.session_state["membrete_pdf_val"] = "SMART"
-   
     
+    if "membrete_pdf" not in st.session_state:
+        st.session_state["membrete_pdf"] = "SMART"
 
-    opciones = ["SMART", "ENEE"]
+    membrete_pdf = st.selectbox(
+        "Membrete",
+        ["SMART", "ENEE"],
+        key="membrete_pdf"
+    )
 
     # ✅ sincronizar widget (membrete_pdf_sel) con el valor lógico
     # - si existe el widget y difiere, lo forzamos
