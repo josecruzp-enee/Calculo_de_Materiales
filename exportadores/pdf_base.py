@@ -65,63 +65,25 @@ def quitar_saltos_finales(elems):
 # ==========================
 def fondo_pagina(canvas, doc):
     """
-    Dibuja el membrete seleccionado.
-    - ENEE: fondo completo de página
-    - SMART: solo encabezado (membrete superior)
+    Dibuja el membrete ENEE en el PDF.
     """
     try:
-        import streamlit as st
-
         canvas.saveState()
 
-        # 1) prioridad: session_state (tu radio/select)
-        membrete = None
-        try:
-            if "membrete_pdf" in st.session_state:
-                membrete = st.session_state.get("membrete_pdf")
-            elif "membrete_pdf_val" in st.session_state:
-                membrete = st.session_state.get("membrete_pdf_val")
-        except Exception:
-            membrete = None
-
-        # 2) fallback: atributos del doc
-        if not membrete:
-            membrete = getattr(doc, "membrete_pdf", None) or getattr(doc, "membrete_pdf_val", None)
-
-        membrete = str(membrete or "SMART").strip().upper()
-
-        fondo = os.path.join(
-            BASE_DIR, "data",
-            "logo enee.jpg" if membrete == "ENEE" else "Membrete_smart.png"
-        )
+        fondo = os.path.join(BASE_DIR, "data", "logo enee.jpg")
 
         ancho, alto = letter
 
         if os.path.exists(fondo):
-            if membrete == "ENEE":
-                # ENEE = fondo completo (hoja membretada / marca de agua)
-                canvas.drawImage(
-                    fondo,
-                    0, 0,
-                    width=ancho,
-                    height=alto,
-                    preserveAspectRatio=True,
-                    anchor="c",
-                    mask="auto",
-                )
-            else:
-                # SMART = solo encabezado (membrete)
-                h = 1.05 * inch
-                y = alto - h
-                canvas.drawImage(
-                    fondo,
-                    0, y,
-                    width=ancho,
-                    height=h,
-                    preserveAspectRatio=True,
-                    anchor="n",
-                    mask="auto",
-                )
+            canvas.drawImage(
+                fondo,
+                0, 0,
+                width=ancho,
+                height=alto,
+                preserveAspectRatio=True,
+                anchor="c",
+                mask="auto",
+            )
 
         canvas.restoreState()
 
