@@ -365,81 +365,72 @@ def seccion_exportacion(
     ruta_estructuras: str | None,
     ruta_datos_materiales: str
 ) -> None:
+
     st.subheader("6. 📂 Exportación de Reportes")
 
     if isinstance(ruta_datos_materiales, str) and ruta_datos_materiales.strip():
         st.session_state["ruta_datos_materiales"] = ruta_datos_materiales.strip()
 
     resultado = st.session_state.get("resultado_calculo")
+
     if not resultado:
         st.warning("⚠️ Primero ve a la sección **Finalizar** y ejecuta el cálculo.")
         return
 
     df_prev = st.session_state.get("df_estructuras")
+
     if isinstance(df_prev, pd.DataFrame) and not df_prev.empty:
         _vista_previa_conteo(df_prev)
     else:
         df_expandido = forzar_expandido_para_groupby(_expandir_estructuras(df))
         _vista_previa_conteo(df_expandido)
 
-    # ✅ estado "lógico" del membrete (NO tocar st.session_state["membrete_pdf"])
-    
-    if "membrete_pdf" not in st.session_state:
-        st.session_state["membrete_pdf"] = "SMART"
+    # ------------------------------------------------
+    # Membrete fijo por ahora
+    # ------------------------------------------------
 
-    membrete_pdf = st.selectbox(
-        "Membrete",
-        ["SMART", "ENEE"],
-        key="membrete_pdf"
-    )
+    membrete_pdf = "ENEE"
 
-    # ✅ sincronizar widget (membrete_pdf_sel) con el valor lógico
-    # - si existe el widget y difiere, lo forzamos
-    # - si no existe, lo inicializamos
-    if st.session_state.get("membrete_pdf_sel") != st.session_state["membrete_pdf_val"]:
-        st.session_state["membrete_pdf_sel"] = st.session_state["membrete_pdf_val"]
+    # ------------------------------------------------
+    # Botón para generar reportes
+    # ------------------------------------------------
 
     with st.form("form_generar_pdfs"):
-        membrete_pdf = st.selectbox(
-            "Membrete",
-            opciones,
-            key="membrete_pdf_sel",
-            index=opciones.index(st.session_state["membrete_pdf_sel"]),
-        )
         generar = st.form_submit_button("📥 Generar Reportes PDF")
 
-    # ✅ si cambió la selección, invalidar PDFs viejos
-    if membrete_pdf != st.session_state.get("membrete_pdf_val"):
-        st.session_state["membrete_pdf_val"] = membrete_pdf
-        st.session_state.pop("pdfs_generados", None)
-        st.session_state.pop("membrete_pdf_generado_con", None)
-
     if generar:
+
         try:
+
             with st.spinner("⏳ Generando reportes, por favor espere..."):
-                pdfs = generar_pdfs(resultado, membrete_pdf=membrete_pdf)
+
+                pdfs = generar_pdfs(
+                    resultado,
+                    membrete_pdf=membrete_pdf
+                )
+
             st.session_state["pdfs_generados"] = pdfs
-            st.session_state["membrete_pdf_generado_con"] = membrete_pdf
-            st.success(f"✅ Reportes generados correctamente ({membrete_pdf})")
+
+            st.success("✅ Reportes generados correctamente (ENEE)")
+
         except Exception as e:
+
             st.error(f"❌ Error al generar PDFs: {type(e).__name__}: {e}")
+
             return
 
     pdfs = st.session_state.get("pdfs_generados")
-    if not pdfs:
-        st.info("Presiona **Generar Reportes PDF** para preparar las descargas.")
-        return
 
-    # ✅ seguridad: si el pdf fue generado con otro membrete, obligar regeneración
-    if st.session_state.get("membrete_pdf_generado_con") != st.session_state.get("membrete_pdf_val"):
-        st.session_state.pop("pdfs_generados", None)
-        st.session_state.pop("membrete_pdf_generado_con", None)
-        st.warning("⚠️ Cambiaste el membrete. Volvé a presionar **Generar Reportes PDF**.")
+    if not pdfs:
+
+        st.info("Presiona **Generar Reportes PDF** para preparar las descargas.")
+
         return
 
     st.markdown("### 📥 Descarga de Reportes Generados")
 
     if pdfs.get("materiales"):
+
         st.download_button(
             "📄 Descargar PDF de Materiales",
             pdfs["materiales"],
@@ -449,6 +440,7 @@ def seccion_exportacion(
         )
 
     if pdfs.get("estructuras_global"):
+
         st.download_button(
             "📄 Descargar PDF de Estructuras (Global)",
             pdfs["estructuras_global"],
@@ -458,6 +450,7 @@ def seccion_exportacion(
         )
 
     if pdfs.get("estructuras_por_punto"):
+
         st.download_button(
             "📄 Descargar PDF de Estructuras por Punto",
             pdfs["estructuras_por_punto"],
@@ -467,6 +460,7 @@ def seccion_exportacion(
         )
 
     if pdfs.get("materiales_por_punto"):
+
         st.download_button(
             "📄 Descargar PDF de Materiales por Punto",
             pdfs["materiales_por_punto"],
@@ -476,6 +470,7 @@ def seccion_exportacion(
         )
 
     if pdfs.get("completo"):
+
         st.download_button(
             "📄 Descargar Informe Completo",
             pdfs["completo"],
