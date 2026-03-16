@@ -57,7 +57,14 @@ def generar_pdf_completo(
 
     buffer = BytesIO()
 
-    doc = BaseDocTemplate(buffer, pagesize=letter)
+    doc = BaseDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=40,
+        rightMargin=40,
+        topMargin=120,
+        bottomMargin=40
+    )
 
     # ✅ ACTIVAR MEMBRETE
     doc.membrete_pdf = datos_proyecto.get("membrete_pdf", "SMART")
