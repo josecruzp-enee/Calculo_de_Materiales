@@ -73,7 +73,7 @@ def cargar_dxf_ancho() -> Optional[pd.DataFrame]:
         return None
 
 
-def seccion_entrada_estructuras(modo_carga: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+def seccion_entrada_estructuras(modo_carga: str = "desplegables") -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     modo_raw = (modo_carga or "").strip().lower()
 
     mapa = {
