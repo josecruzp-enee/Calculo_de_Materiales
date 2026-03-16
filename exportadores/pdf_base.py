@@ -92,7 +92,7 @@ def fondo_pagina(canvas, doc):
 
         fondo = os.path.join(
             BASE_DIR, "data",
-            "membrete_enee.jpg" if membrete == "ENEE" else "Membrete_smart.png"
+            "logo enee.jpg" if membrete == "ENEE" else "Membrete_smart.png"
         )
 
         ancho, alto = letter
