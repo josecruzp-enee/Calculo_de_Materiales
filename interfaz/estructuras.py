@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from core.transformador_estructuras import coerce_df_estructuras_largo
-from interfaz.estructuras_comunes import materializar_df_a_archivo
+from interfaz.estructuras_comunes import expand_wide_to_long, materializar_df_a_archivo
 
 
 
