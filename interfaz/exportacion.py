@@ -385,7 +385,7 @@ def seccion_exportacion(
     # ✅ estado "lógico" del membrete (NO tocar st.session_state["membrete_pdf"])
     if "membrete_pdf_val" not in st.session_state:
         st.session_state["membrete_pdf_val"] = "SMART"
-    st.session_state["membrete_pdf"] = st.session_state["membrete_pdf_val"]
+   
     
 
     opciones = ["SMART", "ENEE"]
