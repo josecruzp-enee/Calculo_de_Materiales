@@ -113,6 +113,10 @@ def formulario_datos_proyecto() -> None:
         }
         st.session_state["datos_proyecto"] = _mezclar_sin_vacios(dp, nuevos)
         st.success("✅ Datos del proyecto guardados correctamente.")
+        # activar membrete global para PDFs
+        st.session_state["membrete_pdf"] = membrete_pdf
+
+st.success("✅ Datos del proyecto guardados correctamente.")
 
 
 def mostrar_datos_formateados() -> None:
