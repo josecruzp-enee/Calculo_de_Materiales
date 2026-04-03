@@ -156,10 +156,17 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
 
     def _split_codigos(x):
         if isinstance(x, list):
-            return [re.sub(r"\(.*?\)", "", str(i)).strip().upper() for i in x if str(i).strip()]
+            return [
+                re.sub(r"\(.*?\)", "", str(i)).strip().upper()
+                for i in x if str(i).strip()
+            ]
 
         limpio = re.sub(r"\(.*?\)", "", str(x))
-        return [p for p in re.split(r"[,\s]+", limpio) if p]
+
+        # 🔥 SOLO separar por coma, NO por espacio
+        partes = [p.strip() for p in limpio.split(",") if p.strip()]
+
+        return partes
 
     tmp["codigodeestructura"] = tmp["codigodeestructura"].apply(_split_codigos)
 
