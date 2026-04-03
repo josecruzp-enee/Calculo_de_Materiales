@@ -65,27 +65,41 @@ def quitar_saltos_finales(elems):
 # ==========================
 def fondo_pagina(canvas, doc):
     """
-    Dibuja el membrete ENEE en el PDF.
+    Logo SMTAR tipo membrete (sin fondo)
     """
     try:
         canvas.saveState()
 
-        fondo = os.path.join(BASE_DIR, "data", "logo enee.jpg")
+        # 👉 NUEVO LOGO
+        logo_path = os.path.join(BASE_DIR, "recursos", "logo_smtar.png")
 
-        ancho, alto = letter
+        if os.path.exists(logo_path):
 
-        if os.path.exists(fondo):
+            ancho_logo = 140
+            alto_logo = 60
+
+            # Posición (arriba izquierda)
+            x = doc.leftMargin
+            y = doc.height + doc.bottomMargin + 10
+
             canvas.drawImage(
-                fondo,
-                0, 0,
-                width=ancho,
-                height=alto,
+                logo_path,
+                x,
+                y,
+                width=ancho_logo,
+                height=alto_logo,
                 preserveAspectRatio=True,
-                anchor="c",
-                mask="auto",
+                mask="auto"
             )
 
         canvas.restoreState()
+
+    except Exception as e:
+        try:
+            canvas.restoreState()
+        except:
+            pass
+        print(f"⚠️ Error logo: {e}")
 
     except Exception as e:
         try:
