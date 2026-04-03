@@ -64,30 +64,25 @@ def quitar_saltos_finales(elems):
 # FONDO DE PÁGINA (MEMBRETE)
 # ==========================
 def fondo_pagina(canvas, doc):
-    """
-    Membrete dinámico según selección en la app (SMART / ENEE)
-    """
     try:
         canvas.saveState()
 
-        # 🔥 IMPORTANTE: importar aquí (evita errores en ReportLab)
         import streamlit as st
 
-        # Leer selección del usuario
         membrete = st.session_state.get("membrete_pdf", "SMART")
 
-        # Selección de logo
+        # 🔥 seleccionar logo
         if membrete == "SMART":
             logo_path = os.path.join(BASE_DIR, "data", "Membrete_smart.png")
-        else:
+
+        elif membrete == "ENEE":
             logo_path = os.path.join(BASE_DIR, "data", "logo enee.jpg")
 
-        # DEBUG opcional
-        print("Membrete:", membrete)
-        print("LOGO PATH:", logo_path)
-        print("EXISTE:", os.path.exists(logo_path))
+        else:
+            logo_path = None  # 🔥 SIN LOGO
 
-        if os.path.exists(logo_path):
+        # 🔥 dibujar solo si existe
+        if logo_path and os.path.exists(logo_path):
 
             ancho_logo = 180
             alto_logo = 80
@@ -115,12 +110,7 @@ def fondo_pagina(canvas, doc):
         canvas.restoreState()
 
     except Exception as e:
-        try:
-            canvas.restoreState()
-        except:
-            pass
         print(f"⚠️ Error logo: {e}")
-
 
 # ==========================================================
 # CALIBRES desde tabla de Cables (sin longitudes)
