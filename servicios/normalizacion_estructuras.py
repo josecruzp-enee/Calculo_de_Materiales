@@ -126,24 +126,23 @@ def limpiar_df_estructuras(df_estructuras: pd.DataFrame, log) -> pd.DataFrame:
 
 
 def _normalizar_codigo_basico(code: str) -> str:
-    """
-    Normalización básica de código:
-      - uppercase
-      - strip
-      - quita sufijos tipo "(E)" "(P)" "(R)"
-      - colapsa espacios (solo para códigos)
-      - normaliza TS (quita espacios antes de KVA)
-    """
     if code is None:
         return ""
-    s = str(code).strip()
-    s = re.sub(r"\s*\([^)]*\)\s*$", "", s).strip()  # quita "(E)" etc al final
-    s = re.sub(r"\s+", " ", s).strip()
-    s = s.upper()
 
-    # Normalizar transformadores tipo "TS-50 KVA" -> "TS-50KVA"
-    s = re.sub(r"\bTS-?\s*(\d+(\.\d+)?)\s*KVA\b", lambda m: f"TS-{m.group(1)}KVA", s)
-    s = s.replace(" TS-", "TS-").replace(" KVA", "KVA")
+    s = str(code)
+
+    # 🔥 limpiar cualquier (P), (E), etc
+    s = re.sub(r"\([^)]*\)", "", s)
+
+    s = re.sub(r"\s+", " ", s).strip().upper()
+
+    # 🔥 normalizar TS con decimales
+    s = re.sub(
+        r"\bTS-?\s*(\d+(\.\d+)?)\s*KVA\b",
+        lambda m: f"TS-{m.group(1)}KVA",
+        s
+    )
+
     return s
 
 
@@ -163,6 +162,12 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
 
     tmp["codigodeestructura"] = tmp["codigodeestructura"].astype(str).str.replace(";", ",", regex=False)
     tmp["codigodeestructura"] = tmp["codigodeestructura"].str.split(",")
+    
+    tmp["codigodeestructura"] = tmp["codigodeestructura"].apply(
+    lambda x: re.split(r"[,\s]+", re.sub(r"\(.*?\)", "", x))
+    )
+
+    
     tmp = tmp.explode("codigodeestructura")
 
     tmp["codigodeestructura"] = tmp["codigodeestructura"].map(_normalizar_codigo_basico)
