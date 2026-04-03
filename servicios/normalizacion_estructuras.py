@@ -156,31 +156,58 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
 
     def _split_codigos(x):
         if isinstance(x, list):
-            return [
+            base = [
                 re.sub(r"\(.*?\)", "", str(i)).strip().upper()
                 for i in x if str(i).strip()
             ]
+        else:
+            limpio = re.sub(r"\(.*?\)", "", str(x)).upper()
 
-        limpio = re.sub(r"\(.*?\)", "", str(x))
+            # 🔥 PROTEGER TRANSFORMADORES (TS-37.5 KVA)
+            limpio = re.sub(
+                r"(TS-?\s*\d+(\.\d+)?\s*KVA)",
+                lambda m: m.group(1).replace(" ", "_"),
+                limpio
+            )
 
-        # 🔥 SOLO separar por coma, NO por espacio
-        partes = [p.strip() for p in limpio.split(",") if p.strip()]
+            # 🔥 SPLIT REAL (espacio + coma)
+            base = re.split(r"[,\s]+", limpio)
 
-        return partes
+        resultado = []
 
+        for item in base:
+            item = item.replace("_", " ").strip()
+
+            if not item:
+                continue
+
+            # 🔥 evitar basura tipo "KVA"
+            if item == "KVA":
+                continue
+
+            resultado.append(item)
+
+        return resultado
+
+    # 🔥 aplicar split correcto
     tmp["codigodeestructura"] = tmp["codigodeestructura"].apply(_split_codigos)
 
+    # 🔥 explotar
     tmp = tmp.explode("codigodeestructura")
 
+    # 🔥 normalizar final
     tmp["codigodeestructura"] = tmp["codigodeestructura"].map(_normalizar_codigo_basico)
+
+    # 🔥 limpiar vacíos
     tmp = tmp[tmp["codigodeestructura"] != ""]
 
+    # 🔥 agrupar
     tmp = (
         tmp.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
         .sum()
     )
 
-    return tmp
+    return tmprn tmp
 
 def construir_estructuras_por_punto_y_conteo(df_unicas: pd.DataFrame, log):
     """
