@@ -207,7 +207,7 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
         .sum()
     )
 
-    return tmprn tmp
+    return tmp
 
 def construir_estructuras_por_punto_y_conteo(df_unicas: pd.DataFrame, log):
     """
