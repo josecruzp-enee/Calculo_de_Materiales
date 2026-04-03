@@ -214,13 +214,38 @@ def extraer_estructuras_desde_dxf(doc: Any, capa_objetivo: str = "") -> pd.DataF
     return normalizar_columnas(df, COLUMNAS_BASE)
 
 
-def _tokenizar_celda(celda: str) -> List[str]:
+def _tokenizar_celda(celda: str):
     if not celda:
         return []
-    t = " ".join(str(celda).split())
-    return [m.group(0).strip() for m in RE_TOKEN.finditer(t)]
 
+    import re
 
+    t = " ".join(str(celda).upper().split())
+    t = t.replace("×", "x")
+
+    # 🔥 extraer TODOS los códigos válidos
+    codigos = re.findall(
+        r"(PC|PM|PT|A|B|CT|TS|LL|LS|R)-[A-Z0-9\.\-]+",
+        t
+    )
+
+    # reconstruir bien los códigos completos
+    codigos = [c[0] + "-" + c[1] if isinstance(c, tuple) else c for c in codigos]
+
+    # 🔥 mejor forma:
+    codigos = re.findall(r"[A-Z]+-\d+(?:\.\d+)?[A-Z\-]*", t)
+
+    pares = []
+
+    for c in codigos:
+        pares.append((c.strip(), 1))
+
+    # agrupar cantidades
+    acc = {}
+    for c, q in pares:
+        acc[c] = acc.get(c, 0) + q
+
+    return list(acc.items())
 def _explotar_codigos_largos(df_largo: pd.DataFrame) -> pd.DataFrame:
     """
     Convierte CodigoEstructura como "R-02 R-04" -> dos filas.
