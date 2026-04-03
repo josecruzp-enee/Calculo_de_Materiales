@@ -65,25 +65,33 @@ def quitar_saltos_finales(elems):
 # ==========================
 def fondo_pagina(canvas, doc):
     """
-    Membrete SMTAR funcional (Cloud-ready)
+    Membrete dinámico según selección en la app (SMART / ENEE)
     """
     try:
         canvas.saveState()
 
-        # 🔥 Ruta absoluta correcta en tu repo
-        logo_path = os.path.join(BASE_DIR, "data", "Membrete_smart.png")
+        # 🔥 IMPORTANTE: importar aquí (evita errores en ReportLab)
+        import streamlit as st
 
-        # DEBUG (puedes quitar después)
+        # Leer selección del usuario
+        membrete = st.session_state.get("membrete_pdf", "SMART")
+
+        # Selección de logo
+        if membrete == "SMART":
+            logo_path = os.path.join(BASE_DIR, "data", "Membrete_smart.png")
+        else:
+            logo_path = os.path.join(BASE_DIR, "data", "logo enee.jpg")
+
+        # DEBUG opcional
+        print("Membrete:", membrete)
         print("LOGO PATH:", logo_path)
         print("EXISTE:", os.path.exists(logo_path))
 
         if os.path.exists(logo_path):
 
-            # 📐 tamaño controlado
             ancho_logo = 180
             alto_logo = 80
 
-            # 📍 posición REAL (ajustada)
             x = doc.leftMargin
             y = doc.height + doc.topMargin - 60
 
@@ -97,7 +105,6 @@ def fondo_pagina(canvas, doc):
                 mask="auto"
             )
 
-            # Línea profesional
             canvas.line(
                 doc.leftMargin,
                 y - 5,
