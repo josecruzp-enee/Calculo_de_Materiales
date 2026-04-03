@@ -15,8 +15,8 @@ from interfaz.estructuras_comunes import expand_wide_to_long, materializar_df_a_
 
 # fuentes
 from interfaz.estructuras_desplegables import listas_desplegables  # debe devolver df_ancho
-#from interfaz.estructuras_dxf_enee import extraer_estructuras_desde_dxf, leer_dxf_streamlit  # o tu función pública
-#from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee  # ideal: que devuelva df_ancho
+from interfaz.estructuras_dxf_enee import extraer_estructuras_desde_dxf, leer_dxf_streamlit  # o tu función pública
+from interfaz.estructuras_pdf_enee import cargar_desde_pdf_enee  # ideal: que devuelva df_ancho
 
 
 def cargar_desde_excel_ancho() -> Optional[pd.DataFrame]:
