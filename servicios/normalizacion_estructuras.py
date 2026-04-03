@@ -147,27 +147,22 @@ def _normalizar_codigo_basico(code: str) -> str:
 
 
 def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convierte celdas tipo:
-      "B-III-6, B-I-4B" -> 2 filas.
-    Mantiene y distribuye la misma 'cantidad' a cada código separado.
 
-    ✅ Luego agrupa y SUMA por (Punto, código).
-    """
     tmp = df[["Punto", "codigodeestructura", "cantidad"]].copy()
 
     tmp["Punto"] = tmp["Punto"].astype(str).str.strip()
     tmp["cantidad"] = pd.to_numeric(tmp["cantidad"], errors="coerce").fillna(1).astype(int)
     tmp.loc[tmp["cantidad"] < 1, "cantidad"] = 1
 
-    tmp["codigodeestructura"] = tmp["codigodeestructura"].astype(str).str.replace(";", ",", regex=False)
-    tmp["codigodeestructura"] = tmp["codigodeestructura"].str.split(",")
-    
-    tmp["codigodeestructura"] = tmp["codigodeestructura"].apply(
-    lambda x: re.split(r"[,\s]+", re.sub(r"\(.*?\)", "", x))
-    )
+    def _split_codigos(x):
+        if isinstance(x, list):
+            return [re.sub(r"\(.*?\)", "", str(i)).strip().upper() for i in x if str(i).strip()]
 
-    
+        limpio = re.sub(r"\(.*?\)", "", str(x))
+        return [p for p in re.split(r"[,\s]+", limpio) if p]
+
+    tmp["codigodeestructura"] = tmp["codigodeestructura"].apply(_split_codigos)
+
     tmp = tmp.explode("codigodeestructura")
 
     tmp["codigodeestructura"] = tmp["codigodeestructura"].map(_normalizar_codigo_basico)
@@ -177,8 +172,8 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
         tmp.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
         .sum()
     )
-    return tmp
 
+    return tmp
 
 def construir_estructuras_por_punto_y_conteo(df_unicas: pd.DataFrame, log):
     """
