@@ -65,18 +65,17 @@ def quitar_saltos_finales(elems):
 # ==========================
 def fondo_pagina(canvas, doc):
     """
-    Logo SMTAR tipo membrete (sin fondo)
+    Logo tipo membrete 
     """
     try:
         canvas.saveState()
 
-        # 👉 NUEVO LOGO
-        logo_path = os.path.join(BASE_DIR, "recursos", "logo_smtar.png")
+        logo_path = os.path.join(BASE_DIR, "data", "Membrete_smart.png")
 
         if os.path.exists(logo_path):
 
-            ancho_logo = 140
-            alto_logo = 60
+            ancho_logo = 160
+            alto_logo = 70
 
             # Posición (arriba izquierda)
             x = doc.leftMargin
@@ -92,6 +91,14 @@ def fondo_pagina(canvas, doc):
                 mask="auto"
             )
 
+            
+            canvas.line(
+                doc.leftMargin,
+                y - 5,
+                doc.width + doc.leftMargin,
+                y - 5
+            )
+
         canvas.restoreState()
 
     except Exception as e:
@@ -100,14 +107,6 @@ def fondo_pagina(canvas, doc):
         except:
             pass
         print(f"⚠️ Error logo: {e}")
-
-    except Exception as e:
-        try:
-            canvas.restoreState()
-        except Exception:
-            pass
-        print(f"⚠️ Error aplicando fondo: {e}")
-
 
 
 
