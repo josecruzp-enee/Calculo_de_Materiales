@@ -65,21 +65,27 @@ def quitar_saltos_finales(elems):
 # ==========================
 def fondo_pagina(canvas, doc):
     """
-    Logo tipo membrete 
+    Membrete SMTAR funcional (Cloud-ready)
     """
     try:
         canvas.saveState()
 
+        # 🔥 Ruta absoluta correcta en tu repo
         logo_path = os.path.join(BASE_DIR, "data", "Membrete_smart.png")
+
+        # DEBUG (puedes quitar después)
+        print("LOGO PATH:", logo_path)
+        print("EXISTE:", os.path.exists(logo_path))
 
         if os.path.exists(logo_path):
 
-            ancho_logo = 160
-            alto_logo = 70
+            # 📐 tamaño controlado
+            ancho_logo = 180
+            alto_logo = 80
 
-            # Posición (arriba izquierda)
+            # 📍 posición REAL (ajustada)
             x = doc.leftMargin
-            y = doc.height + doc.bottomMargin + 10
+            y = doc.height + doc.topMargin - 60
 
             canvas.drawImage(
                 logo_path,
@@ -91,7 +97,7 @@ def fondo_pagina(canvas, doc):
                 mask="auto"
             )
 
-            
+            # Línea profesional
             canvas.line(
                 doc.leftMargin,
                 y - 5,
@@ -107,8 +113,6 @@ def fondo_pagina(canvas, doc):
         except:
             pass
         print(f"⚠️ Error logo: {e}")
-
-
 
 
 # ==========================================================
