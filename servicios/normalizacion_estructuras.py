@@ -170,38 +170,51 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
                 limpio
             )
 
-            # 🔥 SPLIT REAL (espacio + coma)
             base = re.split(r"[,\s]+", limpio)
 
         resultado = []
 
-        for item in base:
-            item = item.replace("_", " ").strip()
+        i = 0
+        while i < len(base):
+            item = base[i].replace("_", " ").strip()
 
             if not item:
+                i += 1
                 continue
 
-            # 🔥 evitar basura tipo "KVA"
-            if item == "KVA":
+            # 🔥 MULTIPLICADOR: 3 x CS-2
+            if item.isdigit() and i + 2 < len(base):
+                if base[i + 1] in ["X", "x"]:
+                    codigo = base[i + 2].replace("_", " ").strip()
+                    cantidad = int(item)
+
+                    resultado.extend([codigo] * cantidad)
+                    i += 3
+                    continue
+
+            # 🔥 eliminar basura
+            if item in ["X", "KVA"]:
+                i += 1
                 continue
 
             resultado.append(item)
+            i += 1
 
         return resultado
 
-    # 🔥 aplicar split correcto
+    # 🔥 aplicar split inteligente
     tmp["codigodeestructura"] = tmp["codigodeestructura"].apply(_split_codigos)
 
-    # 🔥 explotar
+    # 🔥 explotar lista
     tmp = tmp.explode("codigodeestructura")
 
-    # 🔥 normalizar final
+    # 🔥 normalizar final (usa tu función existente)
     tmp["codigodeestructura"] = tmp["codigodeestructura"].map(_normalizar_codigo_basico)
 
-    # 🔥 limpiar vacíos
+    # 🔥 eliminar vacíos
     tmp = tmp[tmp["codigodeestructura"] != ""]
 
-    # 🔥 agrupar
+    # 🔥 agrupar cantidades
     tmp = (
         tmp.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
         .sum()
