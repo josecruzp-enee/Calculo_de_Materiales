@@ -1,95 +1,109 @@
-from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib import colors
 
+from exportadores.precios_puntos import procesar_puntos
 
-def build_tabla_presupuesto(df, styles):
 
-    story = []
+def generar_seccion_presupuesto(doc, styles):
+
+    elems = [PageBreak()]
+
+    elems.append(Paragraph("<b>9. PRESUPUESTO DETALLADO</b>", styles["Heading1"]))
+    elems.append(Spacer(1, 12))
+
+    df = procesar_puntos()
+
+    if df is None or df.empty:
+        elems.append(Paragraph("No hay datos de cotización.", styles["BodyText"]))
+        return elems
+
+    # 🔥 SI NO TIENES CATEGORÍA, CREA UNA
+    if "Categoria" not in df.columns:
+        df["Categoria"] = "GENERAL"
 
     categorias = df["Categoria"].unique()
 
-    item_categoria = 1
+    item_cat = 1
 
     for cat in categorias:
 
+        elems.append(Paragraph(f"<b>{item_cat}.00 {cat}</b>", styles["Heading3"]))
+        elems.append(Spacer(1, 6))
+
         df_cat = df[df["Categoria"] == cat]
 
-        # =========================
-        # TITULO CATEGORIA
-        # =========================
-        story.append(
-            Paragraph(f"{item_categoria}.00 {cat}", styles["Heading3"])
-        )
-
-        data = [
-            ["ITEM", "DESCRIPCIÓN", "UNIDAD", "CANTIDAD", "PRECIO UNIT.", "TOTAL"]
-        ]
+        data = [["ITEM", "DESCRIPCIÓN", "UND", "CANT", "P.U.", "TOTAL"]]
 
         item_sub = 1
+        total_cat = 0
 
-        total_categoria = 0
+        for _, r in df_cat.iterrows():
 
-        for _, row in df_cat.iterrows():
+            item = f"{item_cat}.{item_sub:02d}"
 
-            item = f"{item_categoria}.{item_sub:02d}"
+            pu = r.get("Precio Unitario", 0)
+            cant = r.get("Cantidad", 0)
+            total = pu * cant
 
-            total = row["Cantidad"] * row["Precio Unitario"]
-
-            total_categoria += total
+            total_cat += total
 
             data.append([
                 item,
-                row["Descripción"],
-                row["Unidad"],
-                row["Cantidad"],
-                f"L {row['Precio Unitario']:,.2f}",
+                r.get("Descripción", r.get("Estructura", "")),
+                r.get("Unidad", "Und"),
+                cant,
+                f"L {pu:,.2f}",
                 f"L {total:,.2f}",
             ])
 
             item_sub += 1
 
-        # =========================
-        # FILA SUBTOTAL
-        # =========================
+        # subtotal
         data.append([
             "",
             f"SUBTOTAL {cat}",
             "",
             "",
             "",
-            f"L {total_categoria:,.2f}"
+            f"L {total_cat:,.2f}"
         ])
 
-        # =========================
-        # TABLA
-        # =========================
-        table = Table(data, repeatRows=1)
+        tabla = Table(
+            data,
+            colWidths=[
+                doc.width * 0.10,
+                doc.width * 0.45,
+                doc.width * 0.10,
+                doc.width * 0.10,
+                doc.width * 0.12,
+                doc.width * 0.13,
+            ]
+        )
 
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4F81BD")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        tabla.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
 
-            ("ALIGN", (2, 1), (-1, -1), "CENTER"),
-            ("ALIGN", (4, 1), (-1, -1), "RIGHT"),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
 
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ALIGN", (2,1), (-1,-1), "CENTER"),
+            ("ALIGN", (4,1), (-1,-1), "RIGHT"),
 
-            ("BACKGROUND", (0, -1), (-1, -1), colors.lightgrey),
+            ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#EFEFEF")),
+            ("FONTNAME", (0,-1), (-1,-1), "Helvetica-Bold"),
         ]))
 
-        story.append(table)
-        story.append(Spacer(1, 12))
+        elems.append(tabla)
+        elems.append(Spacer(1, 12))
 
-        item_categoria += 1
+        item_cat += 1
 
-    # =========================
     # GRAN TOTAL
-    # =========================
-    total_general = df["Total"].sum()
+    total_general = (df["Cantidad"] * df["Precio Unitario"]).sum()
 
-    story.append(
+    elems.append(
         Paragraph(f"<b>GRAN TOTAL: L {total_general:,.2f}</b>", styles["Heading2"])
     )
 
-    return story
+    return elems
