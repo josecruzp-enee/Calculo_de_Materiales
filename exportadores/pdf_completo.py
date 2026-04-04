@@ -346,7 +346,8 @@ def generar_pdf_completo(
     return pdf_bytes
 
 
-# ---------------------------
+
+    # ---------------------------
 # RESUMEN ECONÓMICO DEL PROYECTO
 # ---------------------------
 if df_costos is not None and df_mo_estructuras is not None:
@@ -400,3 +401,10 @@ if df_costos is not None and df_mo_estructuras is not None:
     ]))
 
     elems.append(tabla)
+
+
+
+
+
+
+
