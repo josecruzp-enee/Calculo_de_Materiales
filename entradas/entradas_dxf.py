@@ -272,17 +272,22 @@ def _tokenizar_celda(celda: str):
 
     resultados = []
 
-    # 🔥 1. detectar "3x CS-2"
-    matches_mult = re.findall(r"(\d+)\s*x\s*([A-Z]+-\d+(?:\.\d+)?[A-Z\-]*)", t)
+    # multiplicadores
+    matches_mult = re.findall(
+        r"(\d+)\s*x\s*([A-Z]+-\d+(?:\.\d+)?[A-Z\-]*)",
+        t
+    )
 
     for qty, code in matches_mult:
         resultados.append((code.strip(), int(qty)))
 
-    # 🔥 2. detectar códigos sueltos
-    matches_simple = re.findall(r"[A-Z]+-\d+(?:\.\d+)?[A-Z\-]*", t)
+    # simples
+    matches_simple = re.findall(
+        r"[A-Z]+-\d+(?:\.\d+)?[A-Z\-]*",
+        t
+    )
 
     for code in matches_simple:
-        # evitar duplicar los que ya vienen con cantidad
         if not any(code == c for c, _ in resultados):
             resultados.append((code.strip(), 1))
 
