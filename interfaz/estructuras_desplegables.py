@@ -234,7 +234,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
             existentes = df_actual["Punto"].tolist() if not df_actual.empty else []
             nums = []
             for p in existentes:
-                m = re.search(r"(\d+(\.\d+)?)", str(p).replace(",", "."))
+                m = re.search(r"(\d+)", str(x))
                 if m:
                     nums.append(int(m.group(1)))
             nuevo = f"Punto {(max(nums) + 1) if nums else 1}"
@@ -313,7 +313,8 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
         df_all_wide = normalizar_columnas(df_all_wide, COLUMNAS_BASE)
 
         def _num_punto(x: str) -> int:
-            m = re.search(r"(\d+(\.\d+)?)", str(p).replace(",", "."))
+            import re
+            m = re.search(r"(\d+)", str(x))
             return int(m.group(1)) if m else 10**9
 
         df_all_wide = df_all_wide.sort_values(
