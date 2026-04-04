@@ -263,27 +263,30 @@ def expand_wide_to_long(df_ancho: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["Punto", "Tipo", "CodigoEstructura", "Cantidad"])
 
 
-def _tokenizar_celda(celda: str) -> List[Tuple[str, int]]:
+def _tokenizar_celda(celda: str):
     if not celda:
         return []
 
-    t = " ".join(str(celda).split())
+    t = " ".join(str(celda).upper().split())
     t = t.replace("×", "x")
 
-    # 🔥 EXTRAER TODOS LOS CÓDIGOS DIRECTO
-    codigos = re.findall(RE_TOKEN, t)
+    resultados = []
 
-    pares: List[Tuple[str, int]] = []
+    # 🔥 1. detectar "3x CS-2"
+    matches_mult = re.findall(r"(\d+)\s*x\s*([A-Z]+-\d+(?:\.\d+)?[A-Z\-]*)", t)
 
-    for c in codigos:
-        pares.append((c.strip(), 1))
+    for qty, code in matches_mult:
+        resultados.append((code.strip(), int(qty)))
 
-    # consolidar
-    acc: Dict[str, int] = {}
-    for c, q in pares:
-        acc[c] = acc.get(c, 0) + q
+    # 🔥 2. detectar códigos sueltos
+    matches_simple = re.findall(r"[A-Z]+-\d+(?:\.\d+)?[A-Z\-]*", t)
 
-    return list(acc.items())
+    for code in matches_simple:
+        # evitar duplicar los que ya vienen con cantidad
+        if not any(code == c for c, _ in resultados):
+            resultados.append((code.strip(), 1))
+
+    return resultados
 
 def explotar_codigos_largos(df_largo: pd.DataFrame) -> pd.DataFrame:
     """
