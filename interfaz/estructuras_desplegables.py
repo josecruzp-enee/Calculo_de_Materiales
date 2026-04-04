@@ -95,16 +95,31 @@ def _ensure_consolidado():
 # =============================================================================
 # Helpers de consolidación
 # =============================================================================
+import re
+
+def _fix_codigo(c):
+    s = str(c).upper().strip()
+
+    # TS, TD, TT con o sin KVA
+    match = re.search(r"(TS|TD|TT)-\d+(\.\d+)?", s)
+    if match:
+        base = match.group(0)
+
+        # Si no tiene KVA → se lo agregamos
+        if "KVA" not in s:
+            return base + "KVA"
+
+        return base + "KVA"
+
+    return s.split(" - ")[0].strip()
+
+
 def _add_item(cat: str, code: str, qty: int):
     if not code or qty <= 0:
         return
 
-    # 🔥 NORMALIZACIÓN MÍNIMA (PARCHE DIRECTO)
-    code = str(code).upper().strip()
-
-    # 🔥 FIX CLAVE PARA DECIMALES (TU PROBLEMA)
-    if code.startswith("TS-37") and "37.5" not in code:
-        code = "TS-37.5KVA"
+    # 🔥 NORMALIZACIÓN REAL
+    code = _fix_codigo(code)
 
     p = st.session_state["punto_en_edicion"]
     bucket = st.session_state["puntos_data"][p][cat]
