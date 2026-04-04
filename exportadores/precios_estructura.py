@@ -28,17 +28,42 @@ def validar_archivo(ruta):
 def cargar_precios(xls):
 
     df_precios = pd.read_excel(xls, sheet_name="Materiales")
-    df_precios.columns = [str(c).strip() for c in df_precios.columns]
 
+    # 🔥 LIMPIEZA FUERTE
+    df_precios.columns = [str(c).strip().upper() for c in df_precios.columns]
+
+    # 🔍 DEBUG (puedes quitar luego)
+    print("Columnas detectadas:", df_precios.columns)
+
+    # =========================
+    # DETECTAR COLUMNAS
+    # =========================
+    col_codigo = None
+    col_precio = None
+
+    for c in df_precios.columns:
+        if "COD" in c:
+            col_codigo = c
+        if "COSTO" in c:
+            col_precio = c
+
+    if col_codigo is None:
+        raise KeyError(f"No se encontró columna CODIGO: {df_precios.columns}")
+
+    if col_precio is None:
+        raise KeyError(f"No se encontró columna COSTO: {df_precios.columns}")
+
+    # =========================
+    # CREAR DICCIONARIO
+    # =========================
     dict_precios = dict(
         zip(
-            df_precios["CODIGO"].astype(str).str.strip(),
-            df_precios["Costo Unitario"]
+            df_precios[col_codigo].astype(str).str.strip(),
+            df_precios[col_precio]
         )
     )
 
     return dict_precios
-
 
 # =========================================================
 # CALCULAR MATERIAL POR ESTRUCTURA
