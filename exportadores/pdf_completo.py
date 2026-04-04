@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 exportadores/pdf_completo.py
-PDF completo principal (orquestador).
-Autor: José Nikol Cruz
+PDF completo principal (REFactorizado).
 """
 
 import re
@@ -31,8 +30,9 @@ from exportadores.pdf_anexos_costos import (
     tabla_mano_obra_estructuras_pdf,
 )
 
-
-
+# ==========================================================
+# ORQUESTADOR PRINCIPAL
+# ==========================================================
 
 def generar_pdf_completo(
     df_mat,
@@ -41,20 +41,34 @@ def generar_pdf_completo(
     df_mat_por_punto,
     datos_proyecto,
     df_costos=None,
-    df_mo_estructuras=None, 
-    df_costos_estructuras=None
+    df_mo_estructuras=None,
 ):
-    """
-    Genera el PDF total del proyecto incluyendo:
-    - Hoja de Información del Proyecto
-    - Resumen de Materiales (global) (SIN precios)
-    - Tabla de Cables
-    - Resumen de Estructuras (global)
-    - Estructuras por Punto
-    - Materiales por Punto
-    - ANEXO: Costos de Materiales (si df_costos viene)
-    """
+    buffer, doc, elems = _crear_documento(datos_proyecto)
 
+    elems += _seccion_info(datos_proyecto, df_estructuras, df_mat)
+    elems += _seccion_materiales_global(df_mat)
+    elems += _seccion_cables(datos_proyecto)
+    elems += _seccion_estructuras_global(df_estructuras)
+    elems += _seccion_estructuras_por_punto(df_estructuras_por_punto)
+    elems += _seccion_materiales_por_punto(df_mat_por_punto)
+    elems += _seccion_anexo_costos(df_costos)
+    elems += _seccion_anexo_mano_obra(df_mo_estructuras)
+    elems += _seccion_resumen_economico(df_costos, df_mo_estructuras)
+
+    quitar_saltos_finales(elems)
+    doc.build(elems)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
+
+
+# ==========================================================
+# BASE DOCUMENTO
+# ==========================================================
+
+def _crear_documento(datos_proyecto):
     buffer = BytesIO()
 
     doc = BaseDocTemplate(
@@ -66,15 +80,9 @@ def generar_pdf_completo(
         bottomMargin=40
     )
 
-    # ✅ ACTIVAR MEMBRETE
     doc.membrete_pdf = datos_proyecto.get("membrete_pdf", "SMART")
 
-    frame = Frame(
-        doc.leftMargin,
-        doc.bottomMargin,
-        doc.width,
-        doc.height
-    )
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
 
     template = PageTemplate(
         id="fondo",
@@ -84,13 +92,16 @@ def generar_pdf_completo(
 
     doc.addPageTemplates([template])
 
-    elems = []
+    return buffer, doc, []
 
-    # ---------------------------
-    # Hoja de información
-    # ---------------------------
-    elems = extender_flowables(
-        elems,
+
+# ==========================================================
+# SECCIONES
+# ==========================================================
+
+def _seccion_info(datos_proyecto, df_estructuras, df_mat):
+    return extender_flowables(
+        [],
         hoja_info_proyecto(
             datos_proyecto,
             df_estructuras,
@@ -102,264 +113,156 @@ def generar_pdf_completo(
         )
     )
 
-    # ---------------------------
-    # Resumen de materiales (GLOBAL)
-    # ---------------------------
+
+def _seccion_materiales_global(df_mat):
+    elems = []
     salto_pagina_seguro(elems)
 
+    elems.append(Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"]))
+
+    if df_mat is None or df_mat.empty:
+        elems.append(Paragraph("No se encontraron materiales.", styleN))
+        return elems
+
+    df = df_mat.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+
+    df_agr = df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
+    data = [["Material", "Unidad", "Cantidad"]]
+
+    for _, r in df_agr.iterrows():
+        data.append([
+            Paragraph(formatear_material(r["Materiales"]), styleN),
+            escape(str(r["Unidad"])),
+            f"{float(r['Cantidad']):.2f}",
+        ])
+
+    tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
+
+    tabla.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+        ("ALIGN", (1,1), (-1,-1), "CENTER"),
+    ]))
+
+    elems.append(tabla)
+    return elems
+
+
+def _seccion_cables(datos_proyecto):
+    return extender_flowables([], tabla_cables_pdf(datos_proyecto))
+
+
+def _seccion_estructuras_global(df_estructuras):
+    elems = []
+    salto_pagina_seguro(elems)
+
+    elems.append(Paragraph("<b>Resumen de Estructuras</b>", styles["Heading2"]))
+
+    if df_estructuras is None or df_estructuras.empty:
+        elems.append(Paragraph("No se encontraron estructuras.", styleN))
+        return elems
+
     elems.append(
-        Paragraph("<b>Resumen de Materiales</b>", styles["Heading2"])
+        _tabla_estructuras_por_punto("GLOBAL", df_estructuras, letter[0])
     )
 
-    if df_mat is not None and not df_mat.empty:
+    return elems
 
-        dfm = df_mat.copy()
-        dfm.columns = [str(c).strip() for c in dfm.columns]
 
-        df_agr = dfm.groupby(
-            ["Materiales", "Unidad"],
-            as_index=False
-        )["Cantidad"].sum()
+def _seccion_estructuras_por_punto(df):
+    elems = []
+
+    if df is None or df.empty:
+        return elems
+
+    salto_pagina_seguro(elems)
+    elems.append(Paragraph("<b>Estructuras por Punto</b>", styles["Heading2"]))
+
+    df.columns = [str(c).strip() for c in df.columns]
+
+    puntos = sorted(df["Punto"].unique(), key=lambda x: int(re.sub(r"\D", "", str(x)) or 0))
+
+    for p in puntos:
+        num = re.search(r"\d+", str(p)).group()
+
+        elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading3"]))
+
+        df_p = df[df["Punto"] == p]
+
+        elems.append(_tabla_estructuras_por_punto(num, df_p, letter[0]))
+        elems.append(Spacer(1, 0.2 * inch))
+
+    return elems
+
+
+def _seccion_materiales_por_punto(df):
+    elems = []
+
+    if df is None or df.empty:
+        return elems
+
+    salto_pagina_seguro(elems)
+    elems.append(Paragraph("<b>Materiales por Punto</b>", styles["Heading2"]))
+
+    df.columns = [str(c).strip() for c in df.columns]
+
+    for p in sorted(df["Punto"].unique()):
+        elems.append(Paragraph(f"<b>Punto {p}</b>", styles["Heading3"]))
+
+        df_p = df[df["Punto"] == p]
+
+        df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
         data = [["Material", "Unidad", "Cantidad"]]
 
         for _, r in df_agr.iterrows():
-
             data.append([
                 Paragraph(formatear_material(r["Materiales"]), styleN),
-                escape(str(r["Unidad"])),
+                r["Unidad"],
                 f"{float(r['Cantidad']):.2f}",
             ])
 
-        tabla = Table(
-            data,
-            colWidths=[4 * inch, 1 * inch, 1 * inch]
-        )
-
-        tabla.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-            ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-            ("ALIGN", (1,1), (-1,-1), "CENTER"),
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ]))
-
+        tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
         elems.append(tabla)
 
-    else:
-        elems.append(
-            Paragraph("No se encontraron materiales.", styleN)
-        )
+    return elems
 
-    # ---------------------------
-    # Tabla de cables
-    # ---------------------------
-    elems = extender_flowables(
-        elems,
-        tabla_cables_pdf(datos_proyecto)
-    )
 
-    # ---------------------------
-    # Resumen de estructuras (GLOBAL)
-    # ---------------------------
+def _seccion_anexo_costos(df_costos):
+    if df_costos is None or df_costos.empty:
+        return []
+
+    elems = []
     salto_pagina_seguro(elems)
 
-    elems.append(
-        Paragraph("<b>Resumen de Estructuras</b>", styles["Heading2"])
-    )
-
-    if df_estructuras is not None and not df_estructuras.empty:
-
-        dfe = df_estructuras.copy()
-        dfe.columns = [str(c).strip() for c in dfe.columns]
-
-        elems.append(
-            _tabla_estructuras_por_punto(
-                "GLOBAL",
-                dfe,
-                doc.width
-            )
-        )
-
-    else:
-        elems.append(
-            Paragraph("No se encontraron estructuras.", styleN)
-        )
-
-    # ---------------------------
-    # Estructuras por punto
-    # ---------------------------
-    if df_estructuras_por_punto is not None and not df_estructuras_por_punto.empty:
-
-        salto_pagina_seguro(elems)
-
-        elems.append(
-            Paragraph("<b>Estructuras por Punto</b>", styles["Heading2"])
-        )
-
-        dfep = df_estructuras_por_punto.copy()
-        dfep.columns = [str(c).strip() for c in dfep.columns]
-
-        puntos = sorted(
-            dfep["Punto"].unique(),
-            key=lambda x: int(re.sub(r"\D", "", str(x)) or 0)
-        )
-
-        for p in puntos:
-
-            m = re.search(r"(\d+)", str(p))
-            num = m.group(1) if m else str(p)
-
-            elems.append(
-                Paragraph(
-                    f"<b>Punto {escape(num)}</b>",
-                    styles["Heading3"]
-                )
-            )
-
-            df_p = dfep[dfep["Punto"] == p]
-
-            elems.append(
-                _tabla_estructuras_por_punto(
-                    num,
-                    df_p,
-                    doc.width
-                )
-            )
-
-            elems.append(Spacer(1, 0.2 * inch))
-
-    # ---------------------------
-    # Materiales por punto
-    # ---------------------------
-    if df_mat_por_punto is not None and not df_mat_por_punto.empty:
-
-        salto_pagina_seguro(elems)
-
-        elems.append(
-            Paragraph("<b>Materiales por Punto</b>", styles["Heading2"])
-        )
-
-        dfmp = df_mat_por_punto.copy()
-        dfmp.columns = [str(c).strip() for c in dfmp.columns]
-
-        required = {"Punto", "Materiales", "Unidad", "Cantidad"}
-
-        if not required.issubset(set(dfmp.columns)):
-
-            faltan = ", ".join(sorted(required - set(dfmp.columns)))
-
-            elems.append(
-                Paragraph(
-                    f"⚠️ No se puede mostrar 'Materiales por Punto'. "
-                    f"Faltan columnas: {escape(faltan)}",
-                    styleN
-                )
-            )
-
-        else:
-
-            puntos = sorted(
-                dfmp["Punto"].unique(),
-                key=lambda x: int(re.sub(r"\D", "", str(x)) or 0)
-            )
-
-            for p in puntos:
-
-                m = re.search(r"(\d+)", str(p))
-                num = m.group(1) if m else str(p)
-
-                elems.append(
-                    Paragraph(
-                        f"<b>Punto {escape(num)}</b>",
-                        styles["Heading3"]
-                    )
-                )
-
-                df_p = dfmp[dfmp["Punto"] == p]
-
-                df_agr = df_p.groupby(
-                    ["Materiales", "Unidad"],
-                    as_index=False
-                )["Cantidad"].sum()
-
-                data = [["Material", "Unidad", "Cantidad"]]
-
-                for _, r in df_agr.iterrows():
-
-                    data.append([
-                        Paragraph(formatear_material(r["Materiales"]), styleN),
-                        escape(str(r["Unidad"])),
-                        f"{float(r['Cantidad']):.2f}",
-                    ])
-
-                tabla = Table(
-                    data,
-                    colWidths=[4 * inch, 1 * inch, 1 * inch]
-                )
-
-                tabla.setStyle(TableStyle([
-                    ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-                    ("BACKGROUND", (0,0), (-1,0), colors.darkgreen),
-                    ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
-                    ("ALIGN", (1,1), (-1,-1), "CENTER"),
-                    ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ]))
-
-                elems.append(tabla)
-                elems.append(Spacer(1, 0.2 * inch))
-
-    # ---------------------------
-    # ANEXO A: Costos de Materiales
-    # ---------------------------
-    if df_costos is not None and hasattr(df_costos, "empty") and not df_costos.empty:
-
-        salto_pagina_seguro(elems)
-
-        elems = extender_flowables(
-            elems,
-            tabla_costos_materiales_pdf(df_costos)
-        )
-
-    # ---------------------------
-    # ANEXO B: Mano de Obra
-    # ---------------------------
-    if df_mo_estructuras is not None and hasattr(df_mo_estructuras, "empty") and not df_mo_estructuras.empty:
-
-        salto_pagina_seguro(elems)
-
-        elems = extender_flowables(
-            elems,
-            tabla_mano_obra_estructuras_pdf(df_mo_estructuras)
-        )
-
-    quitar_saltos_finales(elems)
-
-    doc.build(elems)
-
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-
-    return pdf_bytes
-
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
+    return extender_flowables(elems, tabla_costos_materiales_pdf(df_costos))
 
 
+def _seccion_anexo_mano_obra(df):
+    if df is None or df.empty:
+        return []
 
-    # ---------------------------
-# RESUMEN ECONÓMICO DEL PROYECTO
-# ---------------------------
-if df_costos is not None and df_mo_estructuras is not None:
+    elems = []
+    salto_pagina_seguro(elems)
 
+    return extender_flowables(elems, tabla_mano_obra_estructuras_pdf(df))
+
+
+def _seccion_resumen_economico(df_costos, df_mo):
+    if df_costos is None or df_mo is None:
+        return []
+
+    elems = []
     salto_pagina_seguro(elems)
 
     elems.append(Paragraph("<b>Resumen Económico del Proyecto</b>", styles["Heading2"]))
 
-    total_materiales = float(df_costos["Total"].sum()) if "Total" in df_costos.columns else 0
-    total_mo = float(df_mo_estructuras["MO Total"].sum()) if "MO Total" in df_mo_estructuras.columns else 0
+    total_materiales = float(df_costos["Total"].sum()) if "Total" in df_costos else 0
+    total_mo = float(df_mo["MO Total"].sum()) if "MO Total" in df_mo else 0
 
-    equipos = total_mo * 0.10  # 🔧 estimado grúa/logística
+    equipos = total_mo * 0.10
     directos = total_materiales + total_mo + equipos
 
     ingenieria = directos * 0.07
@@ -367,7 +270,6 @@ if df_costos is not None and df_mo_estructuras is not None:
     imprevistos = directos * 0.04
 
     indirectos = ingenieria + administracion + imprevistos
-
     utilidad = (directos + indirectos) * 0.15
 
     subtotal = directos + indirectos + utilidad
@@ -378,15 +280,13 @@ if df_costos is not None and df_mo_estructuras is not None:
         ["Concepto", "Monto (L)"],
         ["Materiales", f"{total_materiales:,.2f}"],
         ["Mano de Obra", f"{total_mo:,.2f}"],
-        ["Equipos y Logística", f"{equipos:,.2f}"],
-        ["Subtotal Directo", f"{directos:,.2f}"],
-        ["Ingeniería (7%)", f"{ingenieria:,.2f}"],
-        ["Administración (5%)", f"{administracion:,.2f}"],
-        ["Imprevistos (4%)", f"{imprevistos:,.2f}"],
-        ["Utilidad (15%)", f"{utilidad:,.2f}"],
+        ["Equipos", f"{equipos:,.2f}"],
+        ["Directos", f"{directos:,.2f}"],
+        ["Indirectos", f"{indirectos:,.2f}"],
+        ["Utilidad", f"{utilidad:,.2f}"],
         ["Subtotal", f"{subtotal:,.2f}"],
-        ["ISV 15%", f"{isv:,.2f}"],
-        ["TOTAL PROYECTO", f"{total_final:,.2f}"],
+        ["ISV", f"{isv:,.2f}"],
+        ["TOTAL", f"{total_final:,.2f}"],
     ]
 
     tabla = Table(data, colWidths=[4 * inch, 2 * inch])
@@ -402,9 +302,4 @@ if df_costos is not None and df_mo_estructuras is not None:
 
     elems.append(tabla)
 
-
-
-
-
-
-
+    return elems
