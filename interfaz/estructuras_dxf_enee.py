@@ -25,7 +25,7 @@ RE_PUNTO_EN_TEXTO = re.compile(r"\bP(?:UNTO)?\s*[-#]?\s*(\d+)\b", re.IGNORECASE)
 RE_COD_P = re.compile(
     r"""
     (?P<code>
-        (?:PC|PM|PT)-[A-Z0-9"'\-]+
+        (?:PC|PM|PT|CA|CS)-[A-Z0-9\.\-]+
         |\bA-[A-Z0-9\-]+
         |\bB-[A-Z0-9\-]+
         |\bCT-[A-Z0-9\-]+
@@ -43,7 +43,7 @@ RE_MULT = re.compile(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", flags=re.I)
 
 RE_TOKEN = re.compile(
     r"""
-    (?:PC|PM|PT)-[A-Z0-9"'\-]+
+    (?:PC|PM|PT|CA|CS)-[A-Z0-9\.\-]+
     |\bA-[A-Z0-9\-]+
     |\bB-[A-Z0-9\-]+
     |\bCT-[A-Z0-9\-]+
@@ -86,7 +86,7 @@ def _clasificar(code: str) -> Optional[str]:
     if c.startswith(("TS-", "TD", "TF", "TR", "TX")):
         return "Transformadores"
 
-    if c.startswith(("LL-", "LS-")):
+    if c.startswith(("LL-", "LS-", "CA")):
         return "Luminarias"
 
     return None
