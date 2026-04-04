@@ -63,6 +63,12 @@ def quitar_saltos_finales(elems):
 # ==========================
 # FONDO DE PÁGINA (MEMBRETE)
 # ==========================
+from reportlab.lib.pagesizes import letter
+import os
+
+PAGE_WIDTH, PAGE_HEIGHT = letter
+
+
 def fondo_pagina(canvas, doc):
     try:
         canvas.saveState()
@@ -71,47 +77,69 @@ def fondo_pagina(canvas, doc):
 
         membrete = st.session_state.get("membrete_pdf", "SMART")
 
-        # 🔥 seleccionar logo
+        # =========================
+        # 🟦 CASO 1: SMART (MEMBRETE HORIZONTAL)
+        # =========================
         if membrete == "SMART":
+
             logo_path = os.path.join(BASE_DIR, "data", "Membrete_smart.png")
 
+            if logo_path and os.path.exists(logo_path):
+
+                ancho_logo = doc.width      # 🔥 ocupa todo el ancho
+                alto_logo = 80              # 🔥 altura del membrete
+
+                x = doc.leftMargin
+                y = doc.height + doc.topMargin - 90
+
+                canvas.drawImage(
+                    logo_path,
+                    x,
+                    y,
+                    width=ancho_logo,
+                    height=alto_logo,
+                    preserveAspectRatio=False,  # 🔥 clave para membrete
+                    mask="auto"
+                )
+
+                # Línea inferior del membrete
+                canvas.setLineWidth(1)
+                canvas.line(
+                    doc.leftMargin,
+                    y - 5,
+                    doc.width + doc.leftMargin,
+                    y - 5
+                )
+
+        # =========================
+        # 🟥 CASO 2: ENEE (FONDO COMPLETO)
+        # =========================
         elif membrete == "ENEE":
-            logo_path = os.path.join(BASE_DIR, "data", "logo enee.jpg")
 
+            logo_path = os.path.join(BASE_DIR, "data", "membrete_enee.jpg")
+
+            if logo_path and os.path.exists(logo_path):
+
+                canvas.drawImage(
+                    logo_path,
+                    0,
+                    0,
+                    width=PAGE_WIDTH,
+                    height=PAGE_HEIGHT,
+                    preserveAspectRatio=False,  # 🔥 llena toda la hoja
+                    mask="auto"
+                )
+
+        # =========================
+        # ⚪ CASO 3: SIN MEMBRETE
+        # =========================
         else:
-            logo_path = None  # 🔥 SIN LOGO
-
-        # 🔥 dibujar solo si existe
-        if logo_path and os.path.exists(logo_path):
-
-            ancho_logo = 180
-            alto_logo = 80
-
-            x = doc.leftMargin
-            y = doc.height + doc.topMargin - 60
-
-            canvas.drawImage(
-                logo_path,
-                x,
-                y,
-                width=ancho_logo,
-                height=alto_logo,
-                preserveAspectRatio=True,
-                mask="auto"
-            )
-
-            canvas.line(
-                doc.leftMargin,
-                y - 5,
-                doc.width + doc.leftMargin,
-                y - 5
-            )
+            pass  # no dibuja nada
 
         canvas.restoreState()
 
     except Exception as e:
-        print(f"⚠️ Error logo: {e}")
-
+        print(f"⚠️ Error en fondo_pagina: {e}")
 # ==========================================================
 # CALIBRES desde tabla de Cables (sin longitudes)
 # ==========================================================
