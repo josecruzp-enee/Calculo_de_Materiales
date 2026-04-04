@@ -84,22 +84,30 @@ def _limpiar(s: str) -> str:
 
 def _clasificar(code: str) -> Optional[str]:
     c = (code or "").strip().upper()
+
     if c.startswith(("PC-", "PM-", "PT-")):
         return "Poste"
+
     if c.startswith("A-"):
         return "Primario"
+
     if c.startswith("B-"):
         return "Secundario"
+
     if c.startswith("R-"):
         return "Retenidas"
-    if c.startswith("CT-"):
+
+    if c.startswith("CT-", "CS-", "CR-"):
         return "Conexiones a tierra"
+
     if c.startswith(("TS-", "TD", "TF", "TR", "TX")):
         return "Transformadores"
-    if c.startswith(("LL-", "LS-")):
-        return "Luminarias"
-    return None
 
+    # 🔥 CAMBIO AQUÍ
+    if c.startswith(("LL-", "LS-", "CA-")):
+        return "Luminarias"
+
+    return None
 
 def _add(bucket: Dict[str, Dict[str, int]], col: str, raw_item: str) -> None:
     item = _limpiar(raw_item)
