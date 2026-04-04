@@ -76,12 +76,8 @@ def _clasificar(code: str) -> Optional[str]:
     if c.startswith("R-"):
         return "Retenidas"
 
-    if c.startswith("CT-"):
+    if c.startswith("CT-", "CS-"):
         return "Conexiones a tierra"
-
-    # 🔥 NUEVO
-    if c.startswith(("CS-", "CP-", "CR-")):
-        return "Protecciones"
 
     if c.startswith(("TS-", "TD", "TF", "TR", "TX")):
         return "Transformadores"
