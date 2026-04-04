@@ -324,7 +324,8 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
         df_largo = expand_wide_to_long(df_all_wide)
         # 🔥 DEBUG AQUÍ
         st.write("DEBUG TS:")
-        st.write(df_largo[df_largo["codigodeestructura"].str.contains("TS", na=False)])
+        st.write("COLUMNAS:", df_largo.columns)
+        st.write(df_largo.head())
         
         ruta_tmp = materializar_df_a_archivo(df_all_wide, "ui")
         
