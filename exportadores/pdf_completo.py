@@ -184,9 +184,60 @@ def _seccion_estructuras_global(doc, df):
         elems.append(Paragraph("No hay estructuras.", styleN))
         return elems
 
-    elems.append(_tabla_estructuras_por_punto("GLOBAL", df, doc.width))
-    return elems
+    import pandas as pd
+    import unicodedata
+    import streamlit as st
 
+    def limpiar(s):
+        return ''.join(
+            c for c in unicodedata.normalize('NFKD', str(s))
+            if not unicodedata.combining(c)
+        )
+
+    # =========================
+    # DEBUG
+    # =========================
+    st.write("📊 df ORIGINAL estructuras:", df.head())
+    st.write("📊 columnas:", df.columns)
+
+    # =========================
+    # NORMALIZAR COLUMNAS
+    # =========================
+    df.columns = [limpiar(c).strip().upper() for c in df.columns]
+
+    # =========================
+    # DETECTAR COLUMNAS
+    # =========================
+    col_est = None
+    col_cant = None
+
+    for c in df.columns:
+        if "ESTRUCT" in c:
+            col_est = c
+        if "CANT" in c:
+            col_cant = c
+
+    if col_est is None:
+        elems.append(Paragraph("Error: no se encontró columna de estructuras", styleN))
+        return elems
+
+    # =========================
+    # CREAR FORMATO CORRECTO
+    # =========================
+    df_fix = pd.DataFrame({
+        "Estructura": df[col_est],
+        "Descripción": df[col_est],
+        "Cantidad": df[col_cant] if col_cant else 1
+    })
+
+    st.write("📊 df FIX estructuras:", df_fix.head())
+
+    # =========================
+    # TABLA FINAL
+    # =========================
+    elems.append(_tabla_estructuras_por_punto("GLOBAL", df_fix, doc.width))
+
+    return elems
 
 def _seccion_materiales_global(doc, df_mat):
     elems = [PageBreak()]
