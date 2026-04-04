@@ -165,8 +165,8 @@ def explotar_codigos_por_coma(df: pd.DataFrame) -> pd.DataFrame:
 
             # 🔥 PROTEGER TRANSFORMADORES (TS-37.5 KVA)
             limpio = re.sub(
-                r"(TS-?\s*\d+(\.\d+)?\s*KVA)",
-                lambda m: m.group(1).replace(" ", "_"),
+                r"(TS-?\s*\d+(\.\d+)?\s*KVA|TS-?\d+(\.\d+)?KVA)",
+                lambda m: m.group(0).replace(" ", "_"),
                 limpio
             )
 
