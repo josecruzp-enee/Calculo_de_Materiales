@@ -123,20 +123,47 @@ def forzar_expandido_para_groupby(df: pd.DataFrame) -> pd.DataFrame:
 # Helpers de expansión (si el DF de entrada está en ANCHO)
 # =============================================================================
 def _limpiar_listado(valor: str) -> list[str]:
-    """Normaliza una celda de estructuras en lista limpia sin duplicados preservando orden."""
+    """
+    Normaliza una celda de estructuras en lista limpia sin duplicados
+    preservando orden y SIN romper decimales (ej: TS-37.5KVA).
+    """
     if not valor or str(valor).strip().lower() == "seleccionar estructura":
         return []
+
     out = []
+
     for p in _RE_SPLIT.split(str(valor)):
-        t = _RE_SANIT.sub("", p.strip().upper())
+        t = p.strip().upper()
+
+        # 🔥 eliminar cosas entre paréntesis (P), (E), etc
+        t = re.sub(r"\(.*?\)", "", t)
+
+        # 🔥 limpieza controlada (NO romper decimales)
+        t = re.sub(r"[^A-Z0-9\-\.\s]", "", t)
+
+        # 🔥 normalizar TS / TD / TT correctamente
+        match = re.search(r"(TS|TD|TT)-?\s*(\d+(\.\d+)?)\s*KVA", t)
+        if match:
+            tipo = match.group(1)
+            valor = match.group(2)
+            t = f"{tipo}-{valor}KVA"
+
+        t = t.strip()
+
+        # 🔥 filtrar basura
         if t and t not in {"SELECCIONAR", "ESTRUCTURA", "N/A", "NONE"}:
             out.append(t)
-    vistos, res = set(), []
+
+    # 🔥 eliminar duplicados manteniendo orden
+    vistos = set()
+    res = []
     for x in out:
         if x not in vistos:
             res.append(x)
             vistos.add(x)
+
     return res
+
 
 def _expandir_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     """
