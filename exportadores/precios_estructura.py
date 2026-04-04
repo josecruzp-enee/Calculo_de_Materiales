@@ -1,10 +1,12 @@
+# -*- coding: utf-8 -*-
 import pandas as pd
-
+import os
 
 # =========================================================
 # CONFIGURACIÓN
 # =========================================================
-ARCHIVO = "Estructura_datos.xlsx"
+BASE_DIR = os.path.dirname(__file__)
+ARCHIVO = os.path.join(BASE_DIR, "..", "data", "Estructura_datos.xlsx")
 
 CUADRILLA = 1250
 FACTOR_TIEMPO = 0.25
@@ -13,12 +15,19 @@ FACTOR_UTILIDAD = 0.15
 
 
 # =========================================================
+# VALIDACIÓN ARCHIVO
+# =========================================================
+def validar_archivo(ruta):
+    if not os.path.exists(ruta):
+        raise FileNotFoundError(f"No existe el archivo: {ruta}")
+
+
+# =========================================================
 # CARGAR PRECIOS
 # =========================================================
 def cargar_precios(xls):
 
     df_precios = pd.read_excel(xls, sheet_name="Materiales")
-
     df_precios.columns = [str(c).strip() for c in df_precios.columns]
 
     dict_precios = dict(
@@ -55,7 +64,6 @@ def calcular_material(df, dict_precios):
 
         precio = dict_precios.get(codigo, 0)
 
-        # 🔥 VALIDACIÓN
         if precio == 0:
             print(f"⚠️ Material sin precio: {codigo}")
 
@@ -81,10 +89,14 @@ def calcular_costos(material):
 # =========================================================
 # FUNCIÓN PRINCIPAL (REUTILIZABLE)
 # =========================================================
-def procesar_precios_estructura(ruta_archivo=ARCHIVO, exportar=False):
+def procesar_precios_estructura(ruta_archivo=None, exportar=False):
+
+    if ruta_archivo is None:
+        ruta_archivo = ARCHIVO
+
+    validar_archivo(ruta_archivo)
 
     xls = pd.ExcelFile(ruta_archivo)
-
     dict_precios = cargar_precios(xls)
 
     resultados = []
@@ -100,7 +112,6 @@ def procesar_precios_estructura(ruta_archivo=ARCHIVO, exportar=False):
             continue
 
         material_total = calcular_material(df, dict_precios)
-
         equipos, mo, utilidad, total = calcular_costos(material_total)
 
         resultados.append({
@@ -109,7 +120,7 @@ def procesar_precios_estructura(ruta_archivo=ARCHIVO, exportar=False):
             "Equipos": round(equipos, 2),
             "Mano de Obra": round(mo, 2),
             "Utilidad": round(utilidad, 2),
-            "Precio Unitario": round(total, 2)  # 🔥 cambio clave
+            "Precio Unitario": round(total, 2)
         })
 
     df_final = pd.DataFrame(resultados)
@@ -120,13 +131,11 @@ def procesar_precios_estructura(ruta_archivo=ARCHIVO, exportar=False):
 
     return df_final
 
+
 # =========================================================
-# GENERAR TABLA PARA PDF (FLOWABLE)
+# GENERAR TABLA PARA PDF (CORREGIDO)
 # =========================================================
-# =========================================================
-# GENERAR TABLA PARA PDF (FLOWABLE)
-# =========================================================
-def generar_tabla_presupuesto(doc, styles, df_estructuras):
+def generar_tabla_presupuesto(doc, styles, df_estructuras, df_precios):
 
     from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
     from reportlab.lib import colors
@@ -137,18 +146,11 @@ def generar_tabla_presupuesto(doc, styles, df_estructuras):
         elems.append(Paragraph("No hay datos de estructuras.", styles["BodyText"]))
         return elems
 
-    # 🔥 TRAER PRECIOS (UNA VEZ)
-    df_precios = procesar_precios_estructura()
-
-    # 🔥 MERGE REAL (CLAVE)
+    # 🔥 MERGE (YA NO LEE EXCEL AQUÍ)
     df = df_estructuras.merge(df_precios, on="Estructura", how="left")
 
-    # 🔥 limpiar nulos
     df["Precio Unitario"] = df["Precio Unitario"].fillna(0)
 
-    # =========================
-    # TABLA
-    # =========================
     data = [
         ["ITEM", "DESCRIPCIÓN", "CANT", "P.U.", "TOTAL"]
     ]
@@ -174,7 +176,6 @@ def generar_tabla_presupuesto(doc, styles, df_estructuras):
 
         item += 1
 
-    # 🔥 TOTAL GENERAL
     data.append([
         "",
         "TOTAL GENERAL",
@@ -214,16 +215,14 @@ def generar_tabla_presupuesto(doc, styles, df_estructuras):
     elems.append(tabla)
 
     return elems
+
+
 # =========================================================
 # EJECUCIÓN DIRECTA
 # =========================================================
 if __name__ == "__main__":
 
-    df = procesar_precios_estructura(exportar=True)
+    df_precios = procesar_precios_estructura(exportar=True)
 
     print("\n✅ Precios de estructuras generados:\n")
-    print(df)
-
-
-
-
+    print(df_precios)
