@@ -204,9 +204,9 @@ def _parse_str_to_counter(s: str) -> Counter:
     c = Counter()
     for p in parts:
         low = p.lower()
-        if "x" in low:
+        if " x " in low:
             try:
-                n, cod = low.split("x", 1)
+                n, cod = low.split(" x ", 1)
                 n = int(n.strip())
                 cod = cod.strip().upper()
                 if cod:
