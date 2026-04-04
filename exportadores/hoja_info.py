@@ -127,7 +127,7 @@ def extraer_postes(df_estructuras: Optional[pd.DataFrame]) -> Tuple[Optional[Dic
         return None, 0
 
     s = df_estructuras["codigodeestructura"].astype(str)
-    postes = df_estructuras[s.str.contains(r"\b(PC|PT)\b", case=False, na=False)]
+    postes = df_estructuras[s.str.contains(r"\b(PC|PM|PT)\b", case=False, na=False)]
     if postes.empty:
         return None, 0
 
