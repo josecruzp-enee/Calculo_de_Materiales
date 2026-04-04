@@ -68,8 +68,11 @@ def cargar_dxf_ancho() -> Optional[pd.DataFrame]:
         doc = leer_dxf_streamlit(archivo)
         df_ancho = extraer_estructuras_desde_dxf(doc, capa_objetivo=capa if capa else "")
         return df_ancho if df_ancho is not None and not df_ancho.empty else None
+    import traceback
+
     except Exception as e:
-        st.error(f"No pude leer el DXF: {e}")
+        st.error("💥 ERROR REAL DXF:")
+        st.code(traceback.format_exc())
         return None
 
 
