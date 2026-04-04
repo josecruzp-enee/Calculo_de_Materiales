@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 exportadores/pdf_completo.py
-PDF profesional (VERSIÓN CORREGIDA FINAL)
+PDF PROFESIONAL FINAL (LISTO PARA CLIENTE)
 """
 
 import re
 from io import BytesIO
 from xml.sax.saxutils import escape
 
-from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    BaseDocTemplate, PageTemplate, Frame,
+    Paragraph, Spacer, Table, TableStyle, PageBreak
+)
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.lib import colors
@@ -19,7 +22,7 @@ from exportadores.hoja_info import hoja_info_proyecto
 from exportadores.pdf_base import (
     styles, styleN, styleH,
     fondo_pagina,
-    salto_pagina_seguro, extender_flowables, quitar_saltos_finales,
+    extender_flowables, quitar_saltos_finales,
     formatear_material,
     _calibres_por_tipo,
 )
@@ -45,25 +48,14 @@ def generar_pdf_completo(
 ):
     buffer, doc, elems = _crear_documento(datos_proyecto)
 
-    # 🔹 1. INFORME
     elems += _seccion_info(datos_proyecto, df_estructuras, df_mat)
-
-    # 🔹 2. ESTRUCTURAS
     elems += _seccion_estructuras_global(df_estructuras)
-
-    # 🔹 3. MATERIALES
     elems += _seccion_materiales_global(df_mat)
-
-    # 🔹 4. COSTOS
-    elems += _seccion_anexo_costos(df_costos)
-
-    # 🔹 5. MANO DE OBRA
-    elems += _seccion_anexo_mano_obra(df_mo_estructuras)
-
-    # 🔹 6. COTIZACIÓN
+    elems += _seccion_costos_materiales(df_costos)
+    elems += _seccion_mano_obra(df_mo_estructuras)
     elems += _seccion_cotizacion(df_costos, df_mo_estructuras)
 
-    # 🔹 7. DETALLE (opcional)
+    # DETALLE (opcional)
     elems += _seccion_estructuras_por_punto(df_estructuras_por_punto)
     elems += _seccion_materiales_por_punto(df_mat_por_punto)
 
@@ -88,7 +80,7 @@ def _crear_documento(datos_proyecto):
         pagesize=letter,
         leftMargin=60,
         rightMargin=60,
-        topMargin=160,   # 🔥 evita logo montado
+        topMargin=160,
         bottomMargin=50
     )
 
@@ -105,6 +97,28 @@ def _crear_documento(datos_proyecto):
     doc.addPageTemplates([template])
 
     return buffer, doc, []
+
+
+# ==========================================================
+# ESTILO TABLA PRO
+# ==========================================================
+
+def _tabla_estilo_pro():
+    return TableStyle([
+        ("LINEBELOW", (0,0), (-1,0), 1.2, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#E8E8E8")),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+
+        ("ALIGN", (1,1), (-1,-1), "CENTER"),
+
+        ("LEFTPADDING", (0,0), (-1,-1), 8),
+        ("RIGHTPADDING", (0,0), (-1,-1), 8),
+        ("TOPPADDING", (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+
+        ("ROWBACKGROUNDS", (0,1), (-1,-1),
+         [colors.white, colors.HexColor("#F7F7F7")])
+    ])
 
 
 # ==========================================================
@@ -128,33 +142,35 @@ def _seccion_info(datos_proyecto, df_estructuras, df_mat):
 
 # ----------------------------------------------------------
 
-def _tabla_estilo_pro():
-    return TableStyle([
-        ("LINEBELOW", (0,0), (-1,0), 1, colors.black),
-        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-        ("ALIGN", (1,1), (-1,-1), "CENTER"),
-        ("LEFTPADDING", (0,0), (-1,-1), 6),
-        ("RIGHTPADDING", (0,0), (-1,-1), 6),
-        ("TOPPADDING", (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-    ])
+def _seccion_estructuras_global(df):
+    elems = [PageBreak()]
+
+    elems.append(Paragraph("<b>2. LISTA DE ESTRUCTURAS</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 0.3 * inch))
+
+    if df is None or df.empty:
+        elems.append(Paragraph("No hay estructuras.", styleN))
+        return elems
+
+    elems.append(_tabla_estructuras_por_punto("GLOBAL", df, letter[0]))
+    elems.append(Spacer(1, 0.4 * inch))
+
+    return elems
 
 
 # ----------------------------------------------------------
 
 def _seccion_materiales_global(df_mat):
-    elems = []
-    salto_pagina_seguro(elems)
+    elems = [PageBreak()]
 
-    elems.append(Paragraph("<b>Lista de Materiales</b>", styles["Heading2"]))
+    elems.append(Paragraph("<b>3. LISTA DE MATERIALES</b>", styles["Heading2"]))
     elems.append(Spacer(1, 0.3 * inch))
 
     if df_mat is None or df_mat.empty:
         elems.append(Paragraph("No hay materiales.", styleN))
         return elems
 
-    df = df_mat.copy()
-    df_agr = df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+    df_agr = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
     data = [["Material", "Unidad", "Cantidad"]]
 
@@ -165,41 +181,24 @@ def _seccion_materiales_global(df_mat):
             f"{float(r['Cantidad']):.2f}",
         ])
 
-    tabla = Table(data, colWidths=[4.2 * inch, 1 * inch, 1 * inch])
+    tabla = Table(data, colWidths=[3.5 * inch, 1.2 * inch, 1.2 * inch])
     tabla.setStyle(_tabla_estilo_pro())
 
     elems.append(tabla)
-    return elems
-
-
-# ----------------------------------------------------------
-
-def _seccion_estructuras_global(df):
-    elems = []
-    salto_pagina_seguro(elems)
-
-    elems.append(Paragraph("<b>Lista de Estructuras</b>", styles["Heading2"]))
-    elems.append(Spacer(1, 0.3 * inch))
-
-    if df is None or df.empty:
-        elems.append(Paragraph("No hay estructuras.", styleN))
-        return elems
-
-    elems.append(_tabla_estructuras_por_punto("GLOBAL", df, letter[0]))
+    elems.append(Spacer(1, 0.4 * inch))
 
     return elems
 
 
 # ----------------------------------------------------------
 
-def _seccion_anexo_costos(df_costos):
+def _seccion_costos_materiales(df_costos):
     if df_costos is None or df_costos.empty:
         return []
 
-    elems = []
-    salto_pagina_seguro(elems)
+    elems = [PageBreak()]
 
-    elems.append(Paragraph("<b>Costos de Materiales</b>", styles["Heading2"]))
+    elems.append(Paragraph("<b>4. COSTOS DE MATERIALES</b>", styles["Heading2"]))
     elems.append(Spacer(1, 0.3 * inch))
 
     return extender_flowables(elems, tabla_costos_materiales_pdf(df_costos))
@@ -207,14 +206,13 @@ def _seccion_anexo_costos(df_costos):
 
 # ----------------------------------------------------------
 
-def _seccion_anexo_mano_obra(df):
+def _seccion_mano_obra(df):
     if df is None or df.empty:
         return []
 
-    elems = []
-    salto_pagina_seguro(elems)
+    elems = [PageBreak()]
 
-    elems.append(Paragraph("<b>Costos de Mano de Obra</b>", styles["Heading2"]))
+    elems.append(Paragraph("<b>5. COSTOS DE MANO DE OBRA</b>", styles["Heading2"]))
     elems.append(Spacer(1, 0.3 * inch))
 
     return extender_flowables(elems, tabla_mano_obra_estructuras_pdf(df))
@@ -227,14 +225,13 @@ def _seccion_cotizacion(df_costos, df_mo):
     if df_costos is None or df_mo is None:
         return []
 
-    elems = []
-    salto_pagina_seguro(elems)
+    elems = [PageBreak()]
 
-    elems.append(Paragraph("<b>COTIZACIÓN DEL PROYECTO</b>", styles["Heading2"]))
+    elems.append(Paragraph("<b>6. COTIZACIÓN DEL PROYECTO</b>", styles["Heading2"]))
     elems.append(Spacer(1, 0.4 * inch))
 
-    total_materiales = df_costos["Total"].sum() if "Total" in df_costos else 0
-    total_mo = df_mo["MO Total"].sum() if "MO Total" in df_mo else 0
+    total_materiales = df_costos["Total"].sum()
+    total_mo = df_mo["MO Total"].sum()
 
     subtotal = total_materiales + total_mo
     utilidad = subtotal * 0.15
@@ -272,10 +269,11 @@ def _seccion_estructuras_por_punto(df):
     if df is None or df.empty:
         return []
 
-    elems = []
-    salto_pagina_seguro(elems)
+    df = df[~df["Estructura"].str.contains("NO ENCONTRADA", na=False)]
 
-    elems.append(Paragraph("<b>Detalle por Punto</b>", styles["Heading2"]))
+    elems = [PageBreak()]
+
+    elems.append(Paragraph("<b>7. DETALLE POR PUNTO</b>", styles["Heading2"]))
     elems.append(Spacer(1, 0.3 * inch))
 
     puntos = sorted(df["Punto"].unique(), key=lambda x: int(re.sub(r"\D", "", str(x)) or 0))
@@ -297,10 +295,9 @@ def _seccion_materiales_por_punto(df):
     if df is None or df.empty:
         return []
 
-    elems = []
-    salto_pagina_seguro(elems)
+    elems = [PageBreak()]
 
-    elems.append(Paragraph("<b>Materiales por Punto</b>", styles["Heading2"]))
+    elems.append(Paragraph("<b>8. MATERIALES POR PUNTO</b>", styles["Heading2"]))
     elems.append(Spacer(1, 0.3 * inch))
 
     for p in sorted(df["Punto"].unique()):
@@ -319,9 +316,10 @@ def _seccion_materiales_por_punto(df):
                 f"{float(r['Cantidad']):.2f}",
             ])
 
-        tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
+        tabla = Table(data, colWidths=[3.5 * inch, 1.2 * inch, 1.2 * inch])
         tabla.setStyle(_tabla_estilo_pro())
 
         elems.append(tabla)
+        elems.append(Spacer(1, 0.3 * inch))
 
     return elems
