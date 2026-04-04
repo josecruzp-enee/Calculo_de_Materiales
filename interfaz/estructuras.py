@@ -126,8 +126,14 @@ def seccion_entrada_estructuras(modo_carga: str = "desplegables") -> Tuple[Optio
     if df_ancho is None or df_ancho.empty:
         return None, None
 
+   
     # 2) convertir ANCHO → LARGO (único camino)
-    df_largo = coerce_df_estructuras_largo(df_ancho)
+    if modo == "dxf":
+        # 🔥 DXF ya viene limpio
+        df_largo = expand_wide_to_long(df_ancho)
+    else:
+        df_largo = coerce_df_estructuras_largo(df_ancho)
+
     if df_largo is None or df_largo.empty:
         st.error("No pude convertir estructuras a formato largo (Punto, codigodeestructura, cantidad).")
         st.write("Columnas recibidas:", list(df_ancho.columns))
