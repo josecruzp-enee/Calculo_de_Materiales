@@ -116,7 +116,7 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     faltan = int((df["Tiene_Precio"] == False).sum())
     nota = Paragraph(
-        f"Nota: {faltan} material(es) no tienen precio cargado.",
+        f"Nota: Los precios están sujetos a cambios sin previo aviso.",
         styles["Normal"]
     )
 
@@ -202,8 +202,7 @@ def tabla_mano_obra_estructuras_pdf(df_mo: pd.DataFrame):
     ]))
 
     nota = Paragraph(
-        "Nota: La mano de obra por estructura se toma directamente de la hoja 'indice' (columna 'Precio') "
-        "como costo unitario de MO, multiplicado por la cantidad de estructuras.",
+        "<font size=8><i>Nota: Los costos presentados se calculan a partir de precios unitarios y las cantidades de estructuras definidas en el proyecto. Los precios están sujetos a cambios sin previo aviso.</i></font>",
         styles["Normal"]
     )
 
@@ -285,8 +284,7 @@ def tabla_costos_estructuras_pdf(df_costos_estructuras: pd.DataFrame):
     ]))
 
     nota = Paragraph(
-        "Nota: El costo por estructura se calcula como la suma de (cantidad_material × precio_unitario) "
-        "para una (1) estructura, multiplicado por la cantidad total de esa estructura en el proyecto.",
+        "<font size=8><i>Nota: Los costos presentados se calculan a partir de precios unitarios y las cantidades de estructuras definidas en el proyecto. Los precios están sujetos a cambios sin previo aviso.</i></font>",
         styles["Normal"]
     )
 
