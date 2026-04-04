@@ -10,6 +10,16 @@ from typing import Dict, Any
 import pandas as pd
 import streamlit as st
 import unicodedata
+import re
+
+def fix_codigo(c):
+    s = str(c).upper()
+
+    match = re.search(r"(TS|TD|TT)-\d+(\.\d+)?KVA", s)
+    if match:
+        return match.group(0)
+
+    return s.split(" - ")[0].strip()
 # =============================================================================
 # RUTA DEL CATÁLOGO
 # =============================================================================
