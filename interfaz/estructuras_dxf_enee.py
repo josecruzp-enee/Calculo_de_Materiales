@@ -294,8 +294,7 @@ def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
 
     st.success(f"✅ Estructuras proyectadas detectadas: {len(df_ancho)} puntos")
     st.dataframe(df_ancho, use_container_width=True, hide_index=True)
-    df_largo = expand_wide_to_long(df_ancho)
-    df_largo = _explotar_codigos_largos(df_largo)
+    
     ruta_tmp = materializar_df_a_archivo(df_ancho, "dxf")
 
     return df_largo, ruta_tmp
