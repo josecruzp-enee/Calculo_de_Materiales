@@ -39,12 +39,12 @@ RE_PUNTO_EN_TEXTO = re.compile(r"\bP(?:UNTO)?\s*[-#]?\s*(\d+)\b", re.IGNORECASE)
 RE_COD_P = re.compile(
     r"""
     (?P<code>
-        (?:PC|PM|PT)-[A-Z0-9"'\-]+
+        (?:PC|PM|PT|CA|CS)-[A-Z0-9\.\-]+
         |A-[A-Z0-9\-]+
         |B-[A-Z0-9\-]+
         |CT-[A-Z0-9\-]+
-        TS-[A-Z0-9\.\-]+
-        |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
+        |TS-[A-Z0-9\.\-]+
+        |TD[A-Z0-9\.\-]*|TF[A-Z0-9\.\-]*|TR[A-Z0-9\.\-]*|TX[A-Z0-9\.\-]*
         |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
         |R-\d+[A-Z0-9\-]*
     )
@@ -57,11 +57,11 @@ RE_MULT = re.compile(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", flags=re.I)
 
 RE_TOKEN = re.compile(
     r"""
-    (?:PC|PM|PT)-[A-Z0-9"'\-]+
+    (?:PC|PM|PT|CA|CS)-[A-Z0-9"'\-]+
     |A-[A-Z0-9\-]+
     |B-[A-Z0-9\-]+
     |CT-[A-Z0-9\-]+
-    TS-[A-Z0-9\.\-]+
+    |TS-[A-Z0-9\.\-]+
     |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
     |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
     |R-\d+[A-Z0-9\-]*
