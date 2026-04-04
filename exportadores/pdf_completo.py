@@ -18,7 +18,7 @@ from exportadores.cables_pdf import tabla_cables_pdf
 from exportadores.hoja_info import hoja_info_proyecto
 
 from exportadores.pdf_base import (
-    styles, styleN,
+    styles, styleN, styleH,
     fondo_pagina,
     extender_flowables, quitar_saltos_finales,
     formatear_material,
@@ -146,10 +146,10 @@ def _seccion_info(datos_proyecto, df_estructuras, df_mat):
             df_mat,
             styles=styles,
             styleN=styleN,
+            styleH=styleH,
             _calibres_por_tipo=_calibres_por_tipo
         )
     )
-
 
 # ----------------------------------------------------------
 
