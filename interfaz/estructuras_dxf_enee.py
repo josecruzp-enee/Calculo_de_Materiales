@@ -26,13 +26,13 @@ RE_COD_P = re.compile(
     r"""
     (?P<code>
         (?:PC|PM|PT)-[A-Z0-9"'\-]+
-        |A-[A-Z0-9\-]+
-        |B-[A-Z0-9\-]+
-        |CT-[A-Z0-9\-]+
-        |TS-[A-Z0-9\-]+
-        |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
-        |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
-        |R-\d+[A-Z0-9\-]*
+        |\bA-[A-Z0-9\-]+
+        |\bB-[A-Z0-9\-]+
+        |\bCT-[A-Z0-9\-]+
+        |\bTS-[A-Z0-9\.\-]+
+        |\bTD[A-Z0-9\.\-]*|\bTF[A-Z0-9\.\-]*|\bTR[A-Z0-9\.\-]*|\bTX[A-Z0-9\.\-]*
+        |\bLL-[A-Z0-9\-]+|\bLS-[A-Z0-9\-]+
+        |\bR-\d+[A-Z0-9\-]*
     )
     \s*\(\s*[Pp]\s*\)
     """,
@@ -44,13 +44,13 @@ RE_MULT = re.compile(r"^\s*(\d+)\s*[x×]\s*(.+?)\s*$", flags=re.I)
 RE_TOKEN = re.compile(
     r"""
     (?:PC|PM|PT)-[A-Z0-9"'\-]+
-    |A-[A-Z0-9\-]+
-    |B-[A-Z0-9\-]+
-    |CT-[A-Z0-9\-]+
-    |TS-[A-Z0-9\-]+
-    |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
-    |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
-    |R-\d+[A-Z0-9\-]*
+    |\bA-[A-Z0-9\-]+
+    |\bB-[A-Z0-9\-]+
+    |\bCT-[A-Z0-9\-]+
+    |\bTS-[A-Z0-9\.\-]+
+    |\bTD[A-Z0-9\.\-]*|\bTF[A-Z0-9\.\-]*|\bTR[A-Z0-9\.\-]*|\bTX[A-Z0-9\.\-]*
+    |\bLL-[A-Z0-9\-]+|\bLS-[A-Z0-9\-]+
+    |\bR-\d+[A-Z0-9\-]*
     """,
     re.VERBOSE,
 )
@@ -63,22 +63,33 @@ def _limpiar(s: str) -> str:
 
 def _clasificar(code: str) -> Optional[str]:
     c = (code or "").strip().upper()
+
     if c.startswith(("PC-", "PM-", "PT-")):
         return "Poste"
+
     if c.startswith("A-"):
         return "Primario"
+
     if c.startswith("B-"):
         return "Secundario"
+
     if c.startswith("R-"):
         return "Retenidas"
+
     if c.startswith("CT-"):
         return "Conexiones a tierra"
+
+    # 🔥 NUEVO
+    if c.startswith(("CS-", "CP-", "CR-")):
+        return "Protecciones"
+
     if c.startswith(("TS-", "TD", "TF", "TR", "TX")):
         return "Transformadores"
+
     if c.startswith(("LL-", "LS-")):
         return "Luminarias"
-    return None
 
+    return None
 
 def _add(bucket: Dict[str, Dict[str, int]], col: str, raw_item: str) -> None:
     item = _limpiar(raw_item)
@@ -218,34 +229,23 @@ def _tokenizar_celda(celda: str):
     if not celda:
         return []
 
-    import re
-
     t = " ".join(str(celda).upper().split())
     t = t.replace("×", "x")
 
-    # 🔥 extraer TODOS los códigos válidos
-    codigos = re.findall(
-        r"(PC|PM|PT|A|B|CT|TS|LL|LS|R)-[A-Z0-9\.\-]+",
-        t
-    )
-
-    # reconstruir bien los códigos completos
-    codigos = [c[0] + "-" + c[1] if isinstance(c, tuple) else c for c in codigos]
-
-    # 🔥 mejor forma:
+    # 🔥 Regex única correcta (soporta decimales)
     codigos = re.findall(r"[A-Z]+-\d+(?:\.\d+)?[A-Z\-]*", t)
 
-    pares = []
+    pares = [(c.strip(), 1) for c in codigos if c.strip()]
 
-    for c in codigos:
-        pares.append((c.strip(), 1))
-
-    # agrupar cantidades
+    # agrupar
     acc = {}
     for c, q in pares:
         acc[c] = acc.get(c, 0) + q
 
     return list(acc.items())
+
+
+
 def _explotar_codigos_largos(df_largo: pd.DataFrame) -> pd.DataFrame:
     """
     Convierte CodigoEstructura como "R-02 R-04" -> dos filas.
