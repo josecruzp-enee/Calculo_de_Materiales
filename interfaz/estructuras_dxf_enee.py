@@ -308,11 +308,4 @@ def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
 
     ruta_tmp = materializar_df_a_archivo(df_ancho, "dxf")
 
-    # wide -> long (lo que consume tu motor)
-    df_largo = expand_wide_to_long(df_ancho)
-    df_largo = _explotar_codigos_largos(df_largo)
-
-    st.caption("🔎 Vista LARGA (lo que consume el motor)")
-    st.dataframe(df_largo, use_container_width=True, hide_index=True)
-
     return df_largo, ruta_tmp
