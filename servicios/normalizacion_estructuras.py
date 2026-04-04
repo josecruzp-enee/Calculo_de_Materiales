@@ -229,6 +229,8 @@ def construir_estructuras_por_punto_y_conteo(df_unicas: pd.DataFrame, log):
       - conteo: dict {codigo: cantidad_total_en_proyecto}
       - tmp: DataFrame explotado con columnas (Punto, codigodeestructura, cantidad)
     """
+    print("🔥 ENTRADA REAL:")
+    print(df["codigodeestructura"].tolist())
     tmp = explotar_codigos_por_coma(df_unicas)
 
     conteo = (
