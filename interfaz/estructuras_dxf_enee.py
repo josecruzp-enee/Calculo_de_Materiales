@@ -62,7 +62,13 @@ def _limpiar(s: str) -> str:
 
 
 def _clasificar(code: str) -> Optional[str]:
-    c = (code or "").strip().upper()
+    if code is None:
+        return None
+
+    c = str(code).strip().upper()
+
+    if not c:
+        return None
 
     if c.startswith(("PC-", "PM-", "PT-")):
         return "Poste"
@@ -76,7 +82,7 @@ def _clasificar(code: str) -> Optional[str]:
     if c.startswith("R-"):
         return "Retenidas"
 
-    if c.startswith("CT-", "CS-"):
+    if c.startswith(("CT-", "CS-")):
         return "Conexiones a tierra"
 
     if c.startswith(("TS-", "TD", "TF", "TR", "TX")):
