@@ -119,15 +119,15 @@ def _parse_transformador_codigo(txt: str) -> Optional[Tuple[str, float]]:
 # EXTRACTORES (RETORNAN DATOS, NO FLOWABLES)
 # ==========================================================
 def extraer_postes(df_estructuras: Optional[pd.DataFrame]) -> Tuple[Optional[Dict[str, int]], int]:
-    """
-    Retorna: (resumen_dict, total)
-    resumen_dict: {"PC-30": 2, "PC-40": 1}
-    """
+
     if df_estructuras is None or df_estructuras.empty or "codigodeestructura" not in df_estructuras.columns:
         return None, 0
 
     s = df_estructuras["codigodeestructura"].astype(str)
-    postes = df_estructuras[s.str.contains(r"\b(PC|PM|PT)\b", case=False, na=False)]
+
+    # 🔥 FIX REAL
+    postes = df_estructuras[s.str.contains(r"^(PC|PM|PT)-", case=False, na=False)]
+
     if postes.empty:
         return None, 0
 
@@ -139,8 +139,6 @@ def extraer_postes(df_estructuras: Optional[pd.DataFrame]) -> Tuple[Optional[Dic
             resumen[cod] = resumen.get(cod, 0) + cant
 
     return (resumen if resumen else None), sum(resumen.values())
-
-
 def extraer_transformadores(
     df_estructuras: Optional[pd.DataFrame],
     df_mat: Optional[pd.DataFrame],
