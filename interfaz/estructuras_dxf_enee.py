@@ -88,7 +88,7 @@ def _clasificar(code: str) -> Optional[str]:
     if c.startswith(("TS-", "TD", "TF", "TR", "TX")):
         return "Transformadores"
 
-    if c.startswith(("LL-", "LS-", "CA")):
+    if c.startswith(("LL-", "LS-", "CA-")):
         return "Luminarias"
 
     return None
