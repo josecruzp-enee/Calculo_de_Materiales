@@ -242,7 +242,7 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
             existentes = df_actual["Punto"].tolist() if not df_actual.empty else []
             nums = []
             for p in existentes:
-                m = re.search(r"(\d+)", str(x))
+                m = re.search(r"(\d+)", str(p))
                 if m:
                     nums.append(int(m.group(1)))
             nuevo = f"Punto {(max(nums) + 1) if nums else 1}"
