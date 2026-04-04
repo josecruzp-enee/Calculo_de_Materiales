@@ -135,19 +135,17 @@ def leer_dxf_streamlit(archivo) -> Any:
 
     data = archivo.getvalue()
 
-    # Intento 1: BytesIO
-    try:
-        stream = io.BytesIO(data)
-        return ezdxf.readfile(stream)
-    except Exception:
-        pass
+    # 🔥 SIEMPRE usar archivo temporal (más robusto en Streamlit/Cloud)
+    import tempfile
 
-    # Intento 2: archivo temporal (más estable en cloud)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
         tmp.write(data)
         tmp_path = tmp.name
 
-    return ezdxf.readfile(tmp_path)
+    try:
+        return ezdxf.readfile(tmp_path)
+    except Exception as e:
+        raise RuntimeError(f"Error leyendo DXF: {e}")
 
 
 # ==========================================================
