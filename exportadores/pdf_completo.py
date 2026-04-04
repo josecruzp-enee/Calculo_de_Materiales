@@ -3,7 +3,8 @@
 exportadores/pdf_completo.py
 PDF PROFESIONAL FINAL (CORREGIDO + ROBUSTO + PRO)
 """
-
+import exportadores.precios_estructura as pe
+print(dir(pe))
 import re
 from io import BytesIO
 from reportlab.platypus import (
