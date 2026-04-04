@@ -24,13 +24,13 @@ from exportadores.pdf_base import (
     formatear_material,
     _calibres_por_tipo,
 )
-from exportadores.cotizacion import generar_seccion_presupuesto
+from exportadores.precios_estructura import generar_tabla_presupuesto
 from exportadores.pdf_reportes_simples import _tabla_estructuras_por_punto
 from exportadores.pdf_anexos_costos import (
     tabla_costos_materiales_pdf,
     tabla_mano_obra_estructuras_pdf,
 )
-from exportadores.precios_estructura import generar_tabla_presupuesto
+
 # ==========================================================
 # 🔥 UTILIDAD ROBUSTA (FIX REAL)
 # ==========================================================
@@ -75,12 +75,12 @@ def generar_pdf_completo(
     buffer, doc, elems = _crear_documento(datos_proyecto)
 
     elems += _seccion_info(datos_proyecto, df_estructuras, df_mat)
+    elems += generar_tabla_presupuesto(doc, styles, df_estructuras)
     elems += _seccion_estructuras_global(doc, df_estructuras)
     elems += _seccion_materiales_global(doc, df_mat)
     elems += _seccion_costos_materiales(df_costos)
     elems += _seccion_mano_obra(df_mo_estructuras)
     elems += _seccion_cotizacion(doc, df_costos, df_mo_estructuras)
-    elems += generar_tabla_presupuesto(doc, styles, df_estructuras)
     elems += _seccion_estructuras_por_punto(doc, df_estructuras_por_punto)
     elems += _seccion_materiales_por_punto(doc, df_mat_por_punto)
 
