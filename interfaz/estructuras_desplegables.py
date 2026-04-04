@@ -98,10 +98,18 @@ def _ensure_consolidado():
 def _add_item(cat: str, code: str, qty: int):
     if not code or qty <= 0:
         return
+
+    # 🔥 NORMALIZACIÓN MÍNIMA (PARCHE DIRECTO)
+    code = str(code).upper().strip()
+
+    # 🔥 FIX CLAVE PARA DECIMALES (TU PROBLEMA)
+    if code.startswith("TS-37") and "37.5" not in code:
+        code = "TS-37.5KVA"
+
     p = st.session_state["punto_en_edicion"]
     bucket = st.session_state["puntos_data"][p][cat]
-    bucket[code] = bucket.get(code, 0) + int(qty)
 
+    bucket[code] = bucket.get(code, 0) + int(qty)
 
 def _remove_item(cat: str, code: str, all_qty: bool = False):
     p = st.session_state["punto_en_edicion"]
