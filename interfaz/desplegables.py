@@ -209,22 +209,29 @@ def cargar_opciones(ruta_excel: str = RUTA_EXCEL) -> Dict[str, Dict[str, Any]]:
 def _parse_str_to_counter(s: str) -> Counter:
     if not s:
         return Counter()
+
     s = s.replace("+", ",")
     parts = [p.strip() for p in s.split(",") if p.strip()]
     c = Counter()
+
     for p in parts:
         low = p.lower()
+
         if " x " in low:
             try:
                 n, cod = low.split(" x ", 1)
                 n = int(n.strip())
-                cod = cod.strip().upper()
+
+                cod = fix_codigo(cod)  # 🔥 AQUI
                 if cod:
                     c[cod] += max(1, n)
                 continue
             except Exception:
                 pass
-        c[p.upper()] += 1
+
+        cod = fix_codigo(p)  # 🔥 Y AQUI
+        c[cod] += 1
+
     return c
 
 
