@@ -27,13 +27,24 @@ def validar_archivo(ruta):
 # =========================================================
 def cargar_precios(xls):
 
+    import unicodedata
+
+    def limpiar_texto(s):
+        return ''.join(
+            c for c in unicodedata.normalize('NFKD', str(s))
+            if not unicodedata.combining(c)
+        )
+
     df_precios = pd.read_excel(xls, sheet_name="Materiales")
 
-    # 🔥 LIMPIEZA FUERTE
-    df_precios.columns = [str(c).strip().upper() for c in df_precios.columns]
+    # 🔥 NORMALIZAR COLUMNAS (clave)
+    df_precios.columns = [
+        limpiar_texto(c).strip().upper()
+        for c in df_precios.columns
+    ]
 
-    # 🔍 DEBUG (puedes quitar luego)
-    print("Columnas detectadas:", df_precios.columns)
+    # 🔍 DEBUG opcional
+    print("Columnas normalizadas:", df_precios.columns)
 
     # =========================
     # DETECTAR COLUMNAS
@@ -42,7 +53,7 @@ def cargar_precios(xls):
     col_precio = None
 
     for c in df_precios.columns:
-        if "COD" in c:
+        if "CODIGO" in c:
             col_codigo = c
         if "COSTO" in c:
             col_precio = c
@@ -64,7 +75,6 @@ def cargar_precios(xls):
     )
 
     return dict_precios
-
 # =========================================================
 # CALCULAR MATERIAL POR ESTRUCTURA
 # =========================================================
