@@ -268,8 +268,6 @@ def _seccion_estructuras_por_punto(df):
     if df is None or df.empty:
         return []
 
-    df = df[~df["Estructura"].str.contains("NO ENCONTRADA", na=False)]
-
     elems = [PageBreak()]
     elems.append(Paragraph("<b>7. DETALLE POR PUNTO</b>", styles["Heading2"]))
     elems.append(Spacer(1, 0.3 * inch))
@@ -285,7 +283,6 @@ def _seccion_estructuras_por_punto(df):
         elems.append(Spacer(1, 0.2 * inch))
 
     return elems
-
 
 # ----------------------------------------------------------
 
