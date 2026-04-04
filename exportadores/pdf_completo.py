@@ -24,7 +24,7 @@ from exportadores.pdf_base import (
     formatear_material,
     _calibres_por_tipo,
 )
-from exportadores.precios_estructura import generar_tabla_presupuesto
+from exportadores.precios_estructura import procesar_precios_estructura
 from exportadores.pdf_reportes_simples import _tabla_estructuras_por_punto
 from exportadores.pdf_anexos_costos import (
     tabla_costos_materiales_pdf,
