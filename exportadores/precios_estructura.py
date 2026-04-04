@@ -19,7 +19,6 @@ def cargar_precios(xls):
 
     df_precios = pd.read_excel(xls, sheet_name="Materiales")
 
-    # limpiar nombres de columnas por si hay espacios
     df_precios.columns = [str(c).strip() for c in df_precios.columns]
 
     dict_precios = dict(
@@ -41,13 +40,11 @@ def calcular_material(df, dict_precios):
 
     for _, row in df.iterrows():
 
-        # código limpio
         codigo = str(row.get("COD. ENEE", "")).strip()
 
         if not codigo:
             continue
 
-        # cantidad dinámica
         cantidad = 0
 
         if "34.5" in df.columns:
@@ -56,8 +53,11 @@ def calcular_material(df, dict_precios):
         if "13.8" in df.columns:
             cantidad += row.get("13.8", 0)
 
-        # precio desde base
         precio = dict_precios.get(codigo, 0)
+
+        # 🔥 VALIDACIÓN
+        if precio == 0:
+            print(f"⚠️ Material sin precio: {codigo}")
 
         total += cantidad * precio
 
@@ -79,11 +79,11 @@ def calcular_costos(material):
 
 
 # =========================================================
-# PROCESAMIENTO GENERAL
+# FUNCIÓN PRINCIPAL (REUTILIZABLE)
 # =========================================================
-def procesar():
+def procesar_precios_estructura(ruta_archivo=ARCHIVO, exportar=False):
 
-    xls = pd.ExcelFile(ARCHIVO)
+    xls = pd.ExcelFile(ruta_archivo)
 
     dict_precios = cargar_precios(xls)
 
@@ -91,20 +91,16 @@ def procesar():
 
     for hoja in xls.sheet_names:
 
-        # hojas que no son estructuras
         if hoja.lower() in ["materiales", "indice", "internos", "conectores"]:
             continue
 
         df = pd.read_excel(xls, sheet_name=hoja)
 
-        # validar estructura
         if "COD. ENEE" not in df.columns:
             continue
 
-        # calcular material
         material_total = calcular_material(df, dict_precios)
 
-        # calcular costos completos
         equipos, mo, utilidad, total = calcular_costos(material_total)
 
         resultados.append({
@@ -113,23 +109,24 @@ def procesar():
             "Equipos": round(equipos, 2),
             "Mano de Obra": round(mo, 2),
             "Utilidad": round(utilidad, 2),
-            "TOTAL": round(total, 2)
+            "Precio Unitario": round(total, 2)  # 🔥 cambio clave
         })
 
     df_final = pd.DataFrame(resultados)
-
-    # ordenar por nombre de estructura
     df_final = df_final.sort_values("Estructura")
 
-    # exportar
-    df_final.to_excel("costos_estructuras.xlsx", index=False)
+    if exportar:
+        df_final.to_excel("precios_estructuras.xlsx", index=False)
 
-    print("\n✅ Costos generados correctamente:\n")
-    print(df_final)
+    return df_final
 
 
 # =========================================================
-# EJECUCIÓN
+# EJECUCIÓN DIRECTA
 # =========================================================
 if __name__ == "__main__":
-    procesar()
+
+    df = procesar_precios_estructura(exportar=True)
+
+    print("\n✅ Precios de estructuras generados:\n")
+    print(df)
