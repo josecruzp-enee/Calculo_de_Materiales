@@ -236,24 +236,50 @@ def _seccion_mano_obra(df):
 def _seccion_cotizacion(doc, df_costos, df_mo):
 
     elems = [PageBreak()]
-    elems.append(Paragraph("<b>6. COTIZACIÓN DEL PROYECTO</b>", styles["Heading2"]))
-    elems.append(Spacer(1, 0.4 * inch))
+    elems.append(Paragraph("<b>6. COTIZACIÓN DEL PROYECTO</b>", styles["Heading1"]))
+    elems.append(Spacer(1, 0.5 * inch))
 
     total_materiales = _sumar_costos(df_costos)
     total_mo = _sumar_costos(df_mo)
 
     subtotal = total_materiales + total_mo
-    utilidad = subtotal * 0.15
-    isv = (subtotal + utilidad) * 0.15
-    total = subtotal + utilidad + isv
+
+    # 🔥 desglose del 15%
+    adm = subtotal * 0.04
+    ing = subtotal * 0.03
+    log = subtotal * 0.02
+    seg = subtotal * 0.02
+    enee = subtotal * 0.02
+    imp = subtotal * 0.01
+    otros = subtotal * 0.01
+
+    gastos_total = adm + ing + log + seg + enee + imp + otros
+
+    isv = (subtotal + gastos_total) * 0.15
+    total = subtotal + gastos_total + isv
 
     data = [
         ["Concepto", "Monto (L)"],
+
         ["Materiales", f"{total_materiales:,.2f}"],
         ["Mano de Obra", f"{total_mo:,.2f}"],
+
         ["Subtotal", f"{subtotal:,.2f}"],
-        ["Utilidad (15%)", f"{utilidad:,.2f}"],
+
+        ["", ""],  # separación visual
+
+        ["Gastos Administrativos (4%)", f"{adm:,.2f}"],
+        ["Ingeniería (3%)", f"{ing:,.2f}"],
+        ["Logística y Transporte (2%)", f"{log:,.2f}"],
+        ["Higiene y Seguridad (2%)", f"{seg:,.2f}"],
+        ["Gestión y Aprobación ENEE (2%)", f"{enee:,.2f}"],
+        ["Imprevistos (1%)", f"{imp:,.2f}"],
+        ["Otros (1%)", f"{otros:,.2f}"],
+
+        ["Total Gastos", f"{gastos_total:,.2f}"],
+
         ["ISV (15%)", f"{isv:,.2f}"],
+
         ["TOTAL OFERTA", f"{total:,.2f}"],
     ]
 
@@ -262,20 +288,42 @@ def _seccion_cotizacion(doc, df_costos, df_mo):
         colWidths=[doc.width * 0.7, doc.width * 0.3]
     )
 
+    tabla.hAlign = "CENTER"
+
     tabla.setStyle(TableStyle([
+        # encabezado
         ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
         ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
 
-        ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#D9D9D9")),
-        ("FONTNAME", (0,-1), (-1,-1), "Helvetica-Bold"),
-
+        # alineación
         ("ALIGN", (1,1), (-1,-1), "RIGHT"),
+
+        # subtotal
+        ("BACKGROUND", (0,3), (-1,3), colors.HexColor("#F2F2F2")),
+
+        # bloque de gastos
+        ("BACKGROUND", (0,5), (-1,11), colors.HexColor("#FAFAFA")),
+
+        # total gastos
+        ("BACKGROUND", (0,12), (-1,12), colors.HexColor("#EFEFEF")),
+        ("FONTNAME", (0,12), (-1,12), "Helvetica-Bold"),
+
+        # total final
+        ("BACKGROUND", (0,-1), (-1,-1), colors.darkblue),
+        ("TEXTCOLOR", (0,-1), (-1,-1), colors.white),
+        ("FONTNAME", (0,-1), (-1,-1), "Helvetica-Bold"),
+        ("LINEABOVE", (0,-1), (-1,-1), 1.5, colors.black),
+
+        # padding (más presencia)
         ("LEFTPADDING", (0,0), (-1,-1), 10),
+        ("RIGHTPADDING", (0,0), (-1,-1), 10),
+        ("TOPPADDING", (0,0), (-1,-1), 10),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 10),
     ]))
 
     elems.append(tabla)
     return elems
-
 
 def _seccion_estructuras_por_punto(doc, df):
     if df is None or df.empty:
