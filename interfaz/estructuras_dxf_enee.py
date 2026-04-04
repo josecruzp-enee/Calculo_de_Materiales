@@ -297,4 +297,4 @@ def cargar_desde_dxf_enee() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     
     ruta_tmp = materializar_df_a_archivo(df_ancho, "dxf")
 
-    return df_largo, ruta_tmp
+    return df_ancho, ruta_tmp
