@@ -110,7 +110,7 @@ def _add_item(cat: str, code: str, qty: int):
     bucket = st.session_state["puntos_data"][p][cat]
 
     bucket[code] = bucket.get(code, 0) + int(qty)
-
+    
 def _remove_item(cat: str, code: str, all_qty: bool = False):
     p = st.session_state["punto_en_edicion"]
     bucket = st.session_state["puntos_data"][p][cat]
