@@ -24,7 +24,7 @@ from exportadores.pdf_base import (
     formatear_material,
     _calibres_por_tipo,
 )
-
+from exportadores.cotizacion import generar_seccion_presupuesto
 from exportadores.pdf_reportes_simples import _tabla_estructuras_por_punto
 from exportadores.pdf_anexos_costos import (
     tabla_costos_materiales_pdf,
@@ -80,7 +80,7 @@ def generar_pdf_completo(
     elems += _seccion_costos_materiales(df_costos)
     elems += _seccion_mano_obra(df_mo_estructuras)
     elems += _seccion_cotizacion(doc, df_costos, df_mo_estructuras)
-
+    elems += generar_seccion_presupuesto(doc, styles)
     elems += _seccion_estructuras_por_punto(doc, df_estructuras_por_punto)
     elems += _seccion_materiales_por_punto(doc, df_mat_por_punto)
 
