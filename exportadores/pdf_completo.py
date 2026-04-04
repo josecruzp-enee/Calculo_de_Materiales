@@ -344,3 +344,59 @@ def generar_pdf_completo(
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
+
+
+# ---------------------------
+# RESUMEN ECONÓMICO DEL PROYECTO
+# ---------------------------
+if df_costos is not None and df_mo_estructuras is not None:
+
+    salto_pagina_seguro(elems)
+
+    elems.append(Paragraph("<b>Resumen Económico del Proyecto</b>", styles["Heading2"]))
+
+    total_materiales = float(df_costos["Total"].sum()) if "Total" in df_costos.columns else 0
+    total_mo = float(df_mo_estructuras["MO Total"].sum()) if "MO Total" in df_mo_estructuras.columns else 0
+
+    equipos = total_mo * 0.10  # 🔧 estimado grúa/logística
+    directos = total_materiales + total_mo + equipos
+
+    ingenieria = directos * 0.07
+    administracion = directos * 0.05
+    imprevistos = directos * 0.04
+
+    indirectos = ingenieria + administracion + imprevistos
+
+    utilidad = (directos + indirectos) * 0.15
+
+    subtotal = directos + indirectos + utilidad
+    isv = subtotal * 0.15
+    total_final = subtotal + isv
+
+    data = [
+        ["Concepto", "Monto (L)"],
+        ["Materiales", f"{total_materiales:,.2f}"],
+        ["Mano de Obra", f"{total_mo:,.2f}"],
+        ["Equipos y Logística", f"{equipos:,.2f}"],
+        ["Subtotal Directo", f"{directos:,.2f}"],
+        ["Ingeniería (7%)", f"{ingenieria:,.2f}"],
+        ["Administración (5%)", f"{administracion:,.2f}"],
+        ["Imprevistos (4%)", f"{imprevistos:,.2f}"],
+        ["Utilidad (15%)", f"{utilidad:,.2f}"],
+        ["Subtotal", f"{subtotal:,.2f}"],
+        ["ISV 15%", f"{isv:,.2f}"],
+        ["TOTAL PROYECTO", f"{total_final:,.2f}"],
+    ]
+
+    tabla = Table(data, colWidths=[4 * inch, 2 * inch])
+
+    tabla.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+        ("BACKGROUND", (0,-1), (-1,-1), colors.lightgrey),
+        ("FONTNAME", (0,-1), (-1,-1), "Helvetica-Bold"),
+        ("ALIGN", (1,1), (-1,-1), "RIGHT"),
+    ]))
+
+    elems.append(tabla)
