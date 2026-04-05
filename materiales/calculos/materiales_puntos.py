@@ -14,6 +14,7 @@ COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 # VALIDADOR
 # ==========================================================
 def _validar_df(df: pd.DataFrame) -> None:
+
     if df is None:
         raise ValueError("DataFrame es None")
 
@@ -28,7 +29,25 @@ def _validar_df(df: pd.DataFrame) -> None:
 
 
 # ==========================================================
-# CONTEO DE ESTRUCTURAS (NUEVO - SIN excel_legacy)
+# NORMALIZACIÓN DE ESTRUCTURAS (🔥 CLAVE)
+# ==========================================================
+def _normalizar_estructura(e: str) -> str | None:
+
+    if not e:
+        return None
+
+    for parte in expandir_lista_codigos(e):
+
+        codigo, _ = limpiar_codigo(parte)
+
+        if codigo:
+            return str(codigo).strip().upper()
+
+    return None
+
+
+# ==========================================================
+# CONTEO DE ESTRUCTURAS
 # ==========================================================
 def extraer_conteo_estructuras(df_estructuras):
 
@@ -47,11 +66,12 @@ def extraer_conteo_estructuras(df_estructuras):
         lista_limpia = []
 
         for e in lista:
-            s = str(e).strip().upper()
 
-            if s and s not in {"", "SELECCIONAR", "N/A", "NONE"}:
-                estructuras_limpias.append(s)
-                lista_limpia.append(s)
+            codigo = _normalizar_estructura(e)
+
+            if codigo:
+                estructuras_limpias.append(codigo)
+                lista_limpia.append(codigo)
 
         estructuras_por_punto[punto] = lista_limpia
 
@@ -74,6 +94,9 @@ def calcular_materiales_estructura(
 
     cant = max(int(cant or 1), 1)
 
+    # 🔥 NORMALIZAR CLAVE
+    estructura = str(estructura).strip().upper()
+
     df_hoja = hojas_base.get(estructura)
 
     if df_hoja is None or df_hoja.empty:
@@ -94,8 +117,10 @@ def calcular_materiales_estructura(
         df_filtrado["Cantidad"], errors="coerce"
     ).fillna(0)
 
+    # multiplicar por cantidad de estructuras
     df_filtrado["Cantidad"] *= float(cant)
 
+    # consolidar por estructura
     df_filtrado = (
         df_filtrado
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
