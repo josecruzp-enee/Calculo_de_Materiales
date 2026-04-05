@@ -9,9 +9,8 @@ from interfaz.base import (
 )
 
 from interfaz.datos_proyecto import seccion_datos_proyecto
-from interfaz.cables_ui import seccion_cables  # ✅ CAMBIO CLAVE
-
-from interfaz.estructuras import seccion_entrada_estructuras
+from interfaz.cables_ui import seccion_cables
+from interfaz.estructuras_desplegables import listas_desplegables  # 🔥 CAMBIO CLAVE
 from interfaz.materiales_extra import seccion_adicionar_material
 
 from interfaz.exportacion import (
@@ -39,7 +38,6 @@ def renderizar_datos_proyecto():
 
 
 def renderizar_cables():
-    # ⚠️ UI directa → maneja su propio session_state
     seccion_cables()
 
 
@@ -47,7 +45,17 @@ def renderizar_modo_carga():
     st.subheader("3) Modo de Carga")
 
     modo = seleccionar_modo_carga()
-    st.session_state["modo_carga_seleccionado"] = modo
+
+    # 🔥 NORMALIZAR A MODO TÉCNICO
+    mapa = {
+        "Desde archivo Excel": "excel",
+        "Pegar tabla": "tabla",
+        "Listas desplegables": "manual",
+        "Pdf": "pdf",
+        "DXF (ENEE)": "dxf",
+    }
+
+    st.session_state["modo_carga_seleccionado"] = mapa.get(modo, modo)
 
 
 def renderizar_estructuras():
@@ -58,17 +66,26 @@ def renderizar_estructuras():
 
     modo = st.session_state["modo_carga_seleccionado"]
 
-    df, ruta = seccion_entrada_estructuras(modo)
+    # =====================================================
+    # 🔥 CASO ACTUAL: SOLO DESPLEGABLES
+    # =====================================================
+    if modo == "manual":
 
-    if not es_dataframe_valido(df):
-        st.warning("⚠️ No se generaron estructuras.")
+        df, ruta = listas_desplegables()
+
+    else:
+        st.info("⚠️ Por ahora solo está activo modo desplegables.")
         return
 
-    # ✔ SOLO almacenar resultado
+    if not es_dataframe_valido(df):
+        st.info("⚠️ No hay estructuras aún.")
+        return
+
+    # ✔ almacenar resultado
     st.session_state["df_estructuras"] = df
     st.session_state["ruta_estructuras_compacto"] = ruta
 
-    st.success("✅ Estructuras cargadas correctamente.")
+    st.success("✅ Estructuras listas.")
 
 
 def renderizar_materiales():
