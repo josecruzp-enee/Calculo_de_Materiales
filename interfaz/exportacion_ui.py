@@ -13,6 +13,9 @@ import pandas as pd
 from entradas.orquestador_entradas import cargar_entrada
 from materiales.orquestador_materiales import ejecutar_materiales
 
+# 🔥 NUEVO (CATÁLOGO)
+from entradas.base_datos import cargar_base_datos, obtener_catalogo_materiales
+
 # =========================
 # REPORTES
 # =========================
@@ -69,7 +72,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
         df_cables = st.session_state.get("cables_proyecto_df")
 
         # =====================================================
-        # 3. RUTA MATERIALES (solo referencia)
+        # 3. RUTA MATERIALES
         # =====================================================
         ruta_materiales = st.session_state.get("ruta_datos_materiales")
 
@@ -78,7 +81,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
             return
 
         # =====================================================
-        # 4. ARMAR ENTRADA (🔥 CORRECTO)
+        # 4. ARMAR ENTRADA
         # =====================================================
         entrada = cargar_entrada(
             datos_fuente={
@@ -90,9 +93,21 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
         )
 
         # =====================================================
-        # 5. EJECUTAR ORQUESTADOR
+        # 5. CARGAR CATÁLOGO (🔥 NUEVO)
         # =====================================================
-        resultado = ejecutar_materiales(entrada)
+        data_base = cargar_base_datos()
+        catalogo = obtener_catalogo_materiales(data_base)
+
+        if catalogo.empty:
+            st.warning("⚠️ Catálogo de materiales vacío.")
+
+        # =====================================================
+        # 6. EJECUTAR ORQUESTADOR
+        # =====================================================
+        resultado = ejecutar_materiales(
+            entrada,
+            catalogo=catalogo   # 👈 CLAVE
+        )
 
         if not resultado.ok:
             st.error("❌ Error en cálculo:")
