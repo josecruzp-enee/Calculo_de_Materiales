@@ -22,23 +22,28 @@ def inicializar_estado_estructuras():
 
 
 # =========================================================
-# CATÁLOGO (MÍNIMO FUNCIONAL)
+# CATÁLOGO (ALINEADO CON UI)
 # =========================================================
 
 def obtener_opciones_catalogo():
 
+    base = [
+        "A-I-1",
+        "A-I-4",
+        "B-III-1",
+        "B-III-5",
+        "CT-N",
+        "TS-50 KVA",
+    ]
+
     return {
-        "Estructuras": {
-            "valores": [
-                "A-I-1",
-                "A-I-4",
-                "B-III-1",
-                "B-III-5",
-                "CT-N",
-                "TS-50 KVA",
-            ],
-            "etiquetas": {}
-        }
+        "Poste": {"valores": base, "etiquetas": {}},
+        "Primario": {"valores": base, "etiquetas": {}},
+        "Secundario": {"valores": base, "etiquetas": {}},
+        "Retenidas": {"valores": base, "etiquetas": {}},
+        "Conexiones a tierra": {"valores": base, "etiquetas": {}},
+        "Transformadores": {"valores": base, "etiquetas": {}},
+        "Luminarias": {"valores": base, "etiquetas": {}},
     }
 
 
@@ -107,6 +112,7 @@ def construir_dataframe_salida():
     st.session_state["df_estructuras"] = df_salida
 
     return df_salida, None
-    
+
+
 def crear_nuevo_punto():
     st.session_state["punto_en_edicion"] = f"Punto {len(st.session_state['df_puntos']) + 1}"
