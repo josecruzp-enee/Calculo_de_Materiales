@@ -1,20 +1,23 @@
-# app.py — navegación por secciones sin scroll (estado + query params)
 # -*- coding: utf-8 -*-
+# app.py
+
 from __future__ import annotations
 import os
-import pandas as pd
 import streamlit as st
+
 from interfaz.orquestador_interfaz import ejecutar_orquestador_interfaz
 
-# ---------------------------
-#   Navegación sin scroll
-# ---------------------------
+
+# =========================================================
+# NAVEGACIÓN
+# =========================================================
+
 SECCIONES = [
     ("datos", "Datos"),
     ("cables", "Cables"),
     ("modo", "Modo de Carga"),
     ("estructuras", "Estructuras"),
-    ("materiales", "Adicionar Material"),
+    ("materiales", "Materiales Extra"),
     ("final", "Finalizar"),
     ("exportar", "Exportación"),
     ("mapa_kml", "Mapa / KMZ"),
@@ -22,24 +25,26 @@ SECCIONES = [
 
 
 def _nav_estado_actual() -> str:
-    """Lee la sección actual desde query params o estado; pone un valor por defecto."""
     qp = st.query_params.get("s")
+
     if isinstance(qp, list):
         qp = qp[0] if qp else None
+
     sec = qp or st.session_state.get("sec") or "datos"
+
     st.session_state["sec"] = sec
+
     return sec
 
 
 def _ir_a(seccion: str) -> None:
-    """Cambia de sección y re-ejecuta."""
     st.session_state["sec"] = seccion
     st.query_params["s"] = seccion
     st.rerun()
 
 
 def _barra_nav_botones(seccion_activa: str) -> None:
-    """Barra superior con botones."""
+
     st.markdown(
         """
         <style>
@@ -53,9 +58,7 @@ def _barra_nav_botones(seccion_activa: str) -> None:
             padding:.45rem .85rem;
             font-weight:600;
             font-size:.92rem;
-            box-shadow: 0 1px 0 rgba(0,0,0,.05);
         }
-        .pill button:hover { background:#145CC9; border-color:#145CC9; }
         .pill.active button { background:#072C69; border-color:#072C69; }
         .stButton>button { min-width: 140px; }
         </style>
@@ -64,42 +67,74 @@ def _barra_nav_botones(seccion_activa: str) -> None:
     )
 
     st.markdown('<div class="nav-top">', unsafe_allow_html=True)
+
     cols = st.columns(len(SECCIONES), gap="small")
+
     for i, (key, label) in enumerate(SECCIONES):
         with cols[i]:
             active_cls = "active" if key == seccion_activa else ""
             st.markdown(f'<div class="pill {active_cls}">', unsafe_allow_html=True)
+
             if st.button(label, key=f"nav_{key}"):
                 _ir_a(key)
+
             st.markdown("</div>", unsafe_allow_html=True)
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _init_rutas() -> None:
-    """Define rutas base (solo una vez)."""
+# =========================================================
+# INICIALIZACIÓN GLOBAL
+# =========================================================
+
+def _init_rutas():
     base_dir = os.path.dirname(__file__)
-    ruta_datos_materiales = os.path.join(base_dir, "data", "Estructura_datos.xlsx")
-    st.session_state.setdefault("ruta_datos_materiales", ruta_datos_materiales)
+
+    ruta = os.path.join(base_dir, "data", "Estructura_datos.xlsx")
+
+    st.session_state.setdefault("ruta_datos_materiales", ruta)
 
 
-# ---------------------------
-#           App
-# ---------------------------
-def main() -> None:
-    st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
+def _init_estado_base():
+    """
+    Estado mínimo global (NO lógica de negocio)
+    """
+
+    defaults = {
+        "datos_proyecto": {},
+        "materiales_extra": [],
+        "df_estructuras": None,
+        "resultado_calculo": None,
+        "pdfs_generados": None,
+        "calculo_finalizado": False,
+    }
+
+    for k, v in defaults.items():
+        st.session_state.setdefault(k, v)
+
+
+# =========================================================
+# APP
+# =========================================================
+
+def main():
+
+    st.set_page_config(
+        page_title="Cálculo de Materiales",
+        layout="wide"
+    )
 
     _init_rutas()
+    _init_estado_base()
 
-    # Encabezado / estado global
-    renderizar_encabezado()
-    inicializar_estado()
+    # =====================================================
+    # HEADER
+    # =====================================================
+    st.title("⚡ Cálculo de Materiales de Redes")
 
-    # ---------------------------
-    #   Selector de membrete PDF
-    # ---------------------------
-    if "membrete_pdf" not in st.session_state:
-        st.session_state["membrete_pdf"] = "SMART"
-
+    # =====================================================
+    # MEMBRETE PDF
+    # =====================================================
     st.radio(
         "Membrete del PDF",
         ["SMART", "ENEE", "SIN LOGO"],
@@ -107,15 +142,14 @@ def main() -> None:
         horizontal=True,
     )
 
-    # ============================
-    # 🔥 ORQUESTADOR UI (NUEVO)
-    # ============================
+    # =====================================================
+    # ORQUESTADOR
+    # =====================================================
     ejecutar_orquestador_interfaz(
         _nav_estado_actual,
         _barra_nav_botones,
     )
 
+
 if __name__ == "__main__":
     main()
-
-
