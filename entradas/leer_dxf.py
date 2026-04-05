@@ -1,23 +1,72 @@
 # -*- coding: utf-8 -*-
 """
 leer_dxf.py
-Lectura de estructuras desde archivo DXF (plano ENEE).
 
-Devuelve DataFrame crudo (SIN normalizar).
+Lectura de estructuras desde DXF (INPUT CRUDO CONTROLADO).
+NO contiene lógica de negocio.
 """
 
 from __future__ import annotations
 import pandas as pd
+import re
 
 
+# =========================================================
+# HELPERS
+# =========================================================
+def _limpiar_texto_basico(s: str) -> str:
+    if s is None:
+        return ""
+
+    s = str(s)
+
+    # limpiar saltos de línea DXF
+    s = s.replace("\\P", " ")
+    s = s.replace("\n", " ").replace("\r", " ")
+
+    # normalizar espacios
+    s = re.sub(r"\s+", " ", s).strip()
+
+    return s
+
+
+def _es_texto_util(s: str) -> bool:
+    """
+    Filtro mínimo para eliminar basura típica DXF.
+    NO elimina posibles estructuras válidas.
+    """
+    if not s:
+        return False
+
+    s = s.strip()
+
+    # basura común
+    basura = {"", "-", ".", "...", "0", "N/A", "NONE"}
+    if s.upper() in basura:
+        return False
+
+    # evitar coordenadas puras tipo "123.45"
+    if re.match(r"^\d+(\.\d+)?$", s):
+        return False
+
+    return True
+
+
+# =========================================================
+# FUNCIÓN PRINCIPAL
+# =========================================================
 def leer_dxf(archivo_dxf) -> pd.DataFrame:
     """
-    archivo_dxf:
-        - ruta (.dxf)
-        - archivo cargado (Streamlit)
+    Entrada:
+        - ruta .dxf
+        - archivo tipo Streamlit
 
-    Retorna:
-        DataFrame con estructuras detectadas
+    Salida:
+        DataFrame crudo con:
+            Texto
+            Layer
+            X
+            Y
     """
 
     try:
@@ -30,14 +79,15 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
     # -------------------------
     try:
         if hasattr(archivo_dxf, "read"):
-            # archivo tipo Streamlit (bytes)
             import tempfile
+
             with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
                 tmp.write(archivo_dxf.read())
                 ruta = tmp.name
+
             doc = ezdxf.readfile(ruta)
+
         else:
-            # ruta directa
             doc = ezdxf.readfile(archivo_dxf)
 
     except Exception as e:
@@ -48,26 +98,49 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
     # -------------------------
     # EXTRAER TEXTOS
     # -------------------------
-    textos = []
+    filas = []
 
     for e in msp:
 
-        if e.dxftype() in ["TEXT", "MTEXT"]:
-            try:
-                if e.dxftype() == "TEXT":
-                    contenido = e.dxf.text
-                else:
-                    contenido = e.text
+        if e.dxftype() not in ["TEXT", "MTEXT"]:
+            continue
 
-                if contenido:
-                    textos.append(str(contenido).strip())
+        try:
+            # contenido
+            if e.dxftype() == "TEXT":
+                contenido = e.dxf.text
+                punto = e.dxf.insert
+            else:
+                contenido = e.text
+                punto = e.dxf.insert
 
-            except Exception:
+            texto = _limpiar_texto_basico(contenido)
+
+            if not _es_texto_util(texto):
                 continue
 
+            # posición
+            x = float(punto[0]) if punto else None
+            y = float(punto[1]) if punto else None
+
+            layer = e.dxf.layer if hasattr(e.dxf, "layer") else ""
+
+            filas.append({
+                "Texto": texto,
+                "Layer": layer,
+                "X": x,
+                "Y": y
+            })
+
+        except Exception:
+            continue
+
     # -------------------------
-    # CONVERTIR A DATAFRAME
+    # DATAFRAME FINAL
     # -------------------------
-    df = pd.DataFrame({"Texto": textos})
+    if not filas:
+        return pd.DataFrame(columns=["Texto", "Layer", "X", "Y"])
+
+    df = pd.DataFrame(filas)
 
     return df
