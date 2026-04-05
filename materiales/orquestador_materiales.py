@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
-
 import pandas as pd
 
 # =========================
@@ -11,18 +10,13 @@ from materiales.modelos.entrada import EntradaMateriales
 from materiales.modelos.salida import ResultadoMateriales
 
 # =========================
-# DOMINIO
+# MOTOR (🔥 ESTE ES EL CAMBIO CLAVE)
 # =========================
-from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
-from materiales.validaciones.materiales_validacion import validar_estructuras
+from materiales.calculos.calculo_materiales import calcular_materiales_proyecto
 
-# ⚠️ TEMPORAL (luego migrar a materiales/)
+# ⚠️ TEMPORAL
 from core.cables_materiales import materiales_desde_cables
 
-
-# =========================================================
-# CONFIG
-# =========================================================
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
@@ -30,7 +24,6 @@ COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 # =========================================================
 # HELPERS
 # =========================================================
-
 def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame(columns=COLUMNAS_STD)
@@ -39,127 +32,79 @@ def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
 
     for col in COLUMNAS_STD:
         if col not in df.columns:
-            if col == "Cantidad":
-                df[col] = 0.0
-            else:
-                df[col] = ""
+            df[col] = 0.0 if col == "Cantidad" else ""
 
     return df[COLUMNAS_STD]
-
-
-def _df_a_por_punto(df: pd.DataFrame):
-
-    """
-    Convierte DataFrame de estructuras a:
-    {punto: [estructuras]}
-    """
-
-    resultado = {}
-
-    for _, row in df.iterrows():
-
-        punto = str(row.get("Punto", "")).strip()
-        estructura = str(row.get("codigodeestructura", "")).strip().upper()
-
-        if not punto or not estructura:
-            continue
-
-        if punto not in resultado:
-            resultado[punto] = []
-
-        resultado[punto].append(estructura)
-
-    return resultado
 
 
 # =========================================================
 # ORQUESTADOR
 # =========================================================
-
 def ejecutar_materiales(entrada: EntradaMateriales) -> ResultadoMateriales:
 
     warnings = []
 
-    # =====================================================
-    # INPUTS TIPADOS
-    # =====================================================
     estructuras_df = entrada.estructuras_df
     tension = entrada.tension
     df_cables = entrada.df_cables
 
     # =====================================================
-    # TRANSFORMACIÓN
+    # VALIDACIÓN BÁSICA
     # =====================================================
-    estructuras_por_punto = _df_a_por_punto(estructuras_df)
-
-    # =====================================================
-    # VALIDACIÓN
-    # =====================================================
-    val = validar_estructuras(estructuras_por_punto)
-
-    if not val.get("ok", True):
+    if estructuras_df is None or estructuras_df.empty:
         return ResultadoMateriales(
             ok=False,
             df_materiales=pd.DataFrame(),
-            errores=val.get("errores", []),
-            warnings=val.get("warnings", [])
+            errores=["No hay estructuras"],
+            warnings=[]
         )
 
-    warnings.extend(val.get("warnings", []))
-
     # =====================================================
-    # CÁLCULOS
+    # CÁLCULO (🔥 MOTOR)
     # =====================================================
     try:
-        df_puntos = calcular_materiales_por_punto(
-            None,  # si luego usas base de datos, aquí la pasas
-            estructuras_por_punto,
-            tension
+        resultados = calcular_materiales_proyecto(
+            hojas_base=None,  # aquí luego conectas base real
+            df_estructuras=estructuras_df,
+            tension=tension
         )
 
-        df_cables_mat = materiales_desde_cables(df_cables)
+        df_materiales = resultados.get("df_materiales_detalle")
 
     except Exception as e:
         return ResultadoMateriales(
             ok=False,
             df_materiales=pd.DataFrame(),
-            errores=[f"Error en cálculos: {e}"],
+            errores=[f"Error en cálculo: {e}"],
             warnings=warnings
         )
+
+    # =====================================================
+    # CABLES
+    # =====================================================
+    df_cables_mat = materiales_desde_cables(df_cables)
 
     # =====================================================
     # NORMALIZACIÓN
     # =====================================================
-    df_puntos = _normalizar_df(df_puntos)
+    df_materiales = _normalizar_df(df_materiales)
     df_cables_mat = _normalizar_df(df_cables_mat)
 
     # =====================================================
-    # CONSOLIDACIÓN
+    # CONSOLIDACIÓN FINAL
     # =====================================================
-    try:
-        df_total = pd.concat(
-            [df_puntos, df_cables_mat],
-            ignore_index=True
-        )
+    df_total = pd.concat([df_materiales, df_cables_mat], ignore_index=True)
 
-        if not df_total.empty:
-            df_total = (
-                df_total
-                .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
-                .sum()
-                .sort_values("Materiales")
-            )
-
-    except Exception as e:
-        return ResultadoMateriales(
-            ok=False,
-            df_materiales=pd.DataFrame(),
-            errores=[f"Error consolidando: {e}"],
-            warnings=warnings
+    if not df_total.empty:
+        df_total = (
+            df_total
+            .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+            .sum()
+            .sort_values("Materiales")
         )
 
     # =====================================================
-    # RESULTADO FINAL
+    # RESULTADO
     # =====================================================
     return ResultadoMateriales(
         ok=True,
