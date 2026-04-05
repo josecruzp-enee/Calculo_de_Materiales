@@ -1,49 +1,18 @@
 # -*- coding: utf-8 -*-
 
-# -*- coding: utf-8 -*-
-
-import pandas as pd
-
-COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
-
-# ==========================================================
-# MOCK TEMPORAL (NO ROMPER IMPORTS)
-# ==========================================================
-
-def calcular_materiales_por_punto(*args, **kwargs) -> pd.DataFrame:
-    return pd.DataFrame(columns=COLUMNAS_STD)
-
-
-def extraer_conteo_estructuras(*args, **kwargs):
-    from collections import Counter
-    return Counter(), {}
-
-
-
-
-'''
 from __future__ import annotations
-
 import pandas as pd
 from collections import Counter
 
 from materiales.auxiliares.materiales_aux import limpiar_codigo, expandir_lista_codigos
 from entradas.excel_legacy import extraer_estructuras_proyectadas
-
-# ⚠️ PENDIENTE: mover a materiales/reglas/
-# from materiales.reglas.conectores_mt import reemplazar_solo_yc25a25_mt
-
 from materiales.auxiliares.lector_materiales import leer_hoja_materiales
 
-
-# ==========================================================
-# CONSTANTES
-# ==========================================================
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
 # ==========================================================
-# VALIDADOR INTERNO
+# VALIDADOR
 # ==========================================================
 def _validar_df(df: pd.DataFrame) -> None:
     if df is None:
@@ -55,10 +24,7 @@ def _validar_df(df: pd.DataFrame) -> None:
     if df.empty:
         return
 
-    cols = set(df.columns)
-    esperadas = set(COLUMNAS_STD)
-
-    if not esperadas.issubset(cols):
+    if not set(COLUMNAS_STD).issubset(df.columns):
         raise ValueError(f"Formato inválido: {df.columns}")
 
 
@@ -80,8 +46,7 @@ def extraer_conteo_estructuras(df_estructuras):
     valores_invalidos = {"", "SELECCIONAR", "ESTRUCTURA", "PUNTO", "N/A", "NONE", "0", "1", "2", "3"}
 
     estructuras_filtradas = [
-        e for e in estructuras_limpias
-        if e not in valores_invalidos
+        e for e in estructuras_limpias if e not in valores_invalidos
     ]
 
     conteo = Counter(estructuras_filtradas)
@@ -89,15 +54,11 @@ def extraer_conteo_estructuras(df_estructuras):
     estructuras_por_punto_filtrado = {}
 
     for punto, lista in estructuras_por_punto.items():
-        estructuras_validas = []
-
-        for x in lista:
-            s = str(x).strip().upper()
-
-            if s and s not in valores_invalidos:
-                estructuras_validas.append(s)
-
-        estructuras_por_punto_filtrado[punto] = estructuras_validas
+        estructuras_por_punto_filtrado[punto] = [
+            str(x).strip().upper()
+            for x in lista
+            if str(x).strip().upper() not in valores_invalidos
+        ]
 
     return conteo, estructuras_por_punto_filtrado
 
@@ -106,29 +67,21 @@ def extraer_conteo_estructuras(df_estructuras):
 # MATERIAL POR ESTRUCTURA
 # ==========================================================
 def calcular_materiales_estructura(
-    hojas_base: dict[str, pd.DataFrame],
-    estructura: str,
-    cant: int,
-    tension: float,
+    hojas_base,
+    estructura,
+    cant,
+    tension,
     calibre_mt=None,
     tabla_conectores_mt=None,
-) -> pd.DataFrame:
+):
 
-    cant = int(cant) if cant else 1
-    if cant < 1:
-        cant = 1
+    cant = max(int(cant or 1), 1)
 
-    # =========================
-    # Obtener hoja
-    # =========================
     df_hoja = hojas_base.get(estructura)
 
     if df_hoja is None or df_hoja.empty:
         return pd.DataFrame(columns=COLUMNAS_STD)
 
-    # =========================
-    # Lector
-    # =========================
     df_filtrado = leer_hoja_materiales(df_hoja, tension)
 
     if df_filtrado is None or df_filtrado.empty:
@@ -136,54 +89,33 @@ def calcular_materiales_estructura(
 
     _validar_df(df_filtrado)
 
-    # =========================
-    # Limpieza mínima
-    # =========================
     df_filtrado = df_filtrado.copy()
 
     df_filtrado["Materiales"] = df_filtrado["Materiales"].astype(str).str.strip()
     df_filtrado["Unidad"] = df_filtrado["Unidad"].astype(str).str.strip()
     df_filtrado["Cantidad"] = pd.to_numeric(df_filtrado["Cantidad"], errors="coerce").fillna(0)
 
-    # =========================
-    # ⚠️ REEMPLAZO CONECTORES (PENDIENTE)
-    # =========================
-    # df_filtrado["Materiales"] = reemplazar_solo_yc25a25_mt(
-    #     df_filtrado["Materiales"],
-    #     estructura,
-    #     calibre_mt,
-    #     tabla_conectores_mt
-    # )
+    df_filtrado["Cantidad"] *= float(cant)
 
-    # =========================
-    # Multiplicar por cantidad
-    # =========================
-    df_filtrado["Cantidad"] = df_filtrado["Cantidad"] * float(cant)
-
-    # =========================
-    # Agrupar (evitar duplicados internos)
-    # =========================
     df_filtrado = (
         df_filtrado
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
     )
 
-    _validar_df(df_filtrado)
-
     return df_filtrado[COLUMNAS_STD]
 
 
 # ==========================================================
-# MATERIAL POR PROYECTO (PUNTOS)
+# MATERIAL POR PROYECTO
 # ==========================================================
 def calcular_materiales_por_punto(
-    hojas_base: dict[str, pd.DataFrame],
-    df_estructuras: pd.DataFrame,
-    tension: float,
+    hojas_base,
+    df_estructuras,
+    tension,
     calibre_mt=None,
     tabla_conectores_mt=None,
-) -> pd.DataFrame:
+):
 
     conteo, _ = extraer_conteo_estructuras(df_estructuras)
 
@@ -192,12 +124,12 @@ def calcular_materiales_por_punto(
     for estructura, cant in conteo.items():
 
         df_mat = calcular_materiales_estructura(
-            hojas_base=hojas_base,
-            estructura=estructura,
-            cant=cant,
-            tension=tension,
-            calibre_mt=calibre_mt,
-            tabla_conectores_mt=tabla_conectores_mt
+            hojas_base,
+            estructura,
+            cant,
+            tension,
+            calibre_mt,
+            tabla_conectores_mt,
         )
 
         if df_mat is not None and not df_mat.empty:
@@ -211,4 +143,3 @@ def calcular_materiales_por_punto(
     _validar_df(df_final)
 
     return df_final[COLUMNAS_STD]
-'''
