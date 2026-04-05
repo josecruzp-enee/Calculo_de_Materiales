@@ -1,26 +1,35 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
-from typing import Dict, Any
+
 import pandas as pd
 
 # =========================
-# IMPORTS DOMINIO
+# MODELOS
 # =========================
+from materiales.modelos.entrada import EntradaMateriales
+from materiales.modelos.salida import ResultadoMateriales
 
+# =========================
+# DOMINIO
+# =========================
 from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
 from materiales.validaciones.materiales_validacion import validar_estructuras
 
-# ⚠️ TEMPORAL (luego migramos esto)
+# ⚠️ TEMPORAL (luego migrar a materiales/)
 from core.cables_materiales import materiales_desde_cables
 
 
 # =========================================================
-# HELPERS INTERNOS
+# CONFIG
 # =========================================================
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
+
+# =========================================================
+# HELPERS
+# =========================================================
 
 def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
     if df is None or df.empty:
@@ -38,19 +47,50 @@ def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
     return df[COLUMNAS_STD]
 
 
+def _df_a_por_punto(df: pd.DataFrame):
+
+    """
+    Convierte DataFrame de estructuras a:
+    {punto: [estructuras]}
+    """
+
+    resultado = {}
+
+    for _, row in df.iterrows():
+
+        punto = str(row.get("Punto", "")).strip()
+        estructura = str(row.get("codigodeestructura", "")).strip().upper()
+
+        if not punto or not estructura:
+            continue
+
+        if punto not in resultado:
+            resultado[punto] = []
+
+        resultado[punto].append(estructura)
+
+    return resultado
+
+
 # =========================================================
 # ORQUESTADOR
 # =========================================================
 
-def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
+def ejecutar_materiales(entrada: EntradaMateriales) -> ResultadoMateriales:
 
-    errores = []
     warnings = []
 
-    archivo_materiales = entrada.get("archivo_materiales")
-    estructuras_por_punto = entrada.get("estructuras_por_punto")
-    tension = entrada.get("tension")
-    df_cables = entrada.get("df_cables")
+    # =====================================================
+    # INPUTS TIPADOS
+    # =====================================================
+    estructuras_df = entrada.estructuras_df
+    tension = entrada.tension
+    df_cables = entrada.df_cables
+
+    # =====================================================
+    # TRANSFORMACIÓN
+    # =====================================================
+    estructuras_por_punto = _df_a_por_punto(estructuras_df)
 
     # =====================================================
     # VALIDACIÓN
@@ -58,11 +98,12 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
     val = validar_estructuras(estructuras_por_punto)
 
     if not val.get("ok", True):
-        return {
-            "ok": False,
-            "errores": val.get("errores", []),
-            "warnings": val.get("warnings", []),
-        }
+        return ResultadoMateriales(
+            ok=False,
+            df_materiales=pd.DataFrame(),
+            errores=val.get("errores", []),
+            warnings=val.get("warnings", [])
+        )
 
     warnings.extend(val.get("warnings", []))
 
@@ -71,7 +112,7 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
     # =====================================================
     try:
         df_puntos = calcular_materiales_por_punto(
-            archivo_materiales,
+            None,  # si luego usas base de datos, aquí la pasas
             estructuras_por_punto,
             tension
         )
@@ -79,14 +120,15 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
         df_cables_mat = materiales_desde_cables(df_cables)
 
     except Exception as e:
-        return {
-            "ok": False,
-            "errores": [f"Error en cálculos: {e}"],
-            "warnings": warnings,
-        }
+        return ResultadoMateriales(
+            ok=False,
+            df_materiales=pd.DataFrame(),
+            errores=[f"Error en cálculos: {e}"],
+            warnings=warnings
+        )
 
     # =====================================================
-    # NORMALIZACIÓN (🔥 CLAVE)
+    # NORMALIZACIÓN
     # =====================================================
     df_puntos = _normalizar_df(df_puntos)
     df_cables_mat = _normalizar_df(df_cables_mat)
@@ -109,21 +151,19 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
             )
 
     except Exception as e:
-        return {
-            "ok": False,
-            "errores": [f"Error consolidando: {e}"],
-            "warnings": warnings,
-        }
+        return ResultadoMateriales(
+            ok=False,
+            df_materiales=pd.DataFrame(),
+            errores=[f"Error consolidando: {e}"],
+            warnings=warnings
+        )
 
     # =====================================================
-    # RESULTADO
+    # RESULTADO FINAL
     # =====================================================
-    return {
-        "ok": True,
-        "errores": [],
-        "warnings": warnings,
-        "df_materiales": df_total,
-        "resumen": {
-            "total_items": len(df_total),
-        }
-    }
+    return ResultadoMateriales(
+        ok=True,
+        df_materiales=df_total,
+        errores=[],
+        warnings=warnings
+    )
