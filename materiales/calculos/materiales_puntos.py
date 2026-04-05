@@ -1,20 +1,47 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
+
 import pandas as pd
 from collections import Counter
 
 from materiales.auxiliares.materiales_aux import limpiar_codigo, expandir_lista_codigos
 from entradas.excel_legacy import extraer_estructuras_proyectadas
 
-# ⚠️ temporal (luego mover a materiales/)
-from core.conectores_mt import reemplazar_solo_yc25a25_mt
+# ⚠️ PENDIENTE: mover a materiales/reglas/
+# from materiales.reglas.conectores_mt import reemplazar_solo_yc25a25_mt
 
-# lector ya NO recibe archivo
 from materiales.auxiliares.lector_materiales import leer_hoja_materiales
 
 
 # ==========================================================
-# Conteo de estructuras
+# CONSTANTES
+# ==========================================================
+COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
+
+
+# ==========================================================
+# VALIDADOR INTERNO
+# ==========================================================
+def _validar_df(df: pd.DataFrame) -> None:
+    if df is None:
+        raise ValueError("DataFrame es None")
+
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("Se esperaba DataFrame")
+
+    if df.empty:
+        return
+
+    cols = set(df.columns)
+    esperadas = set(COLUMNAS_STD)
+
+    if not esperadas.issubset(cols):
+        raise ValueError(f"Formato inválido: {df.columns}")
+
+
+# ==========================================================
+# CONTEO DE ESTRUCTURAS
 # ==========================================================
 def extraer_conteo_estructuras(df_estructuras):
 
@@ -54,74 +81,111 @@ def extraer_conteo_estructuras(df_estructuras):
 
 
 # ==========================================================
-# Materiales por ESTRUCTURA (🔥 CORREGIDO)
+# MATERIAL POR ESTRUCTURA
 # ==========================================================
 def calcular_materiales_estructura(
-    hojas_base,                 # 🔥 CAMBIO CLAVE
-    estructura,
-    cant,
-    tension,
-    calibre_mt,
-    tabla_conectores_mt
-):
-    """
-    Calcula materiales por estructura individual usando base cargada en memoria.
-    """
+    hojas_base: dict[str, pd.DataFrame],
+    estructura: str,
+    cant: int,
+    tension: float,
+    calibre_mt=None,
+    tabla_conectores_mt=None,
+) -> pd.DataFrame:
 
-    try:
-        cant = int(cant) if cant else 1
-        if cant < 1:
-            cant = 1
+    cant = int(cant) if cant else 1
+    if cant < 1:
+        cant = 1
 
-        # =========================
-        # OBTENER HOJA DESDE MEMORIA
-        # =========================
-        df_hoja = hojas_base.get(estructura)
+    # =========================
+    # Obtener hoja
+    # =========================
+    df_hoja = hojas_base.get(estructura)
 
-        if df_hoja is None or df_hoja.empty:
-            return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+    if df_hoja is None or df_hoja.empty:
+        return pd.DataFrame(columns=COLUMNAS_STD)
 
-        # =========================
-        # LECTOR UNIFICADO (SIN ARCHIVO)
-        # =========================
-        df_filtrado = leer_hoja_materiales(df_hoja, tension)
+    # =========================
+    # Lector
+    # =========================
+    df_filtrado = leer_hoja_materiales(df_hoja, tension)
 
-        if df_filtrado is None or df_filtrado.empty:
-            return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+    if df_filtrado is None or df_filtrado.empty:
+        return pd.DataFrame(columns=COLUMNAS_STD)
 
-        # =========================
-        # LIMPIEZA
-        # =========================
-        df_filtrado["Materiales"] = df_filtrado["Materiales"].astype(str).str.strip()
-        df_filtrado["Unidad"] = df_filtrado["Unidad"].astype(str).str.strip()
-        df_filtrado["Cantidad"] = pd.to_numeric(df_filtrado["Cantidad"], errors="coerce").fillna(0)
+    _validar_df(df_filtrado)
 
-        # =========================
-        # REEMPLAZO CONECTORES MT
-        # =========================
-        df_filtrado["Materiales"] = reemplazar_solo_yc25a25_mt(
-            df_filtrado["Materiales"].tolist(),
-            estructura,
-            calibre_mt,
-            tabla_conectores_mt
+    # =========================
+    # Limpieza mínima
+    # =========================
+    df_filtrado = df_filtrado.copy()
+
+    df_filtrado["Materiales"] = df_filtrado["Materiales"].astype(str).str.strip()
+    df_filtrado["Unidad"] = df_filtrado["Unidad"].astype(str).str.strip()
+    df_filtrado["Cantidad"] = pd.to_numeric(df_filtrado["Cantidad"], errors="coerce").fillna(0)
+
+    # =========================
+    # ⚠️ REEMPLAZO CONECTORES (PENDIENTE)
+    # =========================
+    # df_filtrado["Materiales"] = reemplazar_solo_yc25a25_mt(
+    #     df_filtrado["Materiales"],
+    #     estructura,
+    #     calibre_mt,
+    #     tabla_conectores_mt
+    # )
+
+    # =========================
+    # Multiplicar por cantidad
+    # =========================
+    df_filtrado["Cantidad"] = df_filtrado["Cantidad"] * float(cant)
+
+    # =========================
+    # Agrupar (evitar duplicados internos)
+    # =========================
+    df_filtrado = (
+        df_filtrado
+        .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+        .sum()
+    )
+
+    _validar_df(df_filtrado)
+
+    return df_filtrado[COLUMNAS_STD]
+
+
+# ==========================================================
+# MATERIAL POR PROYECTO (PUNTOS)
+# ==========================================================
+def calcular_materiales_por_punto(
+    hojas_base: dict[str, pd.DataFrame],
+    df_estructuras: pd.DataFrame,
+    tension: float,
+    calibre_mt=None,
+    tabla_conectores_mt=None,
+) -> pd.DataFrame:
+
+    conteo, _ = extraer_conteo_estructuras(df_estructuras)
+
+    resultados = []
+
+    for estructura, cant in conteo.items():
+
+        df_mat = calcular_materiales_estructura(
+            hojas_base=hojas_base,
+            estructura=estructura,
+            cant=cant,
+            tension=tension,
+            calibre_mt=calibre_mt,
+            tabla_conectores_mt=tabla_conectores_mt
         )
 
-        # =========================
-        # MULTIPLICAR POR CANTIDAD
-        # =========================
-        df_filtrado["Cantidad"] = df_filtrado["Cantidad"] * float(cant)
+        if df_mat is not None and not df_mat.empty:
+            resultados.append(df_mat)
 
-        # =========================
-        # AGRUPAR
-        # =========================
-        df_filtrado = (
-            df_filtrado
-            .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
-            .sum()
-        )
+    if not resultados:
+        return pd.DataFrame(columns=COLUMNAS_STD)
 
-        return df_filtrado[["Materiales", "Unidad", "Cantidad"]]
+    df_final = pd.concat(resultados, ignore_index=True)
 
-    except Exception as e:
-        print(f"⚠️ Error en estructura {estructura}: {e}")
-        return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+    _validar_df(df_final)
+
+    return df_final[COLUMNAS_STD]
