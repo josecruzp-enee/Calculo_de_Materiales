@@ -1,151 +1,182 @@
 # -*- coding: utf-8 -*-
+# entradas/orquestador_entradas.py
 
 from __future__ import annotations
-from typing import Dict, Any
+
+from typing import Any
 import pandas as pd
 
 # =========================
-# IMPORTS
+# LECTURA
 # =========================
+from entradas.leer_excel import leer_estructuras
+from entradas.leer_tabla import leer_tabla
+from entradas.leer_pdf import leer_pdf
+from entradas.leer_dxf import leer_dxf
 
-from entradas.base_datos import cargar_base_datos
+# =========================
+# PROCESAMIENTO
+# =========================
+from entradas.normalizar import normalizar_estructuras
+from entradas.validacion import validar_estructuras
+from entradas.indice_estructuras import cargar_indice_normalizado
 
-from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
-from materiales.validaciones.materiales_validacion import validar_estructuras
-
-# ⚠️ TEMPORAL (luego migrar a materiales/)
-from core.cables_materiales import materiales_desde_cables
+# =========================
+# MODELO DE SALIDA
+# =========================
+from materiales.modelos.entrada import EntradaMateriales
 
 
 # =========================================================
-# CONFIG
+# API PRINCIPAL
 # =========================================================
 
-COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
+def cargar_entrada(
+    tipo: str,
+    data: Any,
+    *,
+    tension: float,
+    df_cables: pd.DataFrame | None = None,
+    ruta_materiales: str | None = None,
+    permitir_sin_catalogo: bool = False,
+) -> EntradaMateriales:
+    """
+    Orquestador de entradas.
 
+    Flujo:
+        1. Leer
+        2. Normalizar
+        3. Validar
+        4. Transformar → estructuras_por_punto
+        5. Salida → EntradaMateriales
+    """
 
-# =========================================================
-# HELPERS
-# =========================================================
+    log = _get_logger()
 
-def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
+    # =====================================================
+    # 1. LECTURA
+    # =====================================================
+    df = _leer_por_tipo(tipo, data)
+
     if df is None or df.empty:
-        return pd.DataFrame(columns=COLUMNAS_STD)
+        raise ValueError("No se pudo leer información válida de la entrada")
 
-    df = df.copy()
+    log(f"✔ Lectura completada: {len(df)} filas")
 
-    for col in COLUMNAS_STD:
-        if col not in df.columns:
-            if col == "Cantidad":
-                df[col] = 0.0
-            else:
-                df[col] = ""
+    # =====================================================
+    # 2. NORMALIZACIÓN
+    # =====================================================
+    try:
+        df = normalizar_estructuras(df)
+    except Exception as e:
+        raise ValueError(f"Error en normalización ({tipo}): {str(e)}")
 
-    return df[COLUMNAS_STD]
+    if df is None or df.empty:
+        raise ValueError("La normalización generó un DataFrame vacío")
 
+    log("✔ Normalización completada")
 
-# =========================================================
-# ORQUESTADOR
-# =========================================================
-
-def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
-
+    # =====================================================
+    # 3. VALIDACIÓN
+    # =====================================================
     errores = []
     warnings = []
 
-    # =====================================================
-    # INPUTS USUARIO
-    # =====================================================
-    estructuras_por_punto = entrada.get("estructuras_por_punto")
-    tension = entrada.get("tension")
-    df_cables = entrada.get("df_cables")
+    if ruta_materiales and not permitir_sin_catalogo:
+        df_indice = cargar_indice_normalizado(ruta_materiales, log)
+        df, errores, warnings = validar_estructuras(df, df_indice, log)
+
+        log(f"✔ Validación completada | warnings: {len(warnings)}")
+
+    if errores:
+        raise ValueError("Errores en estructuras:\n" + "\n".join(errores))
 
     # =====================================================
-    # VALIDACIÓN
+    # 4. TRANSFORMACIÓN
     # =====================================================
-    val = validar_estructuras(estructuras_por_punto)
-
-    if not val.get("ok", True):
-        return {
-            "ok": False,
-            "errores": val.get("errores", []),
-            "warnings": val.get("warnings", []),
-        }
-
-    warnings.extend(val.get("warnings", []))
+    estructuras_por_punto = _convertir_df_a_por_punto(df)
 
     # =====================================================
-    # BASE DE DATOS (🔥 CENTRALIZADO)
+    # 5. SALIDA (🔥 ALINEADO A MATERIALES)
     # =====================================================
-    try:
-        hojas_base = cargar_base_datos()
-    except Exception as e:
-        return {
-            "ok": False,
-            "errores": [f"Error cargando base de datos: {e}"],
-            "warnings": warnings,
-        }
+    return EntradaMateriales(
+        estructuras_por_punto=estructuras_por_punto,
+        tension=tension,
+        df_cables=df_cables,
+    )
 
-    # =====================================================
-    # CÁLCULOS
-    # =====================================================
-    try:
-        # 🔹 MATERIALES POR ESTRUCTURA
-        df_puntos = calcular_materiales_por_punto(
-            hojas_base,
-            estructuras_por_punto,
-            tension
-        )
 
-        # 🔹 CABLES
-        df_cables_mat = materiales_desde_cables(df_cables)
+# =========================================================
+# LECTOR CENTRALIZADO
+# =========================================================
 
-    except Exception as e:
-        return {
-            "ok": False,
-            "errores": [f"Error en cálculos: {e}"],
-            "warnings": warnings,
-        }
+def _leer_por_tipo(tipo: str, data) -> pd.DataFrame:
 
-    # =====================================================
-    # NORMALIZACIÓN
-    # =====================================================
-    df_puntos = _normalizar_df(df_puntos)
-    df_cables_mat = _normalizar_df(df_cables_mat)
+    if tipo == "excel":
+        return leer_estructuras(data)
 
-    # =====================================================
-    # CONSOLIDACIÓN
-    # =====================================================
-    try:
-        df_total = pd.concat(
-            [df_puntos, df_cables_mat],
-            ignore_index=True
-        )
+    elif tipo == "tabla":
+        return leer_tabla(data)
 
-        if not df_total.empty:
-            df_total = (
-                df_total
-                .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
-                .sum()
-                .sort_values("Materiales")
-            )
+    elif tipo == "pdf":
+        return leer_pdf(data)
 
-    except Exception as e:
-        return {
-            "ok": False,
-            "errores": [f"Error consolidando: {e}"],
-            "warnings": warnings,
-        }
+    elif tipo == "dxf":
+        return leer_dxf(data)
 
-    # =====================================================
-    # RESULTADO FINAL
-    # =====================================================
-    return {
-        "ok": True,
-        "errores": [],
-        "warnings": warnings,
-        "df_materiales": df_total,
-        "resumen": {
-            "total_items": len(df_total),
-        }
-    }
+    elif tipo == "ui":
+        return _leer_desde_ui(data)
+
+    raise ValueError(f"Tipo de entrada no soportado: {tipo}")
+
+
+# =========================================================
+# ADAPTADOR UI
+# =========================================================
+
+def _leer_desde_ui(data):
+
+    if isinstance(data, pd.DataFrame):
+        return data.copy()
+
+    if isinstance(data, list):
+        return pd.DataFrame(data)
+
+    if isinstance(data, dict):
+        return pd.DataFrame([data])
+
+    return pd.DataFrame()
+
+
+# =========================================================
+# TRANSFORMACIÓN CLAVE
+# =========================================================
+
+def _convertir_df_a_por_punto(df: pd.DataFrame):
+
+    resultado = {}
+
+    for _, row in df.iterrows():
+
+        punto = str(row.get("Punto", "")).strip()
+        estructura = str(row.get("codigodeestructura", "")).strip().upper()
+
+        if not punto or not estructura:
+            continue
+
+        if punto not in resultado:
+            resultado[punto] = []
+
+        resultado[punto].append(estructura)
+
+    return resultado
+
+
+# =========================================================
+# LOGGER SIMPLE
+# =========================================================
+
+def _get_logger():
+    def _log(msg):
+        print(msg)
+    return _log
