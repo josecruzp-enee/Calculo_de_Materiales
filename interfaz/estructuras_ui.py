@@ -1,5 +1,5 @@
+# -*- coding: utf-8 -*-
 # interfaz/estructuras_ui.py
-# SOLO UI — SIN LÓGICA DE NEGOCIO
 
 from __future__ import annotations
 from typing import Tuple
@@ -52,7 +52,9 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
     with c3:
         if st.button("➕", key=f"{key_prefix}_{cat_key}_add"):
             if sel:
-                agregar_item_estructura(cat_key, sel, qty)
+                punto = st.session_state.get("punto_en_edicion", "Punto 1")
+                # 🔥 FIX: usar punto correcto (no cat_key)
+                agregar_item_estructura(punto, sel)
 
 
 # =========================================================
@@ -123,13 +125,14 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     st.dataframe(pd.DataFrame([fila]), use_container_width=True, hide_index=True)
 
     # =====================================================
-    # GUARDAR + VALIDAR 🔥
+    # GUARDAR + VALIDAR
     # =====================================================
     guardar = st.button("💾 Guardar")
 
     if guardar:
 
-        df, ruta = construir_dataframe_salida(punto)
+        # 🔥 FIX: no pasar argumento
+        df, ruta = construir_dataframe_salida()
 
         try:
             entrada = cargar_entrada(
@@ -152,4 +155,3 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     # SALIDA FINAL
     # =====================================================
     return None, None
-    
