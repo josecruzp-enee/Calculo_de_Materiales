@@ -10,7 +10,7 @@ from entradas.materiales import (
     consolidar_materiales,
     limpiar_materiales,
     obtener_materiales_finales,
-    obtener_catalogo_materiales,
+    
 )
 
 def seccion_adicionar_material():
