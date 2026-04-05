@@ -69,7 +69,7 @@ def renderizar_estructuras():
     modo = st.session_state["modo_carga_seleccionado"]
 
     if modo == "manual":
-        df, ruta = listas_desplegables()
+        df, ruta = cargar_desde_desplegables()
     else:
         st.info("⚠️ Por ahora solo está activo modo desplegables.")
         return
