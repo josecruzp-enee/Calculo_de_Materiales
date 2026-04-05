@@ -1,12 +1,25 @@
+# -*- coding: utf-8 -*-
 # interfaz/exportacion_ui.py
 # SOLO UI — SIN LÓGICA DE NEGOCIO
+
+from __future__ import annotations
 
 import streamlit as st
 import pandas as pd
 
+# =========================
+# DOMINIO
+# =========================
 from entradas.estructuras import procesar_estructuras
+
+# 🔥 ORQUESTADOR (CORRECTO)
 from materiales.orquestador_materiales import ejecutar_materiales
+
+# 🔥 MODELO DE ENTRADA (CLAVE)
+from materiales.modelos.entrada import EntradaMateriales
+
 from reportes.orquestador_reportes import generar_reportes, resumen_estructuras
+
 
 # =========================================================
 # VISTA PREVIA (UI)
@@ -17,11 +30,10 @@ def _vista_previa_conteo(df: pd.DataFrame):
         st.info("No hay datos para mostrar.")
         return
 
-    # 🔥 MOVIDO A DOMINIO (YA NO HAY GROUPBY EN UI)
     conteo = resumen_estructuras(df)
 
     st.caption("Conteo rápido de estructuras por punto:")
-    st.dataframe(conteo, use_container_width=True, hide_index=True)
+    st.dataframe(conteo, width="stretch", hide_index=True)
 
 
 # =========================================================
@@ -86,14 +98,25 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
         df_cables = st.session_state.get("cables_proyecto_df")
 
         # =====================================================
-        # 6. CALCULAR (SERVICIO)
+        # 6. ARMAR ENTRADA (🔥 CLAVE)
         # =====================================================
-        resultado = calcular_materiales(
+        entrada = EntradaMateriales(
             estructuras_df=df_estructuras,
-            archivo_materiales=ruta_materiales,
+            hojas_base=ruta_materiales,
             datos_proyecto=datos_proyecto,
             df_cables=df_cables,
         )
+
+        # =====================================================
+        # 7. EJECUTAR ORQUESTADOR
+        # =====================================================
+        resultado = ejecutar_materiales(entrada)
+
+        if not resultado.ok:
+            st.error("❌ Error en cálculo:")
+            for err in resultado.errores:
+                st.write(f"- {err}")
+            return
 
         st.session_state["resultado_calculo"] = resultado
         st.session_state["calculo_finalizado"] = True
