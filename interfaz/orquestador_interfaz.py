@@ -3,9 +3,7 @@
 
 import streamlit as st
 
-from interfaz.base import (
-    seleccionar_modo_carga,
-)
+from interfaz.base import seleccionar_modo_carga
 
 from interfaz.datos_proyecto import seccion_datos_proyecto
 from interfaz.cables_ui import seccion_cables
@@ -15,6 +13,8 @@ from interfaz.exportacion_ui import (
     seccion_finalizar_calculo,
     seccion_exportacion,
 )
+
+from interfaz.materiales_extra import obtener_materiales_finales
 
 
 # =========================================================
@@ -37,7 +37,6 @@ def renderizar_datos_proyecto():
 def renderizar_cables():
     cables = seccion_cables()
     if cables is not None:
-        # 🔥 unificamos nombre
         st.session_state["cables_proyecto_df"] = cables
 
 
@@ -89,7 +88,19 @@ def renderizar_final():
         st.warning("⚠️ Carga estructuras primero.")
         return
 
-    seccion_finalizar_calculo(df)
+    df_cables = st.session_state.get("cables_proyecto_df")
+    datos_proyecto = st.session_state.get("datos_proyecto")
+
+    # 🔥 MATERIAL EXTRA INTEGRADO
+    df_materiales_extra = obtener_materiales_finales()
+    st.session_state["df_materiales_extra"] = df_materiales_extra
+
+    seccion_finalizar_calculo(
+        df_estructuras=df,
+        df_cables=df_cables,
+        datos_proyecto=datos_proyecto,
+        df_materiales_extra=df_materiales_extra,
+    )
 
 
 def renderizar_exportacion():
@@ -100,7 +111,9 @@ def renderizar_exportacion():
         st.warning("⚠️ Primero completa estructuras.")
         return
 
-    # 🔥 NUEVO: ya no pasamos parámetros
+    # 🔥 asegurar materiales antes de exportar
+    st.session_state["df_materiales_extra"] = obtener_materiales_finales()
+
     seccion_exportacion()
 
 
@@ -114,11 +127,13 @@ def ejecutar_orquestador_interfaz(
 ):
 
     # =====================================================
-    # INICIALIZACIÓN
+    # INICIALIZACIÓN GLOBAL
     # =====================================================
     st.session_state.setdefault("df_estructuras", None)
     st.session_state.setdefault("modo_carga_seleccionado", None)
     st.session_state.setdefault("cables_proyecto_df", None)
+    st.session_state.setdefault("datos_proyecto", None)
+    st.session_state.setdefault("df_materiales_extra", None)
 
     # =====================================================
     # NAVEGACIÓN
