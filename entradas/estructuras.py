@@ -103,10 +103,10 @@ def construir_dataframe_salida():
         .reset_index()
     )
 
-    # 🔥 CLAVE: guardar en session_state
+    # 🔥 CLAVE: guardar para el flujo global
     st.session_state["df_estructuras"] = df_salida
 
     return df_salida, None
-
+    
 def crear_nuevo_punto():
     st.session_state["punto_en_edicion"] = f"Punto {len(st.session_state['df_puntos']) + 1}"
