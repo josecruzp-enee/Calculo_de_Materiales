@@ -17,10 +17,10 @@ SECCIONES = [
     ("cables", "Cables"),
     ("modo", "Modo de Carga"),
     ("estructuras", "Estructuras"),
-    ("materiales", "Materiales Extra"),
+    #("materiales", "Materiales Extra"),
     ("final", "Finalizar"),
     ("exportar", "Exportación"),
-    ("mapa_kml", "Mapa / KMZ"),
+    #("mapa_kml", "Mapa / KMZ"),
 ]
 
 
@@ -102,7 +102,7 @@ def _init_estado_base():
 
     defaults = {
         "datos_proyecto": {},
-        "materiales_extra": [],
+        #"materiales_extra": [],
         "df_estructuras": None,
         "resultado_calculo": None,
         "pdfs_generados": None,
