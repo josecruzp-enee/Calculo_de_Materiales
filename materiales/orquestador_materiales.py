@@ -54,8 +54,13 @@ def ejecutar_materiales(entrada: EntradaMateriales) -> ResultadoMateriales:
     if entrada.estructuras_df is None or entrada.estructuras_df.empty:
         return ResultadoMateriales(False, pd.DataFrame(), ["Sin estructuras"], [])
 
+    if entrada.hojas_base is None:
+        return ResultadoMateriales(False, pd.DataFrame(), ["Base de datos no cargada"], [])
+
+    datos = entrada.datos_proyecto or {}
+
     try:
-        tension, calibre_mt = validar_datos_proyecto(entrada.datos_proyecto)
+        tension, calibre_mt = validar_datos_proyecto(datos)
     except Exception as e:
         return ResultadoMateriales(False, pd.DataFrame(), [f"Error validando datos: {e}"], [])
 
@@ -95,6 +100,15 @@ def ejecutar_materiales(entrada: EntradaMateriales) -> ResultadoMateriales:
     # 5. UNIÓN
     # =========================
     df_total = pd.concat([df_materiales, df_cables_mat], ignore_index=True)
+
+    # =========================
+    # 🔥 5.1 MATERIALES EXTRA
+    # =========================
+    df_extra = datos.get("materiales_extra")
+
+    if isinstance(df_extra, pd.DataFrame) and not df_extra.empty:
+        df_extra = _normalizar_df(df_extra)
+        df_total = pd.concat([df_total, df_extra], ignore_index=True)
 
     # =========================
     # 6. CONSOLIDACIÓN
