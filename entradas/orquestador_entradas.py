@@ -1,52 +1,60 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+
 from typing import Any
 import pandas as pd
 
+# =========================
+# LECTORES
+# =========================
 from entradas.leer_excel import leer_estructuras
 from entradas.leer_tabla import leer_tabla
 from entradas.leer_pdf import leer_pdf
 from entradas.leer_dxf import leer_dxf
 
+# =========================
+# PROCESAMIENTO
+# =========================
 from entradas.normalizar import normalizar_estructuras
 from entradas.validacion import validar_estructuras
 from entradas.indice_estructuras import cargar_indice_normalizado
 from entradas.base_datos import cargar_base_datos
 
+# =========================
+# MODELO
+# =========================
 from materiales.modelos.entrada import EntradaMateriales
 
 
+# =========================================================
+# ORQUESTADOR PRINCIPAL
+# =========================================================
 def cargar_entrada(
-    tipo: str | None = None,
-    data: Any = None,
+    tipo: str,
+    data: Any,
     *,
-    datos_fuente: dict | None = None,
-    tension: float | None = None,
+    tension: float,
     df_cables: pd.DataFrame | None = None,
-    ruta_materiales: str | None = None,
-    permitir_sin_catalogo: bool = False,
+    df_materiales_extra: pd.DataFrame | None = None,
+    validar_catalogo: bool = True,
 ) -> EntradaMateriales:
+    """
+    Punto único de entrada al dominio de materiales.
 
-    log = _get_logger()
-
-    # 🔧 FIX
-    df_materiales_extra = None
-
-    # =========================
-    # UI
-    # =========================
-    if datos_fuente is not None:
-
-        df = _leer_desde_ui(datos_fuente.get("df_estructuras"))
-        df_cables = datos_fuente.get("df_cables")
-        df_materiales_extra = datos_fuente.get("df_materiales_extra")
-
-    else:
-        df = _leer_por_tipo(tipo, data)
+    Flujo:
+        1. Lectura
+        2. Validación mínima
+        3. Normalización
+        4. Validación contra catálogo
+        5. Carga base
+        6. Construcción DTO
+    """
 
     # =========================
-    # VALIDACIÓN
+    # 1. LECTURA
     # =========================
+    df = _leer_por_tipo(tipo, data)
+
     if df is None or df.empty:
         raise ValueError("No se pudo leer información válida")
 
@@ -54,7 +62,7 @@ def cargar_entrada(
         raise ValueError("Falta columna 'Punto'")
 
     # =========================
-    # NORMALIZACIÓN
+    # 2. NORMALIZACIÓN
     # =========================
     df = normalizar_estructuras(df)
 
@@ -62,30 +70,24 @@ def cargar_entrada(
         raise ValueError("Normalización vacía")
 
     # =========================
-    # VALIDACIÓN CATÁLOGO
+    # 3. VALIDACIÓN CATÁLOGO
     # =========================
-    if ruta_materiales and not permitir_sin_catalogo:
+    if validar_catalogo:
+        df_indice = cargar_indice_normalizado()
 
-        df_indice = cargar_indice_normalizado(ruta_materiales, log)
-
-        df, errores, warnings = validar_estructuras(df, df_indice, log)
+        df, errores, _ = validar_estructuras(df, df_indice)
 
         if errores:
             raise ValueError("\n".join(errores))
 
     # =========================
-    # TENSIÓN
+    # 4. BASE DE DATOS
     # =========================
-    if tension is None:
-        raise ValueError("tension es requerida")
+    hojas_base = cargar_base_datos()
 
     # =========================
-    # BASE
+    # 5. DTO
     # =========================
-    hojas_base = None
-    if ruta_materiales:
-        hojas_base = cargar_base_datos()
-
     return EntradaMateriales(
         estructuras_df=df,
         tension=float(tension),
@@ -97,7 +99,13 @@ def cargar_entrada(
     )
 
 
+# =========================================================
+# LECTORES POR TIPO
+# =========================================================
 def _leer_por_tipo(tipo: str, data) -> pd.DataFrame:
+    """
+    Dispatcher de lectura según tipo de entrada.
+    """
 
     if tipo == "excel":
         return leer_estructuras(data)
@@ -117,7 +125,13 @@ def _leer_por_tipo(tipo: str, data) -> pd.DataFrame:
     raise ValueError(f"Tipo no soportado: {tipo}")
 
 
-def _leer_desde_ui(data):
+# =========================================================
+# LECTOR UI
+# =========================================================
+def _leer_desde_ui(data) -> pd.DataFrame:
+    """
+    Convierte datos de UI a DataFrame estándar.
+    """
 
     if isinstance(data, pd.DataFrame):
         return data.copy()
@@ -129,9 +143,3 @@ def _leer_desde_ui(data):
         return pd.DataFrame([data])
 
     return pd.DataFrame()
-
-
-def _get_logger():
-    def _log(msg):
-        print(msg)
-    return _log
