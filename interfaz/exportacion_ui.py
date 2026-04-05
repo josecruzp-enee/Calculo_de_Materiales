@@ -4,10 +4,9 @@
 import streamlit as st
 import pandas as pd
 
-from dominio.entradas.estructuras import procesar_estructuras
-from servicios.calculo_materiales import calcular_materiales
-from dominio.reportes.reportes import generar_reportes, resumen_estructuras  # 👈 NUEVO
-
+from entradas.estructuras import procesar_estructuras
+from materiales.orquestador_materiales import ejecutar_materiales
+from reportes.orquestador_reportes import generar_reportes, resumen_estructuras
 
 # =========================================================
 # VISTA PREVIA (UI)
