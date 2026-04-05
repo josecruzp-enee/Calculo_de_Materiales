@@ -8,13 +8,9 @@ import streamlit as st
 import pandas as pd
 
 # =========================
-# ORQUESTADORES
+# APLICACIÓN (🔥 NUEVO)
 # =========================
-from entradas.orquestador_entradas import cargar_entrada
-from materiales.orquestador_materiales import ejecutar_materiales
-
-# 🔥 NUEVO (CATÁLOGO)
-from entradas.base_datos import cargar_base_datos, obtener_catalogo_materiales
+from aplicacion.orquestador_proyecto import ejecutar_proyecto
 
 # =========================
 # REPORTES
@@ -51,6 +47,9 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
     with st.form("form_finalizar_calculo"):
         ejecutar = st.form_submit_button("✅ Finalizar Cálculo")
 
+    # =========================
+    # SI NO PRESIONA
+    # =========================
     if not ejecutar:
         if st.session_state.get("resultado_calculo"):
             st.success("✅ Ya hay resultados calculados.")
@@ -58,56 +57,20 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
             st.caption("Presiona el botón para calcular.")
         return
 
+    # =========================
+    # EJECUCIÓN
+    # =========================
     try:
-        # =====================================================
-        # 1. MATERIALES EXTRA
-        # =====================================================
-        materiales_extra = pd.DataFrame(
-            st.session_state.get("materiales_extra", [])
+
+        resultado, errores, warnings = ejecutar_proyecto(
+            df,
+            st.session_state
         )
 
-        # =====================================================
-        # 2. CABLES (OPCIONAL)
-        # =====================================================
-        df_cables = st.session_state.get("cables_proyecto_df")
-
-        # =====================================================
-        # 3. RUTA MATERIALES
-        # =====================================================
-        ruta_materiales = st.session_state.get("ruta_datos_materiales")
-
-        if not ruta_materiales:
-            st.error("❌ No hay ruta de materiales definida.")
+        if resultado is None:
+            for err in errores:
+                st.error(f"❌ {err}")
             return
-
-        # =====================================================
-        # 4. ARMAR ENTRADA
-        # =====================================================
-        entrada = cargar_entrada(
-            datos_fuente={
-                "df_estructuras": df,
-                "df_cables": df_cables,
-                "df_materiales_extra": materiales_extra,
-            },
-            ruta_materiales=ruta_materiales,
-        )
-
-        # =====================================================
-        # 5. CARGAR CATÁLOGO (🔥 NUEVO)
-        # =====================================================
-        data_base = cargar_base_datos()
-        catalogo = obtener_catalogo_materiales(data_base)
-
-        if catalogo.empty:
-            st.warning("⚠️ Catálogo de materiales vacío.")
-
-        # =====================================================
-        # 6. EJECUTAR ORQUESTADOR
-        # =====================================================
-        resultado = ejecutar_materiales(
-            entrada,
-            catalogo=catalogo   # 👈 CLAVE
-        )
 
         if not resultado.ok:
             st.error("❌ Error en cálculo:")
@@ -115,8 +78,14 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
                 st.write(f"- {err}")
             return
 
+        # Guardar estado
         st.session_state["resultado_calculo"] = resultado
         st.session_state["calculo_finalizado"] = True
+
+        # Mostrar warnings si existen
+        if getattr(resultado, "warnings", None):
+            for w in resultado.warnings:
+                st.warning(f"⚠️ {w}")
 
         st.success("🎉 Cálculo finalizado correctamente.")
 
@@ -139,14 +108,15 @@ def seccion_exportacion():
         st.warning("⚠️ Primero debes finalizar el cálculo.")
         return
 
+    # Vista previa
     df_prev = st.session_state.get("df_estructuras")
 
     if isinstance(df_prev, pd.DataFrame) and not df_prev.empty:
         _vista_previa_conteo(df_prev)
 
-    # =====================================================
+    # =========================
     # BOTÓN GENERAR
-    # =====================================================
+    # =========================
     with st.form("form_generar_reportes"):
         generar = st.form_submit_button("📥 Generar Reportes PDF")
 
@@ -164,9 +134,9 @@ def seccion_exportacion():
             st.error(f"❌ Error generando reportes: {e}")
             return
 
-    # =====================================================
+    # =========================
     # DESCARGAS
-    # =====================================================
+    # =========================
     pdfs = st.session_state.get("pdfs_generados")
 
     if not pdfs:
