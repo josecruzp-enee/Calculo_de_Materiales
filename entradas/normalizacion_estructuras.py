@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Motor de normalización de estructuras (versión robusta producción)
+Motor de normalización de estructuras (versión producción robusta)
 """
 
 from __future__ import annotations
@@ -60,11 +60,13 @@ def _normalizar_codigo(code: str) -> str:
 
 def _es_codigo_valido(cod: str) -> bool:
     """
-    Más flexible que la versión original.
-    Acepta estructuras reales del dominio.
+    Valida estructura tipo:
+    A-I-1, B-III-5, CT-N, TS-50KVA, etc.
     """
     if not cod:
         return False
+
+    cod = cod.strip().upper()
 
     return bool(
         re.match(r"^[A-Z]{1,4}-[A-Z0-9\.\-]+$", cod)
@@ -92,7 +94,10 @@ def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
         "CANTIDAD": "cantidad"
     }
 
-    df.rename(columns={k: v for k, v in col_map.items() if k in df.columns}, inplace=True)
+    df.rename(
+        columns={k: v for k, v in col_map.items() if k in df.columns},
+        inplace=True
+    )
 
     if "Punto" not in df.columns or "codigodeestructura" not in df.columns:
         raise ValueError("Columnas requeridas no encontradas")
@@ -135,17 +140,23 @@ def _split_codigos(texto: str):
 
     for bloque in bloques:
 
-        # patrón "3 x CS-2"
+        bloque = bloque.strip()
+
+        if not bloque:
+            continue
+
+        # patrón tipo: "3 x CS-2"
         match = re.findall(r"(\d+)\s*x\s*([A-Z0-9\-\.\s]+)", bloque)
 
         if match:
             for cantidad, codigo in match:
                 codigo = codigo.strip()
-                resultado.extend([codigo] * int(cantidad))
+                if codigo:
+                    resultado.extend([codigo] * int(cantidad))
             continue
 
         # fallback simple
-        resultado.append(bloque.strip())
+        resultado.append(bloque)
 
     return resultado
 
@@ -214,6 +225,7 @@ def explotar_estructuras(df: pd.DataFrame):
 def construir_estructuras_por_punto_y_conteo(df: pd.DataFrame):
 
     df = limpiar_df_estructuras(df)
+
     df, errores, warnings = explotar_estructuras(df)
 
     if df.empty:
