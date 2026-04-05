@@ -29,6 +29,10 @@ def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = 0.0 if col == "Cantidad" else ""
 
+    df["Materiales"] = df["Materiales"].astype(str).str.strip()
+    df["Unidad"] = df["Unidad"].astype(str).str.strip()
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
+
     return df[COLUMNAS_STD]
 
 
@@ -46,7 +50,10 @@ def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 # ORQUESTADOR
 # =========================================================
-def ejecutar_materiales(entrada: EntradaMateriales) -> ResultadoMateriales:
+def ejecutar_materiales(
+    entrada: EntradaMateriales,
+    catalogo: pd.DataFrame | None = None
+) -> ResultadoMateriales:
 
     # =========================
     # 1. VALIDACIÓN BASE
@@ -102,7 +109,7 @@ def ejecutar_materiales(entrada: EntradaMateriales) -> ResultadoMateriales:
     df_total = pd.concat([df_materiales, df_cables_mat], ignore_index=True)
 
     # =========================
-    # 🔥 5.1 MATERIALES EXTRA
+    # 5.1 MATERIALES EXTRA
     # =========================
     df_extra = datos.get("materiales_extra")
 
@@ -116,6 +123,53 @@ def ejecutar_materiales(entrada: EntradaMateriales) -> ResultadoMateriales:
     df_total = _consolidar(df_total)
 
     # =========================
-    # 7. SALIDA
+    # 6.1 VALIDACIÓN CONTRA CATÁLOGO
+    # =========================
+    if catalogo is not None and not catalogo.empty:
+
+        catalogo_base = catalogo.copy()
+
+        catalogo_base["Materiales"] = (
+            catalogo_base["Materiales"]
+            .astype(str)
+            .str.strip()
+        )
+
+        catalogo_set = set(catalogo_base["Materiales"].str.upper())
+
+        df_total["Materiales"] = (
+            df_total["Materiales"]
+            .astype(str)
+            .str.strip()
+        )
+
+        df_upper = df_total["Materiales"].str.upper()
+
+        no_validos = df_total.loc[~df_upper.isin(catalogo_set)]
+
+        if not no_validos.empty:
+            errores = [
+                f"Material no válido: {m}"
+                for m in no_validos["Materiales"].unique()
+            ]
+
+            return ResultadoMateriales(False, pd.DataFrame(), errores, [])
+
+    # =========================
+    # 7. COSTOS (OPCIONAL)
+    # =========================
+    if catalogo is not None and not catalogo.empty and "Costo" in catalogo.columns:
+
+        df_total = df_total.merge(
+            catalogo[["Materiales", "Costo"]],
+            on="Materiales",
+            how="left"
+        )
+
+        df_total["Costo"] = pd.to_numeric(df_total["Costo"], errors="coerce").fillna(0)
+        df_total["Costo_Total"] = df_total["Cantidad"] * df_total["Costo"]
+
+    # =========================
+    # 8. SALIDA
     # =========================
     return ResultadoMateriales(True, df_total, [], [])
