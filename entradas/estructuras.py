@@ -97,17 +97,16 @@ def construir_dataframe_salida():
     if df is None or df.empty:
         return pd.DataFrame(), None
 
-    # =====================================================
-    # FORMATO FINAL PARA MATERIALES
-    # =====================================================
     df_salida = (
         df.groupby("Punto")["Estructuras"]
         .apply(lambda x: "; ".join(x))
         .reset_index()
     )
 
-    return df_salida, None
+    # 🔥 CLAVE: guardar en session_state
+    st.session_state["df_estructuras"] = df_salida
 
+    return df_salida, None
 
 def crear_nuevo_punto():
     st.session_state["punto_en_edicion"] = f"Punto {len(st.session_state['df_puntos']) + 1}"
