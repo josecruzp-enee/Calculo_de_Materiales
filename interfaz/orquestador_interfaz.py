@@ -10,7 +10,7 @@ from interfaz.base import (
 
 from interfaz.datos_proyecto import seccion_datos_proyecto
 from interfaz.cables_ui import seccion_cables
-from interfaz.estructuras_desplegables import listas_desplegables  # 🔥 CAMBIO CLAVE
+from interfaz.estructuras_desplegables import listas_desplegables
 from interfaz.materiales_extra import seccion_adicionar_material
 
 from interfaz.exportacion import (
@@ -30,15 +30,17 @@ def es_dataframe_valido(df):
 
 
 # =========================================================
-# SECCIONES UI (SIN LÓGICA)
+# SECCIONES UI (CON SALIDA CONTROLADA)
 # =========================================================
 
 def renderizar_datos_proyecto():
-    seccion_datos_proyecto()
+    datos = seccion_datos_proyecto()
+    st.session_state["datos_proyecto"] = datos
 
 
 def renderizar_cables():
-    seccion_cables()
+    cables = seccion_cables()
+    st.session_state["cables"] = cables
 
 
 def renderizar_modo_carga():
@@ -46,7 +48,6 @@ def renderizar_modo_carga():
 
     modo = seleccionar_modo_carga()
 
-    # 🔥 NORMALIZAR A MODO TÉCNICO
     mapa = {
         "Desde archivo Excel": "excel",
         "Pegar tabla": "tabla",
@@ -66,13 +67,8 @@ def renderizar_estructuras():
 
     modo = st.session_state["modo_carga_seleccionado"]
 
-    # =====================================================
-    # 🔥 CASO ACTUAL: SOLO DESPLEGABLES
-    # =====================================================
     if modo == "manual":
-
         df, ruta = listas_desplegables()
-
     else:
         st.info("⚠️ Por ahora solo está activo modo desplegables.")
         return
@@ -81,7 +77,6 @@ def renderizar_estructuras():
         st.info("⚠️ No hay estructuras aún.")
         return
 
-    # ✔ almacenar resultado
     st.session_state["df_estructuras"] = df
     st.session_state["ruta_estructuras_compacto"] = ruta
 
@@ -89,7 +84,8 @@ def renderizar_estructuras():
 
 
 def renderizar_materiales():
-    seccion_adicionar_material()
+    materiales = seccion_adicionar_material()
+    st.session_state["materiales"] = materiales
 
 
 def renderizar_final():
@@ -100,13 +96,17 @@ def renderizar_final():
         st.info("⚠️ Carga estructuras primero.")
         return
 
-    seccion_finalizar_calculo(df)
+    resultado = seccion_finalizar_calculo(df)
+
+    # 🔥 guardar resultado para exportación futura
+    st.session_state["resultado_calculo"] = resultado
 
 
 def renderizar_exportacion():
 
     df = st.session_state.get("df_estructuras")
     ruta = st.session_state.get("ruta_estructuras_compacto")
+    resultado = st.session_state.get("resultado_calculo")
 
     if not es_dataframe_valido(df):
         st.warning("⚠️ Primero completa estructuras.")
@@ -117,6 +117,7 @@ def renderizar_exportacion():
         modo_carga=st.session_state.get("modo_carga_seleccionado"),
         ruta_estructuras=ruta,
         ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
+        resultado=resultado,  # 👈 preparado para siguiente fase
     )
 
 
@@ -135,10 +136,9 @@ def ejecutar_orquestador_interfaz(
 
     seccion = _nav_estado_actual()
 
-    # Dibujar barra de navegación
+    # Barra navegación
     _barra_nav_botones(seccion)
 
-    # Mapa de navegación → UI pura
     acciones = {
         "datos": renderizar_datos_proyecto,
         "cables": renderizar_cables,
