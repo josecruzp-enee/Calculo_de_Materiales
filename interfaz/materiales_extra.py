@@ -4,8 +4,7 @@
 from __future__ import annotations
 import streamlit as st
 import pandas as pd
-
-from materiales.catalogos.catalogo_materiales import obtener_catalogo_materiales
+from entradas.leer_excel import leer_catalogo_materiales as obtener_catalogo_materiales
 
 from entradas.materiales import (
     inicializar_materiales_extra,
