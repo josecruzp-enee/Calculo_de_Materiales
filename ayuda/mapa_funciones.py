@@ -25,7 +25,12 @@ from typing import Dict, List, Set, Tuple, Optional, Any
 # ==========================
 # Config predeterminada
 # ==========================
-BASES_PREDETERMINADAS = ["modulo"]
+BASES_PREDETERMINADAS = [
+    d for d in os.listdir(".")
+    if os.path.isdir(d)
+    and not d.startswith(".")
+    and d not in ["__pycache__", "venv", "env"]
+]
 INCLUIR_PREDETERMINADOS = ["app.py"]
 SALIDA_PREDETERMINADA = "MAPA_FUNCIONES.txt"
 DIAG_PREDETERMINADO = "DIAGNOSTICO_IMPORTS.txt"
