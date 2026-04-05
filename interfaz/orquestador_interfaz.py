@@ -5,29 +5,27 @@ import streamlit as st
 
 from interfaz.base import (
     seleccionar_modo_carga,
-    ruta_datos_materiales_por_defecto,
 )
 
 from interfaz.datos_proyecto import seccion_datos_proyecto
 from interfaz.cables_ui import seccion_cables
-from entradas.entradas_desplegables import cargar_desde_desplegables
+from interfaz.estructuras_ui import seccion_entrada_estructuras
 
 from interfaz.exportacion_ui import (
     seccion_finalizar_calculo,
     seccion_exportacion,
 )
-from interfaz.estructuras_ui import seccion_entrada_estructuras
+
 
 # =========================================================
 # HELPERS
 # =========================================================
-
 def es_dataframe_valido(df):
     return df is not None and hasattr(df, "empty") and not df.empty
 
 
 # =========================================================
-# SECCIONES UI (SIN LÓGICA DE NEGOCIO)
+# SECCIONES UI
 # =========================================================
 
 def renderizar_datos_proyecto():
@@ -39,7 +37,8 @@ def renderizar_datos_proyecto():
 def renderizar_cables():
     cables = seccion_cables()
     if cables is not None:
-        st.session_state["cables"] = cables
+        # 🔥 unificamos nombre
+        st.session_state["cables_proyecto_df"] = cables
 
 
 def renderizar_modo_carga():
@@ -60,32 +59,27 @@ def renderizar_modo_carga():
 
 def renderizar_estructuras():
 
-    if "modo_carga_seleccionado" not in st.session_state:
+    modo = st.session_state.get("modo_carga_seleccionado")
+
+    if not modo:
         st.warning("⚠️ Primero selecciona el modo de carga.")
         return
-
-    modo = st.session_state["modo_carga_seleccionado"]
 
     if modo != "manual":
         st.info("⚠️ Por ahora solo está activo modo desplegables.")
         return
 
-    # =====================================================
-    # 🔥 LLAMAR UI REAL (ESTO FALTABA)
-    # =====================================================
     df, ruta = seccion_entrada_estructuras()
 
-    if df is None:
+    if df is None or df.empty:
         st.info("⚠️ No hay estructuras aún.")
         return
 
-    # =====================================================
-    # GUARDAR RESULTADO GLOBAL
-    # =====================================================
     st.session_state["df_estructuras"] = df
     st.session_state["ruta_estructuras_compacto"] = ruta
 
     st.success("✅ Estructuras listas.")
+
 
 def renderizar_final():
 
@@ -95,29 +89,19 @@ def renderizar_final():
         st.warning("⚠️ Carga estructuras primero.")
         return
 
-    # Validación mínima
-    if df is None or df.empty:
-        st.error("❌ Estructuras inválidas.")
-        return
-
     seccion_finalizar_calculo(df)
 
 
 def renderizar_exportacion():
 
     df = st.session_state.get("df_estructuras")
-    ruta = st.session_state.get("ruta_estructuras_compacto")
 
     if not es_dataframe_valido(df):
         st.warning("⚠️ Primero completa estructuras.")
         return
 
-    seccion_exportacion(
-        df=df,
-        modo_carga=st.session_state.get("modo_carga_seleccionado"),
-        ruta_estructuras=ruta,
-        ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
-    )
+    # 🔥 NUEVO: ya no pasamos parámetros
+    seccion_exportacion()
 
 
 # =========================================================
@@ -130,11 +114,11 @@ def ejecutar_orquestador_interfaz(
 ):
 
     # =====================================================
-    # INICIALIZACIÓN SEGURA
+    # INICIALIZACIÓN
     # =====================================================
     st.session_state.setdefault("df_estructuras", None)
-    st.session_state.setdefault("ruta_estructuras_compacto", None)
     st.session_state.setdefault("modo_carga_seleccionado", None)
+    st.session_state.setdefault("cables_proyecto_df", None)
 
     # =====================================================
     # NAVEGACIÓN
