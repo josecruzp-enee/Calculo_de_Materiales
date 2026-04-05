@@ -14,6 +14,7 @@ from dominio.entradas.estructuras import (
     eliminar_punto,
     reset_estructuras,
     construir_dataframe_salida,
+    crear_nuevo_punto,   # 👈 NUEVO (dominio)
 )
 
 
@@ -30,8 +31,8 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
     with c1:
         sel = st.selectbox(
             "",
-            valores,
-            index=0 if valores else None,
+            valores if valores else [""],   # 🔥 evita error
+            index=0,
             key=f"{key_prefix}_{cat_key}_sel",
             label_visibility="collapsed",
             format_func=lambda x: etiquetas.get(x, x),
@@ -50,7 +51,8 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
 
     with c3:
         if st.button("➕", key=f"{key_prefix}_{cat_key}_add"):
-            agregar_item_estructura(cat_key, sel, qty)
+            if sel:  # 🔥 evita agregar vacío
+                agregar_item_estructura(cat_key, sel, qty)
 
 
 # =========================================================
@@ -60,18 +62,14 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
 def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     """
     UI pura para estructuras.
-    No contiene lógica de negocio.
     """
 
-    # Inicializar estado (delegado a dominio)
     inicializar_estado_estructuras()
-
     opciones = obtener_opciones_catalogo()
 
     st.subheader("🏗️ Estructuras del Proyecto")
 
     df_actual = st.session_state.get("df_puntos", pd.DataFrame())
-    punto_actual = st.session_state.get("punto_en_edicion")
 
     # =====================================================
     # CONTROLES
@@ -80,7 +78,7 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
 
     with colA:
         if st.button("🆕 Punto"):
-            inicializar_estado_estructuras(nuevo_punto=True)
+            crear_nuevo_punto()   # 🔥 dominio maneja lógica
 
     with colB:
         if not df_actual.empty:
@@ -98,7 +96,7 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
         if st.button("🧹 Reset"):
             reset_estructuras()
 
-    punto = st.session_state["punto_en_edicion"]
+    punto = st.session_state.get("punto_en_edicion", "Punto 1")
     st.markdown(f"### {punto}")
 
     # =====================================================
@@ -130,10 +128,14 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     # =====================================================
     # GUARDAR
     # =====================================================
-    if st.button("💾 Guardar"):
-        construir_dataframe_salida(punto)
+    guardar = st.button("💾 Guardar")
+
+    if guardar:
+        df, ruta = construir_dataframe_salida(punto)
+        st.success("Estructura guardada")
+        return df, ruta
 
     # =====================================================
-    # SALIDA FINAL
+    # SALIDA FINAL (SIN REGENERAR)
     # =====================================================
-    return construir_dataframe_salida()
+    return None, None
