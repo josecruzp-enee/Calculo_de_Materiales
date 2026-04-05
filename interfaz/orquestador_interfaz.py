@@ -154,7 +154,7 @@ def ejecutar_orquestador_interfaz(
         #"materiales": renderizar_materiales,
         "final": renderizar_final,
         "exportar": renderizar_exportacion,
-        "mapa_kml": renderizar_mapa,
+        #"mapa_kml": renderizar_mapa,
     }
 
     funcion = acciones.get(seccion)
