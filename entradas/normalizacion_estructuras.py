@@ -3,6 +3,7 @@
 normalizacion_estructuras.py
 
 Motor de normalización de estructuras ENEE.
+Versión robusta (sin errores de tipo / None / columnas faltantes)
 """
 
 import re
@@ -12,7 +13,6 @@ import pandas as pd
 # =========================================================
 # NORMALIZAR CÓDIGOS
 # =========================================================
-
 def _normalizar_codigo(code: str) -> str:
 
     if code is None:
@@ -29,9 +29,9 @@ def _normalizar_codigo(code: str) -> str:
     # espacios alrededor de guiones
     s = re.sub(r"\s*-\s*", "-", s)
 
-    # -------------------------
+    # =========================
     # NORMALIZACIONES CLAVE
-    # -------------------------
+    # =========================
 
     # TS 50 KVA → TS-50KVA
     s = re.sub(
@@ -53,7 +53,7 @@ def _normalizar_codigo(code: str) -> str:
     if re.match(r"^TS-\d+(\.\d+)?$", s):
         s = s + "KVA"
 
-    # proteger códigos válidos
+    # patrón válido
     if re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", s):
         return s
 
@@ -63,16 +63,19 @@ def _normalizar_codigo(code: str) -> str:
 # =========================================================
 # VALIDADOR SIMPLE DE FORMATO
 # =========================================================
-
 def _es_codigo_valido(cod: str) -> bool:
-    return bool(re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", cod))
+    if cod is None:
+        return False
+    return bool(re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", str(cod).strip()))
 
 
 # =========================================================
 # LIMPIEZA BASE
 # =========================================================
-
 def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
+
+    if df is None or df.empty:
+        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
 
     df = df.dropna(how="all").copy()
 
@@ -82,13 +85,21 @@ def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     if "Punto" not in df.columns and "punto" in df.columns:
         df.rename(columns={"punto": "Punto"}, inplace=True)
 
+    if "codigodeestructura" not in df.columns:
+        raise ValueError("Falta columna 'codigodeestructura'")
+
     if "cantidad" not in df.columns:
         df["cantidad"] = 1
 
     df["Punto"] = df["Punto"].astype(str).str.strip()
     df["codigodeestructura"] = df["codigodeestructura"].astype(str).str.strip()
 
-    df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce").fillna(1).astype(int)
+    df["cantidad"] = (
+        pd.to_numeric(df["cantidad"], errors="coerce")
+        .fillna(1)
+        .astype(int)
+    )
+
     df.loc[df["cantidad"] < 1, "cantidad"] = 1
 
     df = df[df["codigodeestructura"] != ""]
@@ -99,8 +110,10 @@ def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 # SPLIT SEGURO
 # =========================================================
-
 def _split_codigos(texto):
+
+    if texto is None:
+        return []
 
     texto = str(texto).upper()
 
@@ -138,17 +151,22 @@ def _split_codigos(texto):
 # =========================================================
 # EXPLOTAR A FORMATO LARGO
 # =========================================================
-
 def explotar_estructuras(df):
+
+    if df is None or df.empty:
+        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+
+    if "Punto" not in df.columns or "codigodeestructura" not in df.columns:
+        raise ValueError("Columnas requeridas no encontradas")
 
     filas = []
 
     for _, row in df.iterrows():
 
-        punto = row["Punto"]
-        cantidad_base = int(row.get("cantidad", 1))
+        punto = str(row.get("Punto", "")).strip()
+        cantidad_base = int(row.get("cantidad", 1) or 1)
 
-        codigos = _split_codigos(row["codigodeestructura"])
+        codigos = _split_codigos(row.get("codigodeestructura"))
 
         for cod in codigos:
 
@@ -163,7 +181,10 @@ def explotar_estructuras(df):
                 "cantidad": cantidad_base
             })
 
-    df_out = pd.DataFrame(filas)
+    df_out = pd.DataFrame(
+        filas,
+        columns=["Punto", "codigodeestructura", "cantidad"]
+    )
 
     if df_out.empty:
         return df_out
@@ -179,9 +200,9 @@ def explotar_estructuras(df):
 # =========================================================
 # FUNCIÓN FINAL DEL MOTOR
 # =========================================================
-
 def construir_estructuras_por_punto_y_conteo(df):
 
+    df = limpiar_df_estructuras(df)
     df = explotar_estructuras(df)
 
     if df.empty:
