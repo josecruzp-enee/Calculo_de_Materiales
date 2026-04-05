@@ -10,7 +10,7 @@ import pandas as pd
 # =========================
 # DOMINIO
 # =========================
-from entradas.estructuras import procesar_estructuras
+#from entradas.estructuras import procesar_estructuras
 
 # 🔥 ORQUESTADOR (CORRECTO)
 from materiales.orquestador_materiales import ejecutar_materiales
@@ -61,6 +61,7 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
         # =====================================================
         # 1. PROCESAR ESTRUCTURAS (DOMINIO)
         # =====================================================
+        '''
         df_estructuras = procesar_estructuras(df)
 
         if df_estructuras.empty:
@@ -68,7 +69,8 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
             return
 
         st.session_state["df_estructuras"] = df_estructuras
-
+        '''
+        
         # =====================================================
         # 2. MATERIALES EXTRA
         # =====================================================
