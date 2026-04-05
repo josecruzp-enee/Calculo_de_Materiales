@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-normalizar.py
-
-Wrapper oficial del sistema para normalizar estructuras.
+normalizar.py (versión producción robusta)
 """
 
 import pandas as pd
 
 from entradas.normalizacion_estructuras import (
-    limpiar_df_estructuras,
     construir_estructuras_por_punto_y_conteo,
 )
 
@@ -16,61 +13,63 @@ from entradas.normalizacion_estructuras import (
 # =========================================================
 # FUNCIÓN PRINCIPAL
 # =========================================================
-
-def normalizar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
+def normalizar_estructuras(df: pd.DataFrame):
     """
-    Entrada: cualquier formato (Excel, PDF, DXF, UI, tabla)
-
-    Salida:
-        DataFrame con columnas:
-        Punto | codigodeestructura | cantidad
+    Retorna:
+        df_normalizado
+        errores
+        warnings
     """
 
     if df is None or df.empty:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+        return (
+            pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"]),
+            ["Entrada vacía"],
+            []
+        )
 
     df = df.copy()
 
     # =====================================================
-    # CASO 1: YA VIENE EN FORMATO LARGO
+    # DETECTAR FORMATO
     # =====================================================
-    if "codigodeestructura" in df.columns:
-
-        if "Punto" not in df.columns and "punto" in df.columns:
-            df.rename(columns={"punto": "Punto"}, inplace=True)
-
-        if "cantidad" not in df.columns:
-            df["cantidad"] = 1
-
-        df_limpio = limpiar_df_estructuras(df)
-
-        _, _, df_final = construir_estructuras_por_punto_y_conteo(df_limpio)
-
-        return df_final
+    if _es_formato_largo(df):
+        df_base = df.copy()
+    else:
+        df_base = _convertir_a_largo(df)
 
     # =====================================================
-    # CASO 2: FORMATO ANCHO
+    # NORMALIZACIÓN REAL (CORE)
     # =====================================================
-    df_largo = _convertir_a_largo(df)
+    estructuras_por_punto, conteo, df_final, errores, warnings = \
+        construir_estructuras_por_punto_y_conteo(df_base)
 
-    df_limpio = limpiar_df_estructuras(df_largo)
+    return df_final, errores, warnings
 
-    _, _, df_final = construir_estructuras_por_punto_y_conteo(df_limpio)
 
-    return df_final
+# =========================================================
+# DETECCIÓN FORMATO
+# =========================================================
+def _es_formato_largo(df: pd.DataFrame) -> bool:
+
+    cols = [c.lower() for c in df.columns]
+
+    return (
+        "codigodeestructura" in cols
+        and any("punto" in c for c in cols)
+    )
 
 
 # =========================================================
 # CONVERSIÓN A FORMATO LARGO
 # =========================================================
-
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
 
-    # detectar columna punto
     col_punto = None
+
     for c in df.columns:
         if "punto" in c.lower():
             col_punto = c
@@ -82,7 +81,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     filas = []
 
-    for _, row in df.iterrows():
+    for i, row in df.iterrows():
 
         punto = row[col_punto]
 
