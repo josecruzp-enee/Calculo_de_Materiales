@@ -2,23 +2,11 @@
 """
 normalizacion_estructuras.py
 
-Motor completo de normalización de estructuras ENEE.
+Motor de normalización de estructuras ENEE.
 """
 
 import re
 import pandas as pd
-
-
-# =========================================================
-# LOGGER
-# =========================================================
-
-def get_logger():
-    try:
-        import streamlit as st
-        return st.write
-    except Exception:
-        return print
 
 
 # =========================================================
@@ -32,29 +20,64 @@ def _normalizar_codigo(code: str) -> str:
 
     s = str(code).upper().strip()
 
-    # quitar paréntesis (P), (E), etc
+    # quitar paréntesis
     s = re.sub(r"\([^)]*\)", "", s)
 
     # limpiar espacios
-    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
 
-    # normalizar TS (transformadores)
+    # espacios alrededor de guiones
+    s = re.sub(r"\s*-\s*", "-", s)
+
+    # -------------------------
+    # NORMALIZACIONES CLAVE
+    # -------------------------
+
+    # TS 50 KVA → TS-50KVA
     s = re.sub(
         r"\bTS-?\s*(\d+(\.\d+)?)\s*KVA\b",
         lambda m: f"TS-{m.group(1)}KVA",
         s
     )
 
+    # CT N → CT-N
+    s = re.sub(r"\bCT\s+N\b", "CT-N", s)
+
+    # R 2 → R-2
+    s = re.sub(r"\bR\s+(\d+)\b", r"R-\1", s)
+
+    # PC 45 → PC-45
+    s = re.sub(r"\b(PC|PM|PT)\s+(\d+)\b", r"\1-\2", s)
+
+    # TS-50 → TS-50KVA
+    if re.match(r"^TS-\d+(\.\d+)?$", s):
+        s = s + "KVA"
+
+    # proteger códigos válidos
+    if re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", s):
+        return s
+
     return s.strip()
+
+
+# =========================================================
+# VALIDADOR SIMPLE DE FORMATO
+# =========================================================
+
+def _es_codigo_valido(cod: str) -> bool:
+    return bool(re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", cod))
 
 
 # =========================================================
 # LIMPIEZA BASE
 # =========================================================
 
-def limpiar_df_estructuras(df: pd.DataFrame, log) -> pd.DataFrame:
+def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(how="all").copy()
+
+    # normalizar nombres de columnas
+    df.columns = [str(c).strip() for c in df.columns]
 
     if "Punto" not in df.columns and "punto" in df.columns:
         df.rename(columns={"punto": "Punto"}, inplace=True)
@@ -74,55 +97,46 @@ def limpiar_df_estructuras(df: pd.DataFrame, log) -> pd.DataFrame:
 
 
 # =========================================================
-# SPLIT INTELIGENTE
+# SPLIT SEGURO
 # =========================================================
 
 def _split_codigos(texto):
 
-    limpio = re.sub(r"\(.*?\)", "", str(texto)).upper()
+    texto = str(texto).upper()
 
-    # proteger TS
-    limpio = re.sub(
-        r"(TS-?\s*\d+(\.\d+)?\s*KVA)",
-        lambda m: m.group(0).replace(" ", "_"),
-        limpio
-    )
+    # quitar paréntesis
+    texto = re.sub(r"\(.*?\)", "", texto)
 
-    partes = re.split(r"[,\s]+", limpio)
+    bloques = re.split(r",", texto)
 
     resultado = []
 
-    i = 0
-    while i < len(partes):
+    for bloque in bloques:
 
-        item = partes[i].replace("_", " ").strip()
+        partes = bloque.strip().split()
 
-        if not item:
+        i = 0
+        while i < len(partes):
+
+            item = partes[i]
+
+            # multiplicador: 3 x CS-2
+            if item.isdigit() and i + 2 < len(partes):
+                if partes[i + 1].lower() == "x":
+                    codigo = partes[i + 2]
+                    cantidad = int(item)
+                    resultado.extend([codigo] * cantidad)
+                    i += 3
+                    continue
+
+            resultado.append(item)
             i += 1
-            continue
-
-        # multiplicador: 3 x CS-2
-        if item.isdigit() and i + 2 < len(partes):
-            if partes[i + 1].lower() == "x":
-                codigo = partes[i + 2].replace("_", " ").strip()
-                cantidad = int(item)
-
-                resultado.extend([codigo] * cantidad)
-                i += 3
-                continue
-
-        if item in ["X", "KVA"]:
-            i += 1
-            continue
-
-        resultado.append(item)
-        i += 1
 
     return resultado
 
 
 # =========================================================
-# EXPLOTAR
+# EXPLOTAR A FORMATO LARGO
 # =========================================================
 
 def explotar_estructuras(df):
@@ -140,7 +154,7 @@ def explotar_estructuras(df):
 
             cod = _normalizar_codigo(cod)
 
-            if not cod:
+            if not cod or not _es_codigo_valido(cod):
                 continue
 
             filas.append({
@@ -151,6 +165,9 @@ def explotar_estructuras(df):
 
     df_out = pd.DataFrame(filas)
 
+    if df_out.empty:
+        return df_out
+
     df_out = (
         df_out.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
         .sum()
@@ -160,12 +177,15 @@ def explotar_estructuras(df):
 
 
 # =========================================================
-# FUNCIÓN FINAL
+# FUNCIÓN FINAL DEL MOTOR
 # =========================================================
 
-def construir_estructuras_por_punto_y_conteo(df, log):
+def construir_estructuras_por_punto_y_conteo(df):
 
     df = explotar_estructuras(df)
+
+    if df.empty:
+        return {}, {}, df
 
     conteo = (
         df.groupby("codigodeestructura")["cantidad"]
@@ -183,11 +203,5 @@ def construir_estructuras_por_punto_y_conteo(df, log):
             lista.extend([r["codigodeestructura"]] * int(r["cantidad"]))
 
         estructuras_por_punto[punto] = lista
-
-    log("✔ estructuras_por_punto:")
-    log(estructuras_por_punto)
-
-    log("✔ conteo:")
-    log(conteo)
 
     return estructuras_por_punto, conteo, df
