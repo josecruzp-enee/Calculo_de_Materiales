@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Motor de normalización de estructuras (versión final robusta)
+Motor de normalización de estructuras (versión robusta producción)
 """
 
 from __future__ import annotations
@@ -59,9 +59,16 @@ def _normalizar_codigo(code: str) -> str:
 
 
 def _es_codigo_valido(cod: str) -> bool:
+    """
+    Más flexible que la versión original.
+    Acepta estructuras reales del dominio.
+    """
     if not cod:
         return False
-    return bool(re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", cod))
+
+    return bool(
+        re.match(r"^[A-Z]{1,4}-[A-Z0-9\.\-]+$", cod)
+    )
 
 
 # =========================================================
@@ -74,14 +81,13 @@ def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(how="all").copy()
 
-    # normalizar columnas
     df.columns = [_norm_col(c) for c in df.columns]
 
-    # mapear nombres posibles
     col_map = {
         "PUNTO": "Punto",
         "CODIGODEESTRUCTURA": "codigodeestructura",
         "CODIGO DE ESTRUCTURA": "codigodeestructura",
+        "CODIGO_ESTRUCTURA": "codigodeestructura",
         "ESTRUCTURA": "codigodeestructura",
         "CANTIDAD": "cantidad"
     }
@@ -111,9 +117,9 @@ def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =========================================================
-# SPLIT SEGURO
+# SPLIT ROBUSTO
 # =========================================================
-def _split_codigos(texto):
+def _split_codigos(texto: str):
 
     if texto is None:
         return []
@@ -129,24 +135,17 @@ def _split_codigos(texto):
 
     for bloque in bloques:
 
-        partes = bloque.strip().split()
-        i = 0
+        # patrón "3 x CS-2"
+        match = re.findall(r"(\d+)\s*x\s*([A-Z0-9\-\.\s]+)", bloque)
 
-        while i < len(partes):
+        if match:
+            for cantidad, codigo in match:
+                codigo = codigo.strip()
+                resultado.extend([codigo] * int(cantidad))
+            continue
 
-            item = partes[i]
-
-            # patrón: 3 x CS-2
-            if item.isdigit() and i + 2 < len(partes):
-                if partes[i + 1].lower() == "x":
-                    codigo = partes[i + 2]
-                    cantidad = int(item)
-                    resultado.extend([codigo] * cantidad)
-                    i += 3
-                    continue
-
-            resultado.append(item)
-            i += 1
+        # fallback simple
+        resultado.append(bloque.strip())
 
     return resultado
 
@@ -154,25 +153,37 @@ def _split_codigos(texto):
 # =========================================================
 # EXPLOTAR A FORMATO LARGO
 # =========================================================
-def explotar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
+def explotar_estructuras(df: pd.DataFrame):
 
     if df is None or df.empty:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"]), [], []
 
     filas = []
+    errores = []
+    warnings = []
 
-    for _, row in df.iterrows():
+    for i, row in df.iterrows():
 
         punto = str(row.get("Punto", "")).strip()
         cantidad_base = int(row.get("cantidad", 1) or 1)
 
         codigos = _split_codigos(row.get("codigodeestructura"))
 
+        if not codigos:
+            warnings.append(f"Fila {i}: sin códigos válidos")
+            continue
+
         for cod in codigos:
 
+            cod_original = cod
             cod = _normalizar_codigo(cod)
 
-            if not cod or not _es_codigo_valido(cod):
+            if not cod:
+                warnings.append(f"Fila {i}: código vacío ({cod_original})")
+                continue
+
+            if not _es_codigo_valido(cod):
+                errores.append(f"Fila {i}: código inválido → {cod_original}")
                 continue
 
             filas.append({
@@ -187,14 +198,14 @@ def explotar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     if df_out.empty:
-        return df_out
+        return df_out, errores, warnings
 
     df_out = (
         df_out.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
         .sum()
     )
 
-    return df_out
+    return df_out, errores, warnings
 
 
 # =========================================================
@@ -203,10 +214,10 @@ def explotar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 def construir_estructuras_por_punto_y_conteo(df: pd.DataFrame):
 
     df = limpiar_df_estructuras(df)
-    df = explotar_estructuras(df)
+    df, errores, warnings = explotar_estructuras(df)
 
     if df.empty:
-        return {}, {}, df
+        return {}, {}, df, errores, warnings
 
     conteo = (
         df.groupby("codigodeestructura")["cantidad"]
@@ -225,4 +236,4 @@ def construir_estructuras_por_punto_y_conteo(df: pd.DataFrame):
 
         estructuras_por_punto[punto] = lista
 
-    return estructuras_por_punto, conteo, df
+    return estructuras_por_punto, conteo, df, errores, warnings
