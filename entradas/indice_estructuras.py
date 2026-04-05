@@ -7,7 +7,7 @@ Carga y normalización del índice de estructuras + construcción de DFs de resu
 
 import pandas as pd
 
-from entradas.excel_legacy import cargar_indice
+from entradas.leer_excel import leer_indice_materiales
 
 # 🔥 USAR EL MISMO NORMALIZADOR DEL SISTEMA
 from entradas.normalizacion_estructuras import _normalizar_codigo
