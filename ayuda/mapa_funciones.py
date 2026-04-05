@@ -921,13 +921,14 @@ def principal():
     # ==========================
     # 🔥 ANÁLISIS AVANZADO
     # ==========================
+    escribir_txt(proyecto, aristas_llamadas, aristas_imports, args.salida)
+    escribir_diag(diag, args.diag)
     detectar_pipeline(aristas_llamadas)
     detectar_modulos_muertos(proyecto, aristas_imports)
     detectar_duplicados(proyecto)
     resumen_arquitectura(proyecto, aristas_llamadas)
 
-    escribir_txt(proyecto, aristas_llamadas, aristas_imports, args.salida)
-    escribir_diag(diag, args.diag)
+    
 
     if args.json:
         escribir_json(proyecto, aristas_llamadas, aristas_imports, diag, args.json)
