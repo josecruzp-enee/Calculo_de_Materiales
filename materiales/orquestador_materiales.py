@@ -7,16 +7,19 @@ from materiales.modelos.entrada import EntradaMateriales
 from materiales.modelos.salida import ResultadoMateriales
 
 from materiales.calculos.calculo_materiales import calcular_materiales_proyecto
+from materiales.validaciones.materiales_validacion import validar_datos_proyecto
 
-# ⚠️ TEMPORAL
-from core.cables_materiales import materiales_desde_cables
+# ✅ YA NO usar core
+from materiales.cables.cables_materiales import materiales_desde_cables
 
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
+# =========================================================
+# HELPERS
+# =========================================================
 def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
-
     if df is None or df.empty:
         return pd.DataFrame(columns=COLUMNAS_STD)
 
@@ -29,40 +32,76 @@ def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
     return df[COLUMNAS_STD]
 
 
+def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    return (
+        df
+        .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+        .sum()
+    )
+
+
+# =========================================================
+# ORQUESTADOR
+# =========================================================
 def ejecutar_materiales(entrada: EntradaMateriales) -> ResultadoMateriales:
 
-    estructuras_df = entrada.estructuras_df
-    tension = entrada.tension
-    hojas_base = entrada.hojas_base
-    df_cables = entrada.df_cables
-
-    if estructuras_df is None or estructuras_df.empty:
+    # =========================
+    # 1. VALIDACIÓN BASE
+    # =========================
+    if entrada.estructuras_df is None or entrada.estructuras_df.empty:
         return ResultadoMateriales(False, pd.DataFrame(), ["Sin estructuras"], [])
 
     try:
+        tension, calibre_mt = validar_datos_proyecto(entrada.datos_proyecto)
+    except Exception as e:
+        return ResultadoMateriales(False, pd.DataFrame(), [f"Error validando datos: {e}"], [])
+
+    # =========================
+    # 2. CÁLCULO BASE
+    # =========================
+    try:
         resultados = calcular_materiales_proyecto(
-            hojas_base=hojas_base,
-            df_estructuras=estructuras_df,
+            hojas_base=entrada.hojas_base,
+            df_estructuras=entrada.estructuras_df,
             tension=tension
         )
+
+        if not isinstance(resultados, dict) or "df_materiales_detalle" not in resultados:
+            raise ValueError("Salida inválida de calcular_materiales_proyecto")
 
         df_materiales = resultados.get("df_materiales_detalle")
 
     except Exception as e:
-        return ResultadoMateriales(False, pd.DataFrame(), [str(e)], [])
+        return ResultadoMateriales(False, pd.DataFrame(), [f"Error en cálculo: {e}"], [])
 
-    df_cables_mat = materiales_desde_cables(df_cables)
+    # =========================
+    # 3. CABLES → MATERIALES
+    # =========================
+    try:
+        df_cables_mat = materiales_desde_cables(entrada.df_cables)
+    except Exception:
+        df_cables_mat = pd.DataFrame(columns=COLUMNAS_STD)
 
+    # =========================
+    # 4. NORMALIZACIÓN
+    # =========================
     df_materiales = _normalizar_df(df_materiales)
     df_cables_mat = _normalizar_df(df_cables_mat)
 
+    # =========================
+    # 5. UNIÓN
+    # =========================
     df_total = pd.concat([df_materiales, df_cables_mat], ignore_index=True)
 
-    if not df_total.empty:
-        df_total = (
-            df_total
-            .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
-            .sum()
-        )
+    # =========================
+    # 6. CONSOLIDACIÓN
+    # =========================
+    df_total = _consolidar(df_total)
 
+    # =========================
+    # 7. SALIDA
+    # =========================
     return ResultadoMateriales(True, df_total, [], [])
