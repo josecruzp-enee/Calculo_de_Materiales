@@ -781,6 +781,116 @@ def renderizar_streamlit(proyecto, aristas_llamadas, aristas_imports, diag):
     with st.expander("🕸️ Call graph (mod.func -> mod.func)"):
         st.code("\n".join([f"{a} -> {b}" for a, b in aristas_llamadas]) or "(vacío)")
 
+# ==========================
+# 🧠 DETECTOR DE PIPELINE
+# ==========================
+def detectar_pipeline(aristas_llamadas):
+
+    print("\n" + "="*80)
+    print("🔍 PIPELINE DEL SISTEMA")
+    print("="*80)
+
+    niveles = {
+        "app": [],
+        "interfaz": [],
+        "entradas": [],
+        "materiales": [],
+        "export": [],
+    }
+
+    for a, b in aristas_llamadas:
+        for nivel in niveles:
+            if nivel in a:
+                niveles[nivel].append((a, b))
+
+    for nivel, relaciones in niveles.items():
+        if relaciones:
+            print(f"\n📌 {nivel.upper()}")
+            for a, b in relaciones[:10]:
+                print(f"  {a} → {b}")
+
+
+# ==========================
+# 🧠 DETECTOR DE MÓDULOS MUERTOS
+# ==========================
+def detectar_modulos_muertos(proyecto, aristas_imports):
+
+    usados = set()
+    for a, b in aristas_imports:
+        usados.add(a)
+        usados.add(b)
+
+    muertos = [m for m in proyecto.keys() if m not in usados]
+
+    print("\n" + "="*80)
+    print("🧟 MÓDULOS NO UTILIZADOS")
+    print("="*80)
+
+    if muertos:
+        for m in muertos:
+            print(f"  - {m}")
+    else:
+        print("  ✔ Ninguno")
+
+
+# ==========================
+# 🧠 DETECTOR DE FUNCIONES DUPLICADAS
+# ==========================
+def detectar_duplicados(proyecto):
+
+    mapa = {}
+
+    for mod, datos in proyecto.items():
+        for f in datos.get("funciones", []):
+            mapa.setdefault(f, []).append(mod)
+
+    duplicados = {k: v for k, v in mapa.items() if len(v) > 1}
+
+    print("\n" + "="*80)
+    print("♻️ FUNCIONES DUPLICADAS")
+    print("="*80)
+
+    if duplicados:
+        for fn, mods in duplicados.items():
+            print(f"\n🔁 {fn}")
+            for m in mods:
+                print(f"   - {m}")
+    else:
+        print("  ✔ Ninguna")
+
+
+# ==========================
+# 🧠 RESUMEN ARQUITECTURA
+# ==========================
+def resumen_arquitectura(proyecto, aristas_llamadas):
+
+    print("\n" + "="*80)
+    print("🏗️ RESUMEN ARQUITECTÓNICO")
+    print("="*80)
+
+    total_modulos = len(proyecto)
+    total_funcs = sum(len(d.get("funciones", [])) for d in proyecto.values())
+
+    print(f"📦 Módulos: {total_modulos}")
+    print(f"⚙️ Funciones: {total_funcs}")
+    print(f"🔗 Llamadas: {len(aristas_llamadas)}")
+
+    capas = {
+        "interfaz": 0,
+        "entradas": 0,
+        "materiales": 0,
+        "core": 0,
+    }
+
+    for mod in proyecto:
+        for k in capas:
+            if k in mod:
+                capas[k] += 1
+
+    print("\n📊 Distribución por capas:")
+    for k, v in capas.items():
+        print(f"  - {k}: {v}")
+
 
 # ==========================
 # Main
@@ -807,6 +917,15 @@ def principal():
     aristas_llamadas = inferir_aristas_llamadas(proyecto)
     diag = diagnosticar_imports(proyecto)
 
+
+    # ==========================
+    # 🔥 ANÁLISIS AVANZADO
+    # ==========================
+    detectar_pipeline(aristas_llamadas)
+    detectar_modulos_muertos(proyecto, aristas_imports)
+    detectar_duplicados(proyecto)
+    resumen_arquitectura(proyecto, aristas_llamadas)
+
     escribir_txt(proyecto, aristas_llamadas, aristas_imports, args.salida)
     escribir_diag(diag, args.diag)
 
@@ -827,6 +946,7 @@ def principal():
             print("⚠️ No se pudo cargar la UI de Streamlit:")
             print(traceback.format_exc())
 
+    
 
 if __name__ == "__main__":
     principal()
