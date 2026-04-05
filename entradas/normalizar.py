@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-normalizar.py (versión producción robusta)
+normalizar.py
+Fachada de normalización de estructuras (clean + producción)
 """
 
 import pandas as pd
@@ -11,11 +12,16 @@ from entradas.normalizacion_estructuras import (
 
 
 # =========================================================
-# FUNCIÓN PRINCIPAL
+# API PRINCIPAL
 # =========================================================
 def normalizar_estructuras(df: pd.DataFrame):
     """
-    Retorna:
+    Pipeline completo de normalización.
+
+    Entrada:
+        df (cualquier formato)
+
+    Salida:
         df_normalizado
         errores
         warnings
@@ -31,27 +37,34 @@ def normalizar_estructuras(df: pd.DataFrame):
     df = df.copy()
 
     # =====================================================
-    # DETECTAR FORMATO
+    # 1. ASEGURAR FORMATO LARGO
     # =====================================================
-    if _es_formato_largo(df):
-        df_base = df.copy()
-    else:
-        df_base = _convertir_a_largo(df)
+    df_base = _asegurar_formato_largo(df)
 
     # =====================================================
-    # NORMALIZACIÓN REAL (CORE)
+    # 2. MOTOR DE NORMALIZACIÓN
     # =====================================================
-    estructuras_por_punto, conteo, df_final, errores, warnings = \
+    _, _, df_final, errores, warnings = \
         construir_estructuras_por_punto_y_conteo(df_base)
 
     return df_final, errores, warnings
 
 
 # =========================================================
-# DETECCIÓN FORMATO
+# FORMATO
 # =========================================================
-def _es_formato_largo(df: pd.DataFrame) -> bool:
+def _asegurar_formato_largo(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Garantiza que el DataFrame esté en formato largo.
+    """
 
+    if _es_formato_largo(df):
+        return df.copy()
+
+    return _convertir_a_largo(df)
+
+
+def _es_formato_largo(df: pd.DataFrame) -> bool:
     cols = [c.lower() for c in df.columns]
 
     return (
@@ -75,13 +88,14 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             col_punto = c
             break
 
+    # Si no existe punto → generar
     if col_punto is None:
         df["Punto"] = [f"P{i+1}" for i in range(len(df))]
         col_punto = "Punto"
 
     filas = []
 
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
 
         punto = row[col_punto]
 
@@ -106,4 +120,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
                 "cantidad": 1
             })
 
-    return pd.DataFrame(filas)
+    return pd.DataFrame(
+        filas,
+        columns=["Punto", "codigodeestructura", "cantidad"]
+    )
