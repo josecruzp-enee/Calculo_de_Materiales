@@ -5,7 +5,7 @@ import pandas as pd
 from collections import Counter
 
 from materiales.auxiliares.materiales_aux import limpiar_codigo, expandir_lista_codigos
-from materiales.auxiliares.lector_materiales import leer_hoja_materiales
+from materiales.calculos.lector_materiales import leer_hoja_materiales
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
