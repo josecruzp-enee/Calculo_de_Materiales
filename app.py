@@ -20,7 +20,7 @@ from interfaz.estructuras import seccion_entrada_estructuras
 from interfaz.materiales_extra import seccion_adicionar_material
 from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
 from interfaz.mapa_kml import seccion_mapa_kmz
-
+from interfaz.orquestador_interfaz import ejecutar_orquestador_interfaz
 
 # ---------------------------
 #   Navegación sin scroll
@@ -118,98 +118,18 @@ def main() -> None:
 
     st.radio(
         "Membrete del PDF",
-        ["SMART", "ENEE","SIN LOGO"],
+        ["SMART", "ENEE", "SIN LOGO"],
         key="membrete_pdf",
         horizontal=True,
     )
-    
-    # Navegación
-    seccion = _nav_estado_actual()
-    _barra_nav_botones(seccion)
 
-    # Render condicional
-    if seccion == "datos":
-        seccion_datos_proyecto()
-
-    elif seccion == "cables":
-        seccion_cables_proyecto()
-
-    elif seccion == "modo":
-        st.subheader("3) Modo de Carga")
-        modo = seleccionar_modo_carga()
-        st.session_state["modo_carga_seleccionado"] = modo
-
-    elif seccion == "estructuras":
-        modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
-        df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
-
-        st.write("DEBUG df_estructuras:", None if df_estructuras is None else df_estructuras.shape)
-
-        if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
-            # Alias viejo (para no romper tu flujo actual)
-            st.session_state["df_estructuras_compacto"] = df_estructuras
-            st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
-
-            # Paquete estándar (nuevo)
-            st.session_state["df_estructuras"] = df_estructuras
-            st.session_state.setdefault("datos_proyecto", {})
-            st.session_state.setdefault(
-                "df_cables",
-                pd.DataFrame(columns=["Tipo", "Configuración", "Calibre", "Longitud (m)"]),
-            )
-            st.session_state.setdefault(
-                "df_materiales_extra",
-                pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"]),
-            )
-
-            st.success("✅ Guardado en memoria. Ya puedes ir a Finalizar.")
-        else:
-            df_prev = st.session_state.get("df_estructuras_compacto")
-            if df_prev is not None and hasattr(df_prev, "empty") and not df_prev.empty:
-                st.info("ℹ️ No hubo nuevas estructuras, pero ya hay datos guardados previamente.")
-            else:
-                st.warning("⚠️ No se generó la tabla LARGA (compacta). No hay nada para Finalizar.")
-
-    elif seccion == "materiales":
-        seccion_adicionar_material()
-
-    elif seccion == "final":
-        df_e = st.session_state.get("df_estructuras")
-        if df_e is None:
-            df_e = st.session_state.get("df_estructuras_compacto")
-
-        if df_e is None or not hasattr(df_e, "empty") or df_e.empty:
-            st.info("⚠️ Carga primero las estructuras en la sección ‘Estructuras’.")
-        else:
-            seccion_finalizar_calculo(df_e)
-
-    elif seccion == "exportar":
-        df_e = st.session_state.get("df_estructuras")
-        if df_e is None:
-            df_e = st.session_state.get("df_estructuras_compacto")
-
-        ruta_e = st.session_state.get("ruta_estructuras_compacto")
-
-        if df_e is None or not hasattr(df_e, "empty") or df_e.empty:
-            st.warning("⚠️ Primero completa la sección ‘Estructuras’ antes de exportar.")
-            st.info("Ve a la pestaña **Estructuras**, carga o genera tus datos, y luego vuelve aquí.")
-        else:
-            st.markdown("### 🧩 DEBUG: DataFrame antes de exportar")
-            st.write("Columnas:", df_e.columns.tolist())
-            st.write("Shape:", df_e.shape)
-            st.dataframe(df_e.head(10), use_container_width=True, hide_index=True)
-
-            seccion_exportacion(
-                df=df_e,
-                modo_carga=st.session_state.get("modo_carga_seleccionado"),
-                ruta_estructuras=ruta_e,
-                ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
-               
-            )
-
-    elif seccion == "mapa_kml":
-        seccion_mapa_kmz()
-
+    # ============================
+    # 🔥 ORQUESTADOR UI (NUEVO)
+    # ============================
+    ejecutar_orquestador_interfaz(
+        _nav_estado_actual,
+        _barra_nav_botones,
+    )
 
 if __name__ == "__main__":
     main()
