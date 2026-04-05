@@ -1,35 +1,21 @@
 # -*- coding: utf-8 -*-
-# entradas/orquestador_entradas.py
-
 from __future__ import annotations
 from typing import Any
 import pandas as pd
 
-# =========================
-# LECTURA
-# =========================
 from entradas.leer_excel import leer_estructuras
 from entradas.leer_tabla import leer_tabla
 from entradas.leer_pdf import leer_pdf
 from entradas.leer_dxf import leer_dxf
 
-# =========================
-# PROCESAMIENTO
-# =========================
 from entradas.normalizar import normalizar_estructuras
 from entradas.validacion import validar_estructuras
 from entradas.indice_estructuras import cargar_indice_normalizado
 from entradas.base_datos import cargar_base_datos
 
-# =========================
-# MODELO
-# =========================
 from materiales.modelos.entrada import EntradaMateriales
 
 
-# =========================================================
-# API PRINCIPAL (🔥 NUEVA + LEGACY)
-# =========================================================
 def cargar_entrada(
     tipo: str | None = None,
     data: Any = None,
@@ -43,9 +29,12 @@ def cargar_entrada(
 
     log = _get_logger()
 
-    # =====================================================
-    # 🔥 MODO NUEVO (UI)
-    # =====================================================
+    # 🔧 FIX
+    df_materiales_extra = None
+
+    # =========================
+    # UI
+    # =========================
     if datos_fuente is not None:
 
         df = _leer_desde_ui(datos_fuente.get("df_estructuras"))
@@ -53,16 +42,16 @@ def cargar_entrada(
         df_materiales_extra = datos_fuente.get("df_materiales_extra")
 
     else:
-        # =====================================================
-        # LEGACY
-        # =====================================================
         df = _leer_por_tipo(tipo, data)
 
     # =========================
-    # VALIDAR DATA
+    # VALIDACIÓN
     # =========================
     if df is None or df.empty:
         raise ValueError("No se pudo leer información válida")
+
+    if "Punto" not in df.columns:
+        raise ValueError("Falta columna 'Punto'")
 
     # =========================
     # NORMALIZACIÓN
@@ -73,40 +62,41 @@ def cargar_entrada(
         raise ValueError("Normalización vacía")
 
     # =========================
-    # VALIDACIÓN
+    # VALIDACIÓN CATÁLOGO
     # =========================
     if ruta_materiales and not permitir_sin_catalogo:
+
         df_indice = cargar_indice_normalizado(ruta_materiales, log)
+
         df, errores, warnings = validar_estructuras(df, df_indice, log)
 
         if errores:
             raise ValueError("\n".join(errores))
 
     # =========================
-    # BASE DE DATOS
+    # TENSIÓN
+    # =========================
+    if tension is None:
+        raise ValueError("tension es requerida")
+
+    # =========================
+    # BASE
     # =========================
     hojas_base = None
     if ruta_materiales:
         hojas_base = cargar_base_datos()
 
-    # =========================
-    # SALIDA
-    # =========================
     return EntradaMateriales(
         estructuras_df=df,
-        tension=tension or 0.0,
+        tension=float(tension),
         df_cables=df_cables,
         hojas_base=hojas_base,
         datos_proyecto={
             "materiales_extra": df_materiales_extra
-            if datos_fuente else None
         }
     )
 
 
-# =========================================================
-# LECTOR CENTRALIZADO
-# =========================================================
 def _leer_por_tipo(tipo: str, data) -> pd.DataFrame:
 
     if tipo == "excel":
