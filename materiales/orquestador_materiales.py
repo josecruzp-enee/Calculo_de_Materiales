@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Orquestador del dominio de materiales (adaptado al proyecto actual)
-"""
 
 from __future__ import annotations
 from typing import Dict, Any
@@ -9,19 +6,20 @@ from typing import Dict, Any
 import pandas as pd
 
 # =========================
-# IMPORTS REALES
+# IMPORTS
 # =========================
 
-# Validación
+from materiales.calculos.materiales_estructuras import calcular_materiales_estructura
+from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
+
 from materiales.validaciones.materiales_validacion import validar_estructuras
 
-# Cálculos
-from materiales.calculos.materiales_estructuras import calcular_materiales_estructuras
-from materiales.calculos.materiales_puntos import calcular_materiales_puntos
+# 👇 NUEVO
+from core.cables_materiales import materiales_desde_cables
 
 
 # =========================================================
-# ORQUESTADOR
+# ORQUESTADOR REAL
 # =========================================================
 
 def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
@@ -29,15 +27,16 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
     errores = []
     warnings = []
 
-    # =====================================================
-    # 1. ENTRADA (YA VIENE PROCESADA DESDE UI)
-    # =====================================================
-    estructuras = entrada  # 👈 clave en tu proyecto actual
+    archivo_materiales = entrada.get("archivo_materiales")
+    estructuras_por_punto = entrada.get("estructuras_por_punto")
+    tension = entrada.get("tension")
+
+    df_cables = entrada.get("df_cables")  # 👈 NUEVO
 
     # =====================================================
-    # 2. VALIDACIÓN
+    # VALIDACIÓN
     # =====================================================
-    val = validar_estructuras(estructuras)
+    val = validar_estructuras(estructuras_por_punto)
 
     if not val.get("ok", True):
         return {
@@ -49,11 +48,19 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
     warnings.extend(val.get("warnings", []))
 
     # =====================================================
-    # 3. CÁLCULOS
+    # CÁLCULO MATERIALES
     # =====================================================
+
     try:
-        df_estructuras = calcular_materiales_estructuras(estructuras)
-        df_puntos = calcular_materiales_puntos(estructuras)
+        # PUNTOS
+        df_puntos = calcular_materiales_por_punto(
+            archivo_materiales,
+            estructuras_por_punto,
+            tension
+        )
+
+        # 👇 CABLES (NUEVO)
+        df_cables_mat = materiales_desde_cables(df_cables)
 
     except Exception as e:
         return {
@@ -63,19 +70,26 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     # =====================================================
-    # 4. CONSOLIDACIÓN (REALISTA)
+    # CONSOLIDACIÓN TOTAL
     # =====================================================
     try:
-        df_total = pd.concat([df_estructuras, df_puntos], ignore_index=True)
+        dfs = []
 
-        # Agrupar si aplica
-        if "Cantidad" in df_total.columns:
+        if df_puntos is not None and not df_puntos.empty:
+            dfs.append(df_puntos[["Materiales", "Unidad", "Cantidad"]])
+
+        if df_cables_mat is not None and not df_cables_mat.empty:
+            dfs.append(df_cables_mat)
+
+        if not dfs:
+            df_total = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+        else:
+            df_total = pd.concat(dfs, ignore_index=True)
+
             df_total = (
                 df_total
-                .groupby(list(df_total.columns.difference(["Cantidad"])))
-                ["Cantidad"]
+                .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
                 .sum()
-                .reset_index()
             )
 
     except Exception as e:
@@ -86,7 +100,7 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     # =====================================================
-    # 5. SALIDA
+    # RESULTADO
     # =====================================================
     return {
         "ok": True,
