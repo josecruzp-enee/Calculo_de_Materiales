@@ -1,4 +1,26 @@
 # -*- coding: utf-8 -*-
+
+# -*- coding: utf-8 -*-
+
+import pandas as pd
+
+COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
+
+# ==========================================================
+# MOCK TEMPORAL (NO ROMPER IMPORTS)
+# ==========================================================
+
+def calcular_materiales_por_punto(*args, **kwargs) -> pd.DataFrame:
+    return pd.DataFrame(columns=COLUMNAS_STD)
+
+
+def extraer_conteo_estructuras(*args, **kwargs):
+    from collections import Counter
+    return Counter(), {}
+
+
+
+
 '''
 from __future__ import annotations
 
