@@ -39,15 +39,15 @@ def cargar_entrada(
     validar_catalogo: bool = True,
 ) -> EntradaMateriales:
     """
-    Punto único de entrada al dominio de materiales.
+    Entrada única al dominio.
 
     Flujo:
         1. Lectura
         2. Validación mínima
         3. Normalización
-        4. Validación contra catálogo
+        4. Validación catálogo
         5. Carga base
-        6. Construcción DTO
+        6. DTO
     """
 
     # =========================
@@ -74,7 +74,6 @@ def cargar_entrada(
     # =========================
     if validar_catalogo:
         df_indice = cargar_indice_normalizado()
-
         df, errores, _ = validar_estructuras(df, df_indice)
 
         if errores:
@@ -100,12 +99,9 @@ def cargar_entrada(
 
 
 # =========================================================
-# LECTORES POR TIPO
+# LECTORES
 # =========================================================
 def _leer_por_tipo(tipo: str, data) -> pd.DataFrame:
-    """
-    Dispatcher de lectura según tipo de entrada.
-    """
 
     if tipo == "excel":
         return leer_estructuras(data)
@@ -125,13 +121,7 @@ def _leer_por_tipo(tipo: str, data) -> pd.DataFrame:
     raise ValueError(f"Tipo no soportado: {tipo}")
 
 
-# =========================================================
-# LECTOR UI
-# =========================================================
 def _leer_desde_ui(data) -> pd.DataFrame:
-    """
-    Convierte datos de UI a DataFrame estándar.
-    """
 
     if isinstance(data, pd.DataFrame):
         return data.copy()
