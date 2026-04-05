@@ -16,7 +16,7 @@ from interfaz.exportacion_ui import (
     seccion_finalizar_calculo,
     seccion_exportacion,
 )
-
+from interfaz.estructuras_ui import seccion_entrada_estructuras
 
 # =========================================================
 # HELPERS
@@ -71,22 +71,21 @@ def renderizar_estructuras():
         return
 
     # =====================================================
-    # CARGA DESDE DESPLEGABLES
+    # 🔥 LLAMAR UI REAL (ESTO FALTABA)
     # =====================================================
-    df, ruta = cargar_desde_desplegables()
+    df, ruta = seccion_entrada_estructuras()
 
-    if not es_dataframe_valido(df):
+    if df is None:
         st.info("⚠️ No hay estructuras aún.")
         return
 
     # =====================================================
-    # GUARDAR RESULTADO
+    # GUARDAR RESULTADO GLOBAL
     # =====================================================
     st.session_state["df_estructuras"] = df
     st.session_state["ruta_estructuras_compacto"] = ruta
 
     st.success("✅ Estructuras listas.")
-
 
 def renderizar_final():
 
