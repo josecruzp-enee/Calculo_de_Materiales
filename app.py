@@ -6,7 +6,7 @@ import os
 import streamlit as st
 
 from interfaz.orquestador_interfaz import ejecutar_orquestador_interfaz
-
+from entradas.orquestador_entradas import cargar_entrada
 
 # =========================================================
 # NAVEGACIÓN
