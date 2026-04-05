@@ -3,11 +3,12 @@
 entradas_desplegables.py
 
 Entrada mediante listas desplegables (UI → dominio).
+VERSIÓN COMPATIBLE CON ORQUESTADOR ACTUAL
 """
 
 from __future__ import annotations
 
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 import pandas as pd
 
 
@@ -15,18 +16,12 @@ import pandas as pd
 # HELPERS
 # ==========================================================
 def _asegurar_dataframe(df) -> pd.DataFrame:
-    """
-    Garantiza que el objeto sea un DataFrame válido.
-    """
     if isinstance(df, pd.DataFrame):
         return df.copy()
     return pd.DataFrame()
 
 
 def _normalizar_columnas(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Limpia nombres de columnas.
-    """
     if df.empty:
         return df
 
@@ -38,29 +33,35 @@ def _normalizar_columnas(df: pd.DataFrame) -> pd.DataFrame:
 # MAIN
 # ==========================================================
 def cargar_desde_desplegables(
-    datos_fuente: Dict[str, Any]
-) -> Tuple[dict, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    datos_fuente: Optional[Dict[str, Any]] = None
+) -> Tuple[pd.DataFrame, None]:
     """
-    Entrada desde UI (listas desplegables).
+    Versión compatible con orquestador actual.
+
+    Retorna:
+        df_estructuras, ruta(None)
     """
 
     # =========================
-    # Datos proyecto
+    # Si no viene datos → usar session_state
     # =========================
-    datos_proyecto = dict(datos_fuente.get("datos_proyecto") or {})
+    if datos_fuente is None:
+        try:
+            import streamlit as st
+            datos_fuente = st.session_state
+        except Exception:
+            datos_fuente = {}
 
     # =========================
-    # DataFrames
+    # Obtener estructuras (principal)
     # =========================
-    df_estructuras = _asegurar_dataframe(datos_fuente.get("df_estructuras"))
-    df_cables = _asegurar_dataframe(datos_fuente.get("df_cables"))
-    df_materiales_extra = _asegurar_dataframe(datos_fuente.get("df_materiales_extra"))
+    df_estructuras = _asegurar_dataframe(
+        datos_fuente.get("df_estructuras")
+    )
 
-    # =========================
-    # Normalización básica
-    # =========================
     df_estructuras = _normalizar_columnas(df_estructuras)
-    df_cables = _normalizar_columnas(df_cables)
-    df_materiales_extra = _normalizar_columnas(df_materiales_extra)
 
-    return datos_proyecto, df_estructuras, df_cables, df_materiales_extra
+    # =========================
+    # Retorno compatible
+    # =========================
+    return df_estructuras, None
