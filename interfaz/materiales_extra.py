@@ -5,14 +5,14 @@ from __future__ import annotations
 import streamlit as st
 import pandas as pd
 
-from infraestructura.catalogo_materiales import obtener_catalogo_materiales
-from dominio.entradas.materiales import (
+from materiales.catalogos.catalogo_materiales import obtener_catalogo_materiales
+
+from entradas.materiales import (
     inicializar_materiales_extra,
     agregar_material,
     consolidar_materiales,
     limpiar_materiales,
 )
-
 
 def seccion_adicionar_material():
 
