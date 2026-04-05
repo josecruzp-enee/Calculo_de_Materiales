@@ -14,8 +14,11 @@ from dominio.entradas.estructuras import (
     eliminar_punto,
     reset_estructuras,
     construir_dataframe_salida,
-    crear_nuevo_punto,   # 👈 NUEVO (dominio)
+    crear_nuevo_punto,
 )
+
+# 🔥 NUEVO: conexión al dominio entradas
+from entradas.orquestador_entradas import cargar_entrada
 
 
 # =========================================================
@@ -31,7 +34,7 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
     with c1:
         sel = st.selectbox(
             "",
-            valores if valores else [""],   # 🔥 evita error
+            valores if valores else [""],
             index=0,
             key=f"{key_prefix}_{cat_key}_sel",
             label_visibility="collapsed",
@@ -51,7 +54,7 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
 
     with c3:
         if st.button("➕", key=f"{key_prefix}_{cat_key}_add"):
-            if sel:  # 🔥 evita agregar vacío
+            if sel:
                 agregar_item_estructura(cat_key, sel, qty)
 
 
@@ -60,9 +63,6 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
 # =========================================================
 
 def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
-    """
-    UI pura para estructuras.
-    """
 
     inicializar_estado_estructuras()
     opciones = obtener_opciones_catalogo()
@@ -78,7 +78,7 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
 
     with colA:
         if st.button("🆕 Punto"):
-            crear_nuevo_punto()   # 🔥 dominio maneja lógica
+            crear_nuevo_punto()
 
     with colB:
         if not df_actual.empty:
@@ -126,16 +126,33 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     st.dataframe(pd.DataFrame([fila]), use_container_width=True, hide_index=True)
 
     # =====================================================
-    # GUARDAR
+    # GUARDAR + VALIDAR 🔥
     # =====================================================
     guardar = st.button("💾 Guardar")
 
     if guardar:
+
         df, ruta = construir_dataframe_salida(punto)
-        st.success("Estructura guardada")
-        return df, ruta
+
+        try:
+            entrada = cargar_entrada(
+                tipo="ui",
+                data=df,
+                ruta_materiales=st.session_state.get("ruta_datos_materiales"),
+            )
+
+            df_final = entrada.df
+
+            st.success("✅ Estructura validada correctamente")
+
+            return df_final, ruta
+
+        except Exception as e:
+            st.error(f"❌ Error en estructuras:\n{str(e)}")
+            return None, None
 
     # =====================================================
-    # SALIDA FINAL (SIN REGENERAR)
+    # SALIDA FINAL
     # =====================================================
     return None, None
+    
