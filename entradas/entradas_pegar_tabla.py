@@ -1,17 +1,49 @@
 # -*- coding: utf-8 -*-
 """
-entradas_pegar_tabla.py
-Entrada mediante texto pegado.
+leer_tabla.py
+Convierte texto pegado (desde Excel) en DataFrame.
 """
 
 from __future__ import annotations
-from typing import Dict, Any, Tuple
 import pandas as pd
+import io
 
 
-def cargar_desde_pegar_tabla(datos_fuente: Dict[str, Any]) -> Tuple[dict, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    datos_proyecto = dict(datos_fuente.get("datos_proyecto") or {})
-    df_estructuras = pd.DataFrame()
-    df_cables = pd.DataFrame()
-    df_materiales_extra = pd.DataFrame()
-    return datos_proyecto, df_estructuras, df_cables, df_materiales_extra
+def leer_tabla(texto: str) -> pd.DataFrame:
+    """
+    Convierte texto pegado desde Excel en DataFrame.
+
+    Soporta:
+    - Tabulaciones (\t) → Excel típico
+    - Espacios múltiples
+
+    Retorna DataFrame limpio o vacío si falla.
+    """
+
+    if not texto or not texto.strip():
+        return pd.DataFrame()
+
+    # -------------------------
+    # Intento 1: formato Excel (tabs)
+    # -------------------------
+    try:
+        df = pd.read_csv(io.StringIO(texto), sep="\t")
+        if df.shape[1] > 1:
+            return df
+    except Exception:
+        pass
+
+    # -------------------------
+    # Intento 2: espacios múltiples
+    # -------------------------
+    try:
+        df = pd.read_csv(io.StringIO(texto), sep=r"\s{2,}", engine="python")
+        if df.shape[1] > 1:
+            return df
+    except Exception:
+        pass
+
+    # -------------------------
+    # Fallback
+    # -------------------------
+    return pd.DataFrame()
