@@ -11,7 +11,7 @@ from interfaz.base import (
 from interfaz.datos_proyecto import seccion_datos_proyecto
 from interfaz.cables_ui import seccion_cables
 from entradas.entradas_desplegables import cargar_desde_desplegables
-from interfaz.materiales_extra import seccion_adicionar_material
+#from interfaz.materiales_extra import seccion_adicionar_material
 
 from interfaz.exportacion_ui import (
     seccion_finalizar_calculo,
@@ -84,14 +84,14 @@ def renderizar_estructuras():
 
     st.success("✅ Estructuras listas.")
 
-
+'''
 def renderizar_materiales():
     # 🔥 UI maneja session_state internamente
     seccion_adicionar_material()
 
     # 🔥 asegurar existencia (sin sobrescribir)
     st.session_state["materiales_extra"] = st.session_state.get("materiales_extra", [])
-
+'''
 
 def renderizar_final():
 
