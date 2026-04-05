@@ -9,7 +9,11 @@ from pathlib import Path
 # ==========================================================
 # CONFIG
 # ==========================================================
-RUTA_BASE = Path(__file__).resolve().parent.parent / "data" / "Estructura_datos.xlsx"
+def obtener_ruta_base() -> Path:
+    """
+    Permite cambiar fácilmente la ubicación del archivo en el futuro.
+    """
+    return Path(__file__).resolve().parent.parent / "data" / "Estructura_datos.xlsx"
 
 
 # ==========================================================
@@ -21,41 +25,50 @@ def cargar_base_datos() -> dict[str, pd.DataFrame]:
 
     Retorna:
         dict[str, DataFrame]
-
-    Clave:
-        nombre de estructura normalizado (UPPER + strip)
-
-    Valor:
-        DataFrame de la hoja
     """
 
-    if not RUTA_BASE.exists():
-        raise FileNotFoundError(f"No se encontró el archivo: {RUTA_BASE}")
+    ruta = obtener_ruta_base()
 
-    xls = pd.ExcelFile(RUTA_BASE)
+    if not ruta.exists():
+        raise FileNotFoundError(f"No se encontró el archivo: {ruta}")
+
+    try:
+        xls = pd.ExcelFile(ruta)
+    except Exception as e:
+        raise RuntimeError(f"Error al abrir el archivo Excel: {e}")
 
     hojas: dict[str, pd.DataFrame] = {}
 
     for hoja in xls.sheet_names:
+        try:
+            # =========================
+            # Leer hoja
+            # =========================
+            df = xls.parse(hoja)
 
-        # =========================
-        # Leer hoja
-        # =========================
-        df = xls.parse(hoja)
+            if df is None or df.empty:
+                continue
 
-        # =========================
-        # Normalizar nombre clave
-        # =========================
-        nombre = str(hoja).strip().upper()
+            # =========================
+            # Normalizar nombre clave
+            # =========================
+            nombre = str(hoja).strip().upper()
 
-        # =========================
-        # Limpiar columnas
-        # =========================
-        df.columns = df.columns.map(str).str.strip()
+            # =========================
+            # Limpiar columnas
+            # =========================
+            df.columns = df.columns.map(str).str.strip()
 
-        # =========================
-        # Guardar
-        # =========================
-        hojas[nombre] = df
+            # =========================
+            # Guardar
+            # =========================
+            hojas[nombre] = df
+
+        except Exception as e:
+            print(f"[WARN] Error leyendo hoja '{hoja}': {e}")
+            continue
+
+    if not hojas:
+        raise ValueError("No se pudo cargar ninguna hoja válida del archivo.")
 
     return hojas
