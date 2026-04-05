@@ -1,25 +1,9 @@
 # app.py — navegación por secciones sin scroll (estado + query params)
 # -*- coding: utf-8 -*-
-
 from __future__ import annotations
-
 import os
 import pandas as pd
 import streamlit as st
-
-# ==== Importa tus secciones ya existentes ====
-from interfaz.base import (
-    renderizar_encabezado,
-    inicializar_estado,
-    seleccionar_modo_carga,           # crea el radio SOLO aquí
-    ruta_datos_materiales_por_defecto,
-)
-from interfaz.datos_proyecto import seccion_datos_proyecto
-from interfaz.cables_ui import seccion_cables
-from interfaz.estructuras import seccion_entrada_estructuras
-from interfaz.materiales_extra import seccion_adicionar_material
-from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
-from interfaz.mapa_kml import seccion_mapa_kmz
 from interfaz.orquestador_interfaz import ejecutar_orquestador_interfaz
 
 # ---------------------------
