@@ -1,156 +1,162 @@
 # -*- coding: utf-8 -*-
 # interfaz/exportacion_ui.py
-# SOLO UI — SIN LÓGICA DE NEGOCIO
 
 from __future__ import annotations
 
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
 # =========================
-# APLICACIÓN (🔥 NUEVO)
+# APLICACIÓN (🔥 NUEVO FLUJO)
 # =========================
+from aplicacion.modelos_proyecto import EntradaProyecto
 from aplicacion.orquestador_proyecto import ejecutar_proyecto
 
 # =========================
-# REPORTES
+# EXPORTADORES
 # =========================
-from exportadores.orquestador_reportes import generar_reportes, resumen_estructuras
+from exportadores.orquestador_reportes import generar_reportes
 
 
 # =========================================================
-# VISTA PREVIA (UI)
+# HELPERS
 # =========================================================
-def _vista_previa_conteo(df: pd.DataFrame):
+def _vista_previa_conteo(df_estructuras: pd.DataFrame | None):
+    """
+    Vista rápida antes de ejecutar cálculo
+    """
 
-    if df is None or df.empty:
-        st.info("No hay datos para mostrar.")
+    if df_estructuras is None or df_estructuras.empty:
+        st.info("No hay estructuras cargadas")
         return
 
-    conteo = resumen_estructuras(df)
+    st.caption("Vista previa de estructuras")
 
-    st.caption("Conteo rápido de estructuras por punto:")
-    st.dataframe(conteo, width="stretch", hide_index=True)
-
-
-# =========================================================
-# FINALIZAR (CALCULAR)
-# =========================================================
-def seccion_finalizar_calculo(df: pd.DataFrame):
-
-    st.subheader("5. 🏁 Finalizar Cálculo del Proyecto")
-
-    if df is None or df.empty:
-        st.info("⚠️ No hay estructuras cargadas.")
-        return
-
-    with st.form("form_finalizar_calculo"):
-        ejecutar = st.form_submit_button("✅ Finalizar Cálculo")
-
-    # =========================
-    # SI NO PRESIONA
-    # =========================
-    if not ejecutar:
-        if st.session_state.get("resultado_calculo"):
-            st.success("✅ Ya hay resultados calculados.")
-        else:
-            st.caption("Presiona el botón para calcular.")
-        return
-
-    # =========================
-    # EJECUCIÓN
-    # =========================
     try:
+        resumen = df_estructuras.value_counts().reset_index(name="Cantidad")
+        st.dataframe(resumen, use_container_width=True)
+    except Exception:
+        st.dataframe(df_estructuras, use_container_width=True)
 
-        resultado, errores, warnings = ejecutar_proyecto(
-            df,
-            st.session_state
+
+# =========================================================
+# SECCIÓN FINALIZAR
+# =========================================================
+def seccion_finalizar_calculo():
+
+    st.subheader("⚙️ Finalizar cálculo")
+
+    df_estructuras = st.session_state.get("df_estructuras")
+
+    # =========================
+    # VALIDACIÓN
+    # =========================
+    if df_estructuras is None or df_estructuras.empty:
+        st.warning("Debe ingresar estructuras antes de calcular")
+        return
+
+    _vista_previa_conteo(df_estructuras)
+
+    # =========================
+    # BOTÓN EJECUCIÓN
+    # =========================
+    if st.button("🚀 Ejecutar cálculo"):
+
+        # =========================
+        # ARMAR DTO (🔥 CLAVE)
+        # =========================
+        entrada = EntradaProyecto(
+            df_estructuras=df_estructuras,
+            df_cables=st.session_state.get("cables_proyecto_df"),
+            df_materiales_extra=pd.DataFrame(
+                st.session_state.get("materiales_extra", [])
+            ),
+            ruta_materiales=st.session_state.get("ruta_datos_materiales"),
         )
 
-        if resultado is None:
-            for err in errores:
-                st.error(f"❌ {err}")
+        # =========================
+        # EJECUTAR ORQUESTADOR
+        # =========================
+        with st.spinner("Calculando materiales..."):
+            resultado, errores, warnings = ejecutar_proyecto(entrada)
+
+        # =========================
+        # MANEJO DE ERRORES
+        # =========================
+        if errores:
+            st.error("❌ Error en el cálculo:")
+            for e in errores:
+                st.error(f"- {e}")
             return
 
-        if not resultado.ok:
-            st.error("❌ Error en cálculo:")
-            for err in resultado.errores:
-                st.write(f"- {err}")
-            return
+        # =========================
+        # WARNINGS
+        # =========================
+        if warnings:
+            for w in warnings:
+                st.warning(w)
 
-        # Guardar estado
+        # =========================
+        # GUARDAR RESULTADO
+        # =========================
         st.session_state["resultado_calculo"] = resultado
         st.session_state["calculo_finalizado"] = True
 
-        # Mostrar warnings si existen
-        if getattr(resultado, "warnings", None):
-            for w in resultado.warnings:
-                st.warning(f"⚠️ {w}")
-
-        st.success("🎉 Cálculo finalizado correctamente.")
-
-    except Exception as e:
-        st.session_state["calculo_finalizado"] = False
-        st.error(f"❌ Error en cálculo: {e}")
-        st.stop()
+        st.success("✅ Cálculo completado correctamente")
 
 
 # =========================================================
-# EXPORTACIÓN (PDF)
+# SECCIÓN EXPORTACIÓN
 # =========================================================
 def seccion_exportacion():
 
-    st.subheader("6. 📂 Exportación de Reportes")
+    st.subheader("📤 Exportación de resultados")
 
     resultado = st.session_state.get("resultado_calculo")
+    calculo_ok = st.session_state.get("calculo_finalizado")
 
-    if not resultado:
-        st.warning("⚠️ Primero debes finalizar el cálculo.")
+    # =========================
+    # VALIDACIÓN
+    # =========================
+    if not calculo_ok or resultado is None:
+        st.info("Debe ejecutar el cálculo antes de exportar")
         return
 
-    # Vista previa
-    df_prev = st.session_state.get("df_estructuras")
-
-    if isinstance(df_prev, pd.DataFrame) and not df_prev.empty:
-        _vista_previa_conteo(df_prev)
-
     # =========================
-    # BOTÓN GENERAR
+    # GENERAR REPORTES
     # =========================
-    with st.form("form_generar_reportes"):
-        generar = st.form_submit_button("📥 Generar Reportes PDF")
+    if st.button("📄 Generar reportes"):
 
-    if generar:
+        with st.spinner("Generando archivos..."):
 
-        try:
-            with st.spinner("⏳ Generando reportes..."):
+            try:
                 pdfs = generar_reportes(resultado)
 
-            st.session_state["pdfs_generados"] = pdfs
+            except Exception as e:
+                st.error(f"Error generando reportes: {e}")
+                return
 
-            st.success("✅ Reportes generados correctamente")
-
-        except Exception as e:
-            st.error(f"❌ Error generando reportes: {e}")
+        if not pdfs:
+            st.warning("No se generaron archivos")
             return
+
+        st.session_state["pdfs_generados"] = pdfs
+
+        st.success("Reportes generados correctamente")
 
     # =========================
     # DESCARGAS
     # =========================
     pdfs = st.session_state.get("pdfs_generados")
 
-    if not pdfs:
-        st.info("Presiona generar reportes.")
-        return
+    if pdfs:
 
-    st.markdown("### 📥 Descargas")
+        st.markdown("### 📥 Descargar archivos")
 
-    for nombre, archivo in pdfs.items():
-
-        if archivo:
+        for nombre, archivo in pdfs.items():
             st.download_button(
-                f"📄 Descargar {nombre}",
-                archivo,
-                f"{nombre}.pdf",
-                "application/pdf"
+                label=f"Descargar {nombre}",
+                data=archivo,
+                file_name=nombre,
+                mime="application/pdf"
             )
