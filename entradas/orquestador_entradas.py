@@ -1,167 +1,151 @@
 # -*- coding: utf-8 -*-
-# entradas/orquestador_entradas.py
 
 from __future__ import annotations
-
+from typing import Dict, Any
 import pandas as pd
 
 # =========================
-# LECTURA
+# IMPORTS
 # =========================
-from entradas.leer_excel import leer_estructuras
-from entradas.leer_tabla import leer_tabla
-from entradas.leer_pdf import leer_pdf
-from entradas.leer_dxf import leer_dxf
 
-# =========================
-# PROCESAMIENTO
-# =========================
-from entradas.normalizar import normalizar_estructuras
-from entradas.validacion import validar_estructuras
-from entradas.indice_estructuras import cargar_indice_normalizado
+from entradas.base_datos import cargar_base_datos
 
-# =========================
-# CONTRATOS
-# =========================
-from entradas.contratos import EntradaEstructuras
+from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
+from materiales.validaciones.materiales_validacion import validar_estructuras
+
+# ⚠️ TEMPORAL (luego migrar a materiales/)
+from core.cables_materiales import materiales_desde_cables
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL
+# CONFIG
 # =========================================================
 
-def cargar_entrada(
-    tipo: str,
-    data,
-    ruta_materiales: str | None = None,
-    *,
-    permitir_sin_catalogo: bool = False,
-) -> EntradaEstructuras:
-    """
-    Punto único de entrada del sistema.
+COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
-    Flujo:
-        1. Lectura
-        2. Normalización
-        3. Validación
-        4. Salida
 
-    Parámetros:
-        tipo: "excel" | "tabla" | "pdf" | "dxf" | "ui"
-        data: archivo, dataframe o estructura cruda
-        ruta_materiales: ruta al catálogo de estructuras
-        permitir_sin_catalogo: solo para debug
+# =========================================================
+# HELPERS
+# =========================================================
 
-    Retorna:
-        EntradaEstructuras
-    """
-
-    log = _get_logger()
-
-    log(f"📥 Tipo de entrada: {tipo}")
-
-    # =====================================================
-    # 1. LECTURA
-    # =====================================================
-    df = _leer_por_tipo(tipo, data)
-
+def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
     if df is None or df.empty:
-        raise ValueError("No se pudo leer información válida de la entrada")
+        return pd.DataFrame(columns=COLUMNAS_STD)
 
-    log(f"✔ Lectura completada: {len(df)} filas")
+    df = df.copy()
+
+    for col in COLUMNAS_STD:
+        if col not in df.columns:
+            if col == "Cantidad":
+                df[col] = 0.0
+            else:
+                df[col] = ""
+
+    return df[COLUMNAS_STD]
+
+
+# =========================================================
+# ORQUESTADOR
+# =========================================================
+
+def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
+
+    errores = []
+    warnings = []
 
     # =====================================================
-    # 2. NORMALIZACIÓN
+    # INPUTS USUARIO
+    # =====================================================
+    estructuras_por_punto = entrada.get("estructuras_por_punto")
+    tension = entrada.get("tension")
+    df_cables = entrada.get("df_cables")
+
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
+    val = validar_estructuras(estructuras_por_punto)
+
+    if not val.get("ok", True):
+        return {
+            "ok": False,
+            "errores": val.get("errores", []),
+            "warnings": val.get("warnings", []),
+        }
+
+    warnings.extend(val.get("warnings", []))
+
+    # =====================================================
+    # BASE DE DATOS (🔥 CENTRALIZADO)
     # =====================================================
     try:
-        df = normalizar_estructuras(df)
+        hojas_base = cargar_base_datos()
     except Exception as e:
-        raise ValueError(f"Error en normalización ({tipo}): {str(e)}")
-
-    if df is None or df.empty:
-        raise ValueError("La normalización generó un DataFrame vacío")
-
-    log("✔ Normalización completada")
-
-    # =====================================================
-    # 3. VALIDACIÓN
-    # =====================================================
-    warnings = []
-    errores = []
-
-    if not ruta_materiales and not permitir_sin_catalogo:
-        raise ValueError("Se requiere catálogo de materiales para validar estructuras")
-
-    if ruta_materiales:
-        df_indice = cargar_indice_normalizado(ruta_materiales, log)
-
-        df, errores, warnings = validar_estructuras(df, df_indice, log)
-
-        log(f"✔ Validación completada | warnings: {len(warnings)}")
-
-    else:
-        log("⚠ Validación omitida (modo debug)")
-
-    if errores:
-        raise ValueError("Errores en estructuras:\n" + "\n".join(errores))
+        return {
+            "ok": False,
+            "errores": [f"Error cargando base de datos: {e}"],
+            "warnings": warnings,
+        }
 
     # =====================================================
-    # 4. SALIDA
+    # CÁLCULOS
     # =====================================================
-    return EntradaEstructuras(
-        df=df,
-        origen=tipo,
-        warnings=warnings,
-    )
+    try:
+        # 🔹 MATERIALES POR ESTRUCTURA
+        df_puntos = calcular_materiales_por_punto(
+            hojas_base,
+            estructuras_por_punto,
+            tension
+        )
 
+        # 🔹 CABLES
+        df_cables_mat = materiales_desde_cables(df_cables)
 
-# =========================================================
-# LECTOR CENTRALIZADO
-# =========================================================
+    except Exception as e:
+        return {
+            "ok": False,
+            "errores": [f"Error en cálculos: {e}"],
+            "warnings": warnings,
+        }
 
-def _leer_por_tipo(tipo: str, data) -> pd.DataFrame:
+    # =====================================================
+    # NORMALIZACIÓN
+    # =====================================================
+    df_puntos = _normalizar_df(df_puntos)
+    df_cables_mat = _normalizar_df(df_cables_mat)
 
-    if tipo == "excel":
-        return leer_estructuras(data)
+    # =====================================================
+    # CONSOLIDACIÓN
+    # =====================================================
+    try:
+        df_total = pd.concat(
+            [df_puntos, df_cables_mat],
+            ignore_index=True
+        )
 
-    elif tipo == "tabla":
-        return leer_tabla(data)
+        if not df_total.empty:
+            df_total = (
+                df_total
+                .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+                .sum()
+                .sort_values("Materiales")
+            )
 
-    elif tipo == "pdf":
-        return leer_pdf(data)
+    except Exception as e:
+        return {
+            "ok": False,
+            "errores": [f"Error consolidando: {e}"],
+            "warnings": warnings,
+        }
 
-    elif tipo == "dxf":
-        return leer_dxf(data)
-
-    elif tipo == "ui":
-        return _leer_desde_ui(data)
-
-    raise ValueError(f"Tipo de entrada no soportado: {tipo}")
-
-
-# =========================================================
-# ADAPTADOR UI
-# =========================================================
-
-def _leer_desde_ui(data):
-
-    if isinstance(data, pd.DataFrame):
-        return data.copy()
-
-    if isinstance(data, list):
-        return pd.DataFrame(data)
-
-    if isinstance(data, dict):
-        return pd.DataFrame([data])
-
-    return pd.DataFrame()
-
-
-# =========================================================
-# LOGGER (DESACOPLADO)
-# =========================================================
-
-def _get_logger():
-    def _log(msg):
-        print(msg)
-    return _log
+    # =====================================================
+    # RESULTADO FINAL
+    # =====================================================
+    return {
+        "ok": True,
+        "errores": [],
+        "warnings": warnings,
+        "df_materiales": df_total,
+        "resumen": {
+            "total_items": len(df_total),
+        }
+    }
