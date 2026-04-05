@@ -12,76 +12,126 @@ from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
 from interfaz.mapa_kml import seccion_mapa_kmz
 
 
+# =========================================================
+# HELPERS
+# =========================================================
+def es_dataframe_valido(df):
+    return df is not None and hasattr(df, "empty") and not df.empty
+
+
+# =========================================================
+# FUNCIONES POR SECCIÓN (ANTES "handlers")
+# =========================================================
+
+def renderizar_datos_proyecto():
+    seccion_datos_proyecto()
+    return st.session_state.get("datos_proyecto")
+
+
+def renderizar_cables():
+    seccion_cables_proyecto()
+    return st.session_state.get("df_cables")
+
+
+def renderizar_modo_carga():
+    st.subheader("3) Modo de Carga")
+    modo = seleccionar_modo_carga()
+    st.session_state["modo_carga_seleccionado"] = modo
+    return modo
+
+
+def renderizar_estructuras():
+
+    if "modo_carga_seleccionado" not in st.session_state:
+        st.warning("⚠️ Primero selecciona el modo de carga.")
+        return None
+
+    modo = st.session_state["modo_carga_seleccionado"]
+
+    df, ruta = seccion_entrada_estructuras(modo)
+
+    if not es_dataframe_valido(df):
+        st.warning("⚠️ No se generaron estructuras.")
+        return None
+
+    st.session_state["df_estructuras"] = df
+    st.session_state["ruta_estructuras_compacto"] = ruta
+
+    st.session_state.setdefault("datos_proyecto", {})
+    st.session_state.setdefault(
+        "df_cables",
+        pd.DataFrame(columns=["Tipo", "Configuración", "Calibre", "Longitud (m)"]),
+    )
+    st.session_state.setdefault(
+        "df_materiales_extra",
+        pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"]),
+    )
+
+    st.success("✅ Guardado en memoria.")
+
+    return df
+
+
+def renderizar_materiales():
+    seccion_adicionar_material()
+
+
+def renderizar_final():
+
+    df = st.session_state.get("df_estructuras")
+
+    if not es_dataframe_valido(df):
+        st.info("⚠️ Carga estructuras primero.")
+        return
+
+    seccion_finalizar_calculo(df)
+
+
+def renderizar_exportacion():
+
+    df = st.session_state.get("df_estructuras")
+    ruta = st.session_state.get("ruta_estructuras_compacto")
+
+    if not es_dataframe_valido(df):
+        st.warning("⚠️ Primero completa estructuras.")
+        return
+
+    seccion_exportacion(
+        df=df,
+        modo_carga=st.session_state.get("modo_carga_seleccionado"),
+        ruta_estructuras=ruta,
+        ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
+    )
+
+
+def renderizar_mapa():
+    seccion_mapa_kmz()
+
+
+# =========================================================
+# ORQUESTADOR PRINCIPAL
+# =========================================================
+
 def ejecutar_orquestador_interfaz(
     _nav_estado_actual,
     _barra_nav_botones,
 ):
-    """
-    Orquestador de navegación UI.
-    """
 
     seccion = _nav_estado_actual()
     _barra_nav_botones(seccion)
 
-    if seccion == "datos":
-        seccion_datos_proyecto()
+    acciones = {
+        "datos": renderizar_datos_proyecto,
+        "cables": renderizar_cables,
+        "modo": renderizar_modo_carga,
+        "estructuras": renderizar_estructuras,
+        "materiales": renderizar_materiales,
+        "final": renderizar_final,
+        "exportar": renderizar_exportacion,
+        "mapa_kml": renderizar_mapa,
+    }
 
-    elif seccion == "cables":
-        seccion_cables_proyecto()
+    funcion = acciones.get(seccion)
 
-    elif seccion == "modo":
-        st.subheader("3) Modo de Carga")
-        modo = seleccionar_modo_carga()
-        st.session_state["modo_carga_seleccionado"] = modo
-
-    elif seccion == "estructuras":
-        modo = st.session_state.get("modo_carga_seleccionado", "Listas desplegables")
-        df_estructuras, ruta_estructuras = seccion_entrada_estructuras(modo)
-
-        if df_estructuras is not None and hasattr(df_estructuras, "empty") and not df_estructuras.empty:
-
-            st.session_state["df_estructuras"] = df_estructuras
-            st.session_state["ruta_estructuras_compacto"] = ruta_estructuras
-
-            st.session_state.setdefault("datos_proyecto", {})
-            st.session_state.setdefault(
-                "df_cables",
-                pd.DataFrame(columns=["Tipo", "Configuración", "Calibre", "Longitud (m)"]),
-            )
-            st.session_state.setdefault(
-                "df_materiales_extra",
-                pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"]),
-            )
-
-            st.success("✅ Guardado en memoria.")
-
-        else:
-            st.warning("⚠️ No se generaron estructuras.")
-
-    elif seccion == "materiales":
-        seccion_adicionar_material()
-
-    elif seccion == "final":
-        df_e = st.session_state.get("df_estructuras")
-
-        if df_e is None or df_e.empty:
-            st.info("⚠️ Carga estructuras primero.")
-        else:
-            seccion_finalizar_calculo(df_e)
-
-    elif seccion == "exportar":
-        df_e = st.session_state.get("df_estructuras")
-        ruta_e = st.session_state.get("ruta_estructuras_compacto")
-
-        if df_e is None or df_e.empty:
-            st.warning("⚠️ Primero completa estructuras.")
-        else:
-            seccion_exportacion(
-                df=df_e,
-                modo_carga=st.session_state.get("modo_carga_seleccionado"),
-                ruta_estructuras=ruta_e,
-                ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
-            )
-
-    elif seccion == "mapa_kml":
-        seccion_mapa_kmz()
+    if funcion:
+        funcion()
