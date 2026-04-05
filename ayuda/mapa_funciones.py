@@ -821,7 +821,7 @@ def detectar_pipeline(aristas_llamadas):
 def detectar_modulos_muertos(proyecto, aristas_imports):
 
     usados = set()
-    for a, b in aristas_imports:
+    for a, b in aristas_imports + aristas_llamadas:
         usados.add(a)
         usados.add(b)
 
