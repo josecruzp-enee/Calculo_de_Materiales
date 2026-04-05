@@ -8,16 +8,14 @@ import streamlit as st
 import pandas as pd
 
 # =========================
-# DOMINIO
+# ORQUESTADORES
 # =========================
-#from entradas.estructuras import procesar_estructuras
-
-# 🔥 ORQUESTADOR (CORRECTO)
+from entradas.orquestador_entradas import cargar_entrada
 from materiales.orquestador_materiales import ejecutar_materiales
 
-# 🔥 MODELO DE ENTRADA (CLAVE)
-from materiales.modelos.entrada import EntradaMateriales
-
+# =========================
+# REPORTES
+# =========================
 from exportadores.orquestador_reportes import generar_reportes, resumen_estructuras
 
 
@@ -59,34 +57,19 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
 
     try:
         # =====================================================
-        # 1. PROCESAR ESTRUCTURAS (DOMINIO)
-        # =====================================================
-        '''
-        df_estructuras = procesar_estructuras(df)
-
-        if df_estructuras.empty:
-            st.error("❌ No hay estructuras válidas después del procesamiento.")
-            return
-
-        st.session_state["df_estructuras"] = df_estructuras
-        '''
-        
-        # =====================================================
-        # 2. MATERIALES EXTRA
+        # 1. MATERIALES EXTRA
         # =====================================================
         materiales_extra = pd.DataFrame(
             st.session_state.get("materiales_extra", [])
         )
 
         # =====================================================
-        # 3. DATOS PROYECTO
+        # 2. CABLES (OPCIONAL)
         # =====================================================
-        datos_proyecto = {
-            "materiales_extra": materiales_extra
-        }
+        df_cables = st.session_state.get("cables_proyecto_df")
 
         # =====================================================
-        # 4. RUTA MATERIALES
+        # 3. RUTA MATERIALES (solo referencia)
         # =====================================================
         ruta_materiales = st.session_state.get("ruta_datos_materiales")
 
@@ -95,22 +78,19 @@ def seccion_finalizar_calculo(df: pd.DataFrame):
             return
 
         # =====================================================
-        # 5. CABLES (OPCIONAL)
+        # 4. ARMAR ENTRADA (🔥 CORRECTO)
         # =====================================================
-        df_cables = st.session_state.get("cables_proyecto_df")
-
-        # =====================================================
-        # 6. ARMAR ENTRADA (🔥 CLAVE)
-        # =====================================================
-        entrada = EntradaMateriales(
-            estructuras_df=df_estructuras,
-            hojas_base=ruta_materiales,
-            datos_proyecto=datos_proyecto,
-            df_cables=df_cables,
+        entrada = cargar_entrada(
+            datos_fuente={
+                "df_estructuras": df,
+                "df_cables": df_cables,
+                "df_materiales_extra": materiales_extra,
+            },
+            ruta_materiales=ruta_materiales,
         )
 
         # =====================================================
-        # 7. EJECUTAR ORQUESTADOR
+        # 5. EJECUTAR ORQUESTADOR
         # =====================================================
         resultado = ejecutar_materiales(entrada)
 
@@ -159,7 +139,6 @@ def seccion_exportacion():
 
         try:
             with st.spinner("⏳ Generando reportes..."):
-
                 pdfs = generar_reportes(resultado)
 
             st.session_state["pdfs_generados"] = pdfs
