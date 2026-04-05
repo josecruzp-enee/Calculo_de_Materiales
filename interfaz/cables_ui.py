@@ -14,7 +14,7 @@ from materiales.cables.cables_catalogo import (
     get_configs_union,
 )
 
-from materiales.cables.cables_estado import _init_state, _editor_df_actual
+from interfaz.cables_estado import _init_state, _editor_df_actual
 from servicios.cables_logica import (
     _resumen_por_calibre,
     _validar_y_calcular,
