@@ -3,31 +3,60 @@
 import pandas as pd
 
 from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
-from materiales.calculos.materiales_estructuras import calcular_materiales_estructuras
 
 
-def consolidar_calculos_materiales(estructuras_df, tension):
+COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
+
+
+def consolidar_calculos_materiales(
+    hojas_base,
+    df_estructuras,
+    tension,
+    calibre_mt=None,
+    tabla_conectores_mt=None,
+) -> pd.DataFrame:
+    """
+    Consolida los cálculos de materiales del proyecto.
+
+    NO:
+    - hace lógica de negocio
+    - valida UI
+    - calcula estructuras aparte
+
+    SOLO:
+    - ejecuta cálculos
+    - concatena resultados
+    """
 
     resultados = []
 
-    # =========================
-    # 1. Materiales por punto
-    # =========================
-    df_puntos = calcular_materiales_por_punto(estructuras_df, tension)
-    if df_puntos is not None and not df_puntos.empty:
-        resultados.append(df_puntos)
+    # =====================================
+    # 1. Materiales por proyecto
+    # =====================================
+    df = calcular_materiales_por_punto(
+        hojas_base=hojas_base,
+        df_estructuras=df_estructuras,
+        tension=tension,
+        calibre_mt=calibre_mt,
+        tabla_conectores_mt=tabla_conectores_mt,
+    )
 
-    # =========================
-    # 2. Materiales por estructura (si aplica)
-    # =========================
-    df_est = calcular_materiales_estructuras(estructuras_df, tension)
-    if df_est is not None and not df_est.empty:
-        resultados.append(df_est)
+    if df is not None and not df.empty:
+        resultados.append(df)
 
-    # =========================
-    # 3. Consolidación interna
-    # =========================
+    # =====================================
+    # 2. Consolidación
+    # =====================================
     if not resultados:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=COLUMNAS_STD)
 
-    return pd.concat(resultados, ignore_index=True)
+    df_final = pd.concat(resultados, ignore_index=True)
+
+    # =====================================
+    # 3. Validación de formato
+    # =====================================
+    columnas = set(df_final.columns)
+    if not set(COLUMNAS_STD).issubset(columnas):
+        raise ValueError(f"Formato inválido: {df_final.columns}")
+
+    return df_final[COLUMNAS_STD]
