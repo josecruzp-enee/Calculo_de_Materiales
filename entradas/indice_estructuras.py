@@ -1,59 +1,79 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
+
 import pandas as pd
+from pathlib import Path
 
 from entradas.leer_excel import leer_indice_materiales
 
-# 🔧 FIX LOCAL (evita dependencia rota)
-def _normalizar_codigo(x):
+
+# ==========================================================
+# HELPERS
+# ==========================================================
+def _norm_col(s: str) -> str:
+    return str(s).strip().upper().replace("Á", "A")
+
+
+def _norm_codigo(x) -> str:
     if x is None:
         return ""
     return str(x).strip().upper()
 
 
-def cargar_indice_normalizado(archivo_materiales, log) -> pd.DataFrame:
+# ==========================================================
+# CARGA ÍNDICE NORMALIZADO
+# ==========================================================
+def cargar_indice_normalizado(ruta: str | Path) -> pd.DataFrame:
 
-    if not callable(log):
-        log = lambda *args, **kwargs: None
+    df = leer_indice_materiales(ruta)
 
-    # 🔥 FIX
-    df_indice = leer_indice_materiales(archivo_materiales)
+    if df is None or df.empty:
+        raise ValueError("El índice de estructuras está vacío")
 
-    log("Columnas originales índice: " + str(df_indice.columns.tolist()))
+    df = df.copy()
 
-    df_indice = df_indice.copy()
-    df_indice.columns = df_indice.columns.str.strip().str.lower()
+    # =========================
+    # NORMALIZAR COLUMNAS
+    # =========================
+    cols = {_norm_col(c): c for c in df.columns}
 
-    if "código de estructura" in df_indice.columns:
-        df_indice.rename(columns={"código de estructura": "codigodeestructura"}, inplace=True)
+    col_codigo = None
 
-    if "codigo de estructura" in df_indice.columns:
-        df_indice.rename(columns={"codigo de estructura": "codigodeestructura"}, inplace=True)
+    for key in cols:
+        if "CODIGO" in key and "ESTRUCTURA" in key:
+            col_codigo = cols[key]
+            break
 
-    if "descripcion" in df_indice.columns:
-        df_indice.rename(columns={"descripcion": "Descripcion"}, inplace=True)
+    if not col_codigo:
+        raise ValueError("No se encontró columna de código de estructura")
 
-    if "codigodeestructura" not in df_indice.columns:
-        raise ValueError("El índice no contiene columna 'codigodeestructura'")
+    col_desc = None
+    for key in cols:
+        if "DESCRIP" in key:
+            col_desc = cols[key]
+            break
 
-    df_indice["codigodeestructura"] = (
-        df_indice["codigodeestructura"]
+    # =========================
+    # CONSTRUIR DATAFRAME
+    # =========================
+    df_out = pd.DataFrame()
+
+    df_out["codigodeestructura"] = (
+        df[col_codigo]
         .astype(str)
-        .map(_normalizar_codigo)
+        .map(_norm_codigo)
     )
 
-    df_indice = df_indice[df_indice["codigodeestructura"] != ""]
+    df_out = df_out[df_out["codigodeestructura"] != ""]
 
-    if "Descripcion" not in df_indice.columns:
-        df_indice["Descripcion"] = ""
-    else:
-        df_indice["Descripcion"] = (
-            df_indice["Descripcion"]
+    if col_desc:
+        df_out["Descripcion"] = (
+            df[col_desc]
             .fillna("")
             .astype(str)
         )
+    else:
+        df_out["Descripcion"] = ""
 
-    log("Columnas normalizadas índice: " + str(df_indice.columns.tolist()))
-    log("Primeras filas índice:\n" + str(df_indice.head(10)))
-
-    return df_indice
+    return df_out.reset_index(drop=True)
