@@ -14,7 +14,12 @@ from __future__ import annotations
 import pandas as pd
 from typing import Dict, Tuple
 
-from core.cables_normalizacion import _norm_key, _norm_txt, calibre_corto_desde_seleccion, conductores_de
+from materiales.cables.cables_normalizacion import (
+    _norm_key,
+    _norm_txt,
+    calibre_corto_desde_seleccion,
+    conductores_de,
+)
 
 
 
