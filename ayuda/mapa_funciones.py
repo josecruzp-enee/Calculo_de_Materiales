@@ -930,7 +930,7 @@ def principal():
     escribir_txt(proyecto, aristas_llamadas, aristas_imports, args.salida)
     escribir_diag(diag, args.diag)
     detectar_pipeline(aristas_llamadas)
-    detectar_modulos_muertos(proyecto, aristas_imports)
+    detectar_modulos_muertos(proyecto, aristas_imports, aristas_llamadas)
     detectar_duplicados(proyecto)
     resumen_arquitectura(proyecto, aristas_llamadas)
 
