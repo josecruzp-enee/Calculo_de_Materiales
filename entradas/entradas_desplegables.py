@@ -2,7 +2,7 @@
 """
 entradas_desplegables.py
 
-Entrada mediante listas desplegables (selecciones en UI).
+Entrada mediante listas desplegables (UI → dominio).
 """
 
 from __future__ import annotations
@@ -11,28 +11,56 @@ from typing import Dict, Any, Tuple
 import pandas as pd
 
 
-def cargar_desde_desplegables(datos_fuente: Dict[str, Any]) -> Tuple[dict, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+# ==========================================================
+# HELPERS
+# ==========================================================
+def _asegurar_dataframe(df) -> pd.DataFrame:
     """
-    Espera en datos_fuente:
-        - "datos_proyecto": dict (opcional)
-        - "df_estructuras": DataFrame (si ya lo construye la UI)
-        - "df_cables": DataFrame (si ya lo construye la UI)
-        - "df_materiales_extra": DataFrame (opcional)
+    Garantiza que el objeto sea un DataFrame válido.
+    """
+    if isinstance(df, pd.DataFrame):
+        return df.copy()
+    return pd.DataFrame()
 
-    Retorna:
-        datos_proyecto, df_estructuras, df_cables, df_materiales_extra
+
+def _normalizar_columnas(df: pd.DataFrame) -> pd.DataFrame:
     """
+    Limpia nombres de columnas.
+    """
+    if df.empty:
+        return df
+
+    df.columns = df.columns.map(str).str.strip()
+    return df
+
+
+# ==========================================================
+# MAIN
+# ==========================================================
+def cargar_desde_desplegables(
+    datos_fuente: Dict[str, Any]
+) -> Tuple[dict, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Entrada desde UI (listas desplegables).
+    """
+
+    # =========================
+    # Datos proyecto
+    # =========================
     datos_proyecto = dict(datos_fuente.get("datos_proyecto") or {})
 
-    df_estructuras = datos_fuente.get("df_estructuras")
-    df_cables = datos_fuente.get("df_cables")
-    df_materiales_extra = datos_fuente.get("df_materiales_extra")
+    # =========================
+    # DataFrames
+    # =========================
+    df_estructuras = _asegurar_dataframe(datos_fuente.get("df_estructuras"))
+    df_cables = _asegurar_dataframe(datos_fuente.get("df_cables"))
+    df_materiales_extra = _asegurar_dataframe(datos_fuente.get("df_materiales_extra"))
 
-    if df_estructuras is None:
-        df_estructuras = pd.DataFrame()
-    if df_cables is None:
-        df_cables = pd.DataFrame()
-    if df_materiales_extra is None:
-        df_materiales_extra = pd.DataFrame()
+    # =========================
+    # Normalización básica
+    # =========================
+    df_estructuras = _normalizar_columnas(df_estructuras)
+    df_cables = _normalizar_columnas(df_cables)
+    df_materiales_extra = _normalizar_columnas(df_materiales_extra)
 
     return datos_proyecto, df_estructuras, df_cables, df_materiales_extra
