@@ -151,7 +151,7 @@ def ejecutar_orquestador_interfaz(
         "cables": renderizar_cables,
         "modo": renderizar_modo_carga,
         "estructuras": renderizar_estructuras,
-        "materiales": renderizar_materiales,
+        #"materiales": renderizar_materiales,
         "final": renderizar_final,
         "exportar": renderizar_exportacion,
         "mapa_kml": renderizar_mapa,
