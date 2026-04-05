@@ -18,7 +18,7 @@ from materiales.orquestador_materiales import ejecutar_materiales
 # 🔥 MODELO DE ENTRADA (CLAVE)
 from materiales.modelos.entrada import EntradaMateriales
 
-from reportes.orquestador_reportes import generar_reportes, resumen_estructuras
+from exportadores.orquestador_reportes import generar_reportes, resumen_estructuras
 
 
 # =========================================================
