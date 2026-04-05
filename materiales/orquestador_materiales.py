@@ -2,24 +2,44 @@
 
 from __future__ import annotations
 from typing import Dict, Any
-
 import pandas as pd
 
 # =========================
-# IMPORTS
+# IMPORTS DOMINIO
 # =========================
 
-from materiales.calculos.materiales_estructuras import calcular_materiales_estructura
 from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
-
 from materiales.validaciones.materiales_validacion import validar_estructuras
 
-# 👇 NUEVO
+# ⚠️ TEMPORAL (luego migramos esto)
 from core.cables_materiales import materiales_desde_cables
 
 
 # =========================================================
-# ORQUESTADOR REAL
+# HELPERS INTERNOS
+# =========================================================
+
+COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
+
+
+def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=COLUMNAS_STD)
+
+    df = df.copy()
+
+    for col in COLUMNAS_STD:
+        if col not in df.columns:
+            if col == "Cantidad":
+                df[col] = 0.0
+            else:
+                df[col] = ""
+
+    return df[COLUMNAS_STD]
+
+
+# =========================================================
+# ORQUESTADOR
 # =========================================================
 
 def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
@@ -30,8 +50,7 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
     archivo_materiales = entrada.get("archivo_materiales")
     estructuras_por_punto = entrada.get("estructuras_por_punto")
     tension = entrada.get("tension")
-
-    df_cables = entrada.get("df_cables")  # 👈 NUEVO
+    df_cables = entrada.get("df_cables")
 
     # =====================================================
     # VALIDACIÓN
@@ -48,18 +67,15 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
     warnings.extend(val.get("warnings", []))
 
     # =====================================================
-    # CÁLCULO MATERIALES
+    # CÁLCULOS
     # =====================================================
-
     try:
-        # PUNTOS
         df_puntos = calcular_materiales_por_punto(
             archivo_materiales,
             estructuras_por_punto,
             tension
         )
 
-        # 👇 CABLES (NUEVO)
         df_cables_mat = materiales_desde_cables(df_cables)
 
     except Exception as e:
@@ -70,26 +86,26 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     # =====================================================
-    # CONSOLIDACIÓN TOTAL
+    # NORMALIZACIÓN (🔥 CLAVE)
+    # =====================================================
+    df_puntos = _normalizar_df(df_puntos)
+    df_cables_mat = _normalizar_df(df_cables_mat)
+
+    # =====================================================
+    # CONSOLIDACIÓN
     # =====================================================
     try:
-        dfs = []
+        df_total = pd.concat(
+            [df_puntos, df_cables_mat],
+            ignore_index=True
+        )
 
-        if df_puntos is not None and not df_puntos.empty:
-            dfs.append(df_puntos[["Materiales", "Unidad", "Cantidad"]])
-
-        if df_cables_mat is not None and not df_cables_mat.empty:
-            dfs.append(df_cables_mat)
-
-        if not dfs:
-            df_total = pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
-        else:
-            df_total = pd.concat(dfs, ignore_index=True)
-
+        if not df_total.empty:
             df_total = (
                 df_total
                 .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
                 .sum()
+                .sort_values("Materiales")
             )
 
     except Exception as e:
