@@ -6,10 +6,9 @@ from collections import Counter
 from materiales.auxiliares.materiales_aux import limpiar_codigo, expandir_lista_codigos
 from entradas.excel_legacy import extraer_estructuras_proyectadas
 
-# reemplazo de conectores
+# ⚠️ temporal
 from core.conectores_mt import reemplazar_solo_yc25a25_mt
 
-# nuevo lector unificado
 from materiales.auxiliares.lector_materiales import leer_hoja_materiales
 
 
@@ -54,10 +53,10 @@ def extraer_conteo_estructuras(df_estructuras):
 
 
 # ==========================================================
-# Materiales por ESTRUCTURA
+# Materiales por ESTRUCTURA (🔥 LIMPIO)
 # ==========================================================
 def calcular_materiales_estructura(
-    archivo_materiales,
+    hojas_base,      # 🔥 YA NO archivo
     estructura,
     cant,
     tension,
@@ -65,7 +64,7 @@ def calcular_materiales_estructura(
     tabla_conectores_mt
 ):
     """
-    Calcula materiales por estructura individual.
+    Calcula materiales por estructura usando base en memoria.
     """
 
     try:
@@ -74,9 +73,17 @@ def calcular_materiales_estructura(
             cant = 1
 
         # =========================
-        # LECTOR UNIFICADO (CLAVE)
+        # OBTENER HOJA
         # =========================
-        df_filtrado = leer_hoja_materiales(archivo_materiales, estructura, tension)
+        df_hoja = hojas_base.get(estructura)
+
+        if df_hoja is None or df_hoja.empty:
+            return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+
+        # =========================
+        # LECTOR (ÚNICO)
+        # =========================
+        df_filtrado = leer_hoja_materiales(df_hoja, tension)
 
         if df_filtrado is None or df_filtrado.empty:
             return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
@@ -89,7 +96,7 @@ def calcular_materiales_estructura(
         df_filtrado["Cantidad"] = pd.to_numeric(df_filtrado["Cantidad"], errors="coerce").fillna(0)
 
         # =========================
-        # REEMPLAZO CONECTORES MT
+        # REEMPLAZO CONECTORES
         # =========================
         df_filtrado["Materiales"] = reemplazar_solo_yc25a25_mt(
             df_filtrado["Materiales"].tolist(),
@@ -99,9 +106,9 @@ def calcular_materiales_estructura(
         )
 
         # =========================
-        # MULTIPLICAR POR CANTIDAD
+        # MULTIPLICAR
         # =========================
-        df_filtrado["Cantidad"] = df_filtrado["Cantidad"] * float(cant)
+        df_filtrado["Cantidad"] *= float(cant)
 
         # =========================
         # AGRUPAR
