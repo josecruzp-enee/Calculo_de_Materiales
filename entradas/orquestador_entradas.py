@@ -28,13 +28,14 @@ from materiales.modelos.entrada import EntradaMateriales
 
 
 # =========================================================
-# API PRINCIPAL
+# API PRINCIPAL (🔥 NUEVA + LEGACY)
 # =========================================================
 def cargar_entrada(
-    tipo: str,
-    data: Any,
+    tipo: str | None = None,
+    data: Any = None,
     *,
-    tension: float,
+    datos_fuente: dict | None = None,
+    tension: float | None = None,
     df_cables: pd.DataFrame | None = None,
     ruta_materiales: str | None = None,
     permitir_sin_catalogo: bool = False,
@@ -42,16 +43,29 @@ def cargar_entrada(
 
     log = _get_logger()
 
-    # =========================
-    # 1. LECTURA
-    # =========================
-    df = _leer_por_tipo(tipo, data)
+    # =====================================================
+    # 🔥 MODO NUEVO (UI)
+    # =====================================================
+    if datos_fuente is not None:
 
+        df = _leer_desde_ui(datos_fuente.get("df_estructuras"))
+        df_cables = datos_fuente.get("df_cables")
+        df_materiales_extra = datos_fuente.get("df_materiales_extra")
+
+    else:
+        # =====================================================
+        # LEGACY
+        # =====================================================
+        df = _leer_por_tipo(tipo, data)
+
+    # =========================
+    # VALIDAR DATA
+    # =========================
     if df is None or df.empty:
         raise ValueError("No se pudo leer información válida")
 
     # =========================
-    # 2. NORMALIZACIÓN
+    # NORMALIZACIÓN
     # =========================
     df = normalizar_estructuras(df)
 
@@ -59,7 +73,7 @@ def cargar_entrada(
         raise ValueError("Normalización vacía")
 
     # =========================
-    # 3. VALIDACIÓN
+    # VALIDACIÓN
     # =========================
     if ruta_materiales and not permitir_sin_catalogo:
         df_indice = cargar_indice_normalizado(ruta_materiales, log)
@@ -69,20 +83,24 @@ def cargar_entrada(
             raise ValueError("\n".join(errores))
 
     # =========================
-    # 4. BASE DE DATOS
+    # BASE DE DATOS
     # =========================
     hojas_base = None
     if ruta_materiales:
         hojas_base = cargar_base_datos()
 
     # =========================
-    # 5. SALIDA
+    # SALIDA
     # =========================
     return EntradaMateriales(
         estructuras_df=df,
-        tension=tension,
+        tension=tension or 0.0,
         df_cables=df_cables,
         hojas_base=hojas_base,
+        datos_proyecto={
+            "materiales_extra": df_materiales_extra
+            if datos_fuente else None
+        }
     )
 
 
