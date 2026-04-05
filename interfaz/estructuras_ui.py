@@ -6,7 +6,7 @@ from typing import Tuple
 import streamlit as st
 import pandas as pd
 
-from dominio.entradas.estructuras import (
+from entradas.estructuras import (
     inicializar_estado_estructuras,
     obtener_opciones_catalogo,
     agregar_item_estructura,
@@ -15,11 +15,8 @@ from dominio.entradas.estructuras import (
     reset_estructuras,
     construir_dataframe_salida,
     crear_nuevo_punto,
-)
-
-# 🔥 NUEVO: conexión al dominio entradas
-from entradas.orquestador_entradas import cargar_entrada
-
+    cargar_entrada
+))
 
 # =========================================================
 # UI HELPERS
