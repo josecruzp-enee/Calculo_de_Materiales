@@ -29,14 +29,30 @@ def _validar_df(df: pd.DataFrame) -> None:
 
 
 # ==========================================================
+# LIMPIEZA SEGURA DE STRINGS
+# ==========================================================
+def _limpiar_str(v) -> str:
+    if pd.isna(v):
+        return ""
+    return str(v).strip()
+
+
+# ==========================================================
 # NORMALIZACIÓN DE ESTRUCTURAS (🔥 CLAVE)
 # ==========================================================
 def _normalizar_estructura(e: str) -> str | None:
 
-    if not e:
+    e = _limpiar_str(e)
+
+    if not e or e.lower() in {"nan", "none", "0"}:
         return None
 
     for parte in expandir_lista_codigos(e):
+
+        parte = _limpiar_str(parte)
+
+        if not parte:
+            continue
 
         codigo, _ = limpiar_codigo(parte)
 
@@ -59,9 +75,15 @@ def extraer_conteo_estructuras(df_estructuras):
 
     for _, row in df_estructuras.iterrows():
 
-        punto = row.get("Punto", "Punto")
+        punto = _limpiar_str(row.get("Punto")) or "Punto"
 
-        lista = str(row.get("Estructuras", "")).split(";")
+        estructuras_raw = _limpiar_str(row.get("Estructuras"))
+
+        if not estructuras_raw:
+            estructuras_por_punto[punto] = []
+            continue
+
+        lista = estructuras_raw.split(";")
 
         lista_limpia = []
 
@@ -94,8 +116,10 @@ def calcular_materiales_estructura(
 
     cant = max(int(cant or 1), 1)
 
-    # 🔥 NORMALIZAR CLAVE
-    estructura = str(estructura).strip().upper()
+    estructura = _limpiar_str(estructura).upper()
+
+    if not estructura:
+        return pd.DataFrame(columns=COLUMNAS_STD)
 
     df_hoja = hojas_base.get(estructura)
 
@@ -117,10 +141,8 @@ def calcular_materiales_estructura(
         df_filtrado["Cantidad"], errors="coerce"
     ).fillna(0)
 
-    # multiplicar por cantidad de estructuras
     df_filtrado["Cantidad"] *= float(cant)
 
-    # consolidar por estructura
     df_filtrado = (
         df_filtrado
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
@@ -142,6 +164,9 @@ def calcular_materiales_por_punto(
 ):
 
     conteo, _ = extraer_conteo_estructuras(df_estructuras)
+
+    if not conteo:
+        return pd.DataFrame(columns=COLUMNAS_STD)
 
     resultados = []
 
