@@ -11,11 +11,12 @@ from interfaz.estilos_app import aplicar_estilos
 # ====== Constantes compartidas ======
 COLUMNAS_BASE = [
     "Punto", "Poste", "Primario", "Secundario",
-    "Retenidas", "Conexiones a tierra", "Transformadores","Luminarias"
+    "Retenidas", "Conexiones a tierra", "Transformadores", "Luminarias"
 ]
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # raíz del repo
 RUTA_DATOS_MATERIALES_DEFECTO = os.path.join(BASE_DIR, "data", "Estructura_datos.xlsx")
+
 
 # ====== Encabezado / estilos ======
 def renderizar_encabezado() -> None:
@@ -23,6 +24,7 @@ def renderizar_encabezado() -> None:
     st.set_page_config(page_title="Cálculo de Materiales", layout="wide")
     aplicar_estilos()
     st.title("⚡ Cálculo de Materiales para Proyecto de Distribución")
+
 
 # ====== Estado ======
 def inicializar_estado() -> None:
@@ -33,7 +35,7 @@ def inicializar_estado() -> None:
         "materiales_extra": [],
         "calculo_finalizado": False,
         "punto_en_edicion": None,
-        "cables_proyecto": {},
+        "cables_proyecto": [],  # 🔥 CORREGIDO (antes estaba como dict)
         "keys_desplegables": {},
         "pdfs_generados": None,
         "reiniciar_desplegables": False,
@@ -41,24 +43,56 @@ def inicializar_estado() -> None:
     for clave, valor in valores_por_defecto.items():
         st.session_state.setdefault(clave, valor)
 
+
 def resetear_desplegables() -> None:
     """Fuerza nuevas keys para widgets de desplegables (evita estado pegado)."""
-    claves = ["sel_poste", "sel_primario", "sel_secundario",
-              "sel_retenidas", "sel_tierra", "sel_transformador"]
+    claves = [
+        "sel_poste",
+        "sel_primario",
+        "sel_secundario",
+        "sel_retenidas",
+        "sel_tierra",
+        "sel_transformador",
+    ]
     for key in claves:
         st.session_state.pop(key, None)
-    st.session_state["keys_desplegables"] = {k: f"{k}_{int(time.time()*1000)}" for k in claves}
+
+    st.session_state["keys_desplegables"] = {
+        k: f"{k}_{int(time.time() * 1000)}" for k in claves
+    }
+
 
 # ====== Selector de modo ======
 def seleccionar_modo_carga() -> str:
-    """Muestra el selector de modo de carga y retorna la opción elegida."""
+    """
+    Selector de modo de carga.
+
+    Retorna una clave técnica (no texto UI).
+    También guarda el label por compatibilidad.
+    """
+
+    opciones = {
+        "excel": "Desde archivo Excel",
+        "tabla": "Pegar tabla",
+        "manual": "Listas desplegables",
+        "pdf": "Pdf",
+        "dxf": "DXF (ENEE)",
+    }
+
     modo = st.radio(
         "Selecciona modo de carga:",
-        ["Desde archivo Excel", "Pegar tabla", "Listas desplegables", "Pdf", "DXF (ENEE)" ],
-        key="modo_carga_radio"
+        options=list(opciones.keys()),
+        format_func=lambda x: opciones[x],
+        key="modo_carga_radio",
     )
+
+    # 🔥 Guardar label (por si aún lo usas en alguna parte)
+    st.session_state["modo_carga_label"] = opciones[modo]
+
     st.markdown("---")
+
     return modo
+
 
 # ====== Ruta por defecto para materiales ======
 def ruta_datos_materiales_por_defecto() -> str:
