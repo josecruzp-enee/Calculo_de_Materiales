@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 leer_excel.py
-Lectura de datos desde Excel (SIN lógica de negocio pesada).
+
+Lectura de datos desde Excel (INPUT LIMPIO, SIN LÓGICA DE NEGOCIO).
 """
 
 import pandas as pd
@@ -9,78 +10,104 @@ import re
 
 
 # =========================================================
+# HELPERS
+# =========================================================
+def _limpiar_columnas(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+def _limpiar_texto_basico(s):
+    if pd.isna(s):
+        return ""
+
+    s = str(s).strip()
+
+    # eliminar saltos de línea raros
+    s = s.replace("\n", " ").replace("\r", " ")
+
+    # normalizar espacios
+    s = re.sub(r"\s+", " ", s)
+
+    return s
+
+
+# =========================================================
 # PROYECTO
 # =========================================================
-
 def leer_datos_proyecto(archivo):
-    df = pd.read_excel(archivo, sheet_name='datos_proyecto', usecols=[0, 1], nrows=10)
 
-    return {
-        str(r[0]).strip().lower().replace(":", ""): str(r[1]).strip()
-        for r in df.values
-    }
+    df = pd.read_excel(
+        archivo,
+        sheet_name='datos_proyecto',
+        usecols=[0, 1],
+        nrows=20
+    )
+
+    df = _limpiar_columnas(df)
+
+    salida = {}
+
+    for k, v in df.values:
+        key = _limpiar_texto_basico(k).lower().replace(":", "")
+        val = _limpiar_texto_basico(v)
+
+        if key:
+            salida[key] = val
+
+    return salida
 
 
 # =========================================================
-# ESTRUCTURAS
+# ESTRUCTURAS (CRÍTICO)
 # =========================================================
-
-def leer_estructuras(archivo):
-    return pd.read_excel(archivo, sheet_name='estructuras')
-
-
-def extraer_estructuras(df):
+def leer_estructuras(archivo) -> pd.DataFrame:
     """
-    Extrae estructuras por punto (SIN normalización avanzada).
+    Lee estructuras SIN modificar contenido.
+
+    NO:
+        - split
+        - interpretar códigos
+        - normalizar estructuras
+
+    SOLO:
+        - limpiar columnas
+        - limpiar texto superficial
     """
-    estructuras_proyectadas = []
-    estructuras_por_punto = {}
 
-    for i, fila in df.iterrows():
-        punto = fila.get("Punto #", fila.get("Punto", f"Punto {i+1}"))
+    df = pd.read_excel(archivo, sheet_name='estructuras')
 
-        estructuras_en_punto = []
+    df = _limpiar_columnas(df)
 
-        for col in df.columns:
-            valor = fila[col]
+    # limpieza ligera (NO lógica de negocio)
+    for col in df.columns:
+        df[col] = df[col].apply(_limpiar_texto_basico)
 
-            if pd.notna(valor):
-                texto = str(valor).strip()
-
-                if texto and texto.upper() not in ["SELECCIONAR", "ESTRUCTURA", "N/A", "NONE"]:
-
-                    partes = [
-                        p.strip()
-                        for p in texto.replace("\n", " ").split(" ")
-                        if p.strip()
-                    ]
-
-                    for parte in partes:
-                        if any(c.isalpha() for c in parte):
-                            estructuras_en_punto.append(parte)
-
-        estructuras_en_punto = list(dict.fromkeys(estructuras_en_punto))
-
-        estructuras_proyectadas.extend(estructuras_en_punto)
-        estructuras_por_punto[punto] = estructuras_en_punto
-
-    estructuras_proyectadas = list(dict.fromkeys(estructuras_proyectadas))
-
-    return estructuras_proyectadas, estructuras_por_punto
+    return df
 
 
 # =========================================================
 # MATERIALES
 # =========================================================
-
 def leer_materiales(archivo, hoja, header=None):
-    return pd.read_excel(archivo, sheet_name=hoja, header=header)
+
+    df = pd.read_excel(archivo, sheet_name=hoja, header=header)
+    df = _limpiar_columnas(df)
+
+    return df
 
 
+# =========================================================
+# INDICE DE ESTRUCTURAS
+# =========================================================
 def leer_indice_materiales(archivo):
+
     try:
         df = pd.read_excel(archivo, sheet_name='indice')
-        df.columns = df.columns.str.strip().str.lower()
+
+        df = _limpiar_columnas(df)
+        df.columns = df.columns.str.lower()
 
         posibles_codigos = [
             "código de estructura", "codigo de estructura",
@@ -110,12 +137,13 @@ def leer_indice_materiales(archivo):
 # =========================================================
 # CATÁLOGO
 # =========================================================
-
 def leer_catalogo_materiales(archivo):
+
     try:
         df = pd.read_excel(archivo, sheet_name="Materiales")
 
-        df.columns = df.columns.astype(str).str.strip().str.upper()
+        df = _limpiar_columnas(df)
+        df.columns = df.columns.str.upper()
 
         def _col_norm(s: str) -> str:
             return re.sub(r"\s+", " ", str(s).strip().upper())
@@ -148,7 +176,6 @@ def leer_catalogo_materiales(archivo):
         elif "UND" in df.columns:
             df.rename(columns={"UND": "Unidad"}, inplace=True)
 
-        # Asegurar columnas
         df["Descripcion"] = df.get("Descripcion", "")
         df["Unidad"] = df.get("Unidad", "")
         df["Codigo"] = df.get("Codigo", "")
@@ -170,10 +197,12 @@ def leer_catalogo_materiales(archivo):
 # =========================================================
 # ADICIONALES
 # =========================================================
-
 def leer_adicionales(archivo):
+
     try:
         df = pd.read_excel(archivo, sheet_name='materialesadicionados')
+
+        df = _limpiar_columnas(df)
 
         if all(c in df.columns for c in ['Material', 'Unidad', 'Cantidad']):
             return df.rename(columns={'Material': 'Materiales'})
