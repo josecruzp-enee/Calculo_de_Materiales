@@ -10,7 +10,7 @@ from interfaz.base import (
 
 from interfaz.datos_proyecto import seccion_datos_proyecto
 from interfaz.cables_ui import seccion_cables
-from interfaz.estructuras_ui import listas_desplegables 
+from entradas.entradas_desplegables import cargar_desde_desplegables
 from interfaz.materiales_extra import seccion_adicionar_material
 
 from interfaz.exportacion import (
