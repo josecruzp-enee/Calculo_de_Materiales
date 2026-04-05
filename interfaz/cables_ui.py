@@ -15,7 +15,7 @@ from materiales.cables.cables_catalogo import (
 )
 
 from interfaz.cables_estado import _init_state, _editor_df_actual
-from servicios.cables_logica import (
+from materiales.cables.cables_logica import (
     _resumen_por_calibre,
     _validar_y_calcular,
 )
