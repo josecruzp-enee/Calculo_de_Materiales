@@ -3,43 +3,37 @@
 normalizar.py
 
 Wrapper oficial del sistema para normalizar estructuras.
-NO contiene lógica pesada, solo conecta con normalizacion_estructuras.py
 """
 
 import pandas as pd
 
 from entradas.normalizacion_estructuras import (
-    get_logger,
     limpiar_df_estructuras,
     construir_estructuras_por_punto_y_conteo,
 )
 
 
 # =========================================================
-# FUNCIÓN PRINCIPAL (ÚNICA QUE DEBE USARSE)
+# FUNCIÓN PRINCIPAL
 # =========================================================
 
 def normalizar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Recibe cualquier DataFrame (Excel, PDF, DXF, UI, tabla)
-    y devuelve:
+    Entrada: cualquier formato (Excel, PDF, DXF, UI, tabla)
 
+    Salida:
+        DataFrame con columnas:
         Punto | codigodeestructura | cantidad
     """
 
-    log = get_logger()
-
-    # -------------------------
-    # VALIDACIÓN INICIAL
-    # -------------------------
     if df is None or df.empty:
         return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
 
     df = df.copy()
 
-    # -------------------------
-    # SI YA VIENE EN FORMATO LARGO
-    # -------------------------
+    # =====================================================
+    # CASO 1: YA VIENE EN FORMATO LARGO
+    # =====================================================
     if "codigodeestructura" in df.columns:
 
         if "Punto" not in df.columns and "punto" in df.columns:
@@ -48,22 +42,22 @@ def normalizar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
         if "cantidad" not in df.columns:
             df["cantidad"] = 1
 
-        df_limpio = limpiar_df_estructuras(df, log)
+        df_limpio = limpiar_df_estructuras(df)
 
-        _, _, tmp = construir_estructuras_por_punto_y_conteo(df_limpio, log)
+        _, _, df_final = construir_estructuras_por_punto_y_conteo(df_limpio)
 
-        return tmp
+        return df_final
 
-    # -------------------------
-    # SI VIENE FORMATO ANCHO (EXCEL / UI / TABLA / PDF / DXF)
-    # -------------------------
+    # =====================================================
+    # CASO 2: FORMATO ANCHO
+    # =====================================================
     df_largo = _convertir_a_largo(df)
 
-    df_limpio = limpiar_df_estructuras(df_largo, log)
+    df_limpio = limpiar_df_estructuras(df_largo)
 
-    _, _, tmp = construir_estructuras_por_punto_y_conteo(df_limpio, log)
+    _, _, df_final = construir_estructuras_por_punto_y_conteo(df_limpio)
 
-    return tmp
+    return df_final
 
 
 # =========================================================
@@ -73,7 +67,6 @@ def normalizar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
-
     df.columns = [str(c).strip() for c in df.columns]
 
     # detectar columna punto
