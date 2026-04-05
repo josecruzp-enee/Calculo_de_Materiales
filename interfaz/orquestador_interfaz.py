@@ -121,10 +121,10 @@ def renderizar_exportacion():
         ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
     )
 
-
+'''
 #def renderizar_mapa():
     #seccion_mapa_kmz()
-
+'''
 
 # =========================================================
 # ORQUESTADOR PRINCIPAL
