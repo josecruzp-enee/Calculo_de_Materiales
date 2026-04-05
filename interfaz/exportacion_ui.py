@@ -6,7 +6,7 @@ import pandas as pd
 
 from dominio.entradas.estructuras import procesar_estructuras
 from servicios.calculo_materiales import calcular_materiales
-from dominio.reportes.reportes import generar_reportes
+from dominio.reportes.reportes import generar_reportes, resumen_estructuras  # 👈 NUEVO
 
 
 # =========================================================
@@ -18,12 +18,8 @@ def _vista_previa_conteo(df: pd.DataFrame):
         st.info("No hay datos para mostrar.")
         return
 
-    conteo = (
-        df.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
-        .sum()
-        .rename(columns={"cantidad": "Cantidad"})
-        .sort_values(["Punto", "codigodeestructura"])
-    )
+    # 🔥 MOVIDO A DOMINIO (YA NO HAY GROUPBY EN UI)
+    conteo = resumen_estructuras(df)
 
     st.caption("Conteo rápido de estructuras por punto:")
     st.dataframe(conteo, use_container_width=True, hide_index=True)
