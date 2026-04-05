@@ -1,36 +1,38 @@
 # -*- coding: utf-8 -*-
 """
-normalizacion_estructuras.py
-
-Motor de normalización de estructuras ENEE.
-Versión robusta (sin errores de tipo / None / columnas faltantes)
+Motor de normalización de estructuras (versión final robusta)
 """
+
+from __future__ import annotations
 
 import re
 import pandas as pd
 
 
 # =========================================================
-# NORMALIZAR CÓDIGOS
+# HELPERS
 # =========================================================
-def _normalizar_codigo(code: str) -> str:
+def _norm_col(s: str) -> str:
+    return str(s).strip().upper()
 
+
+def _normalizar_codigo(code: str) -> str:
     if code is None:
         return ""
 
     s = str(code).upper().strip()
 
-    # quitar paréntesis
+    # eliminar paréntesis
     s = re.sub(r"\([^)]*\)", "", s)
 
-    # limpiar espacios
+    # espacios múltiples
     s = re.sub(r"\s+", " ", s).strip()
 
     # espacios alrededor de guiones
     s = re.sub(r"\s*-\s*", "-", s)
 
     # =========================
-    # NORMALIZACIONES CLAVE
+    # NORMALIZACIONES ESPECÍFICAS
     # =========================
 
     # TS 50 KVA → TS-50KVA
@@ -39,6 +41,10 @@ def _normalizar_codigo(code: str) -> str:
         lambda m: f"TS-{m.group(1)}KVA",
         s
     )
+
+    # TS-50 → TS-50KVA
+    if re.match(r"^TS-\d+(\.\d+)?$", s):
+        s += "KVA"
 
     # CT N → CT-N
     s = re.sub(r"\bCT\s+N\b", "CT-N", s)
@@ -49,24 +55,13 @@ def _normalizar_codigo(code: str) -> str:
     # PC 45 → PC-45
     s = re.sub(r"\b(PC|PM|PT)\s+(\d+)\b", r"\1-\2", s)
 
-    # TS-50 → TS-50KVA
-    if re.match(r"^TS-\d+(\.\d+)?$", s):
-        s = s + "KVA"
-
-    # patrón válido
-    if re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", s):
-        return s
-
     return s.strip()
 
 
-# =========================================================
-# VALIDADOR SIMPLE DE FORMATO
-# =========================================================
 def _es_codigo_valido(cod: str) -> bool:
-    if cod is None:
+    if not cod:
         return False
-    return bool(re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", str(cod).strip()))
+    return bool(re.match(r"^[A-Z]{1,3}-[A-Z0-9\-\.]+$", cod))
 
 
 # =========================================================
@@ -79,14 +74,22 @@ def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(how="all").copy()
 
-    # normalizar nombres de columnas
-    df.columns = [str(c).strip() for c in df.columns]
+    # normalizar columnas
+    df.columns = [_norm_col(c) for c in df.columns]
 
-    if "Punto" not in df.columns and "punto" in df.columns:
-        df.rename(columns={"punto": "Punto"}, inplace=True)
+    # mapear nombres posibles
+    col_map = {
+        "PUNTO": "Punto",
+        "CODIGODEESTRUCTURA": "codigodeestructura",
+        "CODIGO DE ESTRUCTURA": "codigodeestructura",
+        "ESTRUCTURA": "codigodeestructura",
+        "CANTIDAD": "cantidad"
+    }
 
-    if "codigodeestructura" not in df.columns:
-        raise ValueError("Falta columna 'codigodeestructura'")
+    df.rename(columns={k: v for k, v in col_map.items() if k in df.columns}, inplace=True)
+
+    if "Punto" not in df.columns or "codigodeestructura" not in df.columns:
+        raise ValueError("Columnas requeridas no encontradas")
 
     if "cantidad" not in df.columns:
         df["cantidad"] = 1
@@ -117,7 +120,7 @@ def _split_codigos(texto):
 
     texto = str(texto).upper()
 
-    # quitar paréntesis
+    # eliminar paréntesis
     texto = re.sub(r"\(.*?\)", "", texto)
 
     bloques = re.split(r",", texto)
@@ -127,13 +130,13 @@ def _split_codigos(texto):
     for bloque in bloques:
 
         partes = bloque.strip().split()
-
         i = 0
+
         while i < len(partes):
 
             item = partes[i]
 
-            # multiplicador: 3 x CS-2
+            # patrón: 3 x CS-2
             if item.isdigit() and i + 2 < len(partes):
                 if partes[i + 1].lower() == "x":
                     codigo = partes[i + 2]
@@ -151,13 +154,10 @@ def _split_codigos(texto):
 # =========================================================
 # EXPLOTAR A FORMATO LARGO
 # =========================================================
-def explotar_estructuras(df):
+def explotar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
     if df is None or df.empty:
         return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
-
-    if "Punto" not in df.columns or "codigodeestructura" not in df.columns:
-        raise ValueError("Columnas requeridas no encontradas")
 
     filas = []
 
@@ -198,9 +198,9 @@ def explotar_estructuras(df):
 
 
 # =========================================================
-# FUNCIÓN FINAL DEL MOTOR
+# FUNCIÓN PRINCIPAL DEL MOTOR
 # =========================================================
-def construir_estructuras_por_punto_y_conteo(df):
+def construir_estructuras_por_punto_y_conteo(df: pd.DataFrame):
 
     df = limpiar_df_estructuras(df)
     df = explotar_estructuras(df)
