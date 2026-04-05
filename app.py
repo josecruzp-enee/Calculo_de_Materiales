@@ -15,7 +15,7 @@ from interfaz.base import (
     ruta_datos_materiales_por_defecto,
 )
 from interfaz.datos_proyecto import seccion_datos_proyecto
-from interfaz.cables import seccion_cables_proyecto
+from interfaz.cables_ui import seccion_cables
 from interfaz.estructuras import seccion_entrada_estructuras
 from interfaz.materiales_extra import seccion_adicionar_material
 from interfaz.exportacion import seccion_finalizar_calculo, seccion_exportacion
