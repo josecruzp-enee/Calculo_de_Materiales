@@ -47,7 +47,7 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
             if abs(c_num - tension) < 0.01:
                 col_tension = c
                 break
-        except:
+        except ValueError:
             continue
 
     if col_tension is None:
