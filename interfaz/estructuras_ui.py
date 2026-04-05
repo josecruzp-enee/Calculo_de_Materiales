@@ -6,7 +6,7 @@ from typing import Tuple
 import streamlit as st
 import pandas as pd
 
-from entradas.orquestador_entradas import (
+from entradas.estructuras import (
     inicializar_estado_estructuras,
     obtener_opciones_catalogo,
     agregar_item_estructura,
