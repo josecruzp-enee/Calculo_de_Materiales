@@ -1,116 +1,76 @@
-# interfaz/materiales_ui.py
-# SOLO UI — SIN LÓGICA DE NEGOCIO
+# -*- coding: utf-8 -*-
+# interfaz/materiales_extra.py
 
 from __future__ import annotations
 import streamlit as st
 import pandas as pd
-from entradas.materiales import (
-    inicializar_materiales_extra,
-    agregar_material,
-    consolidar_materiales,
-    limpiar_materiales,
-    obtener_materiales_finales,
-    
-)
 
-def seccion_adicionar_material():
+COLUMNAS = ["Materiales", "Unidad", "Cantidad"]
 
-    st.subheader("4. 🧰 Adicionar Material")
-    st.markdown("Agrega materiales adicionales al proyecto.")
 
-    # Inicializar estado
-    inicializar_materiales_extra()
+# =========================================================
+# ESTADO
+# =========================================================
+def inicializar_materiales_extra():
+    if "materiales_extra" not in st.session_state:
+        st.session_state["materiales_extra"] = pd.DataFrame(columns=COLUMNAS)
 
-    # Obtener catálogo (infraestructura)
-    catalogo_df = obtener_catalogo_materiales()
 
-    if catalogo_df is None or catalogo_df.empty:
-        st.error("❌ No se pudo cargar el catálogo de materiales.")
+# =========================================================
+# OPERACIONES
+# =========================================================
+def agregar_material(nombre: str, unidad: str, cantidad: float):
+
+    if not nombre or float(cantidad) <= 0:
         return
 
-    # =====================================================
-    # FORMULARIO
-    # =====================================================
-    with st.form("form_materiales"):
+    df = st.session_state.get("materiales_extra", pd.DataFrame(columns=COLUMNAS))
 
-        col1, col2 = st.columns([4, 1])
+    nuevo = pd.DataFrame([{
+        "Materiales": str(nombre).strip(),
+        "Unidad": str(unidad).strip(),
+        "Cantidad": float(cantidad),
+    }])
 
-        with col1:
-            etiqueta_sel = st.selectbox(
-                "🔧 Material",
-                options=[""] + catalogo_df["Etiqueta"].tolist(),
-                index=0
-            )
+    st.session_state["materiales_extra"] = pd.concat(
+        [df, nuevo], ignore_index=True
+    )
 
-        with col2:
-            cantidad = st.number_input(
-                "Cantidad",
-                min_value=1,
-                step=1,
-                value=1
-            )
 
-        agregar = st.form_submit_button("➕ Agregar", use_container_width=True)
+def consolidar_materiales(df: pd.DataFrame | None = None) -> pd.DataFrame:
 
-    # =====================================================
-    # AGREGAR
-    # =====================================================
-    if agregar and etiqueta_sel:
-        agregar_material(etiqueta_sel, cantidad)
-        st.success("✅ Material agregado")
+    if df is None:
+        df = st.session_state.get("materiales_extra", pd.DataFrame(columns=COLUMNAS))
 
-    # =====================================================
-    # TABLA
-    # =====================================================
-    lista = st.session_state["materiales_extra"]
+    if df is None or df.empty:
+        return pd.DataFrame(columns=COLUMNAS)
 
-    if not lista:
-        st.info("No hay materiales agregados.")
-        return
+    df = df.copy()
 
-    df_view = pd.DataFrame(lista).copy()
-    df_view.insert(0, "__DEL__", False)
+    df["Materiales"] = df["Materiales"].astype(str).str.strip()
+    df["Unidad"] = df["Unidad"].astype(str).str.strip()
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
-    st.markdown("### 📋 Materiales")
+    df = df[df["Cantidad"] > 0]
 
-    with st.form("form_tabla"):
+    return (
+        df.groupby(["Materiales", "Unidad"], as_index=False)
+        .agg({"Cantidad": "sum"})
+    )
 
-        edited = st.data_editor(
-            df_view,
-            use_container_width=True,
-            hide_index=True,
-            num_rows="dynamic",
-            column_config={
-                "__DEL__": st.column_config.CheckboxColumn("Eliminar"),
-                "Materiales": st.column_config.TextColumn(disabled=True),
-                "Unidad": st.column_config.TextColumn(disabled=True),
-                "Cantidad": st.column_config.NumberColumn(min_value=0),
-            },
-        )
 
-        c1, c2 = st.columns(2)
+def limpiar_materiales():
+    st.session_state["materiales_extra"] = pd.DataFrame(columns=COLUMNAS)
 
-        guardar = c1.form_submit_button("💾 Guardar", type="primary")
-        limpiar = c2.form_submit_button("🗑️ Limpiar")
 
-    # =====================================================
-    # LIMPIAR
-    # =====================================================
-    if limpiar:
-        limpiar_materiales()
-        st.rerun()
+# =========================================================
+# EXPORT
+# =========================================================
+def obtener_materiales_finales() -> pd.DataFrame:
 
-    # =====================================================
-    # GUARDAR
-    # =====================================================
-    if guardar:
+    df = consolidar_materiales()
 
-        if "__DEL__" in edited.columns:
-            edited = edited.loc[~edited["__DEL__"]]
+    if df is None or df.empty:
+        return pd.DataFrame(columns=COLUMNAS)
 
-        st.session_state["materiales_extra"] = consolidar_materiales(
-            edited.to_dict(orient="records")
-        )
-
-        st.success("✅ Cambios guardados")
-        st.rerun()
+    return df.copy()
