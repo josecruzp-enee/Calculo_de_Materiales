@@ -1,14 +1,13 @@
-# interfaz/estructuras_desplegables.py
 # -*- coding: utf-8 -*-
-from __future__ import annotations
+# interfaz/estructuras_desplegables.py
 
+from __future__ import annotations
 from typing import Dict, Tuple
 import re
 
 import pandas as pd
 import streamlit as st
 
-# Comunes (ANCHO -> LARGO)
 from interfaz.estructuras_comunes import (
     COLUMNAS_BASE,
     normalizar_columnas,
@@ -17,29 +16,24 @@ from interfaz.estructuras_comunes import (
 )
 
 
-# =============================================================================
-# Catálogo (desde modulo.desplegables)
-# =============================================================================
+# =========================================================
+# CATÁLOGO
+# =========================================================
 def _cargar_opciones_catalogo() -> Dict[str, Dict[str, object]]:
     from interfaz.desplegables import cargar_opciones, RUTA_EXCEL
 
     opciones = cargar_opciones(RUTA_EXCEL) or {}
 
-    # Asegurar llaves mínimas usadas por la UI
     for key in [
         "Poste", "Primario", "Secundario", "Retenidas",
         "Conexiones a tierra", "Transformadores", "Luminarias",
         "Protección", "Proteccion",
     ]:
         opciones.setdefault(key, {"valores": [], "etiquetas": {}})
-        if not isinstance(opciones[key], dict):
-            opciones[key] = {"valores": [], "etiquetas": {}}
         opciones[key].setdefault("valores", [])
         opciones[key].setdefault("etiquetas", {})
 
     return opciones
-
-
 
 
 def _pick_vals_labels(opciones: dict, prefer: list[str], fuzzy: list[str] | None = None):
@@ -49,20 +43,21 @@ def _pick_vals_labels(opciones: dict, prefer: list[str], fuzzy: list[str] | None
             vals = blk.get("valores", [])
             labs = blk.get("etiquetas", {}) or {c: c for c in vals}
             return vals, labs
+
     if fuzzy:
         for k, blk in opciones.items():
-            k_low = str(k).lower()
-            if any(f in k_low for f in fuzzy):
+            if any(f in str(k).lower() for f in fuzzy):
                 if blk and blk.get("valores"):
                     vals = blk.get("valores", [])
                     labs = blk.get("etiquetas", {}) or {c: c for c in vals}
                     return vals, labs
+
     return [], {}
 
 
-# =============================================================================
-# Estado
-# =============================================================================
+# =========================================================
+# ESTADO
+# =========================================================
 def _ensure_df_sesion():
     st.session_state.setdefault("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
 
@@ -78,6 +73,7 @@ def _ensure_punto():
 def _ensure_consolidado():
     st.session_state.setdefault("puntos_data", {})
     p = st.session_state["punto_en_edicion"]
+
     st.session_state["puntos_data"].setdefault(
         p,
         {
@@ -92,23 +88,15 @@ def _ensure_consolidado():
     )
 
 
-# =============================================================================
-# Helpers de consolidación
-# =============================================================================
-import re
-
+# =========================================================
+# HELPERS
+# =========================================================
 def _fix_codigo(c):
     s = str(c).upper().strip()
 
-    # TS, TD, TT con o sin KVA
     match = re.search(r"(TS|TD|TT)-\d+(\.\d+)?", s)
     if match:
         base = match.group(0)
-
-        # Si no tiene KVA → se lo agregamos
-        if "KVA" not in s:
-            return base + "KVA"
-
         return base + "KVA"
 
     return s.split(" - ")[0].strip()
@@ -118,31 +106,23 @@ def _add_item(cat: str, code: str, qty: int):
     if not code or qty <= 0:
         return
 
-    # 🔥 NORMALIZACIÓN REAL
     code = _fix_codigo(code)
 
     p = st.session_state["punto_en_edicion"]
     bucket = st.session_state["puntos_data"][p][cat]
 
     bucket[code] = bucket.get(code, 0) + int(qty)
-    
-def _remove_item(cat: str, code: str, all_qty: bool = False):
-    p = st.session_state["punto_en_edicion"]
-    bucket = st.session_state["puntos_data"][p][cat]
-    if code in bucket:
-        if all_qty or bucket[code] <= 1:
-            bucket.pop(code, None)
-        else:
-            bucket[code] -= 1
 
 
 def _render_cat_str(punto: str, categoria: str) -> str:
     data = st.session_state["puntos_data"][punto][categoria]
     if not data:
         return ""
+
     parts = []
     for code, n in data.items():
         parts.append(f"{n}× {code}" if n > 1 else code)
+
     return ", ".join(parts)
 
 
@@ -159,15 +139,16 @@ def _consolidado_a_fila(punto: str) -> Dict[str, str]:
     }
 
 
-# =============================================================================
+# =========================================================
 # UI
-# =============================================================================
-def _fila_categoria_ui(cat_key: str, valores: list[str], etiquetas: dict, key_prefix: str,
-                      display_label: str | None = None):
+# =========================================================
+def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix, display_label=None):
+
     label = display_label or cat_key
     st.markdown(f"**{label}**")
 
     c1, c2, c3 = st.columns([7, 1.2, 2])
+
     with c1:
         sel = st.selectbox(
             "",
@@ -177,70 +158,28 @@ def _fila_categoria_ui(cat_key: str, valores: list[str], etiquetas: dict, key_pr
             label_visibility="collapsed",
             format_func=lambda x: etiquetas.get(x, x),
         )
+
     with c2:
         qty = st.number_input(
-            " ",
-            min_value=1, max_value=99, step=1, value=1,
+            "",
+            min_value=1,
+            max_value=99,
+            step=1,
+            value=1,
             key=f"{key_prefix}_{cat_key}_qty",
             label_visibility="collapsed",
         )
+
     with c3:
-        if st.button("➕ Agregar", key=f"{key_prefix}_{cat_key}_add"):
+        if st.button("➕", key=f"{key_prefix}_{cat_key}_add"):
             _add_item(cat_key, sel, qty)
 
 
-import os
-import pandas as pd
-import streamlit as st
-from pathlib import Path
-
-from interfaz.desplegables import cargar_opciones, RUTA_EXCEL
-
-def _debug_catalogo_cloud():
-    st.write("CWD:", os.getcwd())
-    st.write("RUTA_EXCEL (modulo):", RUTA_EXCEL)
-    st.write("EXISTE:", os.path.exists(RUTA_EXCEL))
-
-    # listar data real del repo
-    repo_root = Path(__file__).resolve().parents[1]  # .../Calculo_de_Materiales
-    data_dir = repo_root / "data"
-    st.write("repo_root:", str(repo_root))
-    st.write("data_dir existe:", data_dir.exists())
-    if data_dir.exists():
-        st.write("data_dir contenido:", sorted([p.name for p in data_dir.iterdir()]))
-
-    # si existe, ver hojas y columnas
-    if os.path.exists(RUTA_EXCEL):
-        xls = pd.ExcelFile(RUTA_EXCEL)
-        st.write("Hojas Excel:", xls.sheet_names)
-        hoja = next((s for s in xls.sheet_names if s.strip().lower() in ("indice","índice")), None)
-        st.write("Hoja índice detectada:", hoja)
-        if hoja:
-            df = pd.read_excel(xls, sheet_name=hoja, nrows=5)
-            st.write("Columnas índice:", list(df.columns))
-            st.dataframe(df)
-
-with st.expander("🧪 Debug catálogo (Cloud)", expanded=True):
-    _debug_catalogo_cloud()
-
-# luego ya cargas opciones normal
-from interfaz.desplegables import cargar_opciones, RUTA_EXCEL
-opciones = cargar_opciones(RUTA_EXCEL)
-st.write("Keys opciones:", list(opciones.keys()))
-st.write("Tamaños:", {k: len(v.get("valores", [])) for k, v in opciones.items()})
-
-
-
-# =============================================================================
-# Entrada principal (modo Desplegables)
-# =============================================================================
+# =========================================================
+# FUNCIÓN PRINCIPAL
+# =========================================================
 def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
-    """
-    UI por listas desplegables.
-    Retorna:
-        df_largo (Punto, codigodeestructura, cantidad),
-        ruta_tmp (xlsx temporal con ANCHO/LARGO).
-    """
+
     _ensure_df_sesion()
     _ensure_punto()
     _ensure_consolidado()
@@ -248,110 +187,76 @@ def listas_desplegables() -> Tuple[pd.DataFrame | None, str | None]:
     df_actual = st.session_state["df_puntos"]
     opciones = _cargar_opciones_catalogo()
 
-    st.subheader("🏗️ Estructuras del Proyecto (Listas desplegables)")
+    st.subheader("🏗️ Estructuras del Proyecto")
 
-    # Barra superior
     colA, colB, colC, colD = st.columns([1.2, 1.4, 1.8, 1.2])
+
     with colA:
-        if st.button("🆕 Crear nuevo Punto"):
-            existentes = df_actual["Punto"].tolist() if not df_actual.empty else []
-            nums = []
-            for p in existentes:
-                m = re.search(r"(\d+)", str(p))
-                if m:
-                    nums.append(int(m.group(1)))
+        if st.button("🆕 Punto"):
+            nums = [
+                int(re.search(r"\d+", str(p)).group())
+                for p in df_actual["Punto"]
+                if re.search(r"\d+", str(p))
+            ] if not df_actual.empty else []
+
             nuevo = f"Punto {(max(nums) + 1) if nums else 1}"
             st.session_state["punto_en_edicion"] = nuevo
             _ensure_consolidado()
 
     with colB:
         if not df_actual.empty:
-            p_sel = st.selectbox("📍 Ir a punto:", df_actual["Punto"].unique())
-            if st.button("✏️ Editar"):
+            p_sel = st.selectbox("Ir a:", df_actual["Punto"].unique())
+            if st.button("Editar"):
                 st.session_state["punto_en_edicion"] = p_sel
-                _ensure_consolidado()
 
     with colC:
         if not df_actual.empty:
-            p_del = st.selectbox("❌ Borrar punto:", df_actual["Punto"].unique(), key="del_punto")
+            p_del = st.selectbox("Eliminar:", df_actual["Punto"].unique())
             if st.button("Borrar"):
-                st.session_state["df_puntos"] = df_actual[df_actual["Punto"] != p_del].reset_index(drop=True)
+                st.session_state["df_puntos"] = df_actual[df_actual["Punto"] != p_del]
                 st.session_state["puntos_data"].pop(p_del, None)
 
     with colD:
-        if st.button("🧹 Limpiar todo"):
+        if st.button("🧹 Reset"):
             st.session_state["df_puntos"] = pd.DataFrame(columns=COLUMNAS_BASE)
             st.session_state["puntos_data"] = {}
             st.session_state["punto_en_edicion"] = "Punto 1"
-            _ensure_consolidado()
 
-    st.markdown("---")
     punto = st.session_state["punto_en_edicion"]
-    st.markdown(f"### ✏️ Editando {punto}")
+    st.markdown(f"### {punto}")
 
-    # Catálogos
-    vals_poste, lab_poste = _pick_vals_labels(opciones, ["Poste"], ["poste"])
-    vals_pri, lab_pri = _pick_vals_labels(opciones, ["Primario"], ["primar", "mt"])
-    vals_sec, lab_sec = _pick_vals_labels(opciones, ["Secundario"], ["secund", "bt"])
-    vals_ret, lab_ret = _pick_vals_labels(opciones, ["Retenidas"], ["reten"])
-    vals_ct,  lab_ct  = _pick_vals_labels(opciones, ["Conexiones a tierra"], ["tierra"])
-    vals_tr,  lab_tr  = _pick_vals_labels(opciones, ["Transformadores"], ["trafo"])
-    vals_lum, lab_lum = _pick_vals_labels(opciones, ["Luminarias"], ["lumin"])
+    vals_poste, lab_poste = _pick_vals_labels(opciones, ["Poste"])
+    vals_pri, lab_pri = _pick_vals_labels(opciones, ["Primario"])
+    vals_sec, lab_sec = _pick_vals_labels(opciones, ["Secundario"])
+    vals_ret, lab_ret = _pick_vals_labels(opciones, ["Retenidas"])
+    vals_ct, lab_ct = _pick_vals_labels(opciones, ["Conexiones a tierra"])
+    vals_tr, lab_tr = _pick_vals_labels(opciones, ["Transformadores"])
+    vals_lum, lab_lum = _pick_vals_labels(opciones, ["Luminarias"])
 
-    # Mezcla Tierra + Protección
-    vals_prot, lab_prot = _pick_vals_labels(opciones, ["Protección", "Proteccion"], ["protec"])
-    mix_vals, seen = [], set()
-    for v in (vals_ct + vals_prot):
-        vv = str(v).strip()
-        if vv and vv not in seen:
-            seen.add(vv)
-            mix_vals.append(vv)
-    mix_labs = {**(lab_ct or {}), **(lab_prot or {})} or {c: c for c in mix_vals}
+    kp = f"kp_{punto}"
 
-    key_prefix = f"kp_{punto}"
-    _fila_categoria_ui("Poste", vals_poste, lab_poste, key_prefix)
-    _fila_categoria_ui("Primario", vals_pri, lab_pri, key_prefix)
-    _fila_categoria_ui("Secundario", vals_sec, lab_sec, key_prefix)
-    _fila_categoria_ui("Retenidas", vals_ret, lab_ret, key_prefix)
-    _fila_categoria_ui("Luminarias", vals_lum, lab_lum, key_prefix)
-    _fila_categoria_ui(
-        "Conexiones a tierra", mix_vals, mix_labs,
-        key_prefix + "_ctp", display_label="Conexiones a tierra / Protección"
-    )
-    _fila_categoria_ui("Transformadores", vals_tr, lab_tr, key_prefix)
+    _fila_categoria_ui("Poste", vals_poste, lab_poste, kp)
+    _fila_categoria_ui("Primario", vals_pri, lab_pri, kp)
+    _fila_categoria_ui("Secundario", vals_sec, lab_sec, kp)
+    _fila_categoria_ui("Retenidas", vals_ret, lab_ret, kp)
+    _fila_categoria_ui("Conexiones a tierra", vals_ct, lab_ct, kp)
+    _fila_categoria_ui("Transformadores", vals_tr, lab_tr, kp)
+    _fila_categoria_ui("Luminarias", vals_lum, lab_lum, kp)
 
-    st.markdown("---")
-    st.markdown("#### 📑 Vista consolidada del punto")
     fila = _consolidado_a_fila(punto)
     st.dataframe(pd.DataFrame([fila]), use_container_width=True, hide_index=True)
 
-    if st.button("💾 Guardar Estructura del Punto", type="primary"):
+    if st.button("💾 Guardar"):
         base = st.session_state["df_puntos"]
-        if not base.empty:
-            base = base[base["Punto"] != punto]
+        base = base[base["Punto"] != punto] if not base.empty else base
         st.session_state["df_puntos"] = pd.concat([base, pd.DataFrame([fila])], ignore_index=True)
 
-    df_all_wide = st.session_state.get("df_puntos", pd.DataFrame(columns=COLUMNAS_BASE))
-    if not df_all_wide.empty:
-        df_all_wide = normalizar_columnas(df_all_wide, COLUMNAS_BASE)
+    df_all = st.session_state["df_puntos"]
 
-        def _num_punto(x: str) -> int:
-            import re
-            m = re.search(r"(\d+)", str(x))
-            return int(m.group(1)) if m else 10**9
-
-        df_all_wide = df_all_wide.sort_values(
-            by="Punto", key=lambda s: s.map(_num_punto)
-        ).reset_index(drop=True)
-
-        df_largo = expand_wide_to_long(df_all_wide)
-        # 🔥 DEBUG AQUÍ
-        st.write("DEBUG TS:")
-        st.write("COLUMNAS:", df_largo.columns)
-        st.write(df_largo.head())
-        
-        ruta_tmp = materializar_df_a_archivo(df_all_wide, "ui")
-        
-        return df_largo, ruta_tmp
+    if not df_all.empty:
+        df_all = normalizar_columnas(df_all, COLUMNAS_BASE)
+        df_largo = expand_wide_to_long(df_all)
+        ruta = materializar_df_a_archivo(df_all, "ui")
+        return df_largo, ruta
 
     return None, None
