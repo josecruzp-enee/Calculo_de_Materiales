@@ -5,7 +5,6 @@ import pandas as pd
 from collections import Counter
 
 from materiales.auxiliares.materiales_aux import limpiar_codigo, expandir_lista_codigos
-from entradas.excel_legacy import extraer_estructuras_proyectadas
 from materiales.auxiliares.lector_materiales import leer_hoja_materiales
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
@@ -29,38 +28,36 @@ def _validar_df(df: pd.DataFrame) -> None:
 
 
 # ==========================================================
-# CONTEO DE ESTRUCTURAS
+# CONTEO DE ESTRUCTURAS (NUEVO - SIN excel_legacy)
 # ==========================================================
 def extraer_conteo_estructuras(df_estructuras):
 
-    estructuras_proyectadas, estructuras_por_punto = extraer_estructuras_proyectadas(df_estructuras)
+    if df_estructuras is None or df_estructuras.empty:
+        return Counter(), {}
 
     estructuras_limpias = []
+    estructuras_por_punto = {}
 
-    for e in estructuras_proyectadas:
-        for parte in expandir_lista_codigos(e):
-            codigo, _ = limpiar_codigo(parte)
-            if codigo:
-                estructuras_limpias.append(str(codigo).strip().upper())
+    for _, row in df_estructuras.iterrows():
 
-    valores_invalidos = {"", "SELECCIONAR", "ESTRUCTURA", "PUNTO", "N/A", "NONE", "0", "1", "2", "3"}
+        punto = row.get("Punto", "Punto")
 
-    estructuras_filtradas = [
-        e for e in estructuras_limpias if e not in valores_invalidos
-    ]
+        lista = str(row.get("Estructuras", "")).split(";")
 
-    conteo = Counter(estructuras_filtradas)
+        lista_limpia = []
 
-    estructuras_por_punto_filtrado = {}
+        for e in lista:
+            s = str(e).strip().upper()
 
-    for punto, lista in estructuras_por_punto.items():
-        estructuras_por_punto_filtrado[punto] = [
-            str(x).strip().upper()
-            for x in lista
-            if str(x).strip().upper() not in valores_invalidos
-        ]
+            if s and s not in {"", "SELECCIONAR", "N/A", "NONE"}:
+                estructuras_limpias.append(s)
+                lista_limpia.append(s)
 
-    return conteo, estructuras_por_punto_filtrado
+        estructuras_por_punto[punto] = lista_limpia
+
+    conteo = Counter(estructuras_limpias)
+
+    return conteo, estructuras_por_punto
 
 
 # ==========================================================
@@ -93,7 +90,9 @@ def calcular_materiales_estructura(
 
     df_filtrado["Materiales"] = df_filtrado["Materiales"].astype(str).str.strip()
     df_filtrado["Unidad"] = df_filtrado["Unidad"].astype(str).str.strip()
-    df_filtrado["Cantidad"] = pd.to_numeric(df_filtrado["Cantidad"], errors="coerce").fillna(0)
+    df_filtrado["Cantidad"] = pd.to_numeric(
+        df_filtrado["Cantidad"], errors="coerce"
+    ).fillna(0)
 
     df_filtrado["Cantidad"] *= float(cant)
 
@@ -124,12 +123,12 @@ def calcular_materiales_por_punto(
     for estructura, cant in conteo.items():
 
         df_mat = calcular_materiales_estructura(
-            hojas_base,
-            estructura,
-            cant,
-            tension,
-            calibre_mt,
-            tabla_conectores_mt,
+            hojas_base=hojas_base,
+            estructura=estructura,
+            cant=cant,
+            tension=tension,
+            calibre_mt=calibre_mt,
+            tabla_conectores_mt=tabla_conectores_mt,
         )
 
         if df_mat is not None and not df_mat.empty:
