@@ -1,11 +1,9 @@
+# -*- coding: utf-8 -*-
 # entradas/estructuras.py
-# FACHADA PARA UI DE ESTRUCTURAS
 
 from __future__ import annotations
 import streamlit as st
 import pandas as pd
-
-from entradas.orquestador_entradas import cargar_entrada
 
 
 # =========================================================
@@ -13,26 +11,34 @@ from entradas.orquestador_entradas import cargar_entrada
 # =========================================================
 
 def inicializar_estado_estructuras():
+
     if "df_puntos" not in st.session_state:
-        st.session_state["df_puntos"] = pd.DataFrame()
+        st.session_state["df_puntos"] = pd.DataFrame(
+            columns=["Punto", "Estructuras"]
+        )
 
     if "punto_en_edicion" not in st.session_state:
         st.session_state["punto_en_edicion"] = "Punto 1"
 
 
 # =========================================================
-# CATÁLOGO (SIMPLIFICADO)
+# CATÁLOGO (MÍNIMO FUNCIONAL)
 # =========================================================
 
 def obtener_opciones_catalogo():
+
     return {
-        "Poste": {"valores": [], "etiquetas": {}},
-        "Primario": {"valores": [], "etiquetas": {}},
-        "Secundario": {"valores": [], "etiquetas": {}},
-        "Retenidas": {"valores": [], "etiquetas": {}},
-        "Conexiones a tierra": {"valores": [], "etiquetas": {}},
-        "Transformadores": {"valores": [], "etiquetas": {}},
-        "Luminarias": {"valores": [], "etiquetas": {}},
+        "Estructuras": {
+            "valores": [
+                "A-I-1",
+                "A-I-4",
+                "B-III-1",
+                "B-III-5",
+                "CT-N",
+                "TS-50 KVA",
+            ],
+            "etiquetas": {}
+        }
     }
 
 
@@ -40,33 +46,68 @@ def obtener_opciones_catalogo():
 # OPERACIONES
 # =========================================================
 
-def agregar_item_estructura(cat, sel, qty):
-    pass
+def agregar_item_estructura(punto: str, estructura: str):
 
+    df = st.session_state["df_puntos"]
 
-def consolidar_punto(punto):
-    return {"Punto": punto}
+    nueva_fila = pd.DataFrame([{
+        "Punto": punto,
+        "Estructuras": estructura
+    }])
+
+    st.session_state["df_puntos"] = pd.concat(
+        [df, nueva_fila],
+        ignore_index=True
+    )
 
 
 def eliminar_punto(punto):
-    pass
+
+    df = st.session_state["df_puntos"]
+
+    df = df[df["Punto"] != punto]
+
+    st.session_state["df_puntos"] = df.reset_index(drop=True)
 
 
 def reset_estructuras():
-    st.session_state["df_puntos"] = pd.DataFrame()
+    st.session_state["df_puntos"] = pd.DataFrame(
+        columns=["Punto", "Estructuras"]
+    )
 
 
-def construir_dataframe_salida(punto):
-    return pd.DataFrame(), None
+def consolidar_punto(punto):
+
+    df = st.session_state["df_puntos"]
+
+    df_punto = df[df["Punto"] == punto]
+
+    estructuras = df_punto["Estructuras"].tolist()
+
+    return {
+        "Punto": punto,
+        "Estructuras": estructuras
+    }
+
+
+def construir_dataframe_salida():
+
+    df = st.session_state.get("df_puntos")
+
+    if df is None or df.empty:
+        return pd.DataFrame(), None
+
+    # =====================================================
+    # FORMATO FINAL PARA MATERIALES
+    # =====================================================
+    df_salida = (
+        df.groupby("Punto")["Estructuras"]
+        .apply(lambda x: "; ".join(x))
+        .reset_index()
+    )
+
+    return df_salida, None
 
 
 def crear_nuevo_punto():
-    st.session_state["punto_en_edicion"] = "Punto nuevo"
-
-
-# =========================================================
-# INTEGRACIÓN FINAL
-# =========================================================
-
-def cargar_entrada(**kwargs):
-    return cargar_entrada(**kwargs)
+    st.session_state["punto_en_edicion"] = f"Punto {len(st.session_state['df_puntos']) + 1}"
