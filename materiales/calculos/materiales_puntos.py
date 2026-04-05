@@ -189,3 +189,4 @@ def calcular_materiales_por_punto(
     _validar_df(df_final)
 
     return df_final[COLUMNAS_STD]
+'''
