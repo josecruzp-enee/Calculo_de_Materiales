@@ -18,7 +18,7 @@ from interfaz.exportacion_ui import (
     seccion_exportacion,
 )
 
-from interfaz.mapa_kml import seccion_mapa_kmz
+#from interfaz.mapa_kml import seccion_mapa_kmz
 
 # =========================================================
 # HELPERS
@@ -123,8 +123,8 @@ def renderizar_exportacion():
     )
 
 
-def renderizar_mapa():
-    seccion_mapa_kmz()
+#def renderizar_mapa():
+    #seccion_mapa_kmz()
 
 
 # =========================================================
