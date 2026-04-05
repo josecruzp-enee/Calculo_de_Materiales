@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-validacion.py
-
-Validación de estructuras contra catálogo ENEE.
+validacion.py (versión robusta producción)
 """
 
 import pandas as pd
@@ -11,13 +9,15 @@ import pandas as pd
 # =========================================================
 # VALIDACIÓN PRINCIPAL
 # =========================================================
-
-def validar_estructuras(df: pd.DataFrame, df_indice: pd.DataFrame, log):
+def validar_estructuras(
+    df: pd.DataFrame,
+    df_indice: pd.DataFrame,
+):
     """
     Valida estructuras contra catálogo.
 
     Retorna:
-        df (posiblemente corregido)
+        df_validado (NO muta original)
         errores (list)
         warnings (list)
     """
@@ -28,9 +28,6 @@ def validar_estructuras(df: pd.DataFrame, df_indice: pd.DataFrame, log):
     if df is None or df.empty:
         raise ValueError("No hay estructuras para validar")
 
-    # =====================================================
-    # VALIDAR COLUMNAS
-    # =====================================================
     col = "codigodeestructura"
 
     if col not in df.columns:
@@ -41,7 +38,7 @@ def validar_estructuras(df: pd.DataFrame, df_indice: pd.DataFrame, log):
 
     if df_indice is None or df_indice.empty:
         warnings.append("⚠ Índice vacío → validación omitida")
-        return df, errores, warnings
+        return df.copy(), errores, warnings
 
     # =====================================================
     # NORMALIZAR CATALOGO
@@ -53,70 +50,46 @@ def validar_estructuras(df: pd.DataFrame, df_indice: pd.DataFrame, log):
         .str.upper()
     )
 
-    # =====================================================
-    # NORMALIZAR DF
-    # =====================================================
-    df[col] = (
-        df[col]
+    df_out = df.copy()
+
+    df_out[col] = (
+        df_out[col]
         .astype(str)
         .str.strip()
         .str.upper()
     )
 
     # =====================================================
-    # VALIDAR FILA A FILA (IMPORTANTE)
+    # VALIDACIÓN
     # =====================================================
-    codigos_corregidos = []
-
-    for i, codigo in enumerate(df[col]):
+    for i, codigo in enumerate(df_out[col]):
 
         if codigo in codigos_catalogo:
-            codigos_corregidos.append(codigo)
             continue
 
         sugerencia = _sugerir_codigo(codigo, codigos_catalogo)
 
         if sugerencia:
             warnings.append(
-                f"⚠ Fila {i+1}: {codigo} → corregido a {sugerencia}"
+                f"Fila {i+1}: {codigo} no existe. Sugerido: {sugerencia}"
             )
-            codigos_corregidos.append(sugerencia)
-
         else:
             errores.append(
-                f"❌ Fila {i+1}: {codigo} no existe en catálogo"
+                f"Fila {i+1}: {codigo} no existe en catálogo"
             )
-            codigos_corregidos.append(codigo)
 
-    # aplicar correcciones
-    df[col] = codigos_corregidos
-
-    # =====================================================
-    # LOG
-    # =====================================================
-    if errores:
-        log("❌ ERRORES:")
-        for e in errores:
-            log(e)
-
-    if warnings:
-        log("⚠ WARNINGS:")
-        for w in warnings:
-            log(w)
-
-    return df, errores, warnings
+    return df_out, errores, warnings
 
 
 # =========================================================
-# SUGERENCIAS
+# SUGERENCIAS (MEJORADA)
 # =========================================================
-
 def _sugerir_codigo(codigo, catalogo):
 
     codigo = str(codigo).upper()
 
     mejor = None
-    mejor_dist = 99
+    mejor_dist = 999
 
     for c in catalogo:
         d = _distancia_simple(codigo, c)
@@ -125,7 +98,8 @@ def _sugerir_codigo(codigo, catalogo):
             mejor_dist = d
             mejor = c
 
-    if mejor_dist <= 2:
+    # más estricto
+    if mejor_dist <= 1:
         return mejor
 
     return None
@@ -133,14 +107,14 @@ def _sugerir_codigo(codigo, catalogo):
 
 def _distancia_simple(a, b):
     """
-    Distancia simple tipo Levenshtein ligera.
+    Distancia simple (segura, no agresiva)
     """
 
     if a == b:
         return 0
 
-    if abs(len(a) - len(b)) > 2:
-        return 99
+    if abs(len(a) - len(b)) > 1:
+        return 999
 
     errores = sum(1 for x, y in zip(a, b) if x != y)
     errores += abs(len(a) - len(b))
