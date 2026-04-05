@@ -38,7 +38,7 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
         )
 
     with c2:
-        qty = st.number_input(
+        st.number_input(
             "",
             min_value=1,
             max_value=99,
@@ -52,7 +52,6 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
         if st.button("➕", key=f"{key_prefix}_{cat_key}_add"):
             if sel:
                 punto = st.session_state.get("punto_en_edicion", "Punto 1")
-                # 🔥 FIX: usar punto correcto (no cat_key)
                 agregar_item_estructura(punto, sel)
 
 
@@ -124,31 +123,22 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     st.dataframe(pd.DataFrame([fila]), use_container_width=True, hide_index=True)
 
     # =====================================================
-    # GUARDAR + VALIDAR
+    # GUARDAR (🔥 SOLO UI)
     # =====================================================
-    guardar = st.button("💾 Guardar")
+    if st.button("💾 Guardar"):
 
-    if guardar:
-
-        # 🔥 FIX: no pasar argumento
         df, ruta = construir_dataframe_salida()
 
-        try:
-            entrada = cargar_entrada(
-                tipo="ui",
-                data=df,
-                ruta_materiales=st.session_state.get("ruta_datos_materiales"),
-            )
-
-            df_final = entrada.df
-
-            st.success("✅ Estructura validada correctamente")
-
-            return df_final, ruta
-
-        except Exception as e:
-            st.error(f"❌ Error en estructuras:\n{str(e)}")
+        if df is None or df.empty:
+            st.warning("No hay estructuras para guardar")
             return None, None
+
+        # 🔥 AQUÍ ESTÁ EL CAMBIO IMPORTANTE
+        st.session_state["df_estructuras"] = df
+
+        st.success("✅ Estructuras guardadas correctamente")
+
+        return df, ruta
 
     # =====================================================
     # SALIDA FINAL
