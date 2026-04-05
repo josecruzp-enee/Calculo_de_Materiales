@@ -13,7 +13,7 @@ from interfaz.cables_ui import seccion_cables
 from entradas.entradas_desplegables import cargar_desde_desplegables
 from interfaz.materiales_extra import seccion_adicionar_material
 
-from interfaz.exportacion import (
+from interfaz.exportacion_ui import (
     seccion_finalizar_calculo,
     seccion_exportacion,
 )
