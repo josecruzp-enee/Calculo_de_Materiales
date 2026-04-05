@@ -16,7 +16,7 @@ from entradas.estructuras import (
     construir_dataframe_salida,
     crear_nuevo_punto,
     cargar_entrada
-))
+)
 
 # =========================================================
 # UI HELPERS
