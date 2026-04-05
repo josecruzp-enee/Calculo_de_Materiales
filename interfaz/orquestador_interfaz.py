@@ -30,17 +30,19 @@ def es_dataframe_valido(df):
 
 
 # =========================================================
-# SECCIONES UI (CON SALIDA CONTROLADA)
+# SECCIONES UI (SIN LÓGICA DE NEGOCIO)
 # =========================================================
 
 def renderizar_datos_proyecto():
     datos = seccion_datos_proyecto()
-    st.session_state["datos_proyecto"] = datos
+    if datos:
+        st.session_state["datos_proyecto"] = datos
 
 
 def renderizar_cables():
     cables = seccion_cables()
-    st.session_state["cables"] = cables
+    if cables:
+        st.session_state["cables"] = cables
 
 
 def renderizar_modo_carga():
@@ -77,6 +79,7 @@ def renderizar_estructuras():
         st.info("⚠️ No hay estructuras aún.")
         return
 
+    # 🔥 Guardar SOLO resultado limpio
     st.session_state["df_estructuras"] = df
     st.session_state["ruta_estructuras_compacto"] = ruta
 
@@ -84,8 +87,11 @@ def renderizar_estructuras():
 
 
 def renderizar_materiales():
-    materiales = seccion_adicionar_material()
-    st.session_state["materiales"] = materiales
+    # 🔥 UI maneja session_state internamente
+    seccion_adicionar_material()
+
+    # 🔥 asegurar existencia (sin sobrescribir)
+    st.session_state["materiales_extra"] = st.session_state.get("materiales_extra", [])
 
 
 def renderizar_final():
@@ -96,28 +102,25 @@ def renderizar_final():
         st.info("⚠️ Carga estructuras primero.")
         return
 
-    resultado = seccion_finalizar_calculo(df)
-
-    # 🔥 guardar resultado para exportación futura
-    st.session_state["resultado_calculo"] = resultado
+    # 🔥 la función YA guarda resultado internamente
+    seccion_finalizar_calculo(df)
 
 
 def renderizar_exportacion():
 
     df = st.session_state.get("df_estructuras")
     ruta = st.session_state.get("ruta_estructuras_compacto")
-    resultado = st.session_state.get("resultado_calculo")
 
     if not es_dataframe_valido(df):
         st.warning("⚠️ Primero completa estructuras.")
         return
 
+    # 🔥 no pasar resultado, se usa desde session_state
     seccion_exportacion(
         df=df,
         modo_carga=st.session_state.get("modo_carga_seleccionado"),
         ruta_estructuras=ruta,
         ruta_datos_materiales=ruta_datos_materiales_por_defecto(),
-        resultado=resultado,  # 👈 preparado para siguiente fase
     )
 
 
@@ -134,11 +137,16 @@ def ejecutar_orquestador_interfaz(
     _barra_nav_botones,
 ):
 
+    # =====================================================
+    # NAVEGACIÓN
+    # =====================================================
     seccion = _nav_estado_actual()
 
-    # Barra navegación
     _barra_nav_botones(seccion)
 
+    # =====================================================
+    # MAPA DE SECCIONES
+    # =====================================================
     acciones = {
         "datos": renderizar_datos_proyecto,
         "cables": renderizar_cables,
