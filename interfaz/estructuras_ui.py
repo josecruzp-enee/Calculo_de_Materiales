@@ -15,7 +15,6 @@ from entradas.estructuras import (
     reset_estructuras,
     construir_dataframe_salida,
     crear_nuevo_punto,
-    cargar_entrada,
 )
 
 # =========================================================
