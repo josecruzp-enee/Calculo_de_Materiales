@@ -8,7 +8,6 @@ from materiales.modelos.salida import ResultadoMateriales
 
 from materiales.calculos.calculo_materiales import calcular_materiales_proyecto
 from materiales.validaciones.materiales_validacion import validar_datos_proyecto
-
 from materiales.cables.cables_materiales import materiales_desde_cables
 
 
@@ -18,28 +17,14 @@ COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 # =========================================================
 # HELPERS
 # =========================================================
-def _normalizar_df(df: pd.DataFrame | None) -> pd.DataFrame:
-
-    if df is None or df.empty:
-        return pd.DataFrame(columns=COLUMNAS_STD)
-
-    df = df.copy()
-
-    for col in COLUMNAS_STD:
-        if col not in df.columns:
-            df[col] = 0.0 if col == "Cantidad" else ""
-
-    df["Materiales"] = df["Materiales"].astype(str).str.strip()
-    df["Unidad"] = df["Unidad"].astype(str).str.strip()
-    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
-
-    return df[COLUMNAS_STD]
+def _df_vacio():
+    return pd.DataFrame(columns=COLUMNAS_STD)
 
 
 def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
 
-    if df.empty:
-        return df
+    if df is None or df.empty:
+        return _df_vacio()
 
     return (
         df
@@ -56,34 +41,38 @@ def ejecutar_materiales(
     catalogo: pd.DataFrame | None = None
 ) -> ResultadoMateriales:
 
-    # =========================
-    # 1. VALIDACIÓN BASE
-    # =========================
+    errores = []
+    warnings = []
+
+    # ======================================================
+    # 1. VALIDACIÓN DE ENTRADA
+    # ======================================================
+    if entrada is None:
+        return ResultadoMateriales(False, _df_vacio(), ["Entrada es None"], [])
+
     if entrada.estructuras_df is None or entrada.estructuras_df.empty:
-        return ResultadoMateriales(False, pd.DataFrame(), ["Sin estructuras"], [])
+        return ResultadoMateriales(False, _df_vacio(), ["Sin estructuras"], [])
 
     if entrada.hojas_base is None:
-        return ResultadoMateriales(False, pd.DataFrame(), ["Base de datos no cargada"], [])
+        return ResultadoMateriales(False, _df_vacio(), ["Base de datos no cargada"], [])
 
-    datos = entrada.datos_proyecto or {}
-
-    # =========================
-    # 2. TENSIÓN (FUENTE ÚNICA)
-    # =========================
-    if entrada.tension is None or entrada.tension == 0:
-        return ResultadoMateriales(False, pd.DataFrame(), ["Tensión inválida"], [])
+    if not entrada.tension:
+        return ResultadoMateriales(False, _df_vacio(), ["Tensión inválida"], [])
 
     tension = float(entrada.tension)
+    datos = entrada.datos_proyecto or {}
 
-    # solo extraer calibre
+    # ======================================================
+    # 2. VALIDACIÓN DE DATOS DE PROYECTO
+    # ======================================================
     try:
         _, calibre_mt = validar_datos_proyecto(datos)
     except Exception as e:
-        return ResultadoMateriales(False, pd.DataFrame(), [f"Error validando datos: {e}"], [])
+        return ResultadoMateriales(False, _df_vacio(), [f"Error en datos proyecto: {e}"], [])
 
-    # =========================
-    # 3. CÁLCULO BASE
-    # =========================
+    # ======================================================
+    # 3. MOTOR DE CÁLCULO
+    # ======================================================
     try:
         resultados = calcular_materiales_proyecto(
             hojas_base=entrada.hojas_base,
@@ -92,100 +81,79 @@ def ejecutar_materiales(
         )
 
         if not isinstance(resultados, dict):
-            raise ValueError("Salida inválida del motor")
+            raise ValueError("Salida del motor inválida")
 
         df_materiales = resultados.get("df_materiales_detalle")
 
-        if not isinstance(df_materiales, pd.DataFrame):
-            raise ValueError("df_materiales inválido")
-
-        for col in COLUMNAS_STD:
-            if col not in df_materiales.columns:
-                raise ValueError(f"Falta columna {col}")
+        if df_materiales is None or not isinstance(df_materiales, pd.DataFrame):
+            raise ValueError("df_materiales_detalle inválido")
 
     except Exception as e:
-        return ResultadoMateriales(False, pd.DataFrame(), [f"Error en cálculo: {e}"], [])
+        return ResultadoMateriales(False, _df_vacio(), [f"Error en cálculo: {e}"], [])
 
-    # =========================
+    # ======================================================
     # 4. CABLES → MATERIALES
-    # =========================
-    try:
-        df_cables_mat = materiales_desde_cables(entrada.df_cables)
-    except Exception as e:
-        print(f"[WARN] Error en cables: {e}")
-        df_cables_mat = pd.DataFrame(columns=COLUMNAS_STD)
+    # ======================================================
+    df_cables = _df_vacio()
 
-    # =========================
-    # 5. NORMALIZACIÓN
-    # =========================
-    df_materiales = _normalizar_df(df_materiales)
-    df_cables_mat = _normalizar_df(df_cables_mat)
+    if hasattr(entrada, "df_cables") and isinstance(entrada.df_cables, pd.DataFrame):
+        try:
+            df_cables = materiales_desde_cables(entrada.df_cables)
+        except Exception as e:
+            warnings.append(f"Cables ignorados: {e}")
 
-    # =========================
-    # 6. UNIÓN
-    # =========================
-    df_total = pd.concat([df_materiales, df_cables_mat], ignore_index=True)
+    # ======================================================
+    # 5. MATERIALES EXTRA
+    # ======================================================
+    df_extra = _df_vacio()
 
-    # =========================
-    # 6.1 MATERIALES EXTRA
-    # =========================
-    df_extra = datos.get("materiales_extra")
+    if isinstance(datos.get("materiales_extra"), pd.DataFrame):
+        df_extra = datos["materiales_extra"]
 
-    if isinstance(df_extra, pd.DataFrame) and not df_extra.empty:
-        df_extra = _normalizar_df(df_extra)
-        df_total = pd.concat([df_total, df_extra], ignore_index=True)
+    # ======================================================
+    # 6. UNIÓN GENERAL
+    # ======================================================
+    df_total = pd.concat(
+        [df_materiales, df_cables, df_extra],
+        ignore_index=True
+    )
 
-    # =========================
+    df_total["Cantidad"] = pd.to_numeric(df_total["Cantidad"], errors="coerce").fillna(0)
+
+    # ======================================================
     # 7. CONSOLIDACIÓN
-    # =========================
+    # ======================================================
     df_total = _consolidar(df_total)
 
-    # =========================
-    # 7.1 VALIDACIÓN CONTRA CATÁLOGO
-    # =========================
+    # ======================================================
+    # 8. VALIDACIÓN CONTRA CATÁLOGO
+    # ======================================================
     if catalogo is not None and not catalogo.empty:
 
         catalogo_base = catalogo.copy()
+        catalogo_base["Materiales"] = catalogo_base["Materiales"].astype(str).str.upper().str.strip()
 
-        catalogo_base["Materiales"] = (
-            catalogo_base["Materiales"]
-            .astype(str)
-            .str.upper()
-            .str.strip()
-        )
-
-        df_total["Materiales"] = (
-            df_total["Materiales"]
-            .astype(str)
-            .str.upper()
-            .str.strip()
-        )
+        df_total["Materiales"] = df_total["Materiales"].astype(str).str.upper().str.strip()
 
         catalogo_set = set(catalogo_base["Materiales"])
 
         no_validos = df_total.loc[~df_total["Materiales"].isin(catalogo_set)]
 
         if not no_validos.empty:
-            errores = [
+            errores.extend([
                 f"Material no válido: {m}"
                 for m in no_validos["Materiales"].unique()
-            ]
+            ])
 
-            return ResultadoMateriales(False, pd.DataFrame(), errores, [])
+            return ResultadoMateriales(False, _df_vacio(), errores, warnings)
 
-    # =========================
-    # 8. COSTOS (OPCIONAL)
-    # =========================
-    if catalogo is not None and not catalogo.empty and "Costo" in catalogo.columns:
+    # ======================================================
+    # 9. COSTOS
+    # ======================================================
+    if catalogo is not None and "Costo" in catalogo.columns:
 
         catalogo_tmp = catalogo.copy()
-
-        catalogo_tmp["Materiales"] = (
-            catalogo_tmp["Materiales"]
-            .astype(str)
-            .str.upper()
-            .str.strip()
-        )
+        catalogo_tmp["Materiales"] = catalogo_tmp["Materiales"].astype(str).str.upper().str.strip()
 
         df_total = df_total.merge(
             catalogo_tmp[["Materiales", "Costo"]],
@@ -196,7 +164,7 @@ def ejecutar_materiales(
         df_total["Costo"] = pd.to_numeric(df_total["Costo"], errors="coerce").fillna(0)
         df_total["Costo_Total"] = df_total["Cantidad"] * df_total["Costo"]
 
-    # =========================
-    # 9. SALIDA
-    # =========================
-    return ResultadoMateriales(True, df_total, [], [])
+    # ======================================================
+    # 10. SALIDA
+    # ======================================================
+    return ResultadoMateriales(True, df_total, errores, warnings)
