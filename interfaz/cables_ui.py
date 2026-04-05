@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from core.cables_catalogo import (
+from materiales.cables.cables_catalogo import (
     get_tipos,
     get_calibres_union,
     get_configs_union,
