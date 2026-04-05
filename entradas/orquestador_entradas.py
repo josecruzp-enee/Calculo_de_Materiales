@@ -96,15 +96,22 @@ def cargar_entrada(
     # =====================================================
     estructuras_por_punto = _convertir_df_a_por_punto(df)
 
-    # =====================================================
-    # 5. SALIDA (🔥 ALINEADO A MATERIALES)
-    # =====================================================
+    # =========================================================
+    # 5. SALIDA (🔥 CORREGIDO)
+    # =========================================================
+    from entradas.base_datos import cargar_base_datos
+
+    hojas_base = None
+
+    if ruta_materiales:
+        hojas_base = cargar_base_datos()
+
     return EntradaMateriales(
-        estructuras_por_punto=estructuras_por_punto,
+        estructuras_df=df,         # 🔥 CAMBIO CLAVE
         tension=tension,
         df_cables=df_cables,
+        hojas_base=hojas_base,     # 🔥 NUEVO
     )
-
 
 # =========================================================
 # LECTOR CENTRALIZADO
