@@ -1,44 +1,78 @@
-def validar_datos_proyecto(datos_proyecto):
-    """
-    Extrae la tensión y el calibre MT del diccionario datos_proyecto,
-    aceptando distintas variantes de nombres de clave.
-    """
-    if not datos_proyecto:
-        return None, None
+# -*- coding: utf-8 -*-
+# materiales/validaciones/materiales_validacion.py
 
-    # Buscar tensión (con distintos nombres posibles)
+from __future__ import annotations
+from typing import Tuple, Any
+
+
+def _normalizar_string(valor: Any) -> str:
+    if valor is None:
+        return ""
+    return str(valor).strip().upper()
+
+
+def validar_datos_proyecto(datos_proyecto: dict | None) -> Tuple[str, str]:
+    """
+    Normaliza y extrae:
+    - tensión del sistema
+    - calibre del conductor MT
+
+    Retorna siempre valores válidos (nunca None).
+    """
+
+    # =========================
+    # DEFAULTS
+    # =========================
+    TENSION_DEFAULT = "13.8"
+    CALIBRE_DEFAULT = "1/0 ACSR"
+
+    if not isinstance(datos_proyecto, dict):
+        return TENSION_DEFAULT, CALIBRE_DEFAULT
+
+    # =========================
+    # 1. TENSIÓN
+    # =========================
     tension = (
-        str(
-            datos_proyecto.get("tension")
-            or datos_proyecto.get("nivel_de_tension")
-            or datos_proyecto.get("tensión")
-            or "13.8"
-        ).strip()
+        datos_proyecto.get("tension")
+        or datos_proyecto.get("nivel_de_tension")
+        or datos_proyecto.get("tensión")
     )
 
-    # Buscar calibre MT (con variantes)
+    tension = _normalizar_string(tension) or TENSION_DEFAULT
+
+    # =========================
+    # 2. CALIBRE MT
+    # =========================
     calibre_mt = (
         datos_proyecto.get("calibre_mt")
         or datos_proyecto.get("calibre_primario")
         or datos_proyecto.get("conductor_mt")
-        or None
     )
 
-    # 🩹 Si no hay calibre, buscar dentro de cables_proyecto
-    if not calibre_mt and "cables_proyecto" in datos_proyecto:
+    calibre_mt = _normalizar_string(calibre_mt)
+
+    # =========================
+    # 3. FALLBACK DESDE CABLES
+    # =========================
+    if not calibre_mt:
+        cables = datos_proyecto.get("cables_proyecto")
+
         try:
-            cables = datos_proyecto["cables_proyecto"]
-            if isinstance(cables, list) and len(cables) > 0:
-                calibre_mt = cables[0].get("Calibre", "")
+            if isinstance(cables, list) and cables:
+                calibre_mt = _normalizar_string(cables[0].get("Calibre"))
+
             elif isinstance(cables, dict):
-                calibre_mt = cables.get("Calibre") or cables.get("calibre_mt") or ""
+                calibre_mt = _normalizar_string(
+                    cables.get("Calibre") or cables.get("calibre_mt")
+                )
+
         except Exception:
             calibre_mt = ""
 
-    # Asignar valores por defecto si siguen vacíos
-    if not tension:
-        tension = "13.8"
+    # =========================
+    # 4. DEFAULT FINAL
+    # =========================
     if not calibre_mt:
-        calibre_mt = "1/0 ASCR"
+        calibre_mt = CALIBRE_DEFAULT
 
     return tension, calibre_mt
