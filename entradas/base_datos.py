@@ -1,15 +1,18 @@
 # entradas/base_datos.py
 
 import pandas as pd
+from pathlib import Path
 
 
-def cargar_base_datos(ruta_archivo: str) -> dict:
+RUTA_BASE = Path(__file__).resolve().parent.parent / "data" / "Estructura_datos.xlsx"
+
+
+def cargar_base_datos() -> dict:
     """
-    Carga TODO el Excel y devuelve un diccionario:
-    {nombre_hoja: DataFrame}
+    Carga todas las hojas del Excel base.
     """
 
-    xls = pd.ExcelFile(ruta_archivo)
+    xls = pd.ExcelFile(RUTA_BASE)
 
     hojas = {}
 
