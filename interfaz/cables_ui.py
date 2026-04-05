@@ -25,7 +25,7 @@ from servicios.cables_logica import (
 # UI PRINCIPAL
 # =========================================================
 
-def seccion_cables():
+def seccion_cables() -> dict:
 
     # Inicializar estado
     _init_state(st)
@@ -71,11 +71,11 @@ def seccion_cables():
 
     with st.form("form_cables"):
 
-        st.caption("Editá la lista de cables. El total se calcula automáticamente según la configuración.")
+        st.caption("Editá la lista de cables.")
 
         df_edit = st.data_editor(
             df_base,
-            width="stretch",  # ✅ reemplazo deprecado
+            width="stretch",
             hide_index=True,
             num_rows="dynamic",
             column_config=colcfg,
@@ -98,7 +98,6 @@ def seccion_cables():
         st.session_state["cables_proyecto_df"] = pd.DataFrame()
         st.session_state["cables_proyecto"] = []
 
-        # limpiar también datos_proyecto
         dp = st.session_state.get("datos_proyecto", {}) or {}
         dp["cables_proyecto"] = []
         st.session_state["datos_proyecto"] = dp
@@ -116,9 +115,12 @@ def seccion_cables():
 
         if df_ok is None or df_ok.empty:
             st.warning("⚠️ No hay datos válidos.")
-            return
+            return {
+                "ok": False,
+                "cables": [],
+                "df": pd.DataFrame(),
+            }
 
-        # --- persistencia única ---
         registros = df_ok.to_dict(orient="records")
 
         st.session_state["cables_proyecto_df"] = df_ok.copy()
@@ -127,10 +129,6 @@ def seccion_cables():
         dp = st.session_state.get("datos_proyecto", {}) or {}
         dp["cables_proyecto"] = registros
         st.session_state["datos_proyecto"] = dp
-
-        # =================================================
-        # OUTPUT UI
-        # =================================================
 
         st.success("Cables guardados correctamente.")
 
@@ -146,11 +144,7 @@ def seccion_cables():
             if c in df_ok.columns
         ]
 
-        st.dataframe(
-            df_ok[cols_show],
-            width="stretch",
-            hide_index=True,
-        )
+        st.dataframe(df_ok[cols_show], width="stretch", hide_index=True)
 
         resumen = _resumen_por_calibre(df_ok)
 
@@ -159,3 +153,13 @@ def seccion_cables():
             st.json(resumen)
 
         st.rerun()
+
+    # =====================================================
+    # SALIDA ESTÁNDAR
+    # =====================================================
+
+    return {
+        "ok": True,
+        "cables": st.session_state.get("cables_proyecto", []),
+        "df": st.session_state.get("cables_proyecto_df", pd.DataFrame()),
+    }
