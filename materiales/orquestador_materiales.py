@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Orquestador del dominio de materiales.
-
-Flujo:
-Entradas → Validación → Cálculo → Consolidación → Salida
+Orquestador del dominio de materiales (adaptado al proyecto actual)
 """
 
 from __future__ import annotations
@@ -12,24 +9,15 @@ from typing import Dict, Any
 import pandas as pd
 
 # =========================
-# IMPORTS DOMINIO
+# IMPORTS REALES
 # =========================
 
-# Entradas
-from materiales.parser.estructuras import procesar_entrada_estructuras
-
 # Validación
-from materiales.validaciones.validar_estructuras import validar_estructuras
+from materiales.validaciones.materiales_validacion import validar_estructuras
 
 # Cálculos
-from materiales.calculos.materiales_por_estructura import calcular_materiales_estructuras
-from materiales.calculos.materiales_por_punto import calcular_materiales_puntos
-
-# Consolidación
-from materiales.consolidacion.consolidar_materiales import consolidar_materiales
-
-# Salida
-from materiales.salida.dataframe_materiales import construir_dataframe_materiales
+from materiales.calculos.materiales_estructuras import calcular_materiales_estructuras
+from materiales.calculos.materiales_puntos import calcular_materiales_puntos
 
 
 # =========================================================
@@ -37,48 +25,24 @@ from materiales.salida.dataframe_materiales import construir_dataframe_materiale
 # =========================================================
 
 def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Ejecuta todo el flujo del dominio de materiales.
-
-    Parameters
-    ----------
-    entrada : dict
-        Datos de entrada desde UI o archivo.
-
-    Returns
-    -------
-    dict con:
-        ok: bool
-        errores: list
-        warnings: list
-        df_materiales: DataFrame final
-        resumen: dict
-    """
 
     errores = []
     warnings = []
 
     # =====================================================
-    # 1. ENTRADAS
+    # 1. ENTRADA (YA VIENE PROCESADA DESDE UI)
     # =====================================================
-    try:
-        estructuras = procesar_entrada_estructuras(entrada)
-    except Exception as e:
-        return {
-            "ok": False,
-            "errores": [f"Error procesando entrada: {e}"],
-            "warnings": [],
-        }
+    estructuras = entrada  # 👈 clave en tu proyecto actual
 
     # =====================================================
     # 2. VALIDACIÓN
     # =====================================================
     val = validar_estructuras(estructuras)
 
-    if not val["ok"]:
+    if not val.get("ok", True):
         return {
             "ok": False,
-            "errores": val["errores"],
+            "errores": val.get("errores", []),
             "warnings": val.get("warnings", []),
         }
 
@@ -88,8 +52,9 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
     # 3. CÁLCULOS
     # =====================================================
     try:
-        mat_estructuras = calcular_materiales_estructuras(estructuras)
-        mat_puntos = calcular_materiales_puntos(estructuras)
+        df_estructuras = calcular_materiales_estructuras(estructuras)
+        df_puntos = calcular_materiales_puntos(estructuras)
+
     except Exception as e:
         return {
             "ok": False,
@@ -98,41 +63,37 @@ def ejecutar_materiales(entrada: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     # =====================================================
-    # 4. CONSOLIDACIÓN
+    # 4. CONSOLIDACIÓN (REALISTA)
     # =====================================================
     try:
-        materiales_total = consolidar_materiales(
-            mat_estructuras,
-            mat_puntos
-        )
+        df_total = pd.concat([df_estructuras, df_puntos], ignore_index=True)
+
+        # Agrupar si aplica
+        if "Cantidad" in df_total.columns:
+            df_total = (
+                df_total
+                .groupby(list(df_total.columns.difference(["Cantidad"])))
+                ["Cantidad"]
+                .sum()
+                .reset_index()
+            )
+
     except Exception as e:
         return {
             "ok": False,
-            "errores": [f"Error consolidando materiales: {e}"],
+            "errores": [f"Error consolidando: {e}"],
             "warnings": warnings,
         }
 
     # =====================================================
     # 5. SALIDA
     # =====================================================
-    try:
-        df_materiales = construir_dataframe_materiales(materiales_total)
-    except Exception as e:
-        return {
-            "ok": False,
-            "errores": [f"Error generando salida: {e}"],
-            "warnings": warnings,
-        }
-
-    # =====================================================
-    # RESULTADO FINAL
-    # =====================================================
     return {
         "ok": True,
         "errores": [],
         "warnings": warnings,
-        "df_materiales": df_materiales,
+        "df_materiales": df_total,
         "resumen": {
-            "total_items": len(df_materiales),
+            "total_items": len(df_total),
         }
     }
