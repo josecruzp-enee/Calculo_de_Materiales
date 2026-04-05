@@ -4,13 +4,13 @@
 from __future__ import annotations
 import streamlit as st
 import pandas as pd
-from entradas.leer_excel import leer_catalogo_materiales as obtener_catalogo_materiales
-
 from entradas.materiales import (
     inicializar_materiales_extra,
     agregar_material,
     consolidar_materiales,
     limpiar_materiales,
+    obtener_materiales_finales,
+    obtener_catalogo_materiales,
 )
 
 def seccion_adicionar_material():
