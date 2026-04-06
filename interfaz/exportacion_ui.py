@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 # =========================
-# APLICACIÓN (🔥 NUEVO FLUJO)
+# APLICACIÓN
 # =========================
 from aplicacion.modelos_proyecto import EntradaProyecto
 from aplicacion.orquestador_proyecto import ejecutar_proyecto
@@ -63,7 +63,7 @@ def seccion_finalizar_calculo():
     if st.button("🚀 Ejecutar cálculo"):
 
         # =========================
-        # ARMAR DTO (🔥 CLAVE)
+        # ARMAR DTO
         # =========================
         entrada = EntradaProyecto(
             df_estructuras=df_estructuras,
@@ -78,22 +78,26 @@ def seccion_finalizar_calculo():
         # EJECUTAR ORQUESTADOR
         # =========================
         with st.spinner("Calculando materiales..."):
-            resultado, errores, warnings = ejecutar_proyecto(entrada)
+            resultado = ejecutar_proyecto(entrada)
 
         # =========================
-        # MANEJO DE ERRORES
+        # VALIDAR RESULTADO
         # =========================
-        if errores:
+        if resultado is None:
+            st.error("❌ Resultado vacío")
+            return
+
+        if not resultado.ok:
             st.error("❌ Error en el cálculo:")
-            for e in errores:
+            for e in resultado.errores:
                 st.error(f"- {e}")
             return
 
         # =========================
         # WARNINGS
         # =========================
-        if warnings:
-            for w in warnings:
+        if resultado.warnings:
+            for w in resultado.warnings:
                 st.warning(w)
 
         # =========================
