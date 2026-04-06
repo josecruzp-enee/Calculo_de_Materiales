@@ -17,7 +17,7 @@ from interfaz.exportacion_ui import (
     seccion_exportacion,
 )
 
-# 🔒 IMPORT PROTEGIDO
+# 🔒 IMPORT PROTEGIDO (no rompe si no existe)
 try:
     from interfaz.materiales_extra import obtener_materiales_finales
 except Exception:
@@ -122,10 +122,21 @@ def renderizar_estructuras():
         # DXF (ACTIVO)
         # -------------------------
         elif modo == "dxf":
+
+            archivo = st.file_uploader(
+                "Subir archivo DXF",
+                type=["dxf"],
+                key="dxf_upload"
+            )
+
+            if archivo is None:
+                st.info("Sube un archivo DXF para continuar")
+                return
+
             from entradas.leer_dxf import leer_dxf
 
-            df = leer_dxf()
-            ruta = None
+            df = leer_dxf(archivo)
+            ruta = getattr(archivo, "name", None)
 
             if df is None or df.empty:
                 st.error("No se pudieron leer estructuras desde el DXF")
