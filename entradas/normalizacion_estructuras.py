@@ -31,9 +31,9 @@ def _normalizar_codigo(code: str) -> str:
     # espacios alrededor de guiones
     s = re.sub(r"\s*-\s*", "-", s)
 
-    # =========================
-    # NORMALIZACIONES ESPECÍFICAS
-    # =========================
+    # =====================================================
+    # NORMALIZACIONES BASE
+    # =====================================================
 
     # TS 50 KVA → TS-50KVA
     s = re.sub(
@@ -54,6 +54,20 @@ def _normalizar_codigo(code: str) -> str:
 
     # PC 45 → PC-45
     s = re.sub(r"\b(PC|PM|PT)\s+(\d+)\b", r"\1-\2", s)
+
+    # =====================================================
+    # 🔥 FIXES CRÍTICOS DXF (LOS QUE TE FALTABAN)
+    # =====================================================
+
+    # CS-32 → CA-32 (error común)
+    s = re.sub(r"^CS-(\d+)", r"CA-\1", s)
+
+    # LL incompleto → valores estándar
+    if s == "LL-1":
+        s = "LL-1-50W"
+
+    if s == "LL-2":
+        s = "LL-2-100W"
 
     return s.strip()
 
