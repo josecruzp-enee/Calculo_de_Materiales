@@ -1,20 +1,4 @@
-NameError: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
-Traceback:
-File "/mount/src/calculo_de_materiales/app.py", line 8, in <module>
-    from interfaz.orquestador_interfaz import ejecutar_orquestador_interfaz
-File "/mount/src/calculo_de_materiales/interfaz/orquestador_interfaz.py", line 15, in <module>
-    from interfaz.exportacion_ui import (
-    ...<2 lines>...
-    )
-File "/mount/src/calculo_de_materiales/interfaz/exportacion_ui.py", line 13, in <module>
-    from aplicacion.orquestador_proyecto import ejecutar_proyecto
-File "/mount/src/calculo_de_materiales/aplicacion/orquestador_proyecto.py", line 11, in <module>
-    from entradas.orquestador_entradas import cargar_entrada
-File "/mount/src/calculo_de_materiales/entradas/orquestador_entradas.py", line 13, in <module>
-    from entradas.leer_dxf import leer_dxf
-File "/mount/src/calculo_de_materiales/entradas/leer_dxf.py", line 1, in <module>
-    def leer_dxf(archivo_dxf) -> pd.DataFrame:
-                                 ^^
+import pandas as pd
 def leer_dxf(archivo_dxf) -> pd.DataFrame:
     """
     Ahora devuelve directamente:
