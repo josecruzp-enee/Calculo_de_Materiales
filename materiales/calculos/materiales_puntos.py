@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
-
 from __future__ import annotations
+
 import pandas as pd
 from collections import Counter
 
-from materiales.auxiliares.materiales_aux import limpiar_codigo, expandir_lista_codigos
+from materiales.auxiliares.materiales_aux import (
+    limpiar_codigo,
+    expandir_lista_codigos,
+)
 from materiales.calculos.lector_materiales import leer_hoja_materiales
+
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
@@ -27,7 +31,6 @@ def _validar_df(df: pd.DataFrame) -> None:
     if not set(COLUMNAS_STD).issubset(df.columns):
         raise ValueError(f"Formato inválido: {df.columns}")
 
-    # 🔥 Validaciones adicionales reales
     if df["Materiales"].isna().any():
         raise ValueError("Materiales contiene valores nulos")
 
@@ -39,7 +42,7 @@ def _validar_df(df: pd.DataFrame) -> None:
 
 
 # ==========================================================
-# LIMPIEZA SEGURA
+# LIMPIEZA SIMPLE
 # ==========================================================
 def _limpiar_str(v) -> str:
     if pd.isna(v):
@@ -48,7 +51,7 @@ def _limpiar_str(v) -> str:
 
 
 # ==========================================================
-# NORMALIZACIÓN DE ESTRUCTURAS (SIN DUPLICAR LÓGICA)
+# NORMALIZAR UNA ESTRUCTURA
 # ==========================================================
 def _normalizar_estructura(e: str) -> str | None:
 
@@ -57,23 +60,22 @@ def _normalizar_estructura(e: str) -> str | None:
     if not e or e.lower() in {"nan", "none", "0"}:
         return None
 
-    for parte in expandir_lista_codigos(e):
+    codigos = expandir_lista_codigos(e)
 
-        parte = _limpiar_str(parte)
+    if not codigos:
+        return None
 
-        if not parte:
-            continue
+    # solo tomamos el primero (una estructura por iteración)
+    c = limpiar_codigo(codigos[0])
 
-        codigo, _ = limpiar_codigo(parte)
+    if not c:
+        return None
 
-        if codigo:
-            return str(codigo).strip().upper()
-
-    return None
+    return c
 
 
 # ==========================================================
-# CONTEO DE ESTRUCTURAS
+# CONTEO DE ESTRUCTURAS (CORREGIDO)
 # ==========================================================
 def extraer_conteo_estructuras(df_estructuras):
 
@@ -86,22 +88,26 @@ def extraer_conteo_estructuras(df_estructuras):
     for _, row in df_estructuras.iterrows():
 
         punto = _limpiar_str(row.get("Punto")) or "Punto"
-        estructuras_raw = _limpiar_str(row.get("Estructuras"))
+        estructuras_raw = _limpiar_str(row.get("Estructura"))
 
         if not estructuras_raw:
             estructuras_por_punto[punto] = []
             continue
 
-        lista = estructuras_raw.split(";")
+        # 🔥 USAR PARSER BUENO
+        codigos = expandir_lista_codigos(estructuras_raw)
+
         lista_limpia = []
 
-        for e in lista:
+        for c in codigos:
 
-            codigo = _normalizar_estructura(e)
+            c = limpiar_codigo(c)
 
-            if codigo:
-                estructuras_limpias.append(codigo)
-                lista_limpia.append(codigo)
+            if not c:
+                continue
+
+            estructuras_limpias.append(c)
+            lista_limpia.append(c)
 
         estructuras_por_punto[punto] = lista_limpia
 
@@ -111,7 +117,7 @@ def extraer_conteo_estructuras(df_estructuras):
 
 
 # ==========================================================
-# MATERIAL POR ESTRUCTURA (CORREGIDO)
+# MATERIAL POR ESTRUCTURA
 # ==========================================================
 def calcular_materiales_estructura(
     hojas_base,
@@ -132,7 +138,6 @@ def calcular_materiales_estructura(
 
     cant = int(cant)
 
-    # 🔥 VALIDACIÓN REAL (ANTES SILENCIOSA)
     df_hoja = hojas_base.get(estructura)
 
     if df_hoja is None:
@@ -144,7 +149,9 @@ def calcular_materiales_estructura(
     df_filtrado = leer_hoja_materiales(df_hoja, tension)
 
     if df_filtrado is None or df_filtrado.empty:
-        raise ValueError(f"No hay materiales para estructura {estructura} en tensión {tension}")
+        raise ValueError(
+            f"No hay materiales para estructura {estructura} en tensión {tension}"
+        )
 
     _validar_df(df_filtrado)
 
