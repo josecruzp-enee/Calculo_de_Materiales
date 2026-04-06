@@ -62,22 +62,29 @@ def cargar_entrada(
         raise ValueError("Falta columna 'Punto'")
 
     # =========================
-    # 2. NORMALIZACIÓN
+    # 2. NORMALIZACIÓN (FIX CRÍTICO)
     # =========================
-    df = normalizar_estructuras(df)
+    df, errores_norm, warnings_norm = normalizar_estructuras(df)
 
     if df is None or df.empty:
         raise ValueError("Normalización vacía")
+
+    if errores_norm:
+        raise ValueError("\n".join(errores_norm))
+
+    # (opcional debug)
+    # if warnings_norm:
+    #     print("WARNINGS NORMALIZACIÓN:", warnings_norm)
 
     # =========================
     # 3. VALIDACIÓN CATÁLOGO
     # =========================
     if validar_catalogo:
         df_indice = cargar_indice_normalizado()
-        df, errores, _ = validar_estructuras(df, df_indice)
+        df, errores_val, warnings_val = validar_estructuras(df, df_indice)
 
-        if errores:
-            raise ValueError("\n".join(errores))
+        if errores_val:
+            raise ValueError("\n".join(errores_val))
 
     # =========================
     # 4. BASE DE DATOS
