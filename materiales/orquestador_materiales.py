@@ -1,185 +1,199 @@
 # -*- coding: utf-8 -*-
-# interfaz/orquestador_interfaz.py
+# materiales/orquestador_materiales.py
 
-import streamlit as st
+from __future__ import annotations
 
-# =========================
-# IMPORTS SEGUROS
-# =========================
-from interfaz.base import seleccionar_modo_carga
+from typing import Optional, Dict, Any, List
+import pandas as pd
 
-from interfaz.datos_proyecto import seccion_datos_proyecto
-from interfaz.cables_ui import seccion_cables
-from interfaz.estructuras_ui import seccion_entrada_estructuras
+# =========================================================
+# IMPORTS DE DOMINIO (PERMITIDOS)
+# =========================================================
+from materiales.modelos.entrada import EntradaMateriales
+from materiales.modelos.salida import ResultadoMateriales
 
-from interfaz.exportacion_ui import (
-    seccion_finalizar_calculo,
-    seccion_exportacion,
+from materiales.calculos.calculo_materiales import (
+    calcular_materiales_proyecto,
 )
 
-# 🔥 IMPORT PROTEGIDO (evita romper app)
-try:
-    from interfaz.materiales_extra import obtener_materiales_finales
-except Exception:
-    def obtener_materiales_finales():
-        return None
+from materiales.validaciones.materiales_validacion import (
+    validar_datos_proyecto,
+)
+
+from entradas.normalizar import normalizar_estructuras
 
 
 # =========================================================
 # HELPERS
 # =========================================================
-def es_dataframe_valido(df):
-    return df is not None and hasattr(df, "empty") and not df.empty
+def _df_vacio() -> pd.DataFrame:
+    return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
 
 
-def _init_state():
-    st.session_state.setdefault("df_estructuras", None)
-    st.session_state.setdefault("modo_carga_seleccionado", None)
-    st.session_state.setdefault("cables_proyecto_df", None)
-    st.session_state.setdefault("datos_proyecto", None)
-    st.session_state.setdefault("df_materiales_extra", None)
+def _merge_materiales(
+    df_a: Optional[pd.DataFrame],
+    df_b: Optional[pd.DataFrame],
+) -> pd.DataFrame:
+    """
+    Suma dos DataFrames de materiales (Materiales, Unidad, Cantidad).
+    """
+    if df_a is None or df_a.empty:
+        return df_b if isinstance(df_b, pd.DataFrame) else _df_vacio()
 
+    if df_b is None or df_b.empty:
+        return df_a
 
-# =========================================================
-# SECCIONES UI
-# =========================================================
+    df = pd.concat([df_a, df_b], ignore_index=True)
+    if not set(["Materiales", "Unidad", "Cantidad"]).issubset(df.columns):
+        return df  # deja pasar; la validación fuerte está en ResultadoMateriales
 
-def renderizar_datos_proyecto():
-    datos = seccion_datos_proyecto()
-    if datos:
-        st.session_state["datos_proyecto"] = datos
-
-
-def renderizar_cables():
-    cables = seccion_cables()
-    if cables is not None:
-        st.session_state["cables_proyecto_df"] = cables
-
-
-def renderizar_modo_carga():
-    st.subheader("3) Modo de Carga")
-
-    modo = seleccionar_modo_carga()
-
-    mapa = {
-        "Desde archivo Excel": "excel",
-        "Pegar tabla": "tabla",
-        "Listas desplegables": "manual",
-        "Pdf": "pdf",
-        "DXF (ENEE)": "dxf",
-    }
-
-    st.session_state["modo_carga_seleccionado"] = mapa.get(modo, modo)
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
+    df_out = (
+        df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+        .sum()
+        .sort_values(["Materiales", "Unidad"])
+        .reset_index(drop=True)
+    )
+    return df_out
 
 
 # =========================================================
-# ESTRUCTURAS (MULTIMODO SEGURO)
+# ORQUESTADOR (DOMINIO PURO)
 # =========================================================
-def renderizar_estructuras():
+def ejecutar_materiales(
+    *,
+    estructuras_df: pd.DataFrame,
+    hojas_base: Dict[str, pd.DataFrame],
+    datos_proyecto: Optional[Dict[str, Any]] = None,
+    df_cables: Optional[pd.DataFrame] = None,
+    df_materiales_extra: Optional[pd.DataFrame] = None,
+    tension: Optional[float] = None,
+) -> ResultadoMateriales:
+    """
+    Pipeline:
+        1) Validación de datos_proyecto
+        2) Normalización de estructuras
+        3) Cálculo de materiales por estructuras
+        4) Integración de cables
+        5) Integración de materiales extra
+        6) Consolidación final
 
-    modo = st.session_state.get("modo_carga_seleccionado")
+    NO depende de interfaz.
+    """
 
-    if not modo:
-        st.warning("⚠️ Primero selecciona el modo de carga.")
-        return
+    errores: List[str] = []
+    warnings: List[str] = []
 
-    df = None
-    ruta = None
-
+    # -----------------------------------------------------
+    # 1) VALIDACIÓN DATOS PROYECTO
+    # -----------------------------------------------------
     try:
-
-        if modo == "manual":
-            df, ruta = seccion_entrada_estructuras()
-
-        elif modo == "excel":
-            from entradas.leer_excel import leer_excel
-            df, ruta = leer_excel()
-
-        elif modo == "tabla":
-            from entradas.entradas_tabla import leer_tabla
-            df, ruta = leer_tabla()
-
-        elif modo == "pdf":
-            from entradas.entradas_pdf import leer_pdf
-            df, ruta = leer_pdf()
-
-        elif modo == "dxf":
-            # 🔥 DESACTIVADO SI NO EXISTE
-            st.warning("DXF no disponible actualmente")
-            return
-
-        else:
-            st.warning(f"Modo no soportado: {modo}")
-            return
-
+        validar_datos_proyecto(datos_proyecto or {})
     except Exception as e:
-        st.error(f"Error cargando estructuras: {e}")
-        return
+        warnings.append(f"validar_datos_proyecto: {e}")
 
-    if not es_dataframe_valido(df):
-        st.warning("No hay estructuras válidas.")
-        return
+    # -----------------------------------------------------
+    # 2) NORMALIZAR ESTRUCTURAS
+    # -----------------------------------------------------
+    try:
+        df_norm, err_norm, warn_norm = normalizar_estructuras(estructuras_df)
+        errores.extend(err_norm or [])
+        warnings.extend(warn_norm or [])
+    except Exception as e:
+        errores.append(f"Error normalizando estructuras: {e}")
+        return ResultadoMateriales(
+            df_materiales=_df_vacio(),
+            df_materiales_detalle=_df_vacio(),
+            errores=errores,
+            warnings=warnings,
+        )
 
-    st.session_state["df_estructuras"] = df
-    st.session_state["ruta_estructuras_compacto"] = ruta
+    if df_norm is None or df_norm.empty:
+        warnings.append("No hay estructuras luego de normalización.")
+        return ResultadoMateriales(
+            df_materiales=_df_vacio(),
+            df_materiales_detalle=_df_vacio(),
+            errores=errores,
+            warnings=warnings,
+        )
 
-    st.success(f"Estructuras cargadas ({modo})")
+    # -----------------------------------------------------
+    # 3) CÁLCULO PRINCIPAL (ESTRUCTURAS)
+    # -----------------------------------------------------
+    try:
+        resultado_calc = calcular_materiales_proyecto(
+            df_estructuras=df_norm,
+            hojas_base=hojas_base,
+            tension=float(tension) if tension is not None else None,
+        )
+    except Exception as e:
+        errores.append(f"Error en cálculo de materiales: {e}")
+        return ResultadoMateriales(
+            df_materiales=_df_vacio(),
+            df_materiales_detalle=_df_vacio(),
+            errores=errores,
+            warnings=warnings,
+        )
 
+    # resultado_calc esperado como dict o tupla
+    df_materiales = None
+    df_detalle = None
 
-# =========================================================
-# FINAL (SIN DEPENDENCIAS ROTAS)
-# =========================================================
-def renderizar_final():
+    if isinstance(resultado_calc, dict):
+        df_materiales = resultado_calc.get("df_materiales")
+        df_detalle = resultado_calc.get("df_materiales_detalle")
+    elif isinstance(resultado_calc, tuple):
+        # fallback común
+        if len(resultado_calc) >= 1:
+            df_materiales = resultado_calc[0]
+        if len(resultado_calc) >= 2:
+            df_detalle = resultado_calc[1]
 
-    df = st.session_state.get("df_estructuras")
+    if df_materiales is None:
+        df_materiales = _df_vacio()
 
-    if not es_dataframe_valido(df):
-        st.warning("⚠️ Carga estructuras primero.")
-        return
+    if df_detalle is None:
+        df_detalle = _df_vacio()
 
-    st.session_state["df_materiales_extra"] = obtener_materiales_finales()
+    # -----------------------------------------------------
+    # 4) INTEGRAR CABLES (SI EXISTEN)
+    # -----------------------------------------------------
+    if isinstance(df_cables, pd.DataFrame) and not df_cables.empty:
+        try:
+            from materiales.cables.cables_materiales import materiales_desde_cables
 
-    seccion_finalizar_calculo()
+            df_cab = materiales_desde_cables(df_cables)
+            df_materiales = _merge_materiales(df_materiales, df_cab)
+        except Exception as e:
+            warnings.append(f"Error integrando cables: {e}")
 
+    # -----------------------------------------------------
+    # 5) INTEGRAR MATERIALES EXTRA
+    # -----------------------------------------------------
+    if isinstance(df_materiales_extra, pd.DataFrame) and not df_materiales_extra.empty:
+        try:
+            df_materiales = _merge_materiales(df_materiales, df_materiales_extra)
+        except Exception as e:
+            warnings.append(f"Error integrando materiales extra: {e}")
 
-def renderizar_exportacion():
+    # -----------------------------------------------------
+    # 6) RESULTADO FINAL
+    # -----------------------------------------------------
+    try:
+        resultado = ResultadoMateriales(
+            df_materiales=df_materiales,
+            df_materiales_detalle=df_detalle,
+            errores=errores,
+            warnings=warnings,
+        )
+    except Exception as e:
+        # última barrera de seguridad
+        errores.append(f"Error construyendo ResultadoMateriales: {e}")
+        resultado = ResultadoMateriales(
+            df_materiales=_df_vacio(),
+            df_materiales_detalle=_df_vacio(),
+            errores=errores,
+            warnings=warnings,
+        )
 
-    df = st.session_state.get("df_estructuras")
-
-    if not es_dataframe_valido(df):
-        st.warning("⚠️ Primero completa estructuras.")
-        return
-
-    st.session_state["df_materiales_extra"] = obtener_materiales_finales()
-
-    seccion_exportacion()
-
-
-# =========================================================
-# ORQUESTADOR PRINCIPAL
-# =========================================================
-def ejecutar_orquestador_interfaz(
-    _nav_estado_actual,
-    _barra_nav_botones,
-):
-
-    _init_state()
-
-    seccion = _nav_estado_actual()
-    _barra_nav_botones(seccion)
-
-    acciones = {
-        "datos": renderizar_datos_proyecto,
-        "cables": renderizar_cables,
-        "modo": renderizar_modo_carga,
-        "estructuras": renderizar_estructuras,
-        "final": renderizar_final,
-        "exportar": renderizar_exportacion,
-    }
-
-    funcion = acciones.get(seccion)
-
-    if funcion:
-        funcion()
-    else:
-        st.warning("Sección no reconocida.")
+    return resultado
