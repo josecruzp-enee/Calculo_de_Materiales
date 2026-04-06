@@ -7,7 +7,7 @@ Funciones auxiliares para:
 - expansión de estructuras
 - normalización base
 
-🔥 CRÍTICO: aquí se separan correctamente los códigos
+🔥 FIX CRÍTICO: evitar códigos inválidos tipo CA-32A
 """
 
 from __future__ import annotations
@@ -19,11 +19,7 @@ import re
 # ==========================================================
 def limpiar_codigo(codigo: str) -> str:
     """
-    Normaliza un código de estructura.
-
-    Ej:
-        " a-iii-1 " → "A-III-1"
-        "TS-37.5 KVA" → "TS-37.5KVA"
+    Normaliza un código de estructura SIN deformarlo.
     """
 
     if codigo is None:
@@ -41,10 +37,14 @@ def limpiar_codigo(codigo: str) -> str:
     codigo = re.sub(r"\s+", " ", codigo).strip()
 
     # =========================
-    # CASO ESPECIAL: TRANSFORMADORES
+    # TRANSFORMADORES
     # =========================
-    # TS-37.5 KVA → TS-37.5KVA
     codigo = codigo.replace(" KVA", "KVA")
+
+    # =========================
+    # 🔥 FIX CRÍTICO: CA-32A → CA-32
+    # =========================
+    codigo = re.sub(r"(CA-\d+)[A-Z]+$", r"\1", codigo)
 
     return codigo
 
@@ -55,15 +55,6 @@ def limpiar_codigo(codigo: str) -> str:
 def expandir_lista_codigos(texto: str) -> list[str]:
     """
     Convierte un string en lista de códigos de estructuras.
-
-    SOPORTA:
-        ✔ "A-I-1, B-II-3"
-        ✔ "A-I-1 B-II-3"
-        ✔ "A-I-1;B-II-3"
-        ✔ "CA-2A CA-32A"  ← FIX CRÍTICO
-
-    NO rompe:
-        ✔ TS-37.5KVA
     """
 
     if texto is None:
@@ -81,11 +72,11 @@ def expandir_lista_codigos(texto: str) -> list[str]:
     texto = texto.replace(";", ",")
     texto = texto.replace("|", ",")
 
-    # normalizar espacios múltiples
+    # normalizar espacios
     texto = re.sub(r"\s+", " ", texto)
 
     # =========================
-    # SEPARACIÓN PRINCIPAL
+    # SEPARACIÓN
     # =========================
     bloques = texto.split(",")
 
@@ -97,7 +88,6 @@ def expandir_lista_codigos(texto: str) -> list[str]:
         if not bloque:
             continue
 
-        # dividir por espacio
         partes = bloque.split(" ")
 
         for parte in partes:
@@ -128,17 +118,6 @@ def expandir_lista_codigos(texto: str) -> list[str]:
 # EXPANDIR LISTA CON CONTEO
 # ==========================================================
 def expandir_y_contar(texto: str) -> dict[str, int]:
-    """
-    Retorna conteo de estructuras en un string.
-
-    Ej:
-        "A-I-1 A-I-1 B-II-3"
-        →
-        {
-            "A-I-1": 2,
-            "B-II-3": 1
-        }
-    """
 
     lista = expandir_lista_codigos(texto)
 
@@ -154,12 +133,6 @@ def expandir_y_contar(texto: str) -> dict[str, int]:
 # VALIDAR CÓDIGOS CONTRA CATÁLOGO
 # ==========================================================
 def validar_codigos(codigos: list[str], catalogo: set[str]) -> tuple[list[str], list[str]]:
-    """
-    Valida qué códigos existen y cuáles no.
-
-    Retorna:
-        validos, no_encontrados
-    """
 
     validos = []
     no_encontrados = []
@@ -174,7 +147,7 @@ def validar_codigos(codigos: list[str], catalogo: set[str]) -> tuple[list[str], 
 
 
 # ==========================================================
-# TEST RÁPIDO (DEBUG)
+# TEST RÁPIDO
 # ==========================================================
 if __name__ == "__main__":
 
