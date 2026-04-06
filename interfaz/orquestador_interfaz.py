@@ -6,7 +6,7 @@ from __future__ import annotations
 import pandas as pd
 
 from materiales.modelos.entrada import EntradaMateriales
-from materiales.modelos.resultado import ResultadoMateriales
+from materiales.modelos.salida import ResultadoMateriales
 
 from entradas.normalizar import normalizar_estructuras
 
