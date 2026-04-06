@@ -18,8 +18,6 @@ from entradas.leer_dxf import leer_dxf
 from entradas.normalizar import normalizar_estructuras
 from entradas.validacion import validar_estructuras
 from entradas.indice_estructuras import cargar_indice_normalizado
-
-# 🔥 IMPORT CORRECTO
 from entradas.base_datos import cargar_base_datos, obtener_ruta_base
 
 # =========================
@@ -41,61 +39,69 @@ def cargar_entrada(
     validar_catalogo: bool = True,
 ) -> EntradaMateriales:
     """
-    Entrada única al dominio.
+    Pipeline oficial:
 
-    Flujo:
-        1. Lectura
-        2. Validación mínima
-        3. Normalización
+        1. Lectura (raw)
+        2. Normalización (parseo real)
+        3. Validación estructural
         4. Validación catálogo
-        5. Carga base
-        6. DTO
+        5. Base de datos
+        6. DTO limpio
     """
 
     # =========================
     # 1. LECTURA
     # =========================
-    df = _leer_por_tipo(tipo, data)
+    df_raw = _leer_por_tipo(tipo, data)
 
-    if df is None or df.empty:
+    if df_raw is None or df_raw.empty:
         raise ValueError("No se pudo leer información válida")
 
-    if "Punto" not in df.columns:
+    if "Punto" not in df_raw.columns:
         raise ValueError("Falta columna 'Punto'")
 
     # =========================
-    # 2. NORMALIZACIÓN (FIX TUPLE)
+    # 2. NORMALIZACIÓN
     # =========================
-    df, errores_norm, warnings_norm = normalizar_estructuras(df)
-
-    if df is None or df.empty:
-        raise ValueError("Normalización vacía")
+    df_norm, errores_norm, warnings_norm = normalizar_estructuras(df_raw)
 
     if errores_norm:
         raise ValueError("\n".join(errores_norm))
 
+    if df_norm is None or df_norm.empty:
+        raise ValueError("Normalización vacía")
+
     # =========================
-    # 3. VALIDACIÓN CATÁLOGO (FIX RUTA)
+    # 3. VALIDACIÓN ESTRUCTURAL 🔥 (NUEVO)
+    # =========================
+    _validar_dataframe_estructuras(df_norm)
+
+    # =========================
+    # 4. VALIDACIÓN CATÁLOGO
     # =========================
     if validar_catalogo:
         ruta = obtener_ruta_base()
         df_indice = cargar_indice_normalizado(ruta)
 
-        df, errores_val, warnings_val = validar_estructuras(df, df_indice)
+        df_val, errores_val, warnings_val = validar_estructuras(df_norm, df_indice)
 
         if errores_val:
             raise ValueError("\n".join(errores_val))
 
+        df_final = df_val
+    else:
+        df_final = df_norm
+
     # =========================
-    # 4. BASE DE DATOS
+    # 5. BASE DE DATOS
     # =========================
     hojas_base = cargar_base_datos()
 
     # =========================
-    # 5. DTO
+    # 6. DTO
     # =========================
     return EntradaMateriales(
-        estructuras_df=df,
+        estructuras_df=df_final,
         tension=float(tension),
         df_cables=df_cables,
         hojas_base=hojas_base,
@@ -103,6 +109,26 @@ def cargar_entrada(
             "materiales_extra": df_materiales_extra
         }
     )
+
+
+# =========================================================
+# VALIDACIÓN ESTRUCTURAL FUERTE 🔥
+# =========================================================
+def _validar_dataframe_estructuras(df: pd.DataFrame):
+
+    if "codigodeestructura" not in df.columns:
+        raise ValueError("Normalización inválida: falta codigodeestructura")
+
+    # 🔥 REGLA CRÍTICA: no debe haber espacios
+    invalidos = df["codigodeestructura"].astype(str).str.contains(" ")
+
+    if invalidos.any():
+        ejemplos = df.loc[invalidos, "codigodeestructura"].unique()[:5]
+
+        raise ValueError(
+            "Estructuras mal parseadas (texto no atómico):\n"
+            + "\n".join(ejemplos)
+        )
 
 
 # =========================================================
