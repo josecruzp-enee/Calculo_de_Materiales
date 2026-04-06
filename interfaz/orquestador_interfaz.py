@@ -17,7 +17,7 @@ from interfaz.exportacion_ui import (
     seccion_exportacion,
 )
 
-# 🔒 IMPORT PROTEGIDO (no rompe si no existe)
+# 🔒 IMPORT PROTEGIDO
 try:
     from interfaz.materiales_extra import obtener_materiales_finales
 except Exception:
@@ -73,7 +73,7 @@ def renderizar_modo_carga():
 
 
 # =========================================================
-# ESTRUCTURAS (MULTIMODO ROBUSTO)
+# ESTRUCTURAS (MULTIMODO REAL)
 # =========================================================
 def renderizar_estructuras():
 
@@ -119,11 +119,17 @@ def renderizar_estructuras():
             ruta = None
 
         # -------------------------
-        # DXF (DESACTIVADO)
+        # DXF (ACTIVO)
         # -------------------------
         elif modo == "dxf":
-            st.warning("DXF no disponible actualmente")
-            return
+            from entradas.leer_dxf import leer_dxf
+
+            df = leer_dxf()
+            ruta = None
+
+            if df is None or df.empty:
+                st.error("No se pudieron leer estructuras desde el DXF")
+                return
 
         else:
             st.warning(f"Modo no soportado: {modo}")
@@ -137,10 +143,11 @@ def renderizar_estructuras():
         st.warning("No hay estructuras válidas.")
         return
 
+    # Guardar en estado
     st.session_state["df_estructuras"] = df
     st.session_state["ruta_estructuras_compacto"] = ruta
 
-    st.success(f"Estructuras cargadas ({modo})")
+    st.success(f"Estructuras cargadas correctamente ({modo})")
 
 
 # =========================================================
