@@ -15,6 +15,7 @@ COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 # VALIDADORES
 # =========================================================
 def _validar_df_estructuras(df: pd.DataFrame):
+
     if df is None:
         raise ValueError("df_estructuras es None")
 
@@ -29,6 +30,7 @@ def _validar_df_estructuras(df: pd.DataFrame):
 
 
 def _validar_hojas_base(hojas_base):
+
     if hojas_base is None:
         raise ValueError("hojas_base es None")
 
@@ -39,24 +41,33 @@ def _validar_hojas_base(hojas_base):
         raise ValueError("hojas_base está vacío")
 
 
-def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
+def _validar_df_salida(df: pd.DataFrame):
 
     if df is None or df.empty:
-        return pd.DataFrame(columns=COLUMNAS_STD)
+        raise ValueError("Resultado de materiales vacío")
 
-    df = df.copy()
+    if not set(COLUMNAS_STD).issubset(df.columns):
+        raise ValueError("Columnas inválidas en salida")
 
-    df["Materiales"] = df["Materiales"].astype(str).str.strip()
-    df["Unidad"] = df["Unidad"].astype(str).str.strip()
-    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
+    if df["Materiales"].isna().any():
+        raise ValueError("Materiales contiene valores nulos")
 
-    return df[COLUMNAS_STD]
+    if df["Unidad"].isna().any():
+        raise ValueError("Unidad contiene valores nulos")
+
+    cantidades = pd.to_numeric(df["Cantidad"], errors="coerce")
+
+    if cantidades.isna().any():
+        raise ValueError("Cantidad contiene valores inválidos")
+
+    if (cantidades < 0).any():
+        raise ValueError("Cantidad contiene valores negativos")
 
 
 def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
 
-    if df.empty:
-        return df
+    if df is None or df.empty:
+        return pd.DataFrame(columns=COLUMNAS_STD)
 
     return (
         df
@@ -77,21 +88,16 @@ def calcular_materiales_proyecto(
 ) -> dict:
 
     # =========================
-    # VALIDACIONES
+    # VALIDACIONES INICIALES
     # =========================
     _validar_df_estructuras(df_estructuras)
     _validar_hojas_base(hojas_base)
 
-    if tension is None or tension == 0:
+    if tension is None or float(tension) <= 0:
         raise ValueError("tension no válida")
 
     # =========================
-    # CONTEO (solo para salida)
-    # =========================
-    conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
-
-    # =========================
-    # CÁLCULO REAL (ÚNICO)
+    # CÁLCULO REAL (FUENTE ÚNICA)
     # =========================
     df_detalle = calcular_materiales_por_punto(
         hojas_base=hojas_base,
@@ -102,28 +108,32 @@ def calcular_materiales_proyecto(
     )
 
     # =========================
-    # NORMALIZACIÓN
+    # VALIDACIÓN DETALLE
     # =========================
-    df_detalle = _normalizar_df(df_detalle)
+    _validar_df_salida(df_detalle)
 
     # =========================
-    # CONSOLIDACIÓN (resumen)
+    # CONSOLIDACIÓN
     # =========================
     df_resumen = _consolidar(df_detalle)
 
     # =========================
     # VALIDACIÓN FINAL
     # =========================
-    if not set(COLUMNAS_STD).issubset(df_resumen.columns):
-        raise ValueError("Salida inválida en materiales")
+    _validar_df_salida(df_resumen)
+
+    # =========================
+    # CONTEO (solo informativo)
+    # =========================
+    conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
 
     # =========================
     # SALIDA
     # =========================
     return {
         "ok": True,
-        "df_materiales": df_resumen,           # 🔥 resumen
-        "df_materiales_detalle": df_detalle,   # 🔥 detalle real
+        "df_materiales": df_resumen,
+        "df_materiales_detalle": df_detalle,
         "conteo_estructuras": conteo,
         "estructuras_por_punto": estructuras_por_punto,
     }
