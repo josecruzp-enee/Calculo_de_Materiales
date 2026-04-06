@@ -1,266 +1,157 @@
 # -*- coding: utf-8 -*-
 """
-Motor de normalización de estructuras (versión producción PRO)
+normalizacion_estructuras.py
+
+Normalización ROBUSTA de estructuras.
+
+Entrada:
+    DataFrame en cualquier formato
+
+Salida:
+    - estructuras_por_punto
+    - conteo_global
+    - df_normalizado
+    - errores
+    - warnings
 """
 
 from __future__ import annotations
-
-import re
 import pandas as pd
+from collections import Counter
+
+# 🔥 IMPORTANTE (usa tu módulo bueno)
+from materiales.auxiliares.materiales_aux import (
+    expandir_lista_codigos,
+    limpiar_codigo,
+)
 
 
-# =========================================================
-# HELPERS
-# =========================================================
-def _norm_col(s: str) -> str:
-    return str(s).strip().upper()
+# ==========================================================
+# DETECCIÓN DE FORMATO
+# ==========================================================
+def _es_formato_largo(df: pd.DataFrame) -> bool:
+    cols = [c.lower().strip() for c in df.columns]
 
-
-def _normalizar_codigo(code: str) -> str:
-    if code is None:
-        return ""
-
-    s = str(code).upper().strip()
-
-    # eliminar paréntesis
-    s = re.sub(r"\([^)]*\)", "", s)
-
-    # espacios múltiples
-    s = re.sub(r"\s+", " ", s).strip()
-
-    # espacios alrededor de guiones
-    s = re.sub(r"\s*-\s*", "-", s)
-
-    # =====================================================
-    # NORMALIZACIONES BASE
-    # =====================================================
-
-    # TS 50 KVA → TS-50KVA
-    s = re.sub(
-        r"\bTS-?\s*(\d+(\.\d+)?)\s*KVA\b",
-        lambda m: f"TS-{m.group(1)}KVA",
-        s
-    )
-
-    # TS-50 → TS-50KVA
-    if re.match(r"^TS-\d+(\.\d+)?$", s):
-        s += "KVA"
-
-    # CT N → CT-N
-    s = re.sub(r"\bCT\s+N\b", "CT-N", s)
-
-    # R 2 → R-2
-    s = re.sub(r"\bR\s+(\d+)\b", r"R-\1", s)
-
-    # PC 45 → PC-45
-    s = re.sub(r"\b(PC|PM|PT)\s+(\d+)\b", r"\1-\2", s)
-
-    # =====================================================
-    # 🔥 FIXES DXF (CRÍTICOS)
-    # =====================================================
-
-    # CS-2 → CA-2
-    s = re.sub(r"^CS-(\d+)", r"CA-\1", s)
-
-    # LL incompleto
-    if s == "LL-1":
-        s = "LL-1-50W"
-
-    if s == "LL-2":
-        s = "LL-2-100W"
-
-    # =====================================================
-    # 🔥 FIX CATÁLOGO (TU ERROR ACTUAL)
-    # =====================================================
-
-    # CA-2 → CA-2A (default)
-    if re.match(r"^CA-\d+$", s):
-        s = s + "A"
-
-    return s.strip()
-
-
-def _es_codigo_valido(cod: str) -> bool:
-    if not cod:
-        return False
-
-    cod = cod.strip().upper()
-
-    return bool(
-        re.match(r"^[A-Z]{1,4}-[A-Z0-9\.\-]+$", cod)
+    return (
+        "punto" in cols
+        and ("codigodeestructura" in cols or "estructura" in cols)
     )
 
 
-# =========================================================
-# LIMPIEZA BASE
-# =========================================================
-def limpiar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
+# ==========================================================
+# CONVERSIÓN A FORMATO LARGO
+# ==========================================================
+def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+    df = df.copy()
+    df.columns = df.columns.str.strip()
 
-    df = df.dropna(how="all").copy()
+    registros = []
 
-    df.columns = [_norm_col(c) for c in df.columns]
+    for _, row in df.iterrows():
 
-    col_map = {
-        "PUNTO": "Punto",
-        "CODIGODEESTRUCTURA": "codigodeestructura",
-        "CODIGO DE ESTRUCTURA": "codigodeestructura",
-        "CODIGO_ESTRUCTURA": "codigodeestructura",
-        "ESTRUCTURA": "codigodeestructura",
-        "CANTIDAD": "cantidad"
-    }
+        punto = row.get("Punto") or row.get("punto")
 
-    df.rename(
-        columns={k: v for k, v in col_map.items() if k in df.columns},
-        inplace=True
-    )
+        # buscar columna de estructuras
+        estructura_raw = None
 
-    if "Punto" not in df.columns or "codigodeestructura" not in df.columns:
-        raise ValueError("Columnas requeridas no encontradas")
+        for col in df.columns:
+            if col.lower() in ["estructura", "estructuras", "codigodeestructura"]:
+                estructura_raw = row.get(col)
+                break
 
-    if "cantidad" not in df.columns:
-        df["cantidad"] = 1
-
-    df["Punto"] = df["Punto"].astype(str).str.strip()
-    df["codigodeestructura"] = df["codigodeestructura"].astype(str).str.strip()
-
-    df["cantidad"] = (
-        pd.to_numeric(df["cantidad"], errors="coerce")
-        .fillna(1)
-        .astype(int)
-    )
-
-    df.loc[df["cantidad"] < 1, "cantidad"] = 1
-
-    df = df[df["codigodeestructura"] != ""]
-
-    return df
-
-
-# =========================================================
-# SPLIT ROBUSTO
-# =========================================================
-def _split_codigos(texto: str):
-
-    if texto is None:
-        return []
-
-    texto = str(texto).upper()
-
-    texto = re.sub(r"\(.*?\)", "", texto)
-
-    bloques = re.split(r",", texto)
-
-    resultado = []
-
-    for bloque in bloques:
-
-        bloque = bloque.strip()
-
-        if not bloque:
+        if estructura_raw is None:
             continue
 
-        match = re.findall(r"(\d+)\s*x\s*([A-Z0-9\-\.\s]+)", bloque)
+        # 🔥 AQUÍ ESTÁ LA CLAVE
+        lista_codigos = expandir_lista_codigos(estructura_raw)
 
-        if match:
-            for cantidad, codigo in match:
-                codigo = codigo.strip()
-                if codigo:
-                    resultado.extend([codigo] * int(cantidad))
-            continue
+        for cod in lista_codigos:
+            cod = limpiar_codigo(cod)
 
-        resultado.append(bloque)
+            if not cod:
+                continue
 
-    return resultado
+            registros.append({
+                "Punto": punto,
+                "codigodeestructura": cod,
+                "cantidad": 1
+            })
+
+    return pd.DataFrame(registros)
 
 
-# =========================================================
-# EXPLOTAR
-# =========================================================
-def explotar_estructuras(df: pd.DataFrame):
+# ==========================================================
+# NORMALIZACIÓN PRINCIPAL
+# ==========================================================
+def construir_estructuras_por_punto_y_conteo(df: pd.DataFrame):
 
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"]), [], []
-
-    filas = []
     errores = []
     warnings = []
 
-    for i, row in df.iterrows():
+    if df is None or df.empty:
+        return {}, Counter(), pd.DataFrame(), ["DataFrame vacío"], []
 
-        punto = str(row.get("Punto", "")).strip()
-        cantidad_base = int(row.get("cantidad", 1) or 1)
+    df = df.copy()
 
-        codigos = _split_codigos(row.get("codigodeestructura"))
+    # ======================================================
+    # FORMATO
+    # ======================================================
+    if _es_formato_largo(df):
+        df_base = df.copy()
+    else:
+        df_base = _convertir_a_largo(df)
 
-        if not codigos:
-            warnings.append(f"Fila {i}: sin códigos válidos")
-            continue
+    if df_base.empty:
+        return {}, Counter(), df_base, ["No se pudo normalizar"], []
 
-        for cod in codigos:
+    # ======================================================
+    # LIMPIEZA FINAL
+    # ======================================================
+    df_base.columns = df_base.columns.str.strip().str.lower()
 
-            cod_original = cod
-            cod = _normalizar_codigo(cod)
+    if "punto" not in df_base.columns:
+        errores.append("Falta columna Punto")
+        return {}, Counter(), df_base, errores, warnings
 
-            if not cod:
-                warnings.append(f"Fila {i}: código vacío ({cod_original})")
-                continue
+    if "codigodeestructura" not in df_base.columns:
+        errores.append("Falta columna codigodeestructura")
+        return {}, Counter(), df_base, errores, warnings
 
-            if not _es_codigo_valido(cod):
-                errores.append(f"Fila {i}: código inválido → {cod_original}")
-                continue
+    df_base["punto"] = df_base["punto"].astype(str).str.strip()
+    df_base["codigodeestructura"] = df_base["codigodeestructura"].astype(str).str.strip()
 
-            filas.append({
-                "Punto": punto,
-                "codigodeestructura": cod,
-                "cantidad": cantidad_base
-            })
-
-    df_out = pd.DataFrame(
-        filas,
-        columns=["Punto", "codigodeestructura", "cantidad"]
+    # ======================================================
+    # AGRUPACIÓN
+    # ======================================================
+    df_final = (
+        df_base
+        .groupby(["punto", "codigodeestructura"], as_index=False)
+        .size()
+        .rename(columns={"size": "cantidad"})
     )
 
-    if df_out.empty:
-        return df_out, errores, warnings
-
-    df_out = (
-        df_out.groupby(["Punto", "codigodeestructura"], as_index=False)["cantidad"]
-        .sum()
-    )
-
-    return df_out, errores, warnings
-
-
-# =========================================================
-# PRINCIPAL
-# =========================================================
-def construir_estructuras_por_punto_y_conteo(df: pd.DataFrame):
-
-    df = limpiar_df_estructuras(df)
-
-    df, errores, warnings = explotar_estructuras(df)
-
-    if df.empty:
-        return {}, {}, df, errores, warnings
-
-    conteo = (
-        df.groupby("codigodeestructura")["cantidad"]
-        .sum()
-        .to_dict()
-    )
-
+    # ======================================================
+    # ESTRUCTURAS POR PUNTO
+    # ======================================================
     estructuras_por_punto = {}
 
-    for punto, grp in df.groupby("Punto"):
+    for _, row in df_final.iterrows():
+        p = row["punto"]
+        c = row["codigodeestructura"]
+        n = row["cantidad"]
 
-        lista = []
+        if p not in estructuras_por_punto:
+            estructuras_por_punto[p] = {}
 
-        for _, r in grp.iterrows():
-            lista.extend([r["codigodeestructura"]] * int(r["cantidad"]))
+        estructuras_por_punto[p][c] = n
 
-        estructuras_por_punto[punto] = lista
+    # ======================================================
+    # CONTEO GLOBAL
+    # ======================================================
+    conteo_global = Counter()
 
-    return estructuras_por_punto, conteo, df, errores, warnings
+    for _, row in df_final.iterrows():
+        conteo_global[row["codigodeestructura"]] += row["cantidad"]
+
+    return estructuras_por_punto, conteo_global, df_final, errores, warnings
