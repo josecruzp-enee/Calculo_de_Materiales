@@ -57,19 +57,23 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
         df_materiales_extra = None
 
     # =====================================================
-    # 3. CONSTRUIR ENTRADA DE DOMINIO
+    # 3. CONSTRUIR ENTRADA DE DOMINIO (FIX CRÍTICO)
     # =====================================================
     try:
         entrada = cargar_entrada(
-            datos_fuente={
-                "df_estructuras": entrada_proyecto.df_estructuras,
-                "df_cables": df_cables,
-                "df_materiales_extra": df_materiales_extra,
-            },
-            ruta_materiales=entrada_proyecto.ruta_materiales,
+            tipo="ui",  # 🔥 clave
+            data=entrada_proyecto.df_estructuras,
+            tension=getattr(entrada_proyecto, "tension", 13.8),
+            df_cables=df_cables,
+            df_materiales_extra=df_materiales_extra,
         )
     except Exception as e:
-        return ResultadoMateriales(False, _df_vacio(), [f"Error construyendo entrada: {e}"], [])
+        return ResultadoMateriales(
+            False,
+            _df_vacio(),
+            [f"Error construyendo entrada: {e}"],
+            []
+        )
 
     # =====================================================
     # 4. BASE DE DATOS
@@ -78,7 +82,12 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
         base = cargar_base_datos()
         catalogo = obtener_catalogo_materiales(base)
     except Exception as e:
-        return ResultadoMateriales(False, _df_vacio(), [f"Error cargando base de datos: {e}"], [])
+        return ResultadoMateriales(
+            False,
+            _df_vacio(),
+            [f"Error cargando base de datos: {e}"],
+            []
+        )
 
     # =====================================================
     # 5. EJECUCIÓN DE DOMINIO
@@ -89,7 +98,12 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
             catalogo=catalogo
         )
     except Exception as e:
-        return ResultadoMateriales(False, _df_vacio(), [f"Error en cálculo: {e}"], [])
+        return ResultadoMateriales(
+            False,
+            _df_vacio(),
+            [f"Error en cálculo: {e}"],
+            []
+        )
 
     # =====================================================
     # 6. SALIDA DIRECTA (FUENTE ÚNICA)
@@ -101,6 +115,5 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
 # HELPERS
 # =========================================================
 def _df_vacio():
-    from materiales.orquestador_materiales import COLUMNAS_STD
     import pandas as pd
-    return pd.DataFrame(columns=COLUMNAS_STD)
+    return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
