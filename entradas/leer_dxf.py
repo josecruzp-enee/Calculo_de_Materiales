@@ -34,29 +34,47 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
                 codigo = lineas[i]
                 valor = lineas[i + 1]
 
+                # capa
                 if codigo == "8":
                     capa = valor.upper()
 
+                # contenido
                 if codigo == "1":
                     texto += " " + valor
 
                 i += 2
 
-            # SOLO capa estructuras
+            # =========================
+            # FILTRO DE CAPA
+            # =========================
             if capa != "ESTRUCTURAS":
                 continue
 
             if not texto.strip():
                 continue
 
-            # limpiar MTEXT
-            texto = texto.replace("\\P", " ")
+            # =========================
+            # 🔥 LIMPIEZA MTEXT (CLAVE)
+            # =========================
+
+            # 1. convertir saltos de línea de AutoCAD
+            texto = texto.replace("\\P", ",")
+
+            # 2. eliminar formato tipo {C7:
+            texto = re.sub(r"\{.*?:", "", texto)
+
+            # 3. eliminar llaves
+            texto = texto.replace("}", "")
+
+            # 4. normalizar espacios
             texto = re.sub(r"\s+", " ", texto).strip()
 
-            # 🔥 AQUÍ ESTÁ EL CAMBIO CLAVE
+            # =========================
+            # OUTPUT CRUDO CONTROLADO
+            # =========================
             resultados.append({
                 "Punto": f"P-{punto}",
-                "Estructura": texto  # ← TEXTO COMPLETO
+                "Estructura": texto
             })
 
             punto += 1
