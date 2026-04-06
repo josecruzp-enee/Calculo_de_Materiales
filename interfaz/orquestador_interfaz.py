@@ -24,6 +24,14 @@ def es_dataframe_valido(df):
     return df is not None and hasattr(df, "empty") and not df.empty
 
 
+def _init_state():
+    st.session_state.setdefault("df_estructuras", None)
+    st.session_state.setdefault("modo_carga_seleccionado", None)
+    st.session_state.setdefault("cables_proyecto_df", None)
+    st.session_state.setdefault("datos_proyecto", None)
+    st.session_state.setdefault("df_materiales_extra", None)
+
+
 # =========================================================
 # SECCIONES UI
 # =========================================================
@@ -70,7 +78,7 @@ def renderizar_estructuras():
 
     df, ruta = seccion_entrada_estructuras()
 
-    if df is None or df.empty:
+    if not es_dataframe_valido(df):
         st.info("⚠️ No hay estructuras aún.")
         return
 
@@ -88,13 +96,19 @@ def renderizar_final():
         st.warning("⚠️ Carga estructuras primero.")
         return
 
+    # =========================
+    # NORMALIZAR ENTRADAS UI
+    # =========================
     df_cables = st.session_state.get("cables_proyecto_df")
     datos_proyecto = st.session_state.get("datos_proyecto")
 
-    # 🔥 MATERIAL EXTRA INTEGRADO
+    # 🔥 MATERIAL EXTRA SIEMPRE CONSOLIDADO
     df_materiales_extra = obtener_materiales_finales()
     st.session_state["df_materiales_extra"] = df_materiales_extra
 
+    # =========================
+    # LLAMADA A CAPA APLICACIÓN
+    # =========================
     seccion_finalizar_calculo(
         df_estructuras=df,
         df_cables=df_cables,
@@ -111,7 +125,7 @@ def renderizar_exportacion():
         st.warning("⚠️ Primero completa estructuras.")
         return
 
-    # 🔥 asegurar materiales antes de exportar
+    # 🔥 asegurar consistencia antes de exportar
     st.session_state["df_materiales_extra"] = obtener_materiales_finales()
 
     seccion_exportacion()
@@ -126,25 +140,20 @@ def ejecutar_orquestador_interfaz(
     _barra_nav_botones,
 ):
 
-    # =====================================================
-    # INICIALIZACIÓN GLOBAL
-    # =====================================================
-    st.session_state.setdefault("df_estructuras", None)
-    st.session_state.setdefault("modo_carga_seleccionado", None)
-    st.session_state.setdefault("cables_proyecto_df", None)
-    st.session_state.setdefault("datos_proyecto", None)
-    st.session_state.setdefault("df_materiales_extra", None)
+    # =========================
+    # INIT GLOBAL STATE
+    # =========================
+    _init_state()
 
-    # =====================================================
+    # =========================
     # NAVEGACIÓN
-    # =====================================================
+    # =========================
     seccion = _nav_estado_actual()
-
     _barra_nav_botones(seccion)
 
-    # =====================================================
+    # =========================
     # MAPA DE SECCIONES
-    # =====================================================
+    # =========================
     acciones = {
         "datos": renderizar_datos_proyecto,
         "cables": renderizar_cables,
