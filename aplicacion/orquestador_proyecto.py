@@ -2,11 +2,7 @@
 # aplicacion/orquestador_proyecto.py
 
 from __future__ import annotations
-import pandas as pd
 
-# =========================
-# MODELO
-# =========================
 from aplicacion.modelos_proyecto import EntradaProyecto
 
 # =========================
@@ -20,42 +16,48 @@ from materiales.orquestador_materiales import ejecutar_materiales
 # =========================
 from entradas.base_datos import cargar_base_datos, obtener_catalogo_materiales
 
+# =========================
+# MODELO DE SALIDA
+# =========================
+from materiales.modelos.salida import ResultadoMateriales
+
 
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
-def ejecutar_proyecto(entrada_proyecto: EntradaProyecto):
+def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
     """
-    Orquestador limpio SIN dependencia de UI.
+    Orquestador limpio del sistema completo.
+
+    Flujo:
+    EntradaProyecto → EntradaMateriales → Materiales → ResultadoMateriales
     """
 
-    errores: list[str] = []
-    warnings: list[str] = []
+    # =====================================================
+    # 1. VALIDACIÓN BÁSICA
+    # =====================================================
+    if entrada_proyecto is None:
+        return ResultadoMateriales(False, _df_vacio(), ["EntradaProyecto es None"], [])
 
-    # =====================================================
-    # VALIDACIONES BASE
-    # =====================================================
     if entrada_proyecto.df_estructuras is None or entrada_proyecto.df_estructuras.empty:
-        return None, ["No hay estructuras para procesar"], []
+        return ResultadoMateriales(False, _df_vacio(), ["No hay estructuras"], [])
 
     if not entrada_proyecto.ruta_materiales:
-        return None, ["No hay ruta de materiales definida"], []
+        return ResultadoMateriales(False, _df_vacio(), ["Ruta de materiales no definida"], [])
 
     # =====================================================
-    # NORMALIZAR ENTRADAS OPCIONALES
+    # 2. NORMALIZACIÓN DE OPCIONALES
     # =====================================================
     df_cables = entrada_proyecto.df_cables
-    if df_cables is not None and not isinstance(df_cables, pd.DataFrame):
+    if df_cables is not None and not hasattr(df_cables, "empty"):
         df_cables = None
-        warnings.append("Cables ignorados (formato inválido)")
 
     df_materiales_extra = entrada_proyecto.df_materiales_extra
-    if df_materiales_extra is not None and not isinstance(df_materiales_extra, pd.DataFrame):
+    if df_materiales_extra is not None and not hasattr(df_materiales_extra, "empty"):
         df_materiales_extra = None
-        warnings.append("Materiales extra ignorados (formato inválido)")
 
     # =====================================================
-    # 1. CONSTRUIR ENTRADA DE DOMINIO
+    # 3. CONSTRUIR ENTRADA DE DOMINIO
     # =====================================================
     try:
         entrada = cargar_entrada(
@@ -67,23 +69,19 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto):
             ruta_materiales=entrada_proyecto.ruta_materiales,
         )
     except Exception as e:
-        return None, [f"Error construyendo entrada: {e}"], []
+        return ResultadoMateriales(False, _df_vacio(), [f"Error construyendo entrada: {e}"], [])
 
     # =====================================================
-    # 2. BASE DE DATOS
+    # 4. BASE DE DATOS
     # =====================================================
     try:
         base = cargar_base_datos()
         catalogo = obtener_catalogo_materiales(base)
-
-        if catalogo is None or catalogo.empty:
-            warnings.append("Catálogo de materiales vacío")
-
     except Exception as e:
-        return None, [f"Error cargando base de datos: {e}"], []
+        return ResultadoMateriales(False, _df_vacio(), [f"Error cargando base de datos: {e}"], [])
 
     # =====================================================
-    # 3. MOTOR DE CÁLCULO
+    # 5. EJECUCIÓN DE DOMINIO
     # =====================================================
     try:
         resultado = ejecutar_materiales(
@@ -91,15 +89,18 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto):
             catalogo=catalogo
         )
     except Exception as e:
-        return None, [f"Error ejecutando cálculo: {e}"], []
+        return ResultadoMateriales(False, _df_vacio(), [f"Error en cálculo: {e}"], [])
 
     # =====================================================
-    # 4. VALIDAR RESULTADO
+    # 6. SALIDA DIRECTA (FUENTE ÚNICA)
     # =====================================================
-    if resultado is None:
-        return None, ["Resultado vacío"], []
+    return resultado
 
-    if not resultado.ok:
-        return resultado, resultado.errores, resultado.warnings
 
-    return resultado, errores, warnings
+# =========================================================
+# HELPERS
+# =========================================================
+def _df_vacio():
+    from materiales.orquestador_materiales import COLUMNAS_STD
+    import pandas as pd
+    return pd.DataFrame(columns=COLUMNAS_STD)
