@@ -2,12 +2,9 @@
 """
 materiales_aux.py
 
-Funciones auxiliares para:
+Funciones auxiliares robustas y limpias para:
 - limpieza de códigos
 - expansión de estructuras
-- normalización base
-
-🔥 FIX CRÍTICO: evitar códigos inválidos tipo CA-32A
 """
 
 from __future__ import annotations
@@ -15,151 +12,125 @@ import re
 
 
 # ==========================================================
-# LIMPIAR CÓDIGO INDIVIDUAL
+# LIMPIEZA BÁSICA
 # ==========================================================
 def limpiar_codigo(codigo: str) -> str:
-    """
-    Normaliza un código de estructura SIN deformarlo.
-    """
-
-    if codigo is None:
-        return ""
-
-    codigo = str(codigo).strip().upper()
-
     if not codigo:
         return ""
 
-    # eliminar paréntesis
-    codigo = re.sub(r"\(.*?\)", "", codigo)
+    c = str(codigo).upper().strip()
 
-    # normalizar espacios
-    codigo = re.sub(r"\s+", " ", codigo).strip()
+    c = re.sub(r"\(.*?\)", "", c)        # quitar (P), etc
+    c = re.sub(r"\s+", " ", c).strip()   # espacios
+    c = c.replace(" KVA", "KVA")         # TS-37.5 KVA → TS-37.5KVA
 
-    # =========================
-    # TRANSFORMADORES
-    # =========================
-    codigo = codigo.replace(" KVA", "KVA")
+    # CA-32A → CA-32
+    c = re.sub(r"(CA-\d+)[A-Z]+$", r"\1", c)
 
-    # =========================
-    # 🔥 FIX CRÍTICO: CA-32A → CA-32
-    # =========================
-    codigo = re.sub(r"(CA-\d+)[A-Z]+$", r"\1", codigo)
-
-    return codigo
+    return c
 
 
 # ==========================================================
-# EXPANDIR LISTA DE CÓDIGOS
+# EXTRAER BLOQUES (RESPETA COMAS)
+# ==========================================================
+def _split_bloques(texto: str) -> list[str]:
+    texto = texto.replace(";", ",").replace("|", ",")
+    return [b.strip() for b in texto.split(",") if b.strip()]
+
+
+# ==========================================================
+# FILTRAR SOLO (P)
+# ==========================================================
+def _es_proyectado(bloque: str) -> bool:
+    return "(P)" in bloque.upper()
+
+
+# ==========================================================
+# EXPANDIR MULTIPLICADOR
+# ==========================================================
+def _expandir_multiplicador(bloque: str) -> list[str]:
+    match = re.match(r"(\d+)\s*X\s*(.+)", bloque, re.IGNORECASE)
+
+    if match:
+        n = int(match.group(1))
+        cod = match.group(2).strip()
+        return [cod] * n
+
+    return [bloque]
+
+
+# ==========================================================
+# FUNCIÓN PRINCIPAL
 # ==========================================================
 def expandir_lista_codigos(texto: str) -> list[str]:
-    """
-    Convierte un string en lista de códigos de estructuras.
-    """
-
-    if texto is None:
-        return []
-
-    texto = str(texto).strip().upper()
 
     if not texto:
         return []
 
-    # =========================
-    # LIMPIEZA BASE
-    # =========================
-    texto = texto.replace("(", "").replace(")", "")
-    texto = texto.replace(";", ",")
-    texto = texto.replace("|", ",")
+    texto = str(texto).upper()
 
-    # normalizar espacios
-    texto = re.sub(r"\s+", " ", texto)
+    bloques = _split_bloques(texto)
 
-    # =========================
-    # SEPARACIÓN
-    # =========================
-    bloques = texto.split(",")
-
-    codigos = []
-
-    for bloque in bloques:
-        bloque = bloque.strip()
-
-        if not bloque:
-            continue
-
-        partes = bloque.split(" ")
-
-        for parte in partes:
-            parte = parte.strip()
-
-            if not parte:
-                continue
-
-            codigos.append(parte)
-
-    # =========================
-    # LIMPIEZA FINAL
-    # =========================
     resultado = []
 
-    for c in codigos:
-        c = limpiar_codigo(c)
+    for b in bloques:
 
-        if not c:
+        # solo proyectados
+        if not _es_proyectado(b):
             continue
 
-        resultado.append(c)
+        # quitar etiquetas
+        b = re.sub(r"\(.*?\)", "", b).strip()
+
+        # expandir
+        lista = _expandir_multiplicador(b)
+
+        for c in lista:
+            c = limpiar_codigo(c)
+
+            if not c:
+                continue
+
+            # filtro basura
+            if len(c) <= 2:
+                continue
+
+            resultado.append(c)
 
     return resultado
 
 
 # ==========================================================
-# EXPANDIR LISTA CON CONTEO
+# CONTEO
 # ==========================================================
 def expandir_y_contar(texto: str) -> dict[str, int]:
-
-    lista = expandir_lista_codigos(texto)
-
     conteo = {}
 
-    for cod in lista:
-        conteo[cod] = conteo.get(cod, 0) + 1
+    for c in expandir_lista_codigos(texto):
+        conteo[c] = conteo.get(c, 0) + 1
 
     return conteo
 
 
 # ==========================================================
-# VALIDAR CÓDIGOS CONTRA CATÁLOGO
+# VALIDACIÓN
 # ==========================================================
 def validar_codigos(codigos: list[str], catalogo: set[str]) -> tuple[list[str], list[str]]:
-
     validos = []
     no_encontrados = []
 
     for c in codigos:
-        if c in catalogo:
-            validos.append(c)
-        else:
-            no_encontrados.append(c)
+        (validos if c in catalogo else no_encontrados).append(c)
 
     return validos, no_encontrados
 
 
 # ==========================================================
-# TEST RÁPIDO
+# TEST
 # ==========================================================
 if __name__ == "__main__":
 
-    casos = [
-        "CA-2A CA-32A",
-        "A-I-1, B-II-3",
-        "TS-37.5 KVA",
-        "A-I-1;B-II-3",
-        "  a-iii-1   b-iii-5  ",
-    ]
+    caso = "LL-1-50W (P), CA-32 (E), 3 x CS-2 (P), R-2 (D)"
 
-    for c in casos:
-        print("INPUT :", c)
-        print("OUTPUT:", expandir_lista_codigos(c))
-        print("-" * 40)
+    print(expandir_lista_codigos(caso))
+    print(expandir_y_contar(caso))
