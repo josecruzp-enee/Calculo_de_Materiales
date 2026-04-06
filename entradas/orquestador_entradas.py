@@ -18,7 +18,9 @@ from entradas.leer_dxf import leer_dxf
 from entradas.normalizar import normalizar_estructuras
 from entradas.validacion import validar_estructuras
 from entradas.indice_estructuras import cargar_indice_normalizado
-from entradas.base_datos import cargar_base_datos
+
+# 🔥 IMPORT CORRECTO
+from entradas.base_datos import cargar_base_datos, obtener_ruta_base
 
 # =========================
 # MODELO
@@ -62,7 +64,7 @@ def cargar_entrada(
         raise ValueError("Falta columna 'Punto'")
 
     # =========================
-    # 2. NORMALIZACIÓN (FIX CRÍTICO)
+    # 2. NORMALIZACIÓN (FIX TUPLE)
     # =========================
     df, errores_norm, warnings_norm = normalizar_estructuras(df)
 
@@ -72,15 +74,13 @@ def cargar_entrada(
     if errores_norm:
         raise ValueError("\n".join(errores_norm))
 
-    # (opcional debug)
-    # if warnings_norm:
-    #     print("WARNINGS NORMALIZACIÓN:", warnings_norm)
-
     # =========================
-    # 3. VALIDACIÓN CATÁLOGO
+    # 3. VALIDACIÓN CATÁLOGO (FIX RUTA)
     # =========================
     if validar_catalogo:
-        df_indice = cargar_indice_normalizado()
+        ruta = obtener_ruta_base()
+        df_indice = cargar_indice_normalizado(ruta)
+
         df, errores_val, warnings_val = validar_estructuras(df, df_indice)
 
         if errores_val:
