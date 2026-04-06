@@ -1,132 +1,109 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import pandas as pd
+import re
+
+
+# =========================================================
+# REGEX ESTRUCTURAS
+# =========================================================
+RE_TOKEN = re.compile(
+    r"""
+    (?:PC|PM|PT)-[A-Z0-9\.\-]+
+    |CA-[A-Z0-9\-]+
+    |A-[A-Z0-9\-]+
+    |B-[A-Z0-9\-]+
+    |CT-[A-Z0-9\-]+
+    |CS-[A-Z0-9\-]+
+    |TS-[A-Z0-9\.\-]+
+    |TD[A-Z0-9\-]*|TF[A-Z0-9\-]*|TR[A-Z0-9\-]*|TX[A-Z0-9\-]*
+    |LL-[A-Z0-9\-]+|LS-[A-Z0-9\-]+
+    |R-\d+[A-Z0-9\-]*
+    """,
+    re.VERBOSE,
+)
+
+
+# =========================================================
+# LECTOR DXF POR MTEXT + CAPA
+# =========================================================
 def leer_dxf(archivo_dxf) -> pd.DataFrame:
-    """
-    Ahora devuelve directamente:
-        Punto | codigodeestructura | cantidad
-    """
+
+    if archivo_dxf is None:
+        raise ValueError("archivo_dxf es None")
 
     try:
-        import ezdxf
-    except ImportError:
-        raise ImportError("Debes instalar ezdxf: pip install ezdxf")
+        contenido = archivo_dxf.read().decode("latin-1", errors="ignore")
+    except Exception:
+        raise ValueError("No se pudo leer el DXF")
 
-    # -------------------------
-    # CARGAR DXF
-    # -------------------------
-    try:
-        if hasattr(archivo_dxf, "read"):
-            import tempfile
+    lineas = [l.strip() for l in contenido.splitlines()]
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
-                tmp.write(archivo_dxf.read())
-                ruta = tmp.name
+    resultados = []
+    punto = 1
 
-            doc = ezdxf.readfile(ruta)
-        else:
-            doc = ezdxf.readfile(archivo_dxf)
+    i = 0
+    while i < len(lineas) - 1:
 
-    except Exception as e:
-        raise ValueError(f"No se pudo leer el DXF: {e}")
+        # =========================
+        # DETECTAR ENTIDAD MTEXT
+        # =========================
+        if lineas[i] == "0" and lineas[i + 1] == "MTEXT":
 
-    msp = doc.modelspace()
+            i += 2
+            capa = None
+            texto = ""
 
-    # -------------------------
-    # EXTRAER TEXTOS
-    # -------------------------
-    filas = []
+            # =========================
+            # LEER BLOQUE MTEXT
+            # =========================
+            while i < len(lineas) - 1 and lineas[i] != "0":
 
-    for e in msp:
+                codigo = lineas[i]
+                valor = lineas[i + 1]
 
-        if e.dxftype() not in ["TEXT", "MTEXT"]:
-            continue
+                # capa
+                if codigo == "8":
+                    capa = valor.upper()
 
-        try:
-            if e.dxftype() == "TEXT":
-                contenido = e.dxf.text
-                punto = e.dxf.insert
-            else:
-                contenido = e.text
-                punto = e.dxf.insert
+                # contenido texto
+                if codigo == "1":
+                    texto += " " + valor
 
-            texto = _limpiar_texto_basico(contenido)
+                i += 2
 
-            if not _es_texto_util(texto):
+            # =========================
+            # FILTRAR SOLO CAPA ESTRUCTURAS
+            # =========================
+            if capa != "ESTRUCTURAS":
                 continue
 
-            x = float(punto[0]) if punto else None
-            y = float(punto[1]) if punto else None
+            if not texto.strip():
+                continue
 
-            filas.append({
-                "Texto": texto,
-                "X": x,
-                "Y": y
-            })
+            # limpiar formato MTEXT
+            texto = texto.replace("\\P", " ")
+            texto = re.sub(r"\s+", " ", texto).strip().upper()
 
-        except Exception:
-            continue
+            # =========================
+            # EXTRAER TOKENS
+            # =========================
+            tokens = RE_TOKEN.findall(texto)
 
-    if not filas:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
+            if tokens:
+                for t in tokens:
+                    resultados.append({
+                        "Punto": f"P-{punto}",
+                        "Estructura": t
+                    })
 
-    df = pd.DataFrame(filas)
+                punto += 1
 
-    # =====================================================
-    # 🔥 EXTRAER CÓDIGOS DE ESTRUCTURA
-    # =====================================================
-    regex = re.compile(
-        r"(A-[IVX0-9\-]+|B-[IVX0-9\-]+|CT-[A-Z0-9\-]+|TS-\d+(\.\d+)?KVA|R-\d+|PC-\d+[A-Z]?)"
-    )
+        else:
+            i += 1
 
-    def extraer(texto):
-        encontrados = regex.findall(str(texto).upper())
-        salida = []
-        for e in encontrados:
-            if isinstance(e, tuple):
-                salida.append(e[0])
-            else:
-                salida.append(e)
-        return salida
+    if not resultados:
+        return pd.DataFrame()
 
-    df["codigos"] = df["Texto"].apply(extraer)
-    df = df.explode("codigos")
-    df = df[df["codigos"].notna()]
-    df = df[df["codigos"] != ""]
-
-    if df.empty:
-        return pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"])
-
-    # =====================================================
-    # 🔥 AGRUPAR POR PUNTO (por cercanía)
-    # =====================================================
-    puntos = []
-    clusters = []
-
-    for _, row in df.iterrows():
-
-        x, y = row["X"], row["Y"]
-        asignado = False
-
-        for i, (cx, cy) in enumerate(clusters):
-            if abs(x - cx) <= 5 and abs(y - cy) <= 5:
-                puntos.append(f"Punto {i+1}")
-                asignado = True
-                break
-
-        if not asignado:
-            clusters.append((x, y))
-            puntos.append(f"Punto {len(clusters)}")
-
-    df["Punto"] = puntos
-
-    # =====================================================
-    # 🔥 CONTEO FINAL
-    # =====================================================
-    df_out = (
-        df.groupby(["Punto", "codigos"])
-        .size()
-        .reset_index(name="cantidad")
-    )
-
-    df_out.rename(columns={"codigos": "codigodeestructura"}, inplace=True)
-
-    return df_out
+    return pd.DataFrame(resultados)
