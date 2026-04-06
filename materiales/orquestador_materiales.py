@@ -33,6 +33,29 @@ def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _validar_df_materiales(df: pd.DataFrame):
+
+    if df is None or df.empty:
+        raise ValueError("Materiales vacíos")
+
+    if not set(COLUMNAS_STD).issubset(df.columns):
+        raise ValueError("Formato inválido en materiales")
+
+    if df["Materiales"].isna().any():
+        raise ValueError("Materiales contiene nulos")
+
+    if df["Unidad"].isna().any():
+        raise ValueError("Unidad contiene nulos")
+
+    cantidades = pd.to_numeric(df["Cantidad"], errors="coerce")
+
+    if cantidades.isna().any():
+        raise ValueError("Cantidad inválida")
+
+    if (cantidades < 0).any():
+        raise ValueError("Cantidad negativa")
+
+
 # =========================================================
 # ORQUESTADOR
 # =========================================================
@@ -59,11 +82,17 @@ def ejecutar_materiales(
     if not entrada.tension:
         return ResultadoMateriales(False, _df_vacio(), ["Tensión inválida"], [])
 
-    tension = float(entrada.tension)
+    try:
+        tension = float(entrada.tension)
+        if tension <= 0:
+            raise ValueError
+    except Exception:
+        return ResultadoMateriales(False, _df_vacio(), ["Tensión inválida"], [])
+
     datos = entrada.datos_proyecto or {}
 
     # ======================================================
-    # 2. VALIDACIÓN DE DATOS DE PROYECTO
+    # 2. VALIDACIÓN DE PROYECTO
     # ======================================================
     try:
         _, calibre_mt = validar_datos_proyecto(datos)
@@ -71,7 +100,7 @@ def ejecutar_materiales(
         return ResultadoMateriales(False, _df_vacio(), [f"Error en datos proyecto: {e}"], [])
 
     # ======================================================
-    # 3. MOTOR DE CÁLCULO
+    # 3. CÁLCULO PRINCIPAL
     # ======================================================
     try:
         resultados = calcular_materiales_proyecto(
@@ -80,25 +109,26 @@ def ejecutar_materiales(
             tension=tension
         )
 
-        if not isinstance(resultados, dict):
-            raise ValueError("Salida del motor inválida")
-
         df_materiales = resultados.get("df_materiales_detalle")
 
-        if df_materiales is None or not isinstance(df_materiales, pd.DataFrame):
-            raise ValueError("df_materiales_detalle inválido")
+        if not isinstance(df_materiales, pd.DataFrame):
+            raise ValueError("Salida inválida del motor")
+
+        _validar_df_materiales(df_materiales)
 
     except Exception as e:
         return ResultadoMateriales(False, _df_vacio(), [f"Error en cálculo: {e}"], [])
 
     # ======================================================
-    # 4. CABLES → MATERIALES
+    # 4. CABLES
     # ======================================================
     df_cables = _df_vacio()
 
     if hasattr(entrada, "df_cables") and isinstance(entrada.df_cables, pd.DataFrame):
         try:
-            df_cables = materiales_desde_cables(entrada.df_cables)
+            df_tmp = materiales_desde_cables(entrada.df_cables)
+            _validar_df_materiales(df_tmp)
+            df_cables = df_tmp
         except Exception as e:
             warnings.append(f"Cables ignorados: {e}")
 
@@ -108,17 +138,21 @@ def ejecutar_materiales(
     df_extra = _df_vacio()
 
     if isinstance(datos.get("materiales_extra"), pd.DataFrame):
-        df_extra = datos["materiales_extra"]
+        try:
+            _validar_df_materiales(datos["materiales_extra"])
+            df_extra = datos["materiales_extra"]
+        except Exception as e:
+            warnings.append(f"Materiales extra ignorados: {e}")
 
     # ======================================================
-    # 6. UNIÓN GENERAL
+    # 6. UNIÓN
     # ======================================================
     df_total = pd.concat(
         [df_materiales, df_cables, df_extra],
         ignore_index=True
     )
 
-    df_total["Cantidad"] = pd.to_numeric(df_total["Cantidad"], errors="coerce").fillna(0)
+    _validar_df_materiales(df_total)
 
     # ======================================================
     # 7. CONSOLIDACIÓN
@@ -126,7 +160,7 @@ def ejecutar_materiales(
     df_total = _consolidar(df_total)
 
     # ======================================================
-    # 8. VALIDACIÓN CONTRA CATÁLOGO
+    # 8. VALIDACIÓN CATÁLOGO
     # ======================================================
     if catalogo is not None and not catalogo.empty:
 
@@ -144,7 +178,6 @@ def ejecutar_materiales(
                 f"Material no válido: {m}"
                 for m in no_validos["Materiales"].unique()
             ])
-
             return ResultadoMateriales(False, _df_vacio(), errores, warnings)
 
     # ======================================================
@@ -161,7 +194,10 @@ def ejecutar_materiales(
             how="left"
         )
 
-        df_total["Costo"] = pd.to_numeric(df_total["Costo"], errors="coerce").fillna(0)
+        if df_total["Costo"].isna().any():
+            warnings.append("Algunos materiales no tienen costo definido")
+
+        df_total["Costo"] = pd.to_numeric(df_total["Costo"], errors="coerce")
         df_total["Costo_Total"] = df_total["Cantidad"] * df_total["Costo"]
 
     # ======================================================
