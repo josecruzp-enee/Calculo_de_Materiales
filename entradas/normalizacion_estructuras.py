@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Motor de normalización de estructuras (versión producción robusta)
+Motor de normalización de estructuras (versión producción PRO)
 """
 
 from __future__ import annotations
@@ -56,27 +56,31 @@ def _normalizar_codigo(code: str) -> str:
     s = re.sub(r"\b(PC|PM|PT)\s+(\d+)\b", r"\1-\2", s)
 
     # =====================================================
-    # 🔥 FIXES CRÍTICOS DXF (LOS QUE TE FALTABAN)
+    # 🔥 FIXES DXF (CRÍTICOS)
     # =====================================================
 
-    # CS-32 → CA-32 (error común)
+    # CS-2 → CA-2
     s = re.sub(r"^CS-(\d+)", r"CA-\1", s)
 
-    # LL incompleto → valores estándar
+    # LL incompleto
     if s == "LL-1":
         s = "LL-1-50W"
 
     if s == "LL-2":
         s = "LL-2-100W"
 
+    # =====================================================
+    # 🔥 FIX CATÁLOGO (TU ERROR ACTUAL)
+    # =====================================================
+
+    # CA-2 → CA-2A (default)
+    if re.match(r"^CA-\d+$", s):
+        s = s + "A"
+
     return s.strip()
 
 
 def _es_codigo_valido(cod: str) -> bool:
-    """
-    Valida estructura tipo:
-    A-I-1, B-III-5, CT-N, TS-50KVA, etc.
-    """
     if not cod:
         return False
 
@@ -145,7 +149,6 @@ def _split_codigos(texto: str):
 
     texto = str(texto).upper()
 
-    # eliminar paréntesis
     texto = re.sub(r"\(.*?\)", "", texto)
 
     bloques = re.split(r",", texto)
@@ -159,7 +162,6 @@ def _split_codigos(texto: str):
         if not bloque:
             continue
 
-        # patrón tipo: "3 x CS-2"
         match = re.findall(r"(\d+)\s*x\s*([A-Z0-9\-\.\s]+)", bloque)
 
         if match:
@@ -169,14 +171,13 @@ def _split_codigos(texto: str):
                     resultado.extend([codigo] * int(cantidad))
             continue
 
-        # fallback simple
         resultado.append(bloque)
 
     return resultado
 
 
 # =========================================================
-# EXPLOTAR A FORMATO LARGO
+# EXPLOTAR
 # =========================================================
 def explotar_estructuras(df: pd.DataFrame):
 
@@ -234,7 +235,7 @@ def explotar_estructuras(df: pd.DataFrame):
 
 
 # =========================================================
-# FUNCIÓN PRINCIPAL DEL MOTOR
+# PRINCIPAL
 # =========================================================
 def construir_estructuras_por_punto_y_conteo(df: pd.DataFrame):
 
