@@ -1,143 +1,185 @@
 # -*- coding: utf-8 -*-
-"""
-materiales_aux.py
-
-Funciones auxiliares robustas y limpias para:
-- limpieza de códigos
-- expansión de estructuras
-"""
-
 from __future__ import annotations
+
 import re
+from collections import Counter
 
 
 # ==========================================================
-# LIMPIEZA BÁSICA
+# HELPERS
 # ==========================================================
-def limpiar_codigo(codigo: str) -> str:
-    if not codigo:
-        return ""
 
-    c = str(codigo).upper().strip()
-
-    c = re.sub(r"\(.*?\)", "", c)        # quitar (P), etc
-    c = re.sub(r"\s+", " ", c).strip()   # espacios
-    c = c.replace(" KVA", "KVA")         # TS-37.5 KVA → TS-37.5KVA
-
-    # CA-32A → CA-32
-    c = re.sub(r"(CA-\d+)[A-Z]+$", r"\1", c)
-
-    return c
-
-
-# ==========================================================
-# EXTRAER BLOQUES (RESPETA COMAS)
-# ==========================================================
-def _split_bloques(texto: str) -> list[str]:
-    texto = texto.replace(";", ",").replace("|", ",")
-    return [b.strip() for b in texto.split(",") if b.strip()]
-
-
-# ==========================================================
-# FILTRAR SOLO (P)
-# ==========================================================
 def _es_proyectado(bloque: str) -> bool:
+    if bloque is None:
+        return False
     return "(P)" in bloque.upper()
 
 
-# ==========================================================
-# EXPANDIR MULTIPLICADOR
-# ==========================================================
-def _expandir_multiplicador(bloque: str) -> list[str]:
-    match = re.match(r"(\d+)\s*X\s*(.+)", bloque, re.IGNORECASE)
+def _expandir_multiplicador(token: str):
+    """
+    Ej: "2xB-III-1" → ["B-III-1", "B-III-1"]
+    """
+    token = token.strip()
 
+    match = re.match(r"(\d+)\s*[xX]\s*(.+)", token)
     if match:
         n = int(match.group(1))
-        cod = match.group(2).strip()
-        return [cod] * n
+        val = match.group(2).strip()
+        return [val] * n
 
-    return [bloque]
+    return [token]
+
+
+def _split_bloques(texto: str):
+    """
+    Divide bloques por coma o salto de línea
+    """
+    if texto is None:
+        return []
+
+    texto = texto.replace(";", ",")
+    texto = texto.replace("|", ",")
+
+    partes = re.split(r"[,\n]", texto)
+
+    return [p.strip() for p in partes if p.strip()]
 
 
 # ==========================================================
-# FUNCIÓN PRINCIPAL
+# FUNCIÓN CRÍTICA (FIX REAL)
 # ==========================================================
-def expandir_lista_codigos(texto: str) -> list[str]:
+def expandir_lista_codigos(texto: str):
+    """
+    🔥 FUNCIÓN CENTRAL DEL SISTEMA
+
+    Convierte texto sucio tipo DXF:
+
+    "{C7:P-08,PC-30 (P),B-III-1 (P),LL-1-50W (P)}"
+
+    → ["PC-30", "B-III-1", "LL-1-50W"]
+    """
 
     if texto is None:
         return []
 
-    texto = str(texto).upper().strip()
+    texto = str(texto).upper()
 
-    if not texto:
-        return []
+    # ======================================================
+    # 1. LIMPIEZA DXF FUERTE
+    # ======================================================
 
-    # =========================
-    # LIMPIEZA BASE
-    # =========================
-    texto = re.sub(r"\{[^}]*?:", "", texto)  # elimina {C7:
-    texto = texto.replace("}", "")
+    # eliminar encabezados tipo {C7:
+    texto = re.sub(r"\{[^:]*:", "", texto)
+
+    # eliminar llaves
+    texto = texto.replace("{", "").replace("}", "")
+
+    # eliminar saltos DXF
+    texto = texto.replace("\\P", ",")
+
+    # ======================================================
+    # 2. LIMPIEZA DE TEXTO
+    # ======================================================
+
+    # eliminar (P), (E), etc
+    texto = re.sub(r"\([^)]*\)", "", texto)
+
+    # eliminar etiquetas tipo P-01
+    texto = re.sub(r"\bP-\d+\b", "", texto)
+
+    # normalizar separadores
     texto = texto.replace(";", ",")
     texto = texto.replace("|", ",")
 
-    # =========================
-    # SPLIT SOLO POR COMA
-    # =========================
-    bloques = [b.strip() for b in texto.split(",") if b.strip()]
+    # eliminar espacios duplicados
+    texto = re.sub(r"\s+", " ", texto).strip()
+
+    # ======================================================
+    # 3. DIVISIÓN
+    # ======================================================
+    partes = _split_bloques(texto)
 
     resultado = []
 
-    for b in bloques:
+    for p in partes:
 
-        # solo estructuras proyectadas
-        if "(P)" not in b:
+        if not p:
             continue
 
-        # quitar (P)
-        b = b.replace("(P)", "").strip()
+        # expandir multiplicadores
+        tokens = _expandir_multiplicador(p)
 
-        if not b:
-            continue
+        for t in tokens:
+            t = t.strip()
 
-        # limpiar código final
-        b = limpiar_codigo(b)
+            if not t:
+                continue
 
-        if b:
-            resultado.append(b)
+            # limpiar código final
+            codigo = limpiar_codigo(t)
+
+            if not codigo:
+                continue
+
+            resultado.append(codigo)
 
     return resultado
 
-# ==========================================================
-# CONTEO
-# ==========================================================
-def expandir_y_contar(texto: str) -> dict[str, int]:
-    conteo = {}
-
-    for c in expandir_lista_codigos(texto):
-        conteo[c] = conteo.get(c, 0) + 1
-
-    return conteo
-
 
 # ==========================================================
-# VALIDACIÓN
+# LIMPIEZA FINAL DE CÓDIGO
 # ==========================================================
-def validar_codigos(codigos: list[str], catalogo: set[str]) -> tuple[list[str], list[str]]:
-    validos = []
-    no_encontrados = []
+def limpiar_codigo(codigo: str) -> str:
+    """
+    Normaliza un código individual
+    """
 
-    for c in codigos:
-        (validos if c in catalogo else no_encontrados).append(c)
+    if codigo is None:
+        return ""
 
-    return validos, no_encontrados
+    codigo = str(codigo).strip().upper()
+
+    if not codigo:
+        return ""
+
+    # eliminar espacios internos raros
+    codigo = re.sub(r"\s+", "", codigo)
+
+    # eliminar caracteres no válidos al final
+    codigo = re.sub(r"[^\w\-\.]", "", codigo)
+
+    return codigo
 
 
 # ==========================================================
-# TEST
+# EXPANSIÓN + CONTEO
 # ==========================================================
-if __name__ == "__main__":
+def expandir_y_contar(texto: str):
+    """
+    Devuelve dict con conteo
+    """
+    lista = expandir_lista_codigos(texto)
 
-    caso = "LL-1-50W (P), CA-32 (E), 3 x CS-2 (P), R-2 (D)"
+    conteo = Counter()
 
-    print(expandir_lista_codigos(caso))
-    print(expandir_y_contar(caso))
+    for c in lista:
+        conteo[c] += 1
+
+    return dict(conteo)
+
+
+# ==========================================================
+# VALIDACIÓN (OPCIONAL)
+# ==========================================================
+def validar_codigos(lista_codigos):
+    """
+    Valida lista de códigos
+    """
+
+    errores = []
+
+    for c in lista_codigos:
+        if not isinstance(c, str) or not c.strip():
+            errores.append(f"Código inválido: {c}")
+
+    return errores
