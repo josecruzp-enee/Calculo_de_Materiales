@@ -201,7 +201,7 @@ def ejecutar_orquestador_interfaz(
 
     salida_entradas = None
 
-    if salida_interfaz.ok:
+    if salida_interfaz.ok and sec == "final":
         salida_entradas = ejecutar_entradas(
             salida_interfaz,
             tension=13.8,
