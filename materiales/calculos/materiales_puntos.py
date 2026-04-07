@@ -174,7 +174,10 @@ def calcular_materiales_estructura(
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
     )
+    from ayuda.debug import debug_guardar
 
+    debug_guardar(f"estructura_{estructura}", estructura)
+    debug_guardar(f"df_estructura_{estructura}", df_filtrado)
     return df_filtrado[COLUMNAS_STD]
 
 
