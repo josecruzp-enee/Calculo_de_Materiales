@@ -1,126 +1,132 @@
 # -*- coding: utf-8 -*-
-"""
-normalizar.py
-Fachada de normalización de estructuras (clean + producción)
-"""
+from __future__ import annotations
 
 import pandas as pd
+from collections import Counter
 
-from entradas.normalizacion_estructuras import (
-    construir_estructuras_por_punto_y_conteo,
+from materiales.auxiliares.materiales_aux import (
+    expandir_lista_codigos,
+    limpiar_codigo,
 )
 
 
-# =========================================================
+# ==========================================================
 # API PRINCIPAL
-# =========================================================
+# ==========================================================
 def normalizar_estructuras(df: pd.DataFrame):
     """
-    Pipeline completo de normalización.
+    Pipeline completo:
 
-    Entrada:
-        df (cualquier formato)
+        1. Detectar formato
+        2. Convertir si necesario
+        3. Limpiar
+        4. Agrupar
 
-    Salida:
+    OUTPUT:
         df_normalizado
         errores
         warnings
     """
 
+    errores = []
+    warnings = []
+
     if df is None or df.empty:
         return (
-            pd.DataFrame(columns=["Punto", "codigodeestructura", "cantidad"]),
+            pd.DataFrame(columns=["punto", "codigodeestructura", "cantidad"]),
             ["Entrada vacía"],
             []
         )
 
-    df = df.copy()
+    # ======================================================
+    # FORMATO
+    # ======================================================
+    if _es_formato_largo(df):
+        df_base = df.copy()
+    else:
+        df_base = _convertir_a_largo(df)
 
-    # =====================================================
-    # 1. ASEGURAR FORMATO LARGO
-    # =====================================================
-    df_base = _asegurar_formato_largo(df)
+    if df_base.empty:
+        return df_base, ["No se pudo normalizar"], []
 
-    # =====================================================
-    # 2. MOTOR DE NORMALIZACIÓN
-    # =====================================================
-    _, _, df_final, errores, warnings = \
-        construir_estructuras_por_punto_y_conteo(df_base)
+    # ======================================================
+    # LIMPIEZA
+    # ======================================================
+    df_base.columns = df_base.columns.str.strip().str.lower()
+
+    if "punto" not in df_base.columns:
+        return df_base, ["Falta columna Punto"], []
+
+    if "codigodeestructura" not in df_base.columns:
+        return df_base, ["Falta codigodeestructura"], []
+
+    df_base["punto"] = df_base["punto"].astype(str).str.strip()
+    df_base["codigodeestructura"] = df_base["codigodeestructura"].astype(str).str.strip()
+
+    # ======================================================
+    # AGRUPACIÓN
+    # ======================================================
+    df_final = (
+        df_base
+        .groupby(["punto", "codigodeestructura"], as_index=False)
+        .size()
+        .rename(columns={"size": "cantidad"})
+    )
 
     return df_final, errores, warnings
 
 
-# =========================================================
-# FORMATO
-# =========================================================
-def _asegurar_formato_largo(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Garantiza que el DataFrame esté en formato largo.
-    """
-
-    if _es_formato_largo(df):
-        return df.copy()
-
-    return _convertir_a_largo(df)
-
-
+# ==========================================================
+# DETECCIÓN DE FORMATO
+# ==========================================================
 def _es_formato_largo(df: pd.DataFrame) -> bool:
-    cols = [c.lower() for c in df.columns]
+    cols = [c.lower().strip() for c in df.columns]
 
     return (
-        "codigodeestructura" in cols
-        and any("punto" in c for c in cols)
+        "punto" in cols
+        and "codigodeestructura" in cols
     )
 
 
-# =========================================================
+# ==========================================================
 # CONVERSIÓN A FORMATO LARGO
-# =========================================================
+# ==========================================================
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
+    df.columns = df.columns.str.strip()
 
-    col_punto = None
-
-    for c in df.columns:
-        if "punto" in c.lower():
-            col_punto = c
-            break
-
-    # Si no existe punto → generar
-    if col_punto is None:
-        df["Punto"] = [f"P{i+1}" for i in range(len(df))]
-        col_punto = "Punto"
-
-    filas = []
+    registros = []
 
     for _, row in df.iterrows():
 
-        punto = row[col_punto]
+        punto = row.get("Punto") or row.get("punto")
+
+        if not punto:
+            punto = "P-UNKNOWN"
+
+        estructura_raw = None
 
         for col in df.columns:
+            if col.lower() in ["estructura", "estructuras", "codigodeestructura"]:
+                estructura_raw = row.get(col)
+                break
 
-            if col == col_punto:
+        if estructura_raw is None:
+            continue
+
+        lista_codigos = expandir_lista_codigos(estructura_raw)
+
+        for cod in lista_codigos:
+            cod = limpiar_codigo(cod)
+
+            if not cod:
                 continue
 
-            valor = row[col]
-
-            if pd.isna(valor):
-                continue
-
-            texto = str(valor).strip()
-
-            if not texto:
-                continue
-
-            filas.append({
-                "Punto": punto,
-                "codigodeestructura": texto,
+            registros.append({
+                "punto": str(punto).strip(),
+                "codigodeestructura": cod,
                 "cantidad": 1
             })
 
-    return pd.DataFrame(
-        filas,
-        columns=["Punto", "codigodeestructura", "cantidad"]
-    )
+    return pd.DataFrame(registros)
