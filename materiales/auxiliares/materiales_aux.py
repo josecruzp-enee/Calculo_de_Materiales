@@ -38,7 +38,8 @@ def _expandir_multiplicador(token: str):
 
 def _split_bloques(texto: str):
     """
-    Divide bloques por coma o salto de línea
+    Divide SOLO por coma o salto de línea
+    🔥 NUNCA por guión
     """
     if texto is None:
         return []
@@ -46,13 +47,13 @@ def _split_bloques(texto: str):
     texto = texto.replace(";", ",")
     texto = texto.replace("|", ",")
 
-    partes = re.split(r"[,\n]", texto)
+    partes = re.split(r"[,\n]+", texto)
 
     return [p.strip() for p in partes if p.strip()]
 
 
 # ==========================================================
-# LIMPIEZA FINAL DE CÓDIGO (🔥 CRÍTICO)
+# LIMPIEZA FINAL DE CÓDIGO (🔥 BLINDADA)
 # ==========================================================
 def limpiar_codigo(codigo: str) -> str:
     """
@@ -67,13 +68,14 @@ def limpiar_codigo(codigo: str) -> str:
     if not codigo:
         return ""
 
-    # 🔥 eliminar contenido entre paréntesis
+    # 🔥 eliminar (P), (E), etc
     codigo = re.sub(r"\(.*?\)", "", codigo)
 
-    # 🔥 eliminar espacios
-    codigo = re.sub(r"\s+", "", codigo)
+    # 🔥 eliminar espacios PERO NO GUIONES
+    codigo = codigo.replace(" ", "")
 
-    # 🔥 limpieza NO destructiva
+    # 🔥 PERMITIR:
+    # letras, números, guiones, puntos (para TS-37.5KVA), W
     codigo = re.sub(r"[^A-Z0-9\-\.\+]", "", codigo)
 
     return codigo
@@ -85,7 +87,6 @@ def limpiar_codigo(codigo: str) -> str:
 def expandir_lista_codigos(texto: str):
     """
     Convierte texto DXF sucio en lista limpia de estructuras
-    y separa puntos (P-XX) de estructuras reales
     """
 
     debug_guardar("raw_texto_entrada", texto)
@@ -96,36 +97,35 @@ def expandir_lista_codigos(texto: str):
     texto = str(texto).upper()
 
     # ======================================================
-    # LIMPIEZA DXF
+    # 1. LIMPIEZA DXF
     # ======================================================
+
     texto = re.sub(r"\{[^:]*:", "", texto)
     texto = texto.replace("{", "").replace("}", "")
     texto = texto.replace("\\P", ",")
 
-    # eliminar (P), (E), etc
-    texto = re.sub(r"\([^)]*\)", "", texto)
+    # ======================================================
+    # 🔥 IMPORTANTE: NO eliminar todo antes de separar
+    # ======================================================
 
-    # separadores
-    texto = texto.replace(";", ",")
-    texto = texto.replace("|", ",")
-
-    texto = re.sub(r"\s+", " ", texto).strip()
-
-    debug_guardar("texto_limpio", texto)
+    debug_guardar("texto_pre_split", texto)
 
     # ======================================================
-    # DIVISIÓN
+    # 2. DIVISIÓN PRIMERO
     # ======================================================
     partes = _split_bloques(texto)
 
-    estructuras = []
-    puntos = []
+    resultado = []
 
     for p in partes:
 
         if not p:
             continue
 
+        # 🔥 eliminar (P) después de separar
+        p = re.sub(r"\(.*?\)", "", p)
+
+        # expandir multiplicadores
         tokens = _expandir_multiplicador(p)
 
         for t in tokens:
@@ -139,25 +139,17 @@ def expandir_lista_codigos(texto: str):
             if not codigo:
                 continue
 
-            # =========================================
-            # 🔥 CLASIFICACIÓN CLAVE
-            # =========================================
-            if re.fullmatch(r"P[-#]?\d+", codigo):
-                puntos.append(codigo)
-            else:
-                estructuras.append(codigo)
+            resultado.append(codigo)
 
-    debug_guardar("estructuras_detectadas", estructuras)
-    debug_guardar("puntos_detectados", puntos)
+    debug_guardar("codigos_expandidos", resultado)
 
-    return estructuras
+    return resultado
+
+
 # ==========================================================
 # EXPANSIÓN + CONTEO
 # ==========================================================
 def expandir_y_contar(texto: str):
-    """
-    Devuelve dict con conteo de estructuras
-    """
     lista = expandir_lista_codigos(texto)
 
     conteo = Counter()
@@ -174,10 +166,6 @@ def expandir_y_contar(texto: str):
 # VALIDACIÓN
 # ==========================================================
 def validar_codigos(lista_codigos):
-    """
-    Valida lista de códigos
-    """
-
     errores = []
 
     for c in lista_codigos:
