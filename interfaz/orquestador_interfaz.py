@@ -167,6 +167,7 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
+
 def ejecutar_orquestador_interfaz(
     _nav_estado_actual,
     _barra_nav_botones,
@@ -198,25 +199,28 @@ def ejecutar_orquestador_interfaz(
     # =====================================================
     salida_interfaz = _construir_salida_interfaz()
 
-    salida_entradas = ejecutar_entradas(
-        salida_interfaz,
-        tension=13.8,
-    )
+    salida_entradas = None
 
-    # =====================================================
-    # PERSISTENCIA
-    # =====================================================
-    if salida_entradas.ok:
-        st.session_state["df_estructuras"] = salida_entradas.df_estructuras
+    if salida_interfaz.ok:
+        salida_entradas = ejecutar_entradas(
+            salida_interfaz,
+            tension=13.8,
+        )
+
+        # =================================================
+        # PERSISTENCIA
+        # =================================================
+        if salida_entradas.ok:
+            st.session_state["df_estructuras"] = salida_entradas.df_estructuras
 
     # =====================================================
     # DEBUG PIPELINE
     # =====================================================
     st.session_state["debug_pipeline"] = {
         "interfaz_ok": salida_interfaz.ok,
-        "entradas_ok": salida_entradas.ok,
+        "entradas_ok": salida_entradas.ok if salida_entradas else False,
         "errores_interfaz": salida_interfaz.errores,
-        "errores_entradas": salida_entradas.errores,
+        "errores_entradas": salida_entradas.errores if salida_entradas else [],
         "tipo_entrada": salida_interfaz.tipo_entrada,
         "tiene_data": salida_interfaz.data_entrada is not None,
     }
