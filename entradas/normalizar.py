@@ -31,7 +31,9 @@ def normalizar_estructuras(df: pd.DataFrame):
 
     if df_base.empty:
         return df_base, ["No se pudo normalizar"], []
+
     debug_guardar("ANTES_NORMALIZAR", df.copy())
+
     # ======================================================
     # LIMPIEZA
     # ======================================================
@@ -45,7 +47,7 @@ def normalizar_estructuras(df: pd.DataFrame):
 
     df_base["punto"] = df_base["punto"].astype(str).str.strip()
     df_base["codigodeestructura"] = df_base["codigodeestructura"].astype(str).str.strip()
-    debug_guardar("DESPUES_NORMALIZAR", df_final.copy())
+
     # ======================================================
     # AGRUPACIÓN
     # ======================================================
@@ -56,8 +58,11 @@ def normalizar_estructuras(df: pd.DataFrame):
         .rename(columns={"size": "cantidad"})
     )
 
+    # 🔥 DEBUG CORRECTO (ya existe df_final)
+    debug_guardar("DESPUES_NORMALIZAR", df_final.copy())
+
     # ======================================================
-    # 🔥 CONTRATO UNIFICADO
+    # CONTRATO
     # ======================================================
     df_final = df_final.rename(columns={
         "punto": "Punto",
@@ -75,7 +80,6 @@ def normalizar_estructuras(df: pd.DataFrame):
     ).fillna(0)
 
     return df_final, [], []
-
 
 # ==========================================================
 # DETECCIÓN DE FORMATO
