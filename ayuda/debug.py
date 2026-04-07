@@ -1,40 +1,44 @@
 # -*- coding: utf-8 -*-
 # ayuda/debug.py
 
+from __future__ import annotations
 import streamlit as st
+import pandas as pd
 
 
 # =========================================================
-# GUARDAR DEBUG GLOBAL (para usar en cualquier módulo)
+# 🔷 GUARDAR DEBUG GLOBAL (UNIFICADO)
 # =========================================================
 def debug_guardar(clave: str, valor):
+    """
+    Guarda información de debug accesible desde cualquier capa.
+    """
 
-    if "debug_extra" not in st.session_state:
-        st.session_state["debug_extra"] = {}
+    if "debug_pipeline" not in st.session_state:
+        st.session_state["debug_pipeline"] = {}
 
-    st.session_state["debug_extra"][clave] = valor
+    st.session_state["debug_pipeline"][clave] = valor
 
 
 # =========================================================
-# ESTADO VISUAL
+# 🔷 ESTADO VISUAL
 # =========================================================
 def _estado(ok):
     return "🟢" if ok else "🔴"
 
 
 # =========================================================
-# EVALUAR ESTADO REAL DEL SISTEMA
+# 🔷 EVALUAR ESTADO REAL DEL SISTEMA
 # =========================================================
 def _evaluar_pipeline():
 
     df = st.session_state.get("df_estructuras")
     resultado = st.session_state.get("resultado_calculo")
-    datos = st.session_state.get("datos_proyecto")
 
     estados = {
         "UI": True,
-        "Entradas": df is not None and hasattr(df, "empty") and not df.empty,
-        "Normalización": df is not None and hasattr(df, "columns") and "Punto" in df.columns,
+        "Entradas": isinstance(df, pd.DataFrame) and not df.empty,
+        "Normalización": isinstance(df, pd.DataFrame) and "Punto" in df.columns,
         "Materiales": resultado is not None,
         "Exportación": resultado is not None,
         "PDF": resultado is not None,
@@ -44,7 +48,7 @@ def _evaluar_pipeline():
 
 
 # =========================================================
-# GRAFO PIPELINE
+# 🔷 GRAFO PIPELINE
 # =========================================================
 def _grafo_pipeline(estados):
 
@@ -55,7 +59,7 @@ def _grafo_pipeline(estados):
 
         dot = graphviz.Digraph()
 
-        # Nodos con estado
+        # Nodos
         dot.node("UI", f"UI\n{_estado(estados['UI'])}")
         dot.node("ENT", f"Entradas\n{_estado(estados['Entradas'])}")
         dot.node("NOR", f"Normalización\n{_estado(estados['Normalización'])}")
@@ -73,7 +77,7 @@ def _grafo_pipeline(estados):
         st.graphviz_chart(dot)
 
     except Exception:
-        # Fallback si no hay graphviz
+        # fallback simple
         st.markdown(f"""
         UI {_estado(estados['UI'])}  
         ↓  
@@ -90,7 +94,30 @@ def _grafo_pipeline(estados):
 
 
 # =========================================================
-# UI DEBUG
+# 🔷 RENDER DE BLOQUE DEBUG
+# =========================================================
+def _render_valor_debug(valor):
+
+    # DataFrame
+    if isinstance(valor, pd.DataFrame):
+        st.caption(f"Filas: {len(valor)} | Columnas: {list(valor.columns)}")
+        st.dataframe(valor.head(10), use_container_width=True)
+
+    # Diccionario
+    elif isinstance(valor, dict):
+        st.json(valor)
+
+    # Objetos tipo dataclass
+    elif hasattr(valor, "__dict__"):
+        st.json(valor.__dict__)
+
+    # Otros
+    else:
+        st.write(valor)
+
+
+# =========================================================
+# 🔷 UI DEBUG PRINCIPAL
 # =========================================================
 def seccion_debug():
 
@@ -103,24 +130,19 @@ def seccion_debug():
 
     if debug:
         st.markdown("### 📊 Estado del Pipeline")
-        st.json(debug)
+
+        for clave, valor in debug.items():
+            st.markdown(f"#### 🔹 {clave}")
+            _render_valor_debug(valor)
+
     else:
         st.info("No hay información de debug aún")
 
     # =====================================================
-    # GRAFO DEL SISTEMA 🔥
+    # GRAFO DEL SISTEMA
     # =====================================================
     estados = _evaluar_pipeline()
     _grafo_pipeline(estados)
-
-    # =====================================================
-    # DEBUG INTERNO
-    # =====================================================
-    debug_extra = st.session_state.get("debug_extra")
-
-    if debug_extra:
-        st.markdown("### 🧪 Debug interno")
-        st.json(debug_extra)
 
     # =====================================================
     # SESSION COMPLETA
