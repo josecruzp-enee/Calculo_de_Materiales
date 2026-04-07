@@ -3,11 +3,17 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from ayuda.debug import debug_guardar
 
 
 # ==========================================================
 # HELPERS
 # ==========================================================
+def _limpiar_str(v) -> str:
+    if v is None:
+        return ""
+    return str(v).strip()
+
 
 def _es_proyectado(bloque: str) -> bool:
     if bloque is None:
@@ -46,18 +52,47 @@ def _split_bloques(texto: str):
 
 
 # ==========================================================
-# FUNCIÓN CRÍTICA (FIX REAL)
+# LIMPIEZA FINAL DE CÓDIGO (🔥 CRÍTICO)
+# ==========================================================
+def limpiar_codigo(codigo: str) -> str:
+    """
+    Normaliza un código SIN destruir su estructura
+    """
+
+    if codigo is None:
+        return ""
+
+    codigo = str(codigo).strip().upper()
+
+    if not codigo:
+        return ""
+
+    # 🔥 eliminar contenido entre paréntesis
+    codigo = re.sub(r"\(.*?\)", "", codigo)
+
+    # 🔥 eliminar espacios
+    codigo = re.sub(r"\s+", "", codigo)
+
+    # 🔥 limpieza NO destructiva
+    codigo = re.sub(r"[^A-Z0-9\-\.\+]", "", codigo)
+
+    return codigo
+
+
+# ==========================================================
+# FUNCIÓN CENTRAL
 # ==========================================================
 def expandir_lista_codigos(texto: str):
     """
-    🔥 FUNCIÓN CENTRAL DEL SISTEMA
+    Convierte texto DXF sucio en lista limpia de estructuras
 
-    Convierte texto sucio tipo DXF:
-
+    Ej:
     "{C7:P-08,PC-30 (P),B-III-1 (P),LL-1-50W (P)}"
 
     → ["PC-30", "B-III-1", "LL-1-50W"]
     """
+
+    debug_guardar("raw_texto_entrada", texto)
 
     if texto is None:
         return []
@@ -65,7 +100,7 @@ def expandir_lista_codigos(texto: str):
     texto = str(texto).upper()
 
     # ======================================================
-    # 1. LIMPIEZA DXF FUERTE
+    # 1. LIMPIEZA DXF
     # ======================================================
 
     # eliminar encabezados tipo {C7:
@@ -78,21 +113,20 @@ def expandir_lista_codigos(texto: str):
     texto = texto.replace("\\P", ",")
 
     # ======================================================
-    # 2. LIMPIEZA DE TEXTO
+    # 2. LIMPIEZA CONTROLADA
     # ======================================================
 
     # eliminar (P), (E), etc
     texto = re.sub(r"\([^)]*\)", "", texto)
 
-    # eliminar etiquetas tipo P-01
-    texto = re.sub(r"\bP-\d+\b", "", texto)
-
     # normalizar separadores
     texto = texto.replace(";", ",")
     texto = texto.replace("|", ",")
 
-    # eliminar espacios duplicados
+    # limpiar espacios
     texto = re.sub(r"\s+", " ", texto).strip()
+
+    debug_guardar("texto_limpio", texto)
 
     # ======================================================
     # 3. DIVISIÓN
@@ -115,7 +149,6 @@ def expandir_lista_codigos(texto: str):
             if not t:
                 continue
 
-            # limpiar código final
             codigo = limpiar_codigo(t)
 
             if not codigo:
@@ -123,32 +156,9 @@ def expandir_lista_codigos(texto: str):
 
             resultado.append(codigo)
 
+    debug_guardar("codigos_expandidos", resultado)
+
     return resultado
-
-
-# ==========================================================
-# LIMPIEZA FINAL DE CÓDIGO
-# ==========================================================
-def limpiar_codigo(codigo: str) -> str:
-    """
-    Normaliza un código individual
-    """
-
-    if codigo is None:
-        return ""
-
-    codigo = str(codigo).strip().upper()
-
-    if not codigo:
-        return ""
-
-    # eliminar espacios internos raros
-    codigo = re.sub(r"\s+", "", codigo)
-
-    # eliminar caracteres no válidos al final
-    codigo = re.sub(r"[^\w\-\.]", "", codigo)
-
-    return codigo
 
 
 # ==========================================================
@@ -156,7 +166,7 @@ def limpiar_codigo(codigo: str) -> str:
 # ==========================================================
 def expandir_y_contar(texto: str):
     """
-    Devuelve dict con conteo
+    Devuelve dict con conteo de estructuras
     """
     lista = expandir_lista_codigos(texto)
 
@@ -165,11 +175,13 @@ def expandir_y_contar(texto: str):
     for c in lista:
         conteo[c] += 1
 
+    debug_guardar("conteo_estructuras", dict(conteo))
+
     return dict(conteo)
 
 
 # ==========================================================
-# VALIDACIÓN (OPCIONAL)
+# VALIDACIÓN
 # ==========================================================
 def validar_codigos(lista_codigos):
     """
@@ -181,5 +193,7 @@ def validar_codigos(lista_codigos):
     for c in lista_codigos:
         if not isinstance(c, str) or not c.strip():
             errores.append(f"Código inválido: {c}")
+
+    debug_guardar("errores_codigos", errores)
 
     return errores
