@@ -99,6 +99,11 @@ def renderizar_estructuras():
 
     elif modo == "dxf":
         data = st.file_uploader("Subir DXF", type=["dxf"])
+        if data is not None:
+        st.session_state["data_entrada"] = data
+
+        st.success(f"✅ Archivo cargado: {data.name}")
+        st.info("➡️ Ahora puedes ir a la pestaña 'Finalizar' para procesar")
 
     st.session_state["data_entrada"] = data
 
