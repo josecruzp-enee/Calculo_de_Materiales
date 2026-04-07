@@ -1,45 +1,106 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional, Dict, List
 import pandas as pd
 
-
-# =========================================================
-# 🔷 DTO ENTRADA INTERNA (PIPELINE)
-# =========================================================
-@dataclass
-class EntradaPipeline:
-    """
-    Entrada limpia al pipeline del dominio entradas
-    """
-
-    tipo: str
-    data: Any
-
-    tension: float
-
-    df_cables: Optional[pd.DataFrame] = None
-    df_materiales_extra: Optional[pd.DataFrame] = None
-
-    validar_catalogo: bool = True
+from materiales.auxiliares.materiales_aux import (
+    expandir_lista_codigos,
+    limpiar_codigo,
+)
 
 
-# =========================================================
-# 🔷 RESULTADO INTERNO DEL PIPELINE
-# =========================================================
-@dataclass
-class ResultadoPipeline:
-    """
-    Resultado interno del dominio entradas
-    """
+# ==========================================================
+# API PRINCIPAL
+# ==========================================================
+def normalizar_estructuras(df: pd.DataFrame):
 
-    ok: bool = False
+    if df is None or df.empty:
+        return (
+            pd.DataFrame(columns=["punto", "codigodeestructura", "cantidad"]),
+            ["Entrada vacía"],
+            []
+        )
 
-    estructuras_df: pd.DataFrame = field(default_factory=pd.DataFrame)
+    # ======================================================
+    # FORMATO
+    # ======================================================
+    if _es_formato_largo(df):
+        df_base = df.copy()
+    else:
+        df_base = _convertir_a_largo(df)
 
-    errores: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    if df_base.empty:
+        return df_base, ["No se pudo normalizar"], []
 
-    debug: Dict[str, Any] = field(default_factory=dict)
+    # ======================================================
+    # LIMPIEZA
+    # ======================================================
+    df_base.columns = df_base.columns.str.strip().str.lower()
+
+    if "punto" not in df_base.columns:
+        return df_base, ["Falta columna punto"], []
+
+    if "codigodeestructura" not in df_base.columns:
+        return df_base, ["Falta codigodeestructura"], []
+
+    df_base["punto"] = df_base["punto"].astype(str).str.strip()
+    df_base["codigodeestructura"] = df_base["codigodeestructura"].astype(str).str.strip()
+
+    # ======================================================
+    # AGRUPACIÓN
+    # ======================================================
+    df_final = (
+        df_base
+        .groupby(["punto", "codigodeestructura"], as_index=False)
+        .size()
+        .rename(columns={"size": "cantidad"})
+    )
+
+    return df_final, [], []
+
+
+# ==========================================================
+# DETECCIÓN DE FORMATO
+# ==========================================================
+def _es_formato_largo(df: pd.DataFrame) -> bool:
+    cols = [c.lower().strip() for c in df.columns]
+    return "punto" in cols and "codigodeestructura" in cols
+
+
+# ==========================================================
+# CONVERSIÓN A FORMATO LARGO
+# ==========================================================
+def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
+
+    df = df.copy()
+    df.columns = df.columns.str.strip()
+
+    registros = []
+
+    for idx, row in df.iterrows():
+
+        punto = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
+
+        estructura_raw = None
+
+        for col in df.columns:
+            if col.lower() in ["estructura", "estructuras", "codigodeestructura"]:
+                estructura_raw = row.get(col)
+                break
+
+        if estructura_raw is None:
+            continue
+
+        lista_codigos = expandir_lista_codigos(estructura_raw)
+
+        for cod in lista_codigos:
+            cod = limpiar_codigo(cod)
+
+            if cod:
+                registros.append({
+                    "punto": str(punto).strip(),
+                    "codigodeestructura": cod,
+                    "cantidad": 1
+                })
+
+    return pd.DataFrame(registros)
