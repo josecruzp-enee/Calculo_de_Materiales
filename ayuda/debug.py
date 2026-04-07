@@ -259,17 +259,16 @@ def seccion_debug():
     _auditar_estructuras()
 
     # ======================================================
-    # 📊 VER TODAS LAS ESTRUCTURAS (COMPLETO)
+    # 📊 VER TODAS LAS ESTRUCTURAS (PROCESADAS)
     # ======================================================
     df = st.session_state.get("df_estructuras")
 
     if df is not None and hasattr(df, "empty") and not df.empty:
 
-        st.markdown("### 📊 Estructuras completas")
+        st.markdown("### 📊 Estructuras completas (procesadas)")
 
         st.write(f"Total filas: {len(df)}")
 
-        # 🔎 Filtro rápido
         filtro = st.text_input("Buscar estructura")
 
         if filtro:
@@ -278,7 +277,6 @@ def seccion_debug():
         else:
             st.dataframe(df, use_container_width=True)
 
-        # 🔥 BONUS: conteo por estructura
         st.markdown("### 🔍 Conteo por estructura")
         st.dataframe(
             df.groupby("Estructura")["Cantidad"]
@@ -288,6 +286,49 @@ def seccion_debug():
 
     else:
         st.warning("No hay df_estructuras disponible")
+
+    # ======================================================
+    # 🧾 DXF RAW (ANTES DE NORMALIZAR)
+    # ======================================================
+    debug_extra = st.session_state.get("debug_extra", {})
+
+    raw = debug_extra.get("DXF_TODAS")
+
+    if raw:
+
+        st.markdown("### 🧾 Estructuras detectadas en DXF (RAW)")
+
+        st.write(f"Total detectadas: {len(raw)}")
+
+        st.dataframe(
+            pd.DataFrame({"estructura": raw}),
+            use_container_width=True
+        )
+
+        # 🔎 ÚNICAS
+        st.markdown("### 🔎 Estructuras únicas en DXF")
+
+        unicas = sorted(set(raw))
+
+        st.write(f"Total únicas: {len(unicas)}")
+
+        st.dataframe(
+            pd.DataFrame({"estructura": unicas}),
+            use_container_width=True
+        )
+
+        # 🔥 SOLO CS (para detectar bug)
+        st.markdown("### 🔎 Solo estructuras CS")
+
+        cs = [r for r in raw if "CS" in str(r)]
+
+        st.dataframe(
+            pd.DataFrame({"estructura": sorted(set(cs))}),
+            use_container_width=True
+        )
+
+    else:
+        st.info("No hay datos RAW del DXF")
 
     # ======================================================
     # DEBUG PROFUNDO
