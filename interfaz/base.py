@@ -76,7 +76,6 @@ def seleccionar_modo_carga():
 
     keys = list(opciones.keys())
 
-    # 🔥 asegurar estado válido
     modo_actual = st.session_state.get("modo_carga_seleccionado", "manual")
 
     if modo_actual not in keys:
@@ -93,11 +92,10 @@ def seleccionar_modo_carga():
         key="radio_modo_carga"
     )
 
-    # 🔥 persistencia
     st.session_state["modo_carga_seleccionado"] = modo
     st.session_state["tipo_entrada"] = modo
 
-
+    return modo   # 🔥 ESTA LÍNEA
 
 # ====== Ruta por defecto para materiales ======
 def ruta_datos_materiales_por_defecto() -> str:
