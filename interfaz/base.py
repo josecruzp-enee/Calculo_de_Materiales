@@ -82,18 +82,6 @@ def seleccionar_modo_carga():
 
     st.session_state["modo_carga_seleccionado"] = modo
 
-    # =========================
-    # 🔴 FIX CRÍTICO: TENSIÓN
-    # =========================
-    st.markdown("### ⚡ Nivel de tensión")
-
-    tension = st.radio(
-        "Seleccione nivel de tensión",
-        [13.8, 34.5],
-        horizontal=True
-    )
-
-    st.session_state["tension"] = float(tension)
 
 # ====== Ruta por defecto para materiales ======
 def ruta_datos_materiales_por_defecto() -> str:
