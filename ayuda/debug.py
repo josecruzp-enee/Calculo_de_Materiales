@@ -5,7 +5,7 @@ import streamlit as st
 
 
 # =========================================================
-# GUARDAR DEBUG GLOBAL
+# GUARDAR DEBUG GLOBAL (para usar en cualquier módulo)
 # =========================================================
 def debug_guardar(clave: str, valor):
 
@@ -16,44 +16,77 @@ def debug_guardar(clave: str, valor):
 
 
 # =========================================================
-# GRAFO DE ESTRUCTURAS
+# ESTADO VISUAL
 # =========================================================
-def _grafo_estructuras(df):
+def _estado(ok):
+    return "🟢" if ok else "🔴"
 
-    if df is None or df.empty:
-        st.info("No hay estructuras para graficar")
-        return
+
+# =========================================================
+# EVALUAR ESTADO REAL DEL SISTEMA
+# =========================================================
+def _evaluar_pipeline():
+
+    df = st.session_state.get("df_estructuras")
+    resultado = st.session_state.get("resultado_calculo")
+    datos = st.session_state.get("datos_proyecto")
+
+    estados = {
+        "UI": True,
+        "Entradas": df is not None and hasattr(df, "empty") and not df.empty,
+        "Normalización": df is not None and hasattr(df, "columns") and "Punto" in df.columns,
+        "Materiales": resultado is not None,
+        "Exportación": resultado is not None,
+        "PDF": resultado is not None,
+    }
+
+    return estados
+
+
+# =========================================================
+# GRAFO PIPELINE
+# =========================================================
+def _grafo_pipeline(estados):
+
+    st.markdown("### 🔄 Flujo del sistema")
 
     try:
         import graphviz
 
         dot = graphviz.Digraph()
 
-        # Nodo raíz
-        dot.node("Proyecto", shape="box")
+        # Nodos con estado
+        dot.node("UI", f"UI\n{_estado(estados['UI'])}")
+        dot.node("ENT", f"Entradas\n{_estado(estados['Entradas'])}")
+        dot.node("NOR", f"Normalización\n{_estado(estados['Normalización'])}")
+        dot.node("MAT", f"Materiales\n{_estado(estados['Materiales'])}")
+        dot.node("EXP", f"Exportación\n{_estado(estados['Exportación'])}")
+        dot.node("PDF", f"PDF\n{_estado(estados['PDF'])}")
 
-        for _, row in df.iterrows():
-
-            punto = str(row.get("Punto"))
-            estructura = str(row.get("Estructura"))
-
-            nodo_punto = f"P_{punto}"
-            nodo_est = f"{punto}_{estructura}"
-
-            # Nodo punto
-            dot.node(nodo_punto, f"Punto {punto}", shape="circle")
-
-            # Nodo estructura
-            dot.node(nodo_est, estructura, shape="box")
-
-            # Conexiones
-            dot.edge("Proyecto", nodo_punto)
-            dot.edge(nodo_punto, nodo_est)
+        # Flujo
+        dot.edge("UI", "ENT")
+        dot.edge("ENT", "NOR")
+        dot.edge("NOR", "MAT")
+        dot.edge("MAT", "EXP")
+        dot.edge("EXP", "PDF")
 
         st.graphviz_chart(dot)
 
-    except Exception as e:
-        st.error(f"Error generando grafo: {e}")
+    except Exception:
+        # Fallback si no hay graphviz
+        st.markdown(f"""
+        UI {_estado(estados['UI'])}  
+        ↓  
+        Entradas {_estado(estados['Entradas'])}  
+        ↓  
+        Normalización {_estado(estados['Normalización'])}  
+        ↓  
+        Materiales {_estado(estados['Materiales'])}  
+        ↓  
+        Exportación {_estado(estados['Exportación'])}  
+        ↓  
+        PDF {_estado(estados['PDF'])}
+        """)
 
 
 # =========================================================
@@ -61,26 +94,27 @@ def _grafo_estructuras(df):
 # =========================================================
 def seccion_debug():
 
-    st.subheader("🧠 Debug del sistema")
+    st.title("🧠 Debug del sistema")
 
+    # =====================================================
+    # ESTADO DEL PIPELINE
+    # =====================================================
     debug = st.session_state.get("debug_pipeline")
 
-    if not debug:
-        st.info("No hay información de debug aún")
-    else:
+    if debug:
         st.markdown("### 📊 Estado del Pipeline")
         st.json(debug)
+    else:
+        st.info("No hay información de debug aún")
 
     # =====================================================
-    # GRAFO 🔥
+    # GRAFO DEL SISTEMA 🔥
     # =====================================================
-    st.markdown("### 🧭 Grafo del proyecto")
-
-    df = st.session_state.get("df_estructuras")
-    _grafo_estructuras(df)
+    estados = _evaluar_pipeline()
+    _grafo_pipeline(estados)
 
     # =====================================================
-    # DEBUG EXTRA
+    # DEBUG INTERNO
     # =====================================================
     debug_extra = st.session_state.get("debug_extra")
 
