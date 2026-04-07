@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import pandas as pd
 import re
+from ayuda.debug import debug_guardar
+
 
 
 def leer_dxf(archivo_dxf) -> pd.DataFrame:
@@ -93,3 +95,4 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
         return pd.DataFrame()
 
     return pd.DataFrame(resultados)
+debug_guardar("DXF - salida", df)
