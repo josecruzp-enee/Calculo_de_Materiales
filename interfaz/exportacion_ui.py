@@ -65,7 +65,24 @@ def seccion_finalizar_calculo():
 
     tipo = st.session_state.get("modo_carga_seleccionado")
     data = st.session_state.get("data_entrada")
-    tension = st.session_state.get("tension")  # 🔥 CLAVE
+    datos = st.session_state.get("datos_proyecto", {})
+    tension_raw = datos.get("tension") or datos.get("nivel_tension")
+
+    if not tension_raw:
+        st.error("❌ No se encontró tensión en datos del proyecto")
+        return
+
+    # =========================
+    # NORMALIZAR TENSIÓN
+    # =========================
+    try:
+        if "34.5" in str(tension_raw):
+            tension = 34.5
+        else:
+            tension = 13.8
+    except:
+        st.error(f"❌ Error interpretando tensión: {tension_raw}")
+        return
 
     # =====================================================
     # VALIDACIONES
