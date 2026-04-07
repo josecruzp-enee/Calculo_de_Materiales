@@ -33,6 +33,8 @@ def _parse_tension_col(col) -> float | None:
 # ==========================================================
 # LECTOR PRINCIPAL
 # ==========================================================
+
+
 def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | None:
     """
     Procesa un DataFrame de materiales y devuelve:
