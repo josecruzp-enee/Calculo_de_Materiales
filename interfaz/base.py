@@ -78,6 +78,7 @@ def seleccionar_modo_carga():
         list(opciones.keys()),
         format_func=lambda x: opciones[x],
         horizontal=True
+        key="modo_carga_seleccionado"
     )
 
     st.session_state["modo_carga_seleccionado"] = modo
