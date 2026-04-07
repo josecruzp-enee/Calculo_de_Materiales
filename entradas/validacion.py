@@ -6,74 +6,70 @@ import pandas as pd
 
 def validar_estructuras(
     df: pd.DataFrame,
-    df_indice: pd.DataFrame,
+    df_indice: pd.DataFrame | None = None,
 ):
     """
     Valida estructuras contra catálogo.
 
-    REQUIERE:
-        df ya normalizado (una estructura por fila)
+    INPUT:
+        df: DataFrame normalizado
+        df_indice: catálogo (opcional)
 
-    NO hace parsing.
+    OUTPUT:
+        lista de errores (list[str])
+
+    NOTAS:
+        - No modifica df
+        - No hace parsing
+        - No agrupa
     """
 
     errores = []
-    warnings = []
 
-    # =========================
+    # =====================================================
     # VALIDACIONES BÁSICAS
-    # =========================
+    # =====================================================
     if df is None or df.empty:
-        return df, ["DataFrame de estructuras vacío"], []
-
-    if df_indice is None or df_indice.empty:
-        return df, ["Índice de estructuras vacío"], []
+        return ["DataFrame de estructuras vacío"]
 
     if "codigodeestructura" not in df.columns:
-        return df, ["Falta columna 'codigodeestructura'"], []
+        return ["Falta columna 'codigodeestructura'"]
 
-    if "codigodeestructura" not in df_indice.columns:
-        return df, ["Índice no tiene 'codigodeestructura'"], []
-
-    # =========================
-    # NORMALIZACIÓN SEGURA
-    # =========================
-    df = df.copy()
-    df_indice = df_indice.copy()
-
-    df["codigodeestructura"] = (
+    # =====================================================
+    # NORMALIZACIÓN LOCAL (SEGURA)
+    # =====================================================
+    codigos = (
         df["codigodeestructura"]
         .astype(str)
         .str.strip()
         .str.upper()
     )
 
-    df_indice["codigodeestructura"] = (
+    # =====================================================
+    # SI NO HAY CATÁLOGO → SOLO VALIDACIÓN BÁSICA
+    # =====================================================
+    if df_indice is None or df_indice.empty:
+        return []  # no validar contra catálogo
+
+    if "codigodeestructura" not in df_indice.columns:
+        return ["Índice no tiene 'codigodeestructura'"]
+
+    catalogo = set(
         df_indice["codigodeestructura"]
         .astype(str)
         .str.strip()
         .str.upper()
     )
 
-    # =========================
-    # CATÁLOGO
-    # =========================
-    catalogo = set(df_indice["codigodeestructura"])
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
+    no_encontrados = sorted(set(c for c in codigos if c not in catalogo))
 
-    # =========================
-    # VALIDACIÓN EFICIENTE
-    # =========================
-    codigos = set(df["codigodeestructura"])
-
-    no_encontrados = sorted(c for c in codigos if c not in catalogo)
-
-    # =========================
-    # ERRORES
-    # =========================
     if no_encontrados:
         errores.append(
             "Estructuras no encontradas en catálogo:\n"
             + "\n".join(no_encontrados)
         )
 
-    return df, errores, warnings
+    return errores
