@@ -169,7 +169,6 @@ def _construir_entrada_materiales(
         entrada = EntradaMateriales(
             estructuras_df=entrada_proyecto.df_estructuras,
             tension=tension,
-            hojas_base=base,
             df_cables=df_cables,
             df_materiales_extra=df_materiales_extra,
         )
