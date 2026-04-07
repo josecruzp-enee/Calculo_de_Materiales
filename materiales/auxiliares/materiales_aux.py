@@ -53,7 +53,7 @@ def _expandir_multiplicador(token: str):
 def _split_bloques(texto: str):
     """
     Divide SOLO por coma o salto de línea
-    🔥 Mantiene juntos los multiplicadores tipo: "3 X CS-2"
+    🔥 Mantiene juntos: "3 X CS-2"
     """
     if texto is None:
         return []
@@ -71,18 +71,18 @@ def _split_bloques(texto: str):
         if not p:
             continue
 
-        # 🔥 Detecta "3 X" suelto
+        # 🔥 detecta "3 X"
         if re.match(r"^\d+\s*[xX]$", p):
             buffer = p
             continue
 
-        # 🔥 Si había buffer, lo une correctamente
+        # 🔥 une con lo siguiente
         if buffer:
             p = f"{buffer} {p}"
             buffer = None
 
         resultado.append(p)
-    debug_guardar("partes_split", partes)
+
     return resultado
 # ==========================================================
 # LIMPIEZA FINAL DE CÓDIGO (🔥 BLINDADA)
@@ -174,7 +174,7 @@ def expandir_lista_codigos(texto: str):
             resultado.append(codigo)
 
     debug_guardar("codigos_expandidos", resultado)
-
+    debug_guardar("partes_split", partes)
     return resultado
 
 
