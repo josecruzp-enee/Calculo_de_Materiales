@@ -131,10 +131,14 @@ def main():
 
     # 🔍 DEBUG GLOBAL
     if st.session_state.get("sec") == "debug":
-        st.json({
-            "ok": salida.ok,
-            "errores": salida.errores,
-            "warnings": salida.warnings,
+
+        if salida is None:
+            st.info("ℹ️ Aún no se ha ejecutado el pipeline.")
+        else:
+            st.json({
+                "ok": getattr(salida, "ok", None),
+                "errores": getattr(salida, "errores", []),
+                "warnings": getattr(salida, "warnings", []),
         })
 
 
