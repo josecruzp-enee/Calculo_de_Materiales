@@ -30,11 +30,11 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
     Orquestador limpio del sistema completo.
 
     Flujo:
-    EntradaProyecto → EntradaMateriales → Materiales → ResultadoMateriales
+    EntradaProyecto → Materiales → ResultadoMateriales
     """
 
     # =====================================================
-    # 1. VALIDACIÓN BÁSICA
+    # 1. VALIDACIÓN
     # =====================================================
     if entrada_proyecto is None:
         return ResultadoMateriales(False, _df_vacio(), ["EntradaProyecto es None"], [])
@@ -46,7 +46,7 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
         return ResultadoMateriales(False, _df_vacio(), ["Ruta de materiales no definida"], [])
 
     # =====================================================
-    # 2. NORMALIZACIÓN DE OPCIONALES
+    # 2. NORMALIZAR OPCIONALES
     # =====================================================
     df_cables = entrada_proyecto.df_cables
     if df_cables is not None and not hasattr(df_cables, "empty"):
@@ -57,26 +57,7 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
         df_materiales_extra = None
 
     # =====================================================
-    # 3. CONSTRUIR ENTRADA DE DOMINIO (FIX CRÍTICO)
-    # =====================================================
-    try:
-        entrada = cargar_entrada(
-            tipo="ui",  # 🔥 clave
-            data=entrada_proyecto.df_estructuras,
-            tension=getattr(entrada_proyecto, "tension", 13.8),
-            df_cables=df_cables,
-            df_materiales_extra=df_materiales_extra,
-        )
-    except Exception as e:
-        return ResultadoMateriales(
-            False,
-            _df_vacio(),
-            [f"Error construyendo entrada: {e}"],
-            []
-        )
-
-    # =====================================================
-    # 4. BASE DE DATOS
+    # 3. BASE DE DATOS
     # =====================================================
     try:
         base = cargar_base_datos()
@@ -90,11 +71,11 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
         )
 
     # =====================================================
-    # 5. EJECUCIÓN DE DOMINIO
+    # 4. EJECUCIÓN DIRECTA (SIN NORMALIZAR OTRA VEZ)
     # =====================================================
     try:
         resultado = ejecutar_materiales(
-            entrada,
+            entrada_proyecto,   # 🔥 usamos directo
             catalogo=catalogo
         )
     except Exception as e:
@@ -105,11 +86,7 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
             []
         )
 
-    # =====================================================
-    # 6. SALIDA DIRECTA (FUENTE ÚNICA)
-    # =====================================================
     return resultado
-
 
 # =========================================================
 # HELPERS
