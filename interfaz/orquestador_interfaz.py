@@ -23,7 +23,10 @@ try:
 except Exception:
     def obtener_materiales_finales():
         return None
-from interfaz.debug_ui import seccion_debug
+
+# 🔥 DEBUG (nuevo)
+from ayuda.debug import seccion_debug
+
 
 # =========================================================
 # HELPERS
@@ -39,6 +42,36 @@ def _init_state():
     st.session_state.setdefault("datos_proyecto", None)
     st.session_state.setdefault("df_materiales_extra", None)
     st.session_state.setdefault("ruta_estructuras_compacto", None)
+    st.session_state.setdefault("tipo_entrada", None)
+    st.session_state.setdefault("data_entrada", None)
+    st.session_state.setdefault("debug_pipeline", None)
+
+
+# =========================================================
+# DEBUG HELPERS
+# =========================================================
+def _resumen_df(df):
+    if df is None:
+        return None
+    if hasattr(df, "shape"):
+        return {
+            "filas": df.shape[0],
+            "columnas": list(df.columns)
+        }
+    return str(type(df))
+
+
+def _actualizar_debug_pipeline():
+
+    st.session_state["debug_pipeline"] = {
+        "modo": st.session_state.get("modo_carga_seleccionado"),
+        "tipo_entrada": st.session_state.get("tipo_entrada"),
+        "data_entrada_tipo": type(st.session_state.get("data_entrada")).__name__,
+        "df_estructuras": _resumen_df(st.session_state.get("df_estructuras")),
+        "cables": _resumen_df(st.session_state.get("cables_proyecto_df")),
+        "datos_proyecto": st.session_state.get("datos_proyecto"),
+        "materiales_extra": _resumen_df(st.session_state.get("df_materiales_extra")),
+    }
 
 
 # =========================================================
@@ -73,7 +106,7 @@ def renderizar_modo_carga():
 
 
 # =========================================================
-# ESTRUCTURAS (MULTIMODO REAL)
+# ESTRUCTURAS
 # =========================================================
 def renderizar_estructuras():
 
@@ -88,9 +121,6 @@ def renderizar_estructuras():
 
     try:
 
-        # -------------------------
-        # MANUAL (UI)
-        # -------------------------
         if modo == "manual":
             df, _ = seccion_entrada_estructuras()
 
@@ -99,27 +129,15 @@ def renderizar_estructuras():
 
             df_ui = df
 
-        # -------------------------
-        # EXCEL
-        # -------------------------
         elif modo == "excel":
             archivo = st.file_uploader("Subir Excel", type=["xlsx"])
 
-        # -------------------------
-        # TABLA
-        # -------------------------
         elif modo == "tabla":
             archivo = st.text_area("Pegar tabla")
 
-        # -------------------------
-        # PDF
-        # -------------------------
         elif modo == "pdf":
             archivo = st.file_uploader("Subir PDF", type=["pdf"])
 
-        # -------------------------
-        # DXF
-        # -------------------------
         elif modo == "dxf":
             archivo = st.file_uploader("Subir DXF", type=["dxf"])
 
@@ -142,8 +160,10 @@ def renderizar_estructuras():
         st.session_state["data_entrada"] = archivo
 
     st.success(f"Entrada cargada correctamente ({modo})")
+
+
 # =========================================================
-# FINAL (SIN LÓGICA DE NEGOCIO)
+# FINAL
 # =========================================================
 def renderizar_final():
 
@@ -172,7 +192,7 @@ def renderizar_exportacion():
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL (UI PURO)
+# ORQUESTADOR PRINCIPAL
 # =========================================================
 def ejecutar_orquestador_interfaz(
     _nav_estado_actual,
@@ -191,7 +211,7 @@ def ejecutar_orquestador_interfaz(
         "estructuras": renderizar_estructuras,
         "final": renderizar_final,
         "exportar": renderizar_exportacion,
-        "debug": seccion_debug,
+        "debug": seccion_debug,   # 👈 importante minúscula
     }
 
     funcion = acciones.get(seccion)
@@ -200,3 +220,6 @@ def ejecutar_orquestador_interfaz(
         funcion()
     else:
         st.warning("Sección no reconocida.")
+
+    # 🔥 ACTUALIZAR DEBUG SIEMPRE
+    _actualizar_debug_pipeline()
