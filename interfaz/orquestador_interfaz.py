@@ -23,7 +23,7 @@ try:
 except Exception:
     def obtener_materiales_finales():
         return None
-
+from interfaz.debug_ui import seccion_debug
 
 # =========================================================
 # HELPERS
@@ -191,6 +191,7 @@ def ejecutar_orquestador_interfaz(
         "estructuras": renderizar_estructuras,
         "final": renderizar_final,
         "exportar": renderizar_exportacion,
+        "Debug": seccion_debug,
     }
 
     funcion = acciones.get(seccion)
