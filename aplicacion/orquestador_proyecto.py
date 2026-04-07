@@ -145,14 +145,19 @@ def _normalizar_opcionales(entrada: EntradaProyecto):
 # =========================================================
 def _cargar_base():
 
+    import streamlit as st  # 👈 agregar
+
     try:
         base = cargar_base_datos()
         catalogo = obtener_catalogo_materiales(base)
+
+        # 🔥 ESTA LÍNEA RESUELVE TODO
+        st.session_state["hojas_base"] = base
+
         return base, catalogo, None
+
     except Exception as e:
         return None, None, str(e)
-
-
 # =========================================================
 # BUILDER
 # =========================================================
