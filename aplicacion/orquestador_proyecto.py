@@ -168,11 +168,58 @@ def _construir_entrada_materiales(
     df_materiales_extra
 ):
 
-    try:
-        tension = getattr(entrada_proyecto, "tension", None) or 34.5
+    import streamlit as st
 
+    try:
+        # =====================================================
+        # 🔴 VALIDAR Y OBTENER TENSIÓN (CRÍTICO)
+        # =====================================================
+        tension = getattr(entrada_proyecto, "tension", None)
+
+        if tension is None:
+            raise ValueError(
+                "Tensión no definida. Debe seleccionar 13.8 kV o 34.5 kV antes de calcular."
+            )
+
+        try:
+            tension = float(tension)
+        except Exception:
+            raise ValueError(f"Tensión inválida: {tension}")
+
+        if tension <= 0:
+            raise ValueError("Tensión debe ser mayor que 0")
+
+        # =====================================================
+        # 🔴 NORMALIZAR DF ESTRUCTURAS (CONTRATO)
+        # =====================================================
+        df = entrada_proyecto.df_estructuras
+
+        if df is None or df.empty:
+            raise ValueError("df_estructuras vacío en builder")
+
+        df = df.copy()
+
+        # 🔥 asegurar columna correcta
+        if "Estructuras" in df.columns:
+            df = df.rename(columns={"Estructuras": "Estructura"})
+
+        if "Estructura" not in df.columns:
+            raise ValueError(
+                f"No existe columna 'Estructura'. Columnas actuales: {list(df.columns)}"
+            )
+
+        # =====================================================
+        # 🔴 DEBUG CLAVE
+        # =====================================================
+        st.session_state["debug_tension"] = tension
+        st.session_state["debug_df_estructuras_cols"] = list(df.columns)
+        st.session_state["debug_df_estructuras_shape"] = df.shape
+
+        # =====================================================
+        # 🔴 CREAR DTO
+        # =====================================================
         entrada = EntradaMateriales(
-            estructuras_df=entrada_proyecto.df_estructuras,
+            estructuras_df=df,
             tension=tension,
             df_cables=df_cables,
             df_materiales_extra=df_materiales_extra,
@@ -182,7 +229,6 @@ def _construir_entrada_materiales(
 
     except Exception as e:
         return None, str(e)
-
 
 # =========================================================
 # EJECUCIÓN SEGURA
