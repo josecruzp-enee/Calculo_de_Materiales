@@ -143,10 +143,28 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
     # =========================================================
     # DEBUG
     # =========================================================
+    # =========================================================
+    # DEBUG DXF (COMPLETO)
+    # =========================================================
     print("\n=== DEBUG DXF ===")
     print("registros encontrados:", len(df))
 
-    debug_guardar("DXF - salida", df)
-    debug_guardar("DXF - texto limpio", resultados[:5])
+    # 🔥 DataFrame final
+    debug_guardar("DXF_DF_FINAL", df)
+
+    # 🔥 TODAS las estructuras detectadas
+    debug_guardar("DXF_TODAS", resultados)
+
+    # 🔥 ÚNICAS (CLAVE)
+    debug_guardar(
+        "DXF_UNICAS",
+        sorted(set(resultados))
+    )
+
+    # 🔥 SOLO CS (FOCO DEL PROBLEMA)
+    debug_guardar(
+        "DXF_SOLO_CS",
+        sorted({r for r in resultados if "CS" in str(r)})
+    )
 
     return df
