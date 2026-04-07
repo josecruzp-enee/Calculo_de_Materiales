@@ -83,7 +83,12 @@ def renderizar_estructuras():
         df, _ = seccion_entrada_estructuras()
         if df is None or df.empty:
             return
+
         data = df
+        st.session_state["data_entrada"] = data
+
+        st.success("✅ Datos ingresados correctamente")
+        st.info("➡️ Ahora puedes ir a la pestaña 'Finalizar' para procesar")
 
     # =====================================================
     # ARCHIVOS / INPUTS
@@ -99,14 +104,19 @@ def renderizar_estructuras():
 
     elif modo == "dxf":
         data = st.file_uploader("Subir DXF", type=["dxf"])
-        if data is not None:
+
+    # =====================================================
+    # MANEJO GENERAL (UNIFICADO)
+    # =====================================================
+    if data is not None and modo != "manual":
         st.session_state["data_entrada"] = data
 
-        st.success(f"✅ Archivo cargado: {data.name}")
+        if hasattr(data, "name"):
+            st.success(f"✅ Archivo cargado: {data.name}")
+        else:
+            st.success("✅ Datos cargados correctamente")
+
         st.info("➡️ Ahora puedes ir a la pestaña 'Finalizar' para procesar")
-
-    st.session_state["data_entrada"] = data
-
 
 def renderizar_final():
     if st.session_state.get("df_estructuras") is None:
