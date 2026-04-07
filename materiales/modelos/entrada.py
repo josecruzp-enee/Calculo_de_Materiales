@@ -11,6 +11,7 @@ class EntradaMateriales:
 
     # opcionales
     df_cables: Optional[pd.DataFrame] = None
+    df_materiales_extra: Optional[pd.DataFrame] = None
     calibre_mt: Optional[str] = None
     tabla_conectores_mt: Optional[Dict[str, Any]] = None
 
