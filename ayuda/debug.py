@@ -253,18 +253,59 @@ def seccion_debug():
     else:
         st.info("No hay debug aún")
 
+    # ======================================================
     # Auditoría base
+    # ======================================================
     _auditar_estructuras()
 
-    # 🔥 DEBUG PROFUNDO
+    # ======================================================
+    # 📊 VER TODAS LAS ESTRUCTURAS (COMPLETO)
+    # ======================================================
+    df = st.session_state.get("df_estructuras")
+
+    if df is not None and hasattr(df, "empty") and not df.empty:
+
+        st.markdown("### 📊 Estructuras completas")
+
+        st.write(f"Total filas: {len(df)}")
+
+        # 🔎 Filtro rápido
+        filtro = st.text_input("Buscar estructura")
+
+        if filtro:
+            df_filtrado = df[df["Estructura"].str.contains(filtro, case=False, na=False)]
+            st.dataframe(df_filtrado, use_container_width=True)
+        else:
+            st.dataframe(df, use_container_width=True)
+
+        # 🔥 BONUS: conteo por estructura
+        st.markdown("### 🔍 Conteo por estructura")
+        st.dataframe(
+            df.groupby("Estructura")["Cantidad"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+    else:
+        st.warning("No hay df_estructuras disponible")
+
+    # ======================================================
+    # DEBUG PROFUNDO
+    # ======================================================
     _debug_materiales_profundo()
 
+    # ======================================================
     # Pipeline
+    # ======================================================
     _render_pipeline_runtime()
 
+    # ======================================================
     # Grafo
+    # ======================================================
     _grafo_pipeline()
 
+    # ======================================================
     # Session completa
+    # ======================================================
     with st.expander("🔍 session_state completo"):
         st.json({k: str(v)[:200] for k, v in st.session_state.items()})
