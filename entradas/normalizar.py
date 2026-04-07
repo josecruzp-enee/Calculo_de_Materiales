@@ -1,132 +1,45 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from typing import Any, Optional, Dict, List
 import pandas as pd
-from collections import Counter
-
-from materiales.auxiliares.materiales_aux import (
-    expandir_lista_codigos,
-    limpiar_codigo,
-)
 
 
-# ==========================================================
-# API PRINCIPAL
-# ==========================================================
-def normalizar_estructuras(df: pd.DataFrame):
+# =========================================================
+# 🔷 DTO ENTRADA INTERNA (PIPELINE)
+# =========================================================
+@dataclass
+class EntradaPipeline:
     """
-    Pipeline completo:
-
-        1. Detectar formato
-        2. Convertir si necesario
-        3. Limpiar
-        4. Agrupar
-
-    OUTPUT:
-        df_normalizado
-        errores
-        warnings
+    Entrada limpia al pipeline del dominio entradas
     """
 
-    errores = []
-    warnings = []
+    tipo: str
+    data: Any
 
-    if df is None or df.empty:
-        return (
-            pd.DataFrame(columns=["punto", "codigodeestructura", "cantidad"]),
-            ["Entrada vacía"],
-            []
-        )
+    tension: float
 
-    # ======================================================
-    # FORMATO
-    # ======================================================
-    if _es_formato_largo(df):
-        df_base = df.copy()
-    else:
-        df_base = _convertir_a_largo(df)
+    df_cables: Optional[pd.DataFrame] = None
+    df_materiales_extra: Optional[pd.DataFrame] = None
 
-    if df_base.empty:
-        return df_base, ["No se pudo normalizar"], []
-
-    # ======================================================
-    # LIMPIEZA
-    # ======================================================
-    df_base.columns = df_base.columns.str.strip().str.lower()
-
-    if "punto" not in df_base.columns:
-        return df_base, ["Falta columna Punto"], []
-
-    if "codigodeestructura" not in df_base.columns:
-        return df_base, ["Falta codigodeestructura"], []
-
-    df_base["punto"] = df_base["punto"].astype(str).str.strip()
-    df_base["codigodeestructura"] = df_base["codigodeestructura"].astype(str).str.strip()
-
-    # ======================================================
-    # AGRUPACIÓN
-    # ======================================================
-    df_final = (
-        df_base
-        .groupby(["punto", "codigodeestructura"], as_index=False)
-        .size()
-        .rename(columns={"size": "cantidad"})
-    )
-
-    return df_final, errores, warnings
+    validar_catalogo: bool = True
 
 
-# ==========================================================
-# DETECCIÓN DE FORMATO
-# ==========================================================
-def _es_formato_largo(df: pd.DataFrame) -> bool:
-    cols = [c.lower().strip() for c in df.columns]
+# =========================================================
+# 🔷 RESULTADO INTERNO DEL PIPELINE
+# =========================================================
+@dataclass
+class ResultadoPipeline:
+    """
+    Resultado interno del dominio entradas
+    """
 
-    return (
-        "punto" in cols
-        and "codigodeestructura" in cols
-    )
+    ok: bool = False
 
+    estructuras_df: pd.DataFrame = field(default_factory=pd.DataFrame)
 
-# ==========================================================
-# CONVERSIÓN A FORMATO LARGO
-# ==========================================================
-def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
+    errores: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
 
-    df = df.copy()
-    df.columns = df.columns.str.strip()
-
-    registros = []
-
-    for _, row in df.iterrows():
-
-        punto = row.get("Punto") or row.get("punto")
-
-        if not punto:
-            punto = "P-UNKNOWN"
-
-        estructura_raw = None
-
-        for col in df.columns:
-            if col.lower() in ["estructura", "estructuras", "codigodeestructura"]:
-                estructura_raw = row.get(col)
-                break
-
-        if estructura_raw is None:
-            continue
-
-        lista_codigos = expandir_lista_codigos(estructura_raw)
-
-        for cod in lista_codigos:
-            cod = limpiar_codigo(cod)
-
-            if not cod:
-                continue
-
-            registros.append({
-                "punto": str(punto).strip(),
-                "codigodeestructura": cod,
-                "cantidad": 1
-            })
-
-    return pd.DataFrame(registros)
+    debug: Dict[str, Any] = field(default_factory=dict)
