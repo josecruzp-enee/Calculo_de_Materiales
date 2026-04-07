@@ -85,11 +85,7 @@ def limpiar_codigo(codigo: str) -> str:
 def expandir_lista_codigos(texto: str):
     """
     Convierte texto DXF sucio en lista limpia de estructuras
-
-    Ej:
-    "{C7:P-08,PC-30 (P),B-III-1 (P),LL-1-50W (P)}"
-
-    → ["PC-30", "B-III-1", "LL-1-50W"]
+    y separa puntos (P-XX) de estructuras reales
     """
 
     debug_guardar("raw_texto_entrada", texto)
@@ -100,47 +96,36 @@ def expandir_lista_codigos(texto: str):
     texto = str(texto).upper()
 
     # ======================================================
-    # 1. LIMPIEZA DXF
+    # LIMPIEZA DXF
     # ======================================================
-
-    # eliminar encabezados tipo {C7:
     texto = re.sub(r"\{[^:]*:", "", texto)
-
-    # eliminar llaves
     texto = texto.replace("{", "").replace("}", "")
-
-    # eliminar saltos DXF
     texto = texto.replace("\\P", ",")
-
-    # ======================================================
-    # 2. LIMPIEZA CONTROLADA
-    # ======================================================
 
     # eliminar (P), (E), etc
     texto = re.sub(r"\([^)]*\)", "", texto)
 
-    # normalizar separadores
+    # separadores
     texto = texto.replace(";", ",")
     texto = texto.replace("|", ",")
 
-    # limpiar espacios
     texto = re.sub(r"\s+", " ", texto).strip()
 
     debug_guardar("texto_limpio", texto)
 
     # ======================================================
-    # 3. DIVISIÓN
+    # DIVISIÓN
     # ======================================================
     partes = _split_bloques(texto)
 
-    resultado = []
+    estructuras = []
+    puntos = []
 
     for p in partes:
 
         if not p:
             continue
 
-        # expandir multiplicadores
         tokens = _expandir_multiplicador(p)
 
         for t in tokens:
@@ -154,13 +139,18 @@ def expandir_lista_codigos(texto: str):
             if not codigo:
                 continue
 
-            resultado.append(codigo)
+            # =========================================
+            # 🔥 CLASIFICACIÓN CLAVE
+            # =========================================
+            if re.fullmatch(r"P[-#]?\d+", codigo):
+                puntos.append(codigo)
+            else:
+                estructuras.append(codigo)
 
-    debug_guardar("codigos_expandidos", resultado)
+    debug_guardar("estructuras_detectadas", estructuras)
+    debug_guardar("puntos_detectados", puntos)
 
-    return resultado
-
-
+    return estructuras
 # ==========================================================
 # EXPANSIÓN + CONTEO
 # ==========================================================
