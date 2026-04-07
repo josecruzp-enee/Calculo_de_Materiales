@@ -73,17 +73,26 @@ def seleccionar_modo_carga():
         "manual": "Manual"
     }
 
+    # =========================
+    # 🔥 CONTROL DE ESTADO
+    # =========================
+    if "modo_carga_seleccionado" not in st.session_state:
+        st.session_state["modo_carga_seleccionado"] = "manual"  # default real
+
+    keys = list(opciones.keys())
+    index_actual = keys.index(st.session_state["modo_carga_seleccionado"])
+
     modo = st.radio(
         "Seleccione el tipo de entrada",
-        list(opciones.keys()),
+        keys,
+        index=index_actual,
         format_func=lambda x: opciones[x],
-        horizontal=True
-        key="modo_carga_seleccionado"
+        horizontal=True,
+        key="radio_modo_carga"
     )
 
+    # Persistencia real
     st.session_state["modo_carga_seleccionado"] = modo
-
-
 # ====== Ruta por defecto para materiales ======
 def ruta_datos_materiales_por_defecto() -> str:
     return RUTA_DATOS_MATERIALES_DEFECTO
