@@ -47,7 +47,7 @@ def _expandir_multiplicador(token: str):
         n = int(match.group(1))
         val = match.group(2).strip()
         return [val] * n
-
+    debug_guardar("tokens_expandidos", tokens)
     return [token]
 
 def _split_bloques(texto: str):
@@ -82,7 +82,7 @@ def _split_bloques(texto: str):
             buffer = None
 
         resultado.append(p)
-
+    debug_guardar("partes_split", partes)
     return resultado
 # ==========================================================
 # LIMPIEZA FINAL DE CÓDIGO (🔥 BLINDADA)
