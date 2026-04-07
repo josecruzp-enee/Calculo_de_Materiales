@@ -116,10 +116,6 @@ def renderizar_estructuras():
         st.info("➡️ Ahora puedes ir a la pestaña 'Finalizar' para procesar")
 
 def renderizar_final():
-    if st.session_state.get("df_estructuras") is None:
-        st.warning("⚠️ Debes cargar estructuras primero.")
-        return
-
     seccion_finalizar_calculo()
 
 
