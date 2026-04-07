@@ -23,8 +23,14 @@ class EntradaMateriales:
         # --------------------------
         # estructuras_df
         # --------------------------
-        if self.estructuras_df is None:
-            raise ValueError("estructuras_df es None")
+        cols = {c.strip().upper(): c for c in self.estructuras_df.columns}
+
+        col_est = cols.get("ESTRUCTURAS") or cols.get("ESTRUCTURA")
+
+        if not col_est:
+            raise ValueError(f"No existe columna de estructuras. Columnas: {list(self.estructuras_df.columns)}")
+
+        self.estructuras_df = self.estructuras_df.rename(columns={col_est: "Estructuras"})
 
         if not isinstance(self.estructuras_df, pd.DataFrame):
             raise TypeError("estructuras_df debe ser DataFrame")
