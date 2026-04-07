@@ -61,21 +61,11 @@ def renderizar_cables():
 
 
 def renderizar_modo_carga():
-    modo_label = seleccionar_modo_carga()
+    modo = seleccionar_modo_carga()
 
-    mapa = {
-        "Desde archivo Excel": "excel",
-        "Pegar tabla": "tabla",
-        "Listas desplegables": "manual",
-        "Pdf": "pdf",
-        "DXF (ENEE)": "dxf",
-    }
-
-    modo = mapa.get(modo_label)
-
+    
     st.session_state["modo_carga_seleccionado"] = modo
     st.session_state["tipo_entrada"] = modo
-
 
 def renderizar_estructuras():
     modo = st.session_state.get("modo_carga_seleccionado")
