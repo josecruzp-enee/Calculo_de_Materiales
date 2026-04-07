@@ -7,7 +7,12 @@ from __future__ import annotations
 from interfaz.contratos import SalidaInterfaz, SalidaEntradas
 
 # =========================================================
-# SERVICIO DE DOMINIO (AQUÍ VIVE LA LÓGICA REAL)
+# DTO INTERNO
+# =========================================================
+from entradas.contratos_entradas import EntradaPipeline
+
+# =========================================================
+# SERVICIO (LÓGICA REAL)
 # =========================================================
 from entradas.servicio_entrada import ejecutar_pipeline_entrada
 
@@ -23,28 +28,36 @@ def ejecutar_entradas(
 ) -> SalidaEntradas:
     """
     Orquestador del dominio entradas.
-    SOLO coordina:
-        - recibe contrato
-        - llama servicio
-        - devuelve contrato
+
+    RESPONSABILIDAD:
+        - Validar contrato de entrada (interfaz)
+        - Adaptar a DTO interno
+        - Ejecutar servicio de dominio
+        - Adaptar salida a contrato
+
+    NO:
+        - leer archivos
+        - normalizar
+        - validar estructuras
     """
 
     # =====================================================
-    # 1. VALIDAR ENTRADA DE INTERFAZ
+    # 1. VALIDACIÓN DE CONTRATO (INTERFAZ)
     # =====================================================
     if not entrada.ok:
         return SalidaEntradas(
             ok=False,
             errores=entrada.errores,
             warnings=entrada.warnings,
+            df_estructuras=None,
             debug={"origen": "interfaz"}
         )
 
     try:
         # =====================================================
-        # 2. EJECUTAR PIPELINE DE DOMINIO
+        # 2. ADAPTACIÓN → DTO INTERNO
         # =====================================================
-        resultado = ejecutar_pipeline_entrada(
+        dto = EntradaPipeline(
             tipo=entrada.tipo_entrada,
             data=entrada.data_entrada,
             tension=tension,
@@ -54,20 +67,41 @@ def ejecutar_entradas(
         )
 
         # =====================================================
-        # 3. ADAPTAR A CONTRATO
+        # 3. EJECUCIÓN DEL DOMINIO
+        # =====================================================
+        resultado = ejecutar_pipeline_entrada(dto)
+
+        # =====================================================
+        # 4. VALIDACIÓN DE RESULTADO
+        # =====================================================
+        if not resultado.ok:
+            return SalidaEntradas(
+                ok=False,
+                errores=resultado.errores,
+                warnings=resultado.warnings,
+                df_estructuras=resultado.estructuras_df,
+                datos_proyecto=entrada.datos_proyecto,
+                df_cables=entrada.df_cables,
+                df_materiales_extra=entrada.df_materiales_extra,
+                debug=resultado.debug,
+            )
+
+        # =====================================================
+        # 5. ADAPTACIÓN → CONTRATO DE SALIDA
         # =====================================================
         return SalidaEntradas(
             ok=True,
             errores=[],
-            warnings=[],
+            warnings=resultado.warnings,
             df_estructuras=resultado.estructuras_df,
             datos_proyecto=entrada.datos_proyecto,
             df_cables=entrada.df_cables,
             df_materiales_extra=entrada.df_materiales_extra,
             debug={
                 "pipeline": "ok",
-                "filas": len(resultado.estructuras_df)
-            }
+                "filas": len(resultado.estructuras_df),
+                **resultado.debug,
+            },
         )
 
     except Exception as e:
@@ -76,5 +110,6 @@ def ejecutar_entradas(
             errores=[str(e)],
             warnings=[],
             df_estructuras=None,
-            debug={"error": str(e)}
+            datos_proyecto=entrada.datos_proyecto,
+            debug={"error": str(e), "etapa": "orquestador_entradas"},
         )
