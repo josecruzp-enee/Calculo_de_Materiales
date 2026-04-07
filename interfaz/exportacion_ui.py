@@ -40,41 +40,63 @@ def _vista_previa_conteo(df_estructuras: pd.DataFrame | None):
 
 
 # =========================================================
+# DEBUG CONTROLADO
+# =========================================================
+def _debug_final(tension, data):
+    st.markdown("### 🧠 Debug previo a cálculo")
+
+    st.write("Tensión en session_state:", tension)
+    st.write("Tipo de data:", type(data))
+
+    if isinstance(data, pd.DataFrame):
+        st.write("Filas:", len(data))
+        st.write("Columnas:", list(data.columns))
+
+
+# =========================================================
 # SECCIÓN FINALIZAR
 # =========================================================
 def seccion_finalizar_calculo():
 
-    import streamlit as st
-    import pandas as pd
-
     from interfaz.contratos import SalidaInterfaz
     from entradas.orquestador_entradas import ejecutar_entradas
-    from aplicacion.modelos_proyecto import EntradaProyecto
-    from aplicacion.orquestador_proyecto import ejecutar_proyecto
 
     st.subheader("⚙️ Finalizar cálculo")
 
     tipo = st.session_state.get("modo_carga_seleccionado")
     data = st.session_state.get("data_entrada")
+    tension = st.session_state.get("tension")  # 🔥 CLAVE
 
+    # =====================================================
+    # VALIDACIONES
+    # =====================================================
     if data is None:
         st.warning("Debe ingresar estructuras antes de calcular")
         return
 
-    # =========================
+    if tension is None:
+        st.error("❌ Tensión no definida. Seleccione 13.8 kV o 34.5 kV en 'Modo de Carga'")
+        return
+
+    # =====================================================
+    # DEBUG (clave para no volvernos locos)
+    # =====================================================
+    _debug_final(tension, data)
+
+    # =====================================================
     # Vista previa (solo manual)
-    # =========================
+    # =====================================================
     if isinstance(data, pd.DataFrame):
         _vista_previa_conteo(data)
 
-    # =========================
+    # =====================================================
     # EJECUCIÓN
-    # =========================
+    # =====================================================
     if st.button("🚀 Ejecutar cálculo"):
 
         try:
             # =====================================================
-            # 1. ARMAR CONTRATO INTERFAZ
+            # 1. CONTRATO INTERFAZ
             # =====================================================
             salida_ui = SalidaInterfaz(
                 ok=True,
@@ -88,11 +110,11 @@ def seccion_finalizar_calculo():
             )
 
             # =====================================================
-            # 2. PIPELINE ENTRADAS
+            # 2. ENTRADAS (CON TENSIÓN REAL)
             # =====================================================
             salida_entradas = ejecutar_entradas(
                 salida_ui,
-                tension=13.8
+                tension=float(tension)  # 🔥 YA NO HARDCODE
             )
 
             if not salida_entradas.ok:
@@ -100,7 +122,9 @@ def seccion_finalizar_calculo():
                 for e in salida_entradas.errores:
                     st.error(f"- {e}")
                 return
+
             st.session_state["df_estructuras"] = salida_entradas.df_estructuras
+
             # =====================================================
             # 3. ADAPTADOR → PROYECTO
             # =====================================================
@@ -109,6 +133,7 @@ def seccion_finalizar_calculo():
                 df_cables=salida_entradas.df_cables,
                 df_materiales_extra=salida_entradas.df_materiales_extra,
                 ruta_materiales=st.session_state.get("ruta_datos_materiales"),
+                tension=float(tension),  # 🔥 CRÍTICO
             )
 
             # =====================================================
@@ -141,6 +166,8 @@ def seccion_finalizar_calculo():
 
         except Exception as e:
             st.error(f"❌ Error general: {str(e)}")
+
+
 # =========================================================
 # SECCIÓN EXPORTACIÓN
 # =========================================================
@@ -151,16 +178,16 @@ def seccion_exportacion():
     resultado = st.session_state.get("resultado_calculo")
     calculo_ok = st.session_state.get("calculo_finalizado")
 
-    # =========================
+    # =====================================================
     # VALIDACIÓN
-    # =========================
+    # =====================================================
     if not calculo_ok or resultado is None:
         st.info("Debe ejecutar el cálculo antes de exportar")
         return
 
-    # =========================
+    # =====================================================
     # GENERAR REPORTES
-    # =========================
+    # =====================================================
     if st.button("📄 Generar reportes"):
 
         with st.spinner("Generando archivos..."):
@@ -180,9 +207,9 @@ def seccion_exportacion():
 
         st.success("Reportes generados correctamente")
 
-    # =========================
+    # =====================================================
     # DESCARGAS
-    # =========================
+    # =====================================================
     pdfs = st.session_state.get("pdfs_generados")
 
     if pdfs:
