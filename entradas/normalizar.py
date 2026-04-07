@@ -114,7 +114,8 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         lista_codigos = expandir_lista_codigos(estructura_raw)
-
+        debug_guardar("RAW_ESTRUCTURA", estructura_raw)
+        debug_guardar("LISTA_CODIGOS", lista_codigos)
         for cod in lista_codigos:
 
             cod = limpiar_codigo(cod)
