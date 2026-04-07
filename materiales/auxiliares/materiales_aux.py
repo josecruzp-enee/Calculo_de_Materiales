@@ -23,18 +23,32 @@ def _es_proyectado(bloque: str) -> bool:
 
 def _expandir_multiplicador(token: str):
     """
-    Ej: "2xB-III-1" → ["B-III-1", "B-III-1"]
+    Soporta:
+    - 2xB-III-1
+    - 2 x B-III-1
+    - 3XCS-2
     """
-    token = token.strip()
 
-    match = re.match(r"(\d+)\s*[xX]\s*(.+)", token)
+    if not token:
+        return []
+
+    token = token.strip().upper()
+
+    # 🔥 CASO 1: "3 x CS-2" o "3xCS-2"
+    match = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
+    if match:
+        n = int(match.group(1))
+        val = match.group(2).strip()
+        return [val] * n
+
+    # 🔥 CASO 2: "3XCS-2" (pegado)
+    match = re.match(r"^\s*(\d+)[xX]([A-Z0-9\-\.]+)$", token)
     if match:
         n = int(match.group(1))
         val = match.group(2).strip()
         return [val] * n
 
     return [token]
-
 
 def _split_bloques(texto: str):
     """
