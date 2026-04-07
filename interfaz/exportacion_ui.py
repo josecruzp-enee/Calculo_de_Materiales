@@ -66,7 +66,7 @@ def seccion_finalizar_calculo():
     tipo = st.session_state.get("modo_carga_seleccionado")
     data = st.session_state.get("data_entrada")
     datos = st.session_state.get("datos_proyecto", {})
-    tension_raw = datos.get("tension") or datos.get("nivel_tension")
+    tension_raw = datos.get("nivel_de_tension")
 
     if not tension_raw:
         st.error("❌ No se encontró tensión en datos del proyecto")
