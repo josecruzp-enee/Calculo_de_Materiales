@@ -129,19 +129,44 @@ def _grafo_pipeline():
 # =========================================================
 def _render_valor_debug(valor):
 
+    import pandas as pd
+
+    # =========================
+    # DATAFRAME
+    # =========================
     if isinstance(valor, pd.DataFrame):
         st.caption(f"Filas: {len(valor)} | Columnas: {list(valor.columns)}")
         st.dataframe(valor.head(10), use_container_width=True)
 
+    # =========================
+    # DICT (CLAVE PROBLEMA)
+    # =========================
     elif isinstance(valor, dict):
-        st.json(valor)
+        try:
+            # 🔥 fuerza a serializable
+            limpio = {str(k): str(v)[:200] for k, v in valor.items()}
+            st.json(limpio)
+        except Exception:
+            st.write(str(valor))
 
+    # =========================
+    # OBJETOS
+    # =========================
     elif hasattr(valor, "__dict__"):
-        st.json(valor.__dict__)
+        try:
+            limpio = {str(k): str(v)[:200] for k, v in vars(valor).items()}
+            st.json(limpio)
+        except Exception:
+            st.write(str(valor))
 
+    # =========================
+    # OTROS
+    # =========================
     else:
-        st.write(valor)
-
+        try:
+            st.write(valor)
+        except Exception:
+            st.write(str(valor))
 
 # =========================================================
 # 🔷 AUDITORÍA DE ESTRUCTURAS
