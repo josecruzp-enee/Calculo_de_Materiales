@@ -28,7 +28,7 @@ def _parse_tension_col(col) -> float | None:
 
 
 # ==========================================================
-# LECTOR PRINCIPAL
+# LECTOR PRINCIPAL (ROBUSTO + DEBUG + CONTRATO)
 # ==========================================================
 def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | None:
 
@@ -36,11 +36,11 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
     # DEBUG ENTRADA
     # =========================
     debug_guardar("lector_input_shape", getattr(df, "shape", None))
-    debug_guardar("lector_input_columns", list(df.columns) if df is not None else None)
+    debug_guardar("lector_input_columns_raw", list(df.columns) if df is not None else None)
     debug_guardar("lector_tension", tension)
 
     # =========================
-    # VALIDACIÓN FUERTE
+    # VALIDACIONES
     # =========================
     if df is None or df.empty:
         debug_guardar("lector_error", "df vacío o None")
@@ -55,28 +55,49 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
         raise ValueError(f"tension inválida: {tension}")
 
     df = df.copy()
-    df.columns = df.columns.map(str).str.strip()
 
     # =========================
-    # DEBUG COLUMNAS LIMPIAS
+    # NORMALIZAR COLUMNAS (🔥 CLAVE)
     # =========================
-    debug_guardar("lector_columns_clean", list(df.columns))
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    debug_guardar("lector_columns_normalized", list(df.columns))
 
     # =========================
-    # VALIDAR COLUMNAS BASE
+    # DETECTAR COLUMNA MATERIALES
     # =========================
-    if "Materiales" not in df.columns:
+    posibles_material = [
+        "MATERIALES",
+        "MATERIAL",
+        "DESCRIPCION",
+        "DESCRIPCIÓN"
+    ]
+
+    col_material = None
+
+    for c in df.columns:
+        if c in posibles_material:
+            col_material = c
+            break
+
+    if col_material is None:
         debug_guardar("lector_error", {
-            "msg": "Columna 'Materiales' no encontrada",
+            "msg": "No se encontró columna de materiales",
             "columnas": list(df.columns)
         })
-        raise ValueError("Columna 'Materiales' no encontrada")
+        raise ValueError(f"No se encontró columna de materiales: {df.columns}")
 
-    if "Unidad" not in df.columns:
+    df["Materiales"] = df[col_material]
+
+    # =========================
+    # UNIDAD
+    # =========================
+    if "UNIDAD" in df.columns:
+        df["Unidad"] = df["UNIDAD"]
+    else:
         df["Unidad"] = ""
 
     # =========================
-    # BUSCAR COLUMNA DE TENSIÓN
+    # DETECTAR COLUMNA TENSIÓN
     # =========================
     col_tension = None
 
@@ -86,14 +107,14 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
         if c_val is None:
             continue
 
-        if abs(c_val - tension) < 0.05:
+        if abs(c_val - tension) < 0.1:
             col_tension = c
             break
 
     debug_guardar("lector_columna_tension", col_tension)
 
     if col_tension is None:
-        debug_guardar("lector_warning", "No se encontró columna de tensión")
+        debug_guardar("lector_warning", f"No se encontró columna de tensión {tension}")
         return None
 
     # =========================
@@ -103,7 +124,8 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
     df["Unidad"] = df["Unidad"].apply(_limpiar_str)
 
     df[col_tension] = pd.to_numeric(
-        df[col_tension], errors="coerce"
+        df[col_tension],
+        errors="coerce"
     ).fillna(0)
 
     # =========================
@@ -125,11 +147,11 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
     # =========================
     # DEBUG SALIDA
     # =========================
-    debug_guardar("lector_output_preview", df_out.head(10))
     debug_guardar("lector_output_shape", df_out.shape)
+    debug_guardar("lector_output_preview", df_out.head(10))
 
     # =========================
-    # VALIDACIÓN FINAL
+    # VALIDACIÓN FINAL (CONTRATO)
     # =========================
     if df_out.empty:
         debug_guardar("lector_resultado", "vacío")
