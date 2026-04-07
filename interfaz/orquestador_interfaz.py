@@ -83,8 +83,8 @@ def renderizar_estructuras():
         st.warning("⚠️ Primero selecciona el modo de carga.")
         return
 
-    df = None
-    ruta = None
+    archivo = None
+    df_ui = None
 
     try:
 
@@ -92,75 +92,56 @@ def renderizar_estructuras():
         # MANUAL (UI)
         # -------------------------
         if modo == "manual":
-            df, ruta = seccion_entrada_estructuras()
+            df, _ = seccion_entrada_estructuras()
+
+            if df is None or df.empty:
+                return
+
+            df_ui = df
 
         # -------------------------
         # EXCEL
         # -------------------------
         elif modo == "excel":
-            from entradas.leer_excel import leer_estructuras
-            df = leer_estructuras()
-            ruta = None
+            archivo = st.file_uploader("Subir Excel", type=["xlsx"])
 
         # -------------------------
         # TABLA
         # -------------------------
         elif modo == "tabla":
-            from entradas.leer_tabla import leer_tabla
-            df = leer_tabla()
-            ruta = None
+            archivo = st.text_area("Pegar tabla")
 
         # -------------------------
         # PDF
         # -------------------------
         elif modo == "pdf":
-            from entradas.leer_pdf import leer_pdf
-            df = leer_pdf()
-            ruta = None
+            archivo = st.file_uploader("Subir PDF", type=["pdf"])
 
         # -------------------------
-        # DXF (ACTIVO)
+        # DXF
         # -------------------------
         elif modo == "dxf":
-
-            archivo = st.file_uploader(
-                "Subir archivo DXF",
-                type=["dxf"],
-                key="dxf_upload"
-            )
-
-            if archivo is None:
-                st.info("Sube un archivo DXF para continuar")
-                return
-
-            from entradas.leer_dxf import leer_dxf
-
-            df = leer_dxf(archivo)
-            ruta = getattr(archivo, "name", None)
-
-            if df is None or df.empty:
-                st.error("No se pudieron leer estructuras desde el DXF")
-                return
+            archivo = st.file_uploader("Subir DXF", type=["dxf"])
 
         else:
             st.warning(f"Modo no soportado: {modo}")
             return
 
     except Exception as e:
-        st.error(f"Error cargando estructuras: {e}")
+        st.error(f"Error en carga: {e}")
         return
 
-    if not es_dataframe_valido(df):
-        st.warning("No hay estructuras válidas.")
-        return
+    # =========================
+    # GUARDAR ENTRADA CRUDA
+    # =========================
+    st.session_state["tipo_entrada"] = modo
 
-    # Guardar en estado
-    st.session_state["df_estructuras"] = df
-    st.session_state["ruta_estructuras_compacto"] = ruta
+    if df_ui is not None:
+        st.session_state["data_entrada"] = df_ui
+    else:
+        st.session_state["data_entrada"] = archivo
 
-    st.success(f"Estructuras cargadas correctamente ({modo})")
-
-
+    st.success(f"Entrada cargada correctamente ({modo})")
 # =========================================================
 # FINAL (SIN LÓGICA DE NEGOCIO)
 # =========================================================
