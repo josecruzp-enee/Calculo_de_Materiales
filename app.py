@@ -20,6 +20,7 @@ SECCIONES = [
     
     ("final", "Finalizar"),
     ("exportar", "Exportación"),
+    ("debug", "Debug"),
     
 ]
 
