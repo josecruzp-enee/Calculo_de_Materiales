@@ -64,41 +64,48 @@ def _expandir_multiplicador(bloque: str) -> list[str]:
 # ==========================================================
 def expandir_lista_codigos(texto: str) -> list[str]:
 
+    if texto is None:
+        return []
+
+    texto = str(texto).upper().strip()
+
     if not texto:
         return []
 
-    texto = str(texto).upper()
+    # =========================
+    # LIMPIEZA BASE
+    # =========================
+    texto = re.sub(r"\{[^}]*?:", "", texto)  # elimina {C7:
+    texto = texto.replace("}", "")
+    texto = texto.replace(";", ",")
+    texto = texto.replace("|", ",")
 
-    bloques = _split_bloques(texto)
+    # =========================
+    # SPLIT SOLO POR COMA
+    # =========================
+    bloques = [b.strip() for b in texto.split(",") if b.strip()]
 
     resultado = []
 
     for b in bloques:
 
-        # solo proyectados
-        if not _es_proyectado(b):
+        # solo estructuras proyectadas
+        if "(P)" not in b:
             continue
 
-        # quitar etiquetas
-        b = re.sub(r"\(.*?\)", "", b).strip()
+        # quitar (P)
+        b = b.replace("(P)", "").strip()
 
-        # expandir
-        lista = _expandir_multiplicador(b)
+        if not b:
+            continue
 
-        for c in lista:
-            c = limpiar_codigo(c)
+        # limpiar código final
+        b = limpiar_codigo(b)
 
-            if not c:
-                continue
-
-            # filtro basura
-            if len(c) <= 2:
-                continue
-
-            resultado.append(c)
+        if b:
+            resultado.append(b)
 
     return resultado
-
 
 # ==========================================================
 # CONTEO
