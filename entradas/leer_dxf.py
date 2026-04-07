@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pandas as pd
 import re
-from ayuda.debug import debug_guardar
 
+from ayuda.debug import debug_guardar
 
 
 def leer_dxf(archivo_dxf) -> pd.DataFrame:
@@ -54,26 +54,33 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
                 continue
 
             # =========================
-            # 🔥 LIMPIEZA FUERTE (FINAL)
+            # 🔥 LIMPIEZA FUERTE
             # =========================
 
             # saltos AutoCAD
             texto = texto.replace("\\P", ",")
 
-            # eliminar formato {C7: o similar
+            # eliminar formato tipo {C7:
             texto = re.sub(r"\{[^};]*[;:]", "", texto)
 
             # eliminar llaves
-            texto = texto.replace("}", "")
+            texto = texto.replace("{", "").replace("}", "")
 
             # eliminar etiquetas tipo P-57
             texto = re.sub(r"\bP-\d+\b", "", texto)
 
-            # eliminar (P)
-            texto = re.sub(r"\(P\)", "", texto)
+            # eliminar (P), (E), etc
+            texto = re.sub(r"\([^)]*\)", "", texto)
 
-            # normalizar comas
+            # normalizar separadores
+            texto = texto.replace(";", ",")
+            texto = texto.replace("|", ",")
+
+            # normalizar comas múltiples
             texto = re.sub(r",+", ",", texto)
+
+            # 🔥 IMPORTANTE: separar cuando hay espacio entre códigos
+            texto = re.sub(r"\s(?=[A-Z]+-)", ",", texto)
 
             # limpiar espacios
             texto = re.sub(r"\s+", " ", texto).strip(" ,")
@@ -91,8 +98,18 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
         else:
             i += 1
 
+    # =========================
+    # OUTPUT FINAL
+    # =========================
     if not resultados:
-        return pd.DataFrame()
+        df = pd.DataFrame()
+    else:
+        df = pd.DataFrame(resultados)
 
-    return pd.DataFrame(resultados)
-debug_guardar("DXF - salida", df)
+    # =========================
+    # DEBUG
+    # =========================
+    debug_guardar("DXF - salida", df)
+    debug_guardar("DXF - texto limpio", resultados[:5])
+
+    return df
