@@ -7,7 +7,7 @@ from materiales.auxiliares.materiales_aux import (
     expandir_lista_codigos,
     limpiar_codigo,
 )
-
+import re
 
 # ==========================================================
 # API PRINCIPAL
@@ -112,13 +112,34 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         lista_codigos = expandir_lista_codigos(estructura_raw)
 
         for cod in lista_codigos:
+
             cod = limpiar_codigo(cod)
 
-            if cod:
-                registros.append({
-                    "punto": str(punto).strip(),
-                    "codigodeestructura": cod,
-                    "cantidad": 1
-                })
+            if not cod:
+                continue
+
+            # ======================================================
+            # 🔥 FILTRO CRÍTICO (AQUÍ ESTABA EL PROBLEMA)
+            # ======================================================
+
+            # ❌ eliminar multiplicadores tipo 3X
+            if re.match(r"^\d+X$", cod):
+                continue
+
+            # ❌ eliminar puntos tipo P-01
+            if re.match(r"^P-\d+$", cod):
+                continue
+
+            # ❌ eliminar luminaria incompleta
+            if cod == "LL-1":
+                continue
+
+            # ======================================================
+
+            registros.append({
+                "punto": str(punto).strip(),
+                "codigodeestructura": cod,
+                "cantidad": 1
+            })
 
     return pd.DataFrame(registros)
