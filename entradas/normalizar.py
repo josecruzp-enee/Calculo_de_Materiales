@@ -61,7 +61,7 @@ def normalizar_estructuras(df: pd.DataFrame):
     # ======================================================
     df_final = df_final.rename(columns={
         "punto": "Punto",
-        "codigodeestructura": "Estructuras",
+        "codigodeestructura": "Estructura",
         "cantidad": "Cantidad"
     })
 
