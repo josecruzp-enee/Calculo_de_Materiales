@@ -27,6 +27,11 @@ from materiales.validaciones.materiales_validacion import (
     validar_datos_proyecto,
 )
 
+# =========================================================
+# DEBUG
+# =========================================================
+from ayuda.debug import debug_guardar
+
 
 # =========================================================
 # HELPERS
@@ -86,6 +91,8 @@ def ejecutar_materiales(
         "materiales_extra": None if df_materiales_extra is None else len(df_materiales_extra),
     }
 
+    debug_guardar("materiales_entrada", debug["entrada"])
+
     # =====================================================
     # 2. VALIDACIÓN
     # =====================================================
@@ -96,6 +103,9 @@ def ejecutar_materiales(
 
     if df_norm is None or df_norm.empty:
         warnings.append("No hay estructuras para procesar.")
+
+        debug_guardar("materiales_warning", "No hay estructuras")
+
         return SalidaMateriales(
             ok=True,
             errores=errores,
@@ -104,6 +114,14 @@ def ejecutar_materiales(
             df_materiales_por_punto=_df_vacio(),
             debug=debug
         )
+
+    # =====================================================
+    # DEBUG PRE CÁLCULO
+    # =====================================================
+    debug_guardar("materiales_pre_calculo", {
+        "tension": tension,
+        "n_estructuras": len(df_norm),
+    })
 
     # =====================================================
     # 3. CÁLCULO PRINCIPAL
@@ -116,6 +134,9 @@ def ejecutar_materiales(
         )
     except Exception as e:
         errores.append(f"Error en cálculo de materiales: {e}")
+
+        debug_guardar("materiales_error", str(e))
+
         return SalidaMateriales(
             ok=False,
             errores=errores,
@@ -152,6 +173,11 @@ def ejecutar_materiales(
         "detalle_rows": len(df_detalle),
     }
 
+    debug_guardar("materiales_post_calculo", debug["post_calculo"])
+
+    # DEBUG PRO: ver resultados
+    debug_guardar("df_materiales", df_materiales)
+
     # =====================================================
     # 5. CABLES
     # =====================================================
@@ -161,8 +187,13 @@ def ejecutar_materiales(
             df_cab = materiales_desde_cables(df_cables)
             df_materiales = _merge_materiales(df_materiales, df_cab)
 
+            debug_guardar("materiales_cables", {
+                "rows": len(df_cab)
+            })
+
         except Exception as e:
             warnings.append(f"Error integrando cables: {e}")
+            debug_guardar("materiales_error_cables", str(e))
 
     # =====================================================
     # 6. MATERIALES EXTRA
@@ -170,12 +201,24 @@ def ejecutar_materiales(
     if isinstance(df_materiales_extra, pd.DataFrame) and not df_materiales_extra.empty:
         try:
             df_materiales = _merge_materiales(df_materiales, df_materiales_extra)
+
+            debug_guardar("materiales_extra", {
+                "rows": len(df_materiales_extra)
+            })
+
         except Exception as e:
             warnings.append(f"Error integrando materiales extra: {e}")
+            debug_guardar("materiales_error_extra", str(e))
 
     # =====================================================
     # 7. RESULTADO FINAL
     # =====================================================
+    debug_guardar("materiales_resultado", {
+        "ok": True,
+        "errores": errores,
+        "warnings": warnings,
+    })
+
     return SalidaMateriales(
         ok=True,
         errores=errores,
