@@ -34,21 +34,20 @@ def _expandir_multiplicador(token: str):
 
     token = token.strip().upper()
 
-    # 🔥 CASO 1: "3 x CS-2" o "3xCS-2"
     match = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
     if match:
         n = int(match.group(1))
         val = match.group(2).strip()
         return [val] * n
 
-    # 🔥 CASO 2: "3XCS-2" (pegado)
     match = re.match(r"^\s*(\d+)[xX]([A-Z0-9\-\.]+)$", token)
     if match:
         n = int(match.group(1))
         val = match.group(2).strip()
         return [val] * n
-    debug_guardar("tokens_expandidos", tokens)
+
     return [token]
+
 
 def _split_bloques(texto: str):
     """
@@ -71,12 +70,11 @@ def _split_bloques(texto: str):
         if not p:
             continue
 
-        # 🔥 detecta "3 X"
+        # detecta "3 X"
         if re.match(r"^\d+\s*[xX]$", p):
             buffer = p
             continue
 
-        # 🔥 une con lo siguiente
         if buffer:
             p = f"{buffer} {p}"
             buffer = None
@@ -84,13 +82,12 @@ def _split_bloques(texto: str):
         resultado.append(p)
 
     return resultado
+
+
 # ==========================================================
-# LIMPIEZA FINAL DE CÓDIGO (🔥 BLINDADA)
+# LIMPIEZA FINAL
 # ==========================================================
 def limpiar_codigo(codigo: str) -> str:
-    """
-    Normaliza un código SIN destruir su estructura
-    """
 
     if codigo is None:
         return ""
@@ -100,14 +97,8 @@ def limpiar_codigo(codigo: str) -> str:
     if not codigo:
         return ""
 
-    # 🔥 eliminar (P), (E), etc
     codigo = re.sub(r"\(.*?\)", "", codigo)
-
-    # 🔥 eliminar espacios PERO NO GUIONES
     codigo = codigo.replace(" ", "")
-
-    # 🔥 PERMITIR:
-    # letras, números, guiones, puntos (para TS-37.5KVA), W
     codigo = re.sub(r"[^A-Z0-9\-\.\+]", "", codigo)
 
     return codigo
@@ -117,9 +108,6 @@ def limpiar_codigo(codigo: str) -> str:
 # FUNCIÓN CENTRAL
 # ==========================================================
 def expandir_lista_codigos(texto: str):
-    """
-    Convierte texto DXF sucio en lista limpia de estructuras
-    """
 
     debug_guardar("raw_texto_entrada", texto)
 
@@ -128,24 +116,15 @@ def expandir_lista_codigos(texto: str):
 
     texto = str(texto).upper()
 
-    # ======================================================
-    # 1. LIMPIEZA DXF
-    # ======================================================
-
+    # limpieza DXF
     texto = re.sub(r"\{[^:]*:", "", texto)
     texto = texto.replace("{", "").replace("}", "")
     texto = texto.replace("\\P", ",")
 
-    # ======================================================
-    # 🔥 IMPORTANTE: NO eliminar todo antes de separar
-    # ======================================================
-
     debug_guardar("texto_pre_split", texto)
 
-    # ======================================================
-    # 2. DIVISIÓN PRIMERO
-    # ======================================================
     partes = _split_bloques(texto)
+    debug_guardar("partes_split", partes)
 
     resultado = []
 
@@ -154,11 +133,11 @@ def expandir_lista_codigos(texto: str):
         if not p:
             continue
 
-        # 🔥 eliminar (P) después de separar
+        # quitar (P)
         p = re.sub(r"\(.*?\)", "", p)
 
-        # expandir multiplicadores
         tokens = _expandir_multiplicador(p)
+        debug_guardar("tokens_expandidos", tokens)
 
         for t in tokens:
             t = t.strip()
@@ -174,7 +153,7 @@ def expandir_lista_codigos(texto: str):
             resultado.append(codigo)
 
     debug_guardar("codigos_expandidos", resultado)
-    debug_guardar("partes_split", partes)
+
     return resultado
 
 
@@ -182,6 +161,7 @@ def expandir_lista_codigos(texto: str):
 # EXPANSIÓN + CONTEO
 # ==========================================================
 def expandir_y_contar(texto: str):
+
     lista = expandir_lista_codigos(texto)
 
     conteo = Counter()
@@ -198,6 +178,7 @@ def expandir_y_contar(texto: str):
 # VALIDACIÓN
 # ==========================================================
 def validar_codigos(lista_codigos):
+
     errores = []
 
     for c in lista_codigos:
