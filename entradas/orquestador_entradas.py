@@ -7,18 +7,46 @@ from __future__ import annotations
 from interfaz.contratos import SalidaInterfaz, SalidaEntradas
 
 # =========================================================
-# DTO INTERNO
+# LECTORES
 # =========================================================
-from entradas.contratos_entradas import EntradaPipeline
+from entradas.leer_excel import leer_estructuras as leer_excel
+from entradas.leer_tabla import leer_tabla
+from entradas.leer_pdf import leer_pdf
+from entradas.leer_dxf import leer_dxf
 
 # =========================================================
-# SERVICIO (LÓGICA REAL)
+# PROCESAMIENTO
 # =========================================================
-from entradas.servicio_entrada import ejecutar_pipeline_entrada
+from entradas.normalizar import normalizar_estructuras
+from entradas.validacion import validar_estructuras
 
 
 # =========================================================
-# ORQUESTADOR PURO
+# DISPATCH
+# =========================================================
+def _leer(tipo: str, data):
+
+    if tipo == "excel":
+        return leer_excel(data)
+
+    elif tipo == "tabla":
+        return leer_tabla(data)
+
+    elif tipo == "pdf":
+        return leer_pdf(data)
+
+    elif tipo == "dxf":
+        return leer_dxf(data)
+
+    elif tipo == "manual":
+        return data
+
+    else:
+        raise ValueError(f"Tipo no soportado: {tipo}")
+
+
+# =========================================================
+# ORQUESTADOR REAL (PIPELINE)
 # =========================================================
 def ejecutar_entradas(
     entrada: SalidaInterfaz,
@@ -26,90 +54,83 @@ def ejecutar_entradas(
     tension: float,
     validar_catalogo: bool = True,
 ) -> SalidaEntradas:
-    """
-    Orquestador del dominio entradas.
-
-    RESPONSABILIDAD:
-        - Validar contrato de entrada (interfaz)
-        - Adaptar a DTO interno
-        - Ejecutar servicio de dominio
-        - Adaptar salida a contrato
-
-    NO:
-        - leer archivos
-        - normalizar
-        - validar estructuras
-    """
 
     # =====================================================
-    # 1. VALIDACIÓN DE CONTRATO (INTERFAZ)
+    # 1. VALIDACIÓN INTERFAZ
     # =====================================================
     if not entrada.ok:
         return SalidaEntradas(
             ok=False,
             errores=entrada.errores,
             warnings=entrada.warnings,
-            df_estructuras=None,
             debug={"origen": "interfaz"}
         )
 
     try:
         # =====================================================
-        # 2. ADAPTACIÓN → DTO INTERNO
+        # 2. LECTURA
         # =====================================================
-        dto = EntradaPipeline(
-            tipo=entrada.tipo_entrada,
-            data=entrada.data_entrada,
-            tension=tension,
-            df_cables=entrada.df_cables,
-            df_materiales_extra=entrada.df_materiales_extra,
-            validar_catalogo=validar_catalogo,
-        )
+        df_raw = _leer(entrada.tipo_entrada, entrada.data_entrada)
 
-        # =====================================================
-        # 3. EJECUCIÓN DEL DOMINIO
-        # =====================================================
-        resultado = ejecutar_pipeline_entrada(dto)
-
-        # =====================================================
-        # 4. VALIDACIÓN DE RESULTADO
-        # =====================================================
-        if not resultado.ok:
+        if df_raw is None or getattr(df_raw, "empty", True):
             return SalidaEntradas(
                 ok=False,
-                errores=resultado.errores,
-                warnings=resultado.warnings,
-                df_estructuras=resultado.estructuras_df,
-                datos_proyecto=entrada.datos_proyecto,
-                df_cables=entrada.df_cables,
-                df_materiales_extra=entrada.df_materiales_extra,
-                debug=resultado.debug,
+                errores=["No se pudo leer la entrada"],
+                debug={"fase": "lectura"}
             )
 
         # =====================================================
-        # 5. ADAPTACIÓN → CONTRATO DE SALIDA
+        # 3. NORMALIZACIÓN
+        # =====================================================
+        df_norm, errores_norm, warnings_norm = normalizar_estructuras(df_raw)
+
+        if errores_norm:
+            return SalidaEntradas(
+                ok=False,
+                errores=errores_norm,
+                warnings=warnings_norm,
+                debug={"fase": "normalizacion"}
+            )
+
+        # =====================================================
+        # 4. VALIDACIÓN
+        # =====================================================
+        errores_val = validar_estructuras(df_norm)
+
+        if errores_val:
+            return SalidaEntradas(
+                ok=False,
+                errores=errores_val,
+                warnings=warnings_norm,
+                df_estructuras=df_norm,
+                debug={"fase": "validacion"}
+            )
+
+        # =====================================================
+        # 5. OK
         # =====================================================
         return SalidaEntradas(
             ok=True,
             errores=[],
-            warnings=resultado.warnings,
-            df_estructuras=resultado.estructuras_df,
+            warnings=warnings_norm,
+            df_estructuras=df_norm,
             datos_proyecto=entrada.datos_proyecto,
             df_cables=entrada.df_cables,
             df_materiales_extra=entrada.df_materiales_extra,
             debug={
-                "pipeline": "ok",
-                "filas": len(resultado.estructuras_df),
-                **resultado.debug,
-            },
+                "fase": "ok",
+                "filas": len(df_norm),
+                "columnas": list(df_norm.columns),
+                "tipo": entrada.tipo_entrada,
+            }
         )
 
     except Exception as e:
         return SalidaEntradas(
             ok=False,
             errores=[str(e)],
-            warnings=[],
-            df_estructuras=None,
-            datos_proyecto=entrada.datos_proyecto,
-            debug={"error": str(e), "etapa": "orquestador_entradas"},
+            debug={
+                "fase": "exception",
+                "tipo": entrada.tipo_entrada
+            }
         )
