@@ -63,6 +63,7 @@ def resetear_desplegables() -> None:
 
 
 # ====== Selector de modo ======
+
 def seleccionar_modo_carga():
 
     st.markdown("### ⚙️ Modo de carga")
@@ -73,11 +74,15 @@ def seleccionar_modo_carga():
         "manual": "Manual"
     }
 
-    if "modo_carga_seleccionado" not in st.session_state:
-        st.session_state["modo_carga_seleccionado"] = "manual"
-
     keys = list(opciones.keys())
-    index_actual = keys.index(st.session_state["modo_carga_seleccionado"])
+
+    # 🔥 asegurar estado válido
+    modo_actual = st.session_state.get("modo_carga_seleccionado", "manual")
+
+    if modo_actual not in keys:
+        modo_actual = "manual"
+
+    index_actual = keys.index(modo_actual)
 
     modo = st.radio(
         "Seleccione el tipo de entrada",
@@ -88,9 +93,12 @@ def seleccionar_modo_carga():
         key="radio_modo_carga"
     )
 
-    # 🔥 CRÍTICO
+    # 🔥 persistencia
     st.session_state["modo_carga_seleccionado"] = modo
-    st.session_state["tipo_entrada"] = modo   # ← ESTA LÍNEA FALTABA
+    st.session_state["tipo_entrada"] = modo
+
+
+
 # ====== Ruta por defecto para materiales ======
 def ruta_datos_materiales_por_defecto() -> str:
     return RUTA_DATOS_MATERIALES_DEFECTO
