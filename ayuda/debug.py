@@ -170,6 +170,75 @@ def _auditar_estructuras():
     else:
         st.warning("⚠️ No existe columna 'Estructura'")
 
+def _debug_critico_materiales():
+
+    st.markdown("### 🚨 Diagnóstico REAL del problema")
+
+    df = st.session_state.get("df_estructuras")
+    resultado = st.session_state.get("resultado_calculo")
+    hojas = st.session_state.get("hojas_base")
+
+    if df is None or df.empty:
+        st.error("No hay estructuras cargadas")
+        return
+
+    if hojas is None:
+        st.error("No se cargó base de datos (Estructura_datos.xlsx)")
+        return
+
+    estructuras_input = set(df["Estructura"].dropna().unique())
+    estructuras_base = set(hojas.keys())
+
+    # =========================================
+    # 1. ESTRUCTURAS NO EXISTEN EN BASE
+    # =========================================
+    no_existen = estructuras_input - estructuras_base
+
+    if no_existen:
+        st.error("❌ Estructuras no encontradas en base:")
+        st.write(sorted(no_existen))
+
+    else:
+        st.success("✔ Todas las estructuras existen en la base")
+
+    # =========================================
+    # 2. HOJAS VACÍAS
+    # =========================================
+    vacias = []
+
+    for est in estructuras_input:
+        df_est = hojas.get(est)
+        if df_est is None or df_est.empty:
+            vacias.append(est)
+
+    if vacias:
+        st.error("❌ Estructuras sin materiales:")
+        st.write(vacias)
+
+    # =========================================
+    # 3. VALIDAR TENSIÓN
+    # =========================================
+    tension = st.session_state.get("tension")
+
+    columnas_invalidas = []
+
+    for est in estructuras_input:
+        df_est = hojas.get(est)
+        if df_est is not None and tension not in df_est.columns:
+            columnas_invalidas.append(est)
+
+    if columnas_invalidas:
+        st.error(f"❌ No tienen columna de tensión {tension}:")
+        st.write(columnas_invalidas)
+
+    # =========================================
+    # 4. RESULTADO VACÍO
+    # =========================================
+    if resultado and hasattr(resultado, "df_materiales"):
+        if resultado.df_materiales.empty:
+            st.error("❌ Se calcularon materiales pero el resultado está vacío")
+
+
 
 # =========================================================
 # 🔷 UI DEBUG PRINCIPAL
@@ -197,7 +266,7 @@ def seccion_debug():
     # 🔴 AUDITORÍA REAL
     # =====================================================
     _auditar_estructuras()
-
+    _debug_critico_materiales()
     # =====================================================
     # 🔥 PIPELINE REAL
     # =====================================================
