@@ -12,16 +12,11 @@ def validar_estructuras(
     Valida estructuras contra catálogo.
 
     INPUT:
-        df: DataFrame normalizado
+        df: DataFrame normalizado (Punto, Estructura, Cantidad)
         df_indice: catálogo (opcional)
 
     OUTPUT:
         lista de errores (list[str])
-
-    NOTAS:
-        - No modifica df
-        - No hace parsing
-        - No agrupa
     """
 
     errores = []
@@ -32,30 +27,39 @@ def validar_estructuras(
     if df is None or df.empty:
         return ["DataFrame de estructuras vacío"]
 
-    if "codigodeestructura" not in df.columns:
-        return ["Falta columna 'codigodeestructura'"]
+    if "Estructura" not in df.columns:
+        return ["Falta columna 'Estructura'"]
 
     # =====================================================
-    # NORMALIZACIÓN LOCAL (SEGURA)
+    # NORMALIZACIÓN LOCAL
     # =====================================================
     codigos = (
-        df["codigodeestructura"]
+        df["Estructura"]
         .astype(str)
         .str.strip()
         .str.upper()
     )
 
     # =====================================================
-    # SI NO HAY CATÁLOGO → SOLO VALIDACIÓN BÁSICA
+    # VALIDACIÓN BÁSICA (sin catálogo)
     # =====================================================
     if df_indice is None or df_indice.empty:
-        return []  # no validar contra catálogo
+        return []
 
-    if "codigodeestructura" not in df_indice.columns:
-        return ["Índice no tiene 'codigodeestructura'"]
+    # =====================================================
+    # NORMALIZAR CATÁLOGO
+    # =====================================================
+    df_indice.columns = df_indice.columns.str.strip().str.lower()
+
+    if "codigodeestructura" in df_indice.columns:
+        col_catalogo = "codigodeestructura"
+    elif "estructura" in df_indice.columns:
+        col_catalogo = "estructura"
+    else:
+        return ["Índice no tiene columna de estructuras válida"]
 
     catalogo = set(
-        df_indice["codigodeestructura"]
+        df_indice[col_catalogo]
         .astype(str)
         .str.strip()
         .str.upper()
