@@ -7,10 +7,14 @@ from typing import Optional, Dict, Any, List
 import pandas as pd
 
 # =========================================================
+# CONTRATO OFICIAL
+# =========================================================
+from interfaz.contratos import SalidaMateriales
+
+# =========================================================
 # MODELOS
 # =========================================================
 from materiales.modelos.entrada import EntradaMateriales
-from materiales.modelos.salida import ResultadoMateriales
 
 # =========================================================
 # CÁLCULO
@@ -59,7 +63,7 @@ def _merge_materiales(df_a, df_b):
 def ejecutar_materiales(
     entrada: EntradaMateriales,
     catalogo: Optional[Dict[str, Any]] = None,
-) -> ResultadoMateriales:
+) -> SalidaMateriales:
 
     errores: List[str] = []
     warnings: List[str] = []
@@ -92,11 +96,12 @@ def ejecutar_materiales(
 
     if df_norm is None or df_norm.empty:
         warnings.append("No hay estructuras para procesar.")
-        return ResultadoMateriales(
-            df_materiales=_df_vacio(),
-            df_materiales_detalle=_df_vacio(),
+        return SalidaMateriales(
+            ok=True,
             errores=errores,
             warnings=warnings,
+            df_materiales=_df_vacio(),
+            df_materiales_por_punto=_df_vacio(),
             debug=debug
         )
 
@@ -111,11 +116,12 @@ def ejecutar_materiales(
         )
     except Exception as e:
         errores.append(f"Error en cálculo de materiales: {e}")
-        return ResultadoMateriales(
-            df_materiales=_df_vacio(),
-            df_materiales_detalle=_df_vacio(),
+        return SalidaMateriales(
+            ok=False,
             errores=errores,
             warnings=warnings,
+            df_materiales=_df_vacio(),
+            df_materiales_por_punto=_df_vacio(),
             debug=debug
         )
 
@@ -155,10 +161,6 @@ def ejecutar_materiales(
             df_cab = materiales_desde_cables(df_cables)
             df_materiales = _merge_materiales(df_materiales, df_cab)
 
-            debug["cables"] = {
-                "rows": len(df_cab)
-            }
-
         except Exception as e:
             warnings.append(f"Error integrando cables: {e}")
 
@@ -168,33 +170,18 @@ def ejecutar_materiales(
     if isinstance(df_materiales_extra, pd.DataFrame) and not df_materiales_extra.empty:
         try:
             df_materiales = _merge_materiales(df_materiales, df_materiales_extra)
-
-            debug["materiales_extra"] = {
-                "rows": len(df_materiales_extra)
-            }
-
         except Exception as e:
             warnings.append(f"Error integrando materiales extra: {e}")
 
     # =====================================================
     # 7. RESULTADO FINAL
     # =====================================================
-    try:
-        resultado = ResultadoMateriales(
-            df_materiales=df_materiales,
-            df_materiales_detalle=df_detalle,
-            errores=errores,
-            warnings=warnings,
-            debug=debug
-        )
-    except Exception as e:
-        errores.append(f"Error construyendo ResultadoMateriales: {e}")
-        resultado = ResultadoMateriales(
-            df_materiales=_df_vacio(),
-            df_materiales_detalle=_df_vacio(),
-            errores=errores,
-            warnings=warnings,
-            debug=debug
-        )
-
-    return resultado
+    return SalidaMateriales(
+        ok=True,
+        errores=errores,
+        warnings=warnings,
+        df_materiales=df_materiales,
+        df_materiales_por_punto=df_detalle,
+        datos_proyecto=entrada.datos_proyecto,
+        debug=debug
+    )
