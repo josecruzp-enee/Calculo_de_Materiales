@@ -8,15 +8,41 @@ from ayuda.debug import debug_guardar
 
 
 def leer_dxf(archivo_dxf) -> pd.DataFrame:
+    """
+    Lee un archivo DXF (MTEXT) y extrae estructuras.
+
+    INPUT:
+        archivo_dxf: UploadedFile | file-like
+
+    OUTPUT:
+        DataFrame columnas:
+            - Punto
+            - Estructura
+    """
 
     if archivo_dxf is None:
         raise ValueError("archivo_dxf es None")
 
+    # =========================================================
+    # 🔥 LECTURA SEGURA (FIX CRÍTICO)
+    # =========================================================
     try:
-        contenido = archivo_dxf.read().decode("latin-1", errors="ignore")
-    except Exception:
-        raise ValueError("No se pudo leer el DXF")
+        if hasattr(archivo_dxf, "seek"):
+            archivo_dxf.seek(0)  # 🔥 resetear puntero SIEMPRE
 
+        raw = archivo_dxf.read()
+
+        if not raw:
+            raise ValueError("DXF vacío o ya fue consumido")
+
+        contenido = raw.decode("latin-1", errors="ignore")
+
+    except Exception as e:
+        raise ValueError(f"No se pudo leer el DXF: {e}")
+
+    # =========================================================
+    # PROCESAMIENTO BASE
+    # =========================================================
     lineas = [l.strip() for l in contenido.splitlines()]
 
     resultados = []
@@ -44,18 +70,18 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
 
                 i += 2
 
-            # =========================
+            # =================================================
             # FILTRO DE CAPA
-            # =========================
+            # =================================================
             if capa != "ESTRUCTURAS":
                 continue
 
             if not texto.strip():
                 continue
 
-            # =========================
-            # 🔥 LIMPIEZA FUERTE
-            # =========================
+            # =================================================
+            # LIMPIEZA
+            # =================================================
 
             # saltos AutoCAD
             texto = texto.replace("\\P", ",")
@@ -79,15 +105,15 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             # normalizar comas múltiples
             texto = re.sub(r",+", ",", texto)
 
-            # 🔥 IMPORTANTE: separar cuando hay espacio entre códigos
+            # separar códigos pegados por espacio
             texto = re.sub(r"\s(?=[A-Z]+-)", ",", texto)
 
             # limpiar espacios
             texto = re.sub(r"\s+", " ", texto).strip(" ,")
 
-            # =========================
+            # =================================================
             # OUTPUT
-            # =========================
+            # =================================================
             resultados.append({
                 "Punto": f"P-{punto}",
                 "Estructura": texto
@@ -98,17 +124,20 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
         else:
             i += 1
 
-    # =========================
+    # =========================================================
     # OUTPUT FINAL
-    # =========================
+    # =========================================================
     if not resultados:
-        df = pd.DataFrame()
+        df = pd.DataFrame(columns=["Punto", "Estructura"])
     else:
         df = pd.DataFrame(resultados)
 
-    # =========================
+    # =========================================================
     # DEBUG
-    # =========================
+    # =========================================================
+    print("\n=== DEBUG DXF ===")
+    print("registros encontrados:", len(df))
+
     debug_guardar("DXF - salida", df)
     debug_guardar("DXF - texto limpio", resultados[:5])
 
