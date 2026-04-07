@@ -25,9 +25,8 @@ def _validar_df_estructuras(df: pd.DataFrame):
     if df.empty:
         raise ValueError("df_estructuras está vacío")
 
-    if "Estructuras" not in df.columns:
-        raise ValueError("df_estructuras debe contener columna 'Estructuras'")
-
+    if "Estructura" not in df.columns:
+        raise ValueError("df_estructuras debe contener columna 'Estructura'")
 
 def _validar_hojas_base(hojas_base):
 
