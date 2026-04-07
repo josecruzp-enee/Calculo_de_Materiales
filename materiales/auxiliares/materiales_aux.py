@@ -22,18 +22,19 @@ def _es_proyectado(bloque: str) -> bool:
 # ==========================================================
 def _expandir_multiplicador(token: str):
 
+    debug_guardar("F1_EXPANDIR_INPUT", token)
+
     if not token:
         return []
 
     token = token.strip().upper()
-    debug_guardar("EXPANDIR_INPUT", token)
 
     # caso: 2 x B-III-1
     match = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
     if match:
         n = int(match.group(1))
         val = match.group(2).strip()
-        debug_guardar("EXPANDIR_MATCH_1", {"n": n, "val": val})
+        debug_guardar("F1_MATCH_ESPACIADO", {"n": n, "val": val})
         return [val] * n
 
     # caso: 3XCS-2
@@ -41,7 +42,7 @@ def _expandir_multiplicador(token: str):
     if match:
         n = int(match.group(1))
         val = match.group(2).strip()
-        debug_guardar("EXPANDIR_MATCH_2", {"n": n, "val": val})
+        debug_guardar("F1_MATCH_DIRECTO", {"n": n, "val": val})
         return [val] * n
 
     return [token]
@@ -52,14 +53,14 @@ def _expandir_multiplicador(token: str):
 # ==========================================================
 def _split_bloques(texto: str):
 
+    debug_guardar("F2_SPLIT_ENTRADA", texto)
+
     if texto is None:
         return []
 
     texto = texto.replace(";", ",")
     texto = texto.replace("|", ",")
     texto = texto.replace("\\P", ",")
-
-    debug_guardar("SPLIT_TEXTO_IN", texto)
 
     partes = re.split(r"[,\n]+", texto)
 
@@ -72,7 +73,6 @@ def _split_bloques(texto: str):
         if not p:
             continue
 
-        # detecta "3 X"
         if re.match(r"^\d+\s*[xX]$", p):
             buffer = p
             continue
@@ -83,15 +83,17 @@ def _split_bloques(texto: str):
 
         resultado.append(p)
 
-    debug_guardar("SPLIT_RESULTADO", resultado)
+    debug_guardar("F2_SPLIT_RESULTADO", resultado)
 
     return resultado
 
 
 # ==========================================================
-# LIMPIEZA FINAL (CORREGIDA)
+# LIMPIEZA FINAL
 # ==========================================================
 def limpiar_codigo(codigo: str) -> str:
+
+    debug_guardar("F3_LIMPIAR_INPUT", codigo)
 
     if codigo is None:
         return ""
@@ -103,13 +105,13 @@ def limpiar_codigo(codigo: str) -> str:
     # eliminar (P)
     codigo = re.sub(r"\(.*?\)", "", codigo)
 
-    # ⚠️ NO eliminar espacios internos
+    # ⚠️ IMPORTANTE: NO eliminar espacios internos
     codigo = codigo.strip()
 
-    # eliminar basura pero conservar estructura
+    # limpiar caracteres raros
     codigo = re.sub(r"[^A-Z0-9\-\.\+ ]", "", codigo)
 
-    debug_guardar("LIMPIAR_CODIGO", {
+    debug_guardar("F3_LIMPIAR_OUTPUT", {
         "input": codigo_original,
         "output": codigo
     })
@@ -118,11 +120,11 @@ def limpiar_codigo(codigo: str) -> str:
 
 
 # ==========================================================
-# FUNCIÓN CENTRAL
+# FUNCIÓN CENTRAL (FORENSE)
 # ==========================================================
 def expandir_lista_codigos(texto: str):
 
-    debug_guardar("RAW_TEXTO", texto)
+    debug_guardar("EVIDENCIA_1_TEXTO_ORIGINAL", texto)
 
     if texto is None:
         return []
@@ -132,8 +134,9 @@ def expandir_lista_codigos(texto: str):
     # limpieza DXF
     texto = re.sub(r"\{[^:]*:", "", texto)
     texto = texto.replace("{", "").replace("}", "")
+    texto = texto.replace("\\P", ",")
 
-    debug_guardar("TEXTO_LIMPIO", texto)
+    debug_guardar("EVIDENCIA_1B_TEXTO_LIMPIO", texto)
 
     partes = _split_bloques(texto)
 
@@ -141,12 +144,12 @@ def expandir_lista_codigos(texto: str):
 
     for p in partes:
 
+        # 🔥 DEBUG CLAVE
+        if "CS" in str(p) or re.search(r"\b\d+\b", str(p)):
+            debug_guardar("EVIDENCIA_2_PARTES", p)
+
         if not p:
             continue
-
-        # 🔥 DEBUG CRÍTICO
-        if "CS" in p:
-            debug_guardar("DEBUG_CS_PARTE", p)
 
         # quitar (P)
         p = re.sub(r"\(.*?\)", "", p)
@@ -155,26 +158,32 @@ def expandir_lista_codigos(texto: str):
 
         for t in tokens:
 
-            if "CS" in t:
-                debug_guardar("DEBUG_CS_TOKEN", t)
-
-            t = t.strip()
+            if "CS" in str(t) or re.match(r"^\d+$", str(t)):
+                debug_guardar("EVIDENCIA_3_TOKENS", t)
 
             if not t:
                 continue
 
+            t = t.strip()
+
+            debug_guardar("EVIDENCIA_4_PRE_LIMPIEZA", t)
+
             codigo = limpiar_codigo(t)
 
-            if "CS" in codigo:
-                debug_guardar("DEBUG_CS_FINAL", codigo)
+            debug_guardar("EVIDENCIA_5_POST_LIMPIEZA", codigo)
 
-            # 🔥 VALIDACIÓN FUERTE (evita basura)
+            # 🔥 FILTRO CRÍTICO
+            if re.match(r"^\d+$", codigo):
+                debug_guardar("DESCARTADO_NUMERO", codigo)
+                continue
+
             if not re.match(r"^[A-Z]+-\d+[A-Z]*$", codigo):
+                debug_guardar("DESCARTADO_INVALIDO", codigo)
                 continue
 
             resultado.append(codigo)
 
-    debug_guardar("CODIGOS_FINALES", resultado)
+    debug_guardar("EVIDENCIA_6_RESULTADO_FINAL", resultado)
 
     return resultado
 
