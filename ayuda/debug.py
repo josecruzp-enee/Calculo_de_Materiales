@@ -7,7 +7,7 @@ import pandas as pd
 
 
 # =========================================================
-# 🔷 GUARDAR DEBUG GLOBAL (UNIFICADO)
+# 🔷 GUARDAR DEBUG GLOBAL
 # =========================================================
 def debug_guardar(clave: str, valor):
 
@@ -18,6 +18,18 @@ def debug_guardar(clave: str, valor):
 
 
 # =========================================================
+# 🔷 DEBUG ESTRUCTURADO (PRO)
+# =========================================================
+def debug_step(nombre: str, data):
+
+    debug_guardar(nombre, {
+        "tipo": type(data).__name__,
+        "shape": getattr(data, "shape", None),
+        "preview": str(data)[:500]
+    })
+
+
+# =========================================================
 # 🔷 ESTADO VISUAL
 # =========================================================
 def _estado(ok):
@@ -25,7 +37,7 @@ def _estado(ok):
 
 
 # =========================================================
-# 🔷 PIPELINE REAL (RUNTIME)
+# 🔷 PIPELINE REAL
 # =========================================================
 def _pipeline_runtime():
 
@@ -54,15 +66,8 @@ def _pipeline_runtime():
         and hasattr(resultado, "df_materiales")
     ))
 
-    pasos.append((
-        "Exportación",
-        resultado is not None
-    ))
-
-    pasos.append((
-        "PDF",
-        resultado is not None
-    ))
+    pasos.append(("Exportación", resultado is not None))
+    pasos.append(("PDF", resultado is not None))
 
     return pasos
 
@@ -78,7 +83,7 @@ def _render_pipeline_runtime():
 
     for nombre, ok in pasos:
 
-        icono = "🟢" if ok else "🔴"
+        icono = _estado(ok)
         st.write(f"{icono} {nombre}")
 
         if not ok:
@@ -87,7 +92,7 @@ def _render_pipeline_runtime():
 
 
 # =========================================================
-# 🔷 GRAFO PIPELINE (VISUAL)
+# 🔷 GRAFO PIPELINE
 # =========================================================
 def _grafo_pipeline():
 
@@ -104,9 +109,7 @@ def _grafo_pipeline():
 
         for nombre, ok in pasos:
 
-            estado = "🟢" if ok else "🔴"
-            label = f"{nombre}\n{estado}"
-
+            label = f"{nombre}\n{_estado(ok)}"
             dot.node(nombre, label)
 
             if prev:
@@ -118,12 +121,11 @@ def _grafo_pipeline():
 
     except Exception:
         for nombre, ok in pasos:
-            estado = "🟢" if ok else "🔴"
-            st.write(f"{estado} {nombre}")
+            st.write(f"{_estado(ok)} {nombre}")
 
 
 # =========================================================
-# 🔷 RENDER DE BLOQUE DEBUG
+# 🔷 RENDER DEBUG
 # =========================================================
 def _render_valor_debug(valor):
 
@@ -142,7 +144,7 @@ def _render_valor_debug(valor):
 
 
 # =========================================================
-# 🔷 AUDITORÍA REAL DE ESTRUCTURAS (CRÍTICO)
+# 🔷 AUDITORÍA DE ESTRUCTURAS
 # =========================================================
 def _auditar_estructuras():
 
@@ -154,132 +156,115 @@ def _auditar_estructuras():
         st.error("df_estructuras = None")
         return
 
-    if not isinstance(df, pd.DataFrame):
-        st.error(f"df_estructuras no es DataFrame: {type(df)}")
-        return
-
     st.write("Shape:", df.shape)
     st.write("Columnas:", list(df.columns))
-
-    st.write("Primeras filas:")
-    st.dataframe(df.head(10), use_container_width=True)
+    st.dataframe(df.head(10))
 
     if "Estructura" in df.columns:
-        st.write("Valores únicos (Estructura):")
-        st.write(sorted(df["Estructura"].dropna().unique())[:20])
-    else:
-        st.warning("⚠️ No existe columna 'Estructura'")
-
-def _debug_critico_materiales():
-
-    st.markdown("### 🚨 Diagnóstico REAL del problema")
-
-    df = st.session_state.get("df_estructuras")
-    resultado = st.session_state.get("resultado_calculo")
-    hojas = st.session_state.get("hojas_base")
-
-    if df is None or df.empty:
-        st.error("No hay estructuras cargadas")
-        return
-
-    if hojas is None:
-        st.error("No se cargó base de datos (Estructura_datos.xlsx)")
-        return
-
-    estructuras_input = set(df["Estructura"].dropna().unique())
-    estructuras_base = set(hojas.keys())
-
-    # =========================================
-    # 1. ESTRUCTURAS NO EXISTEN EN BASE
-    # =========================================
-    no_existen = estructuras_input - estructuras_base
-
-    if no_existen:
-        st.error("❌ Estructuras no encontradas en base:")
-        st.write(sorted(no_existen))
-
-    else:
-        st.success("✔ Todas las estructuras existen en la base")
-
-    # =========================================
-    # 2. HOJAS VACÍAS
-    # =========================================
-    vacias = []
-
-    for est in estructuras_input:
-        df_est = hojas.get(est)
-        if df_est is None or df_est.empty:
-            vacias.append(est)
-
-    if vacias:
-        st.error("❌ Estructuras sin materiales:")
-        st.write(vacias)
-
-    # =========================================
-    # 3. VALIDAR TENSIÓN
-    # =========================================
-    tension = st.session_state.get("tension")
-
-    columnas_invalidas = []
-
-    for est in estructuras_input:
-        df_est = hojas.get(est)
-        if df_est is not None and tension not in df_est.columns:
-            columnas_invalidas.append(est)
-
-    if columnas_invalidas:
-        st.error(f"❌ No tienen columna de tensión {tension}:")
-        st.write(columnas_invalidas)
-
-    # =========================================
-    # 4. RESULTADO VACÍO
-    # =========================================
-    if resultado and hasattr(resultado, "df_materiales"):
-        if resultado.df_materiales.empty:
-            st.error("❌ Se calcularon materiales pero el resultado está vacío")
-
+        st.write("Valores únicos:")
+        st.write(sorted(df["Estructura"].dropna().unique())[:50])
 
 
 # =========================================================
-# 🔷 UI DEBUG PRINCIPAL
+# 🔥 DEBUG PROFUNDO DE MATERIALES
+# =========================================================
+def _debug_materiales_profundo():
+
+    st.markdown("### 🔬 Trazabilidad de materiales")
+
+    hojas = st.session_state.get("hojas_base")
+    df = st.session_state.get("df_estructuras")
+    tension = st.session_state.get("tension")
+
+    if hojas is None:
+        st.error("❌ No hay hojas_base cargadas")
+        return
+
+    if df is None or df.empty:
+        st.error("❌ No hay estructuras")
+        return
+
+    estructuras = sorted(df["Estructura"].dropna().unique())
+
+    st.write("Total estructuras:", len(estructuras))
+
+    for est in estructuras:
+
+        with st.expander(f"🔎 {est}"):
+
+            df_est = hojas.get(est)
+
+            if df_est is None:
+                st.error("❌ NO EXISTE EN BASE")
+                continue
+
+            st.success("✔ Hoja encontrada")
+
+            st.write("Columnas:", list(df_est.columns))
+
+            # Buscar columna tensión
+            col_tension = None
+
+            for c in df_est.columns:
+                try:
+                    val = float(str(c).replace(",", "."))
+                    if abs(val - float(tension)) < 0.1:
+                        col_tension = c
+                        break
+                except:
+                    continue
+
+            if col_tension is None:
+                st.error(f"❌ No tiene columna {tension}")
+                continue
+
+            st.success(f"✔ Columna tensión: {col_tension}")
+
+            df_est[col_tension] = pd.to_numeric(df_est[col_tension], errors="coerce").fillna(0)
+
+            df_filtrado = df_est[
+                (df_est[col_tension] > 0)
+                & df_est["MATERIALES"].notna()
+            ]
+
+            if df_filtrado.empty:
+                st.error("❌ SIN MATERIALES")
+            else:
+                st.success(f"✔ {len(df_filtrado)} materiales encontrados")
+                st.dataframe(df_filtrado.head(10))
+
+
+# =========================================================
+# 🔷 DEBUG PRINCIPAL
 # =========================================================
 def seccion_debug():
 
     st.title("🧠 Debug del sistema")
 
-    # =====================================================
-    # DEBUG GLOBAL
-    # =====================================================
     debug = st.session_state.get("debug_pipeline")
 
     if debug:
-        st.markdown("### 📊 Estado del Pipeline")
+        st.markdown("### 📊 Variables capturadas")
 
-        for clave, valor in debug.items():
-            st.markdown(f"#### 🔹 {clave}")
-            _render_valor_debug(valor)
+        for k, v in debug.items():
+            st.markdown(f"#### 🔹 {k}")
+            _render_valor_debug(v)
 
     else:
-        st.info("No hay información de debug aún")
+        st.info("No hay debug aún")
 
-    # =====================================================
-    # 🔴 AUDITORÍA REAL
-    # =====================================================
+    # Auditoría base
     _auditar_estructuras()
-    _debug_critico_materiales()
-    # =====================================================
-    # 🔥 PIPELINE REAL
-    # =====================================================
+
+    # 🔥 DEBUG PROFUNDO
+    _debug_materiales_profundo()
+
+    # Pipeline
     _render_pipeline_runtime()
 
-    # =====================================================
-    # 🔄 GRAFO
-    # =====================================================
+    # Grafo
     _grafo_pipeline()
 
-    # =====================================================
-    # SESSION COMPLETA
-    # =====================================================
-    with st.expander("🔍 Ver session_state completo"):
-        for k, v in st.session_state.items():
-            st.write(f"**{k}**:", v)
+    # Session completa
+    with st.expander("🔍 session_state completo"):
+        st.json({k: str(v)[:200] for k, v in st.session_state.items()})
