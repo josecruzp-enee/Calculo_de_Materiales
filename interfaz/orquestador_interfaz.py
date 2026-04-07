@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-# interfaz/orquestador_interfaz.py
-
 from __future__ import annotations
+
 import streamlit as st
 
 # =========================================================
@@ -31,22 +30,23 @@ from ayuda.debug import seccion_debug
 # =========================================================
 def _init_state():
     defaults = {
-        "df_estructuras": None,
         "modo_carga_seleccionado": None,
-        "cables_proyecto_df": None,
-        "datos_proyecto": None,
-        "df_materiales_extra": None,
         "tipo_entrada": None,
         "data_entrada": None,
+        "datos_proyecto": {},
+        "cables_proyecto_df": None,
+        "df_materiales_extra": None,
+        "df_estructuras": None,
         "debug_pipeline": {},
     }
 
     for k, v in defaults.items():
-        st.session_state.setdefault(k, v)
+        if k not in st.session_state:
+            st.session_state[k] = v
 
 
 # =========================================================
-# UI SECCIONES
+# SECCIONES UI
 # =========================================================
 def renderizar_datos_proyecto():
     datos = seccion_datos_proyecto()
@@ -61,7 +61,7 @@ def renderizar_cables():
 
 
 def renderizar_modo_carga():
-    modo = seleccionar_modo_carga()
+    modo_label = seleccionar_modo_carga()
 
     mapa = {
         "Desde archivo Excel": "excel",
@@ -71,87 +71,99 @@ def renderizar_modo_carga():
         "DXF (ENEE)": "dxf",
     }
 
-    st.session_state["modo_carga_seleccionado"] = mapa.get(modo, modo)
+    modo = mapa.get(modo_label)
+
+    st.session_state["modo_carga_seleccionado"] = modo
+    st.session_state["tipo_entrada"] = modo
 
 
 def renderizar_estructuras():
-
     modo = st.session_state.get("modo_carga_seleccionado")
 
     if not modo:
-        st.warning("⚠️ Primero selecciona modo.")
+        st.warning("⚠️ Primero selecciona modo de carga.")
         return
 
-    archivo = None
-    df_ui = None
+    data = None
 
+    # =====================================================
+    # MANUAL
+    # =====================================================
     if modo == "manual":
         df, _ = seccion_entrada_estructuras()
         if df is None or df.empty:
             return
-        df_ui = df
+        data = df
 
+    # =====================================================
+    # ARCHIVOS / INPUTS
+    # =====================================================
     elif modo == "excel":
-        archivo = st.file_uploader("Subir Excel", type=["xlsx"])
+        data = st.file_uploader("Subir Excel", type=["xlsx"])
 
     elif modo == "tabla":
-        archivo = st.text_area("Pegar tabla")
+        data = st.text_area("Pegar tabla")
 
     elif modo == "pdf":
-        archivo = st.file_uploader("Subir PDF", type=["pdf"])
+        data = st.file_uploader("Subir PDF", type=["pdf"])
 
     elif modo == "dxf":
-        archivo = st.file_uploader("Subir DXF", type=["dxf"])
+        data = st.file_uploader("Subir DXF", type=["dxf"])
 
-    st.session_state["tipo_entrada"] = modo
-    st.session_state["data_entrada"] = df_ui if df_ui is not None else archivo
+    st.session_state["data_entrada"] = data
 
 
 def renderizar_final():
     if st.session_state.get("df_estructuras") is None:
-        st.warning("Carga estructuras primero")
+        st.warning("⚠️ Debes cargar estructuras primero.")
         return
+
     seccion_finalizar_calculo()
 
 
 def renderizar_exportacion():
     if st.session_state.get("df_estructuras") is None:
-        st.warning("Carga estructuras primero")
+        st.warning("⚠️ Debes cargar estructuras primero.")
         return
+
     seccion_exportacion()
 
 
 # =========================================================
-# CONTRATO INTERFAZ
+# CONSTRUCCIÓN DE CONTRATO
 # =========================================================
-def _construir_salida() -> SalidaInterfaz:
+def _construir_salida_interfaz() -> SalidaInterfaz:
 
     errores = []
+    warnings = []
 
     tipo = st.session_state.get("tipo_entrada")
     data = st.session_state.get("data_entrada")
 
     if not tipo:
-        errores.append("Modo no seleccionado")
+        errores.append("Modo de entrada no seleccionado")
 
     if data is None:
-        errores.append("No hay datos")
+        errores.append("No se proporcionó entrada")
 
     return SalidaInterfaz(
         ok=len(errores) == 0,
         errores=errores,
-        warnings=[],
+        warnings=warnings,
         tipo_entrada=tipo or "manual",
         data_entrada=data,
         datos_proyecto=st.session_state.get("datos_proyecto") or {},
         df_cables=st.session_state.get("cables_proyecto_df"),
         df_materiales_extra=st.session_state.get("df_materiales_extra"),
-        debug={}
+        debug={
+            "tipo": tipo,
+            "tiene_data": data is not None,
+        }
     )
 
 
 # =========================================================
-# ORQUESTADOR
+# ORQUESTADOR PRINCIPAL
 # =========================================================
 def ejecutar_orquestador_interfaz(
     _nav_estado_actual,
@@ -163,6 +175,9 @@ def ejecutar_orquestador_interfaz(
     sec = _nav_estado_actual()
     _barra_nav_botones(sec)
 
+    # =====================================================
+    # RENDER UI
+    # =====================================================
     acciones = {
         "datos": renderizar_datos_proyecto,
         "cables": renderizar_cables,
@@ -177,17 +192,31 @@ def ejecutar_orquestador_interfaz(
         acciones[sec]()
 
     # =====================================================
-    # 🔥 INTERFAZ → ENTRADAS
+    # INTERFAZ → ENTRADAS
     # =====================================================
-    salida_interfaz = _construir_salida()
+    salida_interfaz = _construir_salida_interfaz()
 
     salida_entradas = ejecutar_entradas(
         salida_interfaz,
         tension=13.8,
     )
 
-    # persistencia para UI
+    # =====================================================
+    # PERSISTENCIA
+    # =====================================================
     if salida_entradas.ok:
         st.session_state["df_estructuras"] = salida_entradas.df_estructuras
+
+    # =====================================================
+    # DEBUG PIPELINE
+    # =====================================================
+    st.session_state["debug_pipeline"] = {
+        "interfaz_ok": salida_interfaz.ok,
+        "entradas_ok": salida_entradas.ok,
+        "errores_interfaz": salida_interfaz.errores,
+        "errores_entradas": salida_entradas.errores,
+        "tipo_entrada": salida_interfaz.tipo_entrada,
+        "tiene_data": salida_interfaz.data_entrada is not None,
+    }
 
     return salida_entradas
