@@ -63,36 +63,37 @@ def resetear_desplegables() -> None:
 
 
 # ====== Selector de modo ======
-def seleccionar_modo_carga() -> str:
-    """
-    Selector de modo de carga.
+def seleccionar_modo_carga():
 
-    Retorna una clave técnica (no texto UI).
-    También guarda el label por compatibilidad.
-    """
+    st.markdown("### ⚙️ Modo de carga")
 
     opciones = {
-        "excel": "Desde archivo Excel",
-        "tabla": "Pegar tabla",
-        "manual": "Listas desplegables",
-        "pdf": "Pdf",
         "dxf": "DXF (ENEE)",
+        "excel": "Excel",
+        "manual": "Manual"
     }
 
     modo = st.radio(
-        "Selecciona modo de carga:",
-        options=list(opciones.keys()),
+        "Seleccione el tipo de entrada",
+        list(opciones.keys()),
         format_func=lambda x: opciones[x],
-        key="modo_carga_radio",
+        horizontal=True
     )
 
-    # 🔥 Guardar label (por si aún lo usas en alguna parte)
-    st.session_state["modo_carga_label"] = opciones[modo]
+    st.session_state["modo_carga_seleccionado"] = modo
 
-    st.markdown("---")
+    # =========================
+    # 🔴 FIX CRÍTICO: TENSIÓN
+    # =========================
+    st.markdown("### ⚡ Nivel de tensión")
 
-    return modo
+    tension = st.radio(
+        "Seleccione nivel de tensión",
+        [13.8, 34.5],
+        horizontal=True
+    )
 
+    st.session_state["tension"] = float(tension)
 
 # ====== Ruta por defecto para materiales ======
 def ruta_datos_materiales_por_defecto() -> str:
