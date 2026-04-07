@@ -100,7 +100,7 @@ def seccion_finalizar_calculo():
                 for e in salida_entradas.errores:
                     st.error(f"- {e}")
                 return
-
+            st.session_state["df_estructuras"] = salida_entradas.df_estructuras
             # =====================================================
             # 3. ADAPTADOR → PROYECTO
             # =====================================================
