@@ -10,55 +10,56 @@ from ayuda.debug import debug_guardar
 # HELPERS
 # ==========================================================
 def _limpiar_str(v) -> str:
-    if v is None:
-        return ""
-    return str(v).strip()
+    return "" if v is None else str(v).strip()
 
 
 def _es_proyectado(bloque: str) -> bool:
-    if bloque is None:
-        return False
-    return "(P)" in bloque.upper()
+    return "(P)" in str(bloque).upper() if bloque else False
 
 
+# ==========================================================
+# EXPANSIÓN MULTIPLICADOR
+# ==========================================================
 def _expandir_multiplicador(token: str):
-    """
-    Soporta:
-    - 2xB-III-1
-    - 2 x B-III-1
-    - 3XCS-2
-    """
 
     if not token:
         return []
 
     token = token.strip().upper()
+    debug_guardar("EXPANDIR_INPUT", token)
 
+    # caso: 2 x B-III-1
     match = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
     if match:
         n = int(match.group(1))
         val = match.group(2).strip()
+        debug_guardar("EXPANDIR_MATCH_1", {"n": n, "val": val})
         return [val] * n
 
-    match = re.match(r"^\s*(\d+)[xX]([A-Z0-9\-\.]+)$", token)
+    # caso: 3XCS-2
+    match = re.match(r"^\s*(\d+)[xX]([A-Z0-9\-\.\+]+)$", token)
     if match:
         n = int(match.group(1))
         val = match.group(2).strip()
+        debug_guardar("EXPANDIR_MATCH_2", {"n": n, "val": val})
         return [val] * n
 
     return [token]
 
 
+# ==========================================================
+# SPLIT CONTROLADO
+# ==========================================================
 def _split_bloques(texto: str):
-    """
-    Divide SOLO por coma o salto de línea
-    🔥 Mantiene juntos: "3 X CS-2"
-    """
+
     if texto is None:
         return []
 
     texto = texto.replace(";", ",")
     texto = texto.replace("|", ",")
+    texto = texto.replace("\\P", ",")
+
+    debug_guardar("SPLIT_TEXTO_IN", texto)
 
     partes = re.split(r"[,\n]+", texto)
 
@@ -67,6 +68,7 @@ def _split_bloques(texto: str):
 
     for p in partes:
         p = p.strip()
+
         if not p:
             continue
 
@@ -81,25 +83,36 @@ def _split_bloques(texto: str):
 
         resultado.append(p)
 
+    debug_guardar("SPLIT_RESULTADO", resultado)
+
     return resultado
 
 
 # ==========================================================
-# LIMPIEZA FINAL
+# LIMPIEZA FINAL (CORREGIDA)
 # ==========================================================
 def limpiar_codigo(codigo: str) -> str:
 
     if codigo is None:
         return ""
 
+    codigo_original = codigo
+
     codigo = str(codigo).strip().upper()
 
-    if not codigo:
-        return ""
-
+    # eliminar (P)
     codigo = re.sub(r"\(.*?\)", "", codigo)
-    codigo = codigo.replace(" ", "")
-    codigo = re.sub(r"[^A-Z0-9\-\.\+]", "", codigo)
+
+    # ⚠️ NO eliminar espacios internos
+    codigo = codigo.strip()
+
+    # eliminar basura pero conservar estructura
+    codigo = re.sub(r"[^A-Z0-9\-\.\+ ]", "", codigo)
+
+    debug_guardar("LIMPIAR_CODIGO", {
+        "input": codigo_original,
+        "output": codigo
+    })
 
     return codigo
 
@@ -109,7 +122,7 @@ def limpiar_codigo(codigo: str) -> str:
 # ==========================================================
 def expandir_lista_codigos(texto: str):
 
-    debug_guardar("raw_texto_entrada", texto)
+    debug_guardar("RAW_TEXTO", texto)
 
     if texto is None:
         return []
@@ -119,12 +132,10 @@ def expandir_lista_codigos(texto: str):
     # limpieza DXF
     texto = re.sub(r"\{[^:]*:", "", texto)
     texto = texto.replace("{", "").replace("}", "")
-    texto = texto.replace("\\P", ",")
 
-    debug_guardar("texto_pre_split", texto)
+    debug_guardar("TEXTO_LIMPIO", texto)
 
     partes = _split_bloques(texto)
-    debug_guardar("partes_split", partes)
 
     resultado = []
 
@@ -133,13 +144,20 @@ def expandir_lista_codigos(texto: str):
         if not p:
             continue
 
+        # 🔥 DEBUG CRÍTICO
+        if "CS" in p:
+            debug_guardar("DEBUG_CS_PARTE", p)
+
         # quitar (P)
         p = re.sub(r"\(.*?\)", "", p)
 
         tokens = _expandir_multiplicador(p)
-        debug_guardar("tokens_expandidos", tokens)
 
         for t in tokens:
+
+            if "CS" in t:
+                debug_guardar("DEBUG_CS_TOKEN", t)
+
             t = t.strip()
 
             if not t:
@@ -147,12 +165,16 @@ def expandir_lista_codigos(texto: str):
 
             codigo = limpiar_codigo(t)
 
-            if not codigo:
+            if "CS" in codigo:
+                debug_guardar("DEBUG_CS_FINAL", codigo)
+
+            # 🔥 VALIDACIÓN FUERTE (evita basura)
+            if not re.match(r"^[A-Z]+-\d+[A-Z]*$", codigo):
                 continue
 
             resultado.append(codigo)
 
-    debug_guardar("codigos_expandidos", resultado)
+    debug_guardar("CODIGOS_FINALES", resultado)
 
     return resultado
 
@@ -169,7 +191,7 @@ def expandir_y_contar(texto: str):
     for c in lista:
         conteo[c] += 1
 
-    debug_guardar("conteo_estructuras", dict(conteo))
+    debug_guardar("CONTEO_FINAL", dict(conteo))
 
     return dict(conteo)
 
@@ -185,6 +207,6 @@ def validar_codigos(lista_codigos):
         if not isinstance(c, str) or not c.strip():
             errores.append(f"Código inválido: {c}")
 
-    debug_guardar("errores_codigos", errores)
+    debug_guardar("ERRORES_CODIGOS", errores)
 
     return errores
