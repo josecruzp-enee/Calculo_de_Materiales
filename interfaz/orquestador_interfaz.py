@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import streamlit as st
-from typing import Callable
 
 # =========================================================
 # CONTRATO
@@ -12,7 +11,7 @@ from typing import Callable
 from interfaz.contratos import SalidaInterfaz
 
 # =========================================================
-# IMPORTS UI (SEGUROS)
+# IMPORTS UI
 # =========================================================
 from interfaz.base import seleccionar_modo_carga
 
@@ -25,14 +24,12 @@ from interfaz.exportacion_ui import (
     seccion_exportacion,
 )
 
-# 🔒 IMPORT PROTEGIDO
 try:
     from interfaz.materiales_extra import obtener_materiales_finales
 except Exception:
     def obtener_materiales_finales():
         return None
 
-# 🔥 DEBUG UI
 from ayuda.debug import seccion_debug
 
 
@@ -60,7 +57,7 @@ def _init_state():
 
 
 # =========================================================
-# DEBUG PIPELINE (CLAVE)
+# DEBUG
 # =========================================================
 def _resumen_df(df):
     if df is None:
@@ -85,7 +82,7 @@ def _actualizar_debug_pipeline():
         "datos_proyecto": st.session_state.get("datos_proyecto"),
         "materiales_extra": _resumen_df(st.session_state.get("df_materiales_extra")),
 
-        # 🔥 estado del contrato
+        # 🔥 contrato
         "contrato_interfaz": {
             "tipo_entrada": st.session_state.get("tipo_entrada"),
             "data_valida": st.session_state.get("data_entrada") is not None,
@@ -125,7 +122,7 @@ def renderizar_modo_carga():
 
 
 # =========================================================
-# ESTRUCTURAS (CRUDO)
+# ESTRUCTURAS
 # =========================================================
 def renderizar_estructuras():
 
@@ -168,9 +165,6 @@ def renderizar_estructuras():
         st.error(f"Error en carga: {e}")
         return
 
-    # =========================
-    # GUARDAR CRUDO
-    # =========================
     st.session_state["tipo_entrada"] = modo
 
     if df_ui is not None:
@@ -211,7 +205,7 @@ def renderizar_exportacion():
 
 
 # =========================================================
-# 🔥 CONSTRUCTOR DE CONTRATO
+# 🔥 CONSTRUCTOR DE SALIDA
 # =========================================================
 def _construir_salida() -> SalidaInterfaz:
 
@@ -225,7 +219,7 @@ def _construir_salida() -> SalidaInterfaz:
         errores.append("Modo de entrada no seleccionado")
 
     if data_entrada is None:
-        errores.append("No hay datos de entrada cargados")
+        errores.append("No hay datos de entrada")
 
     return SalidaInterfaz(
         ok=len(errores) == 0,
@@ -244,8 +238,8 @@ def _construir_salida() -> SalidaInterfaz:
 # ORQUESTADOR PRINCIPAL
 # =========================================================
 def ejecutar_orquestador_interfaz(
-    _nav_estado_actual: Callable,
-    _barra_nav_botones: Callable,
+    _nav_estado_actual,
+    _barra_nav_botones,
 ) -> SalidaInterfaz:
 
     _init_state()
@@ -270,14 +264,6 @@ def ejecutar_orquestador_interfaz(
     else:
         st.warning("Sección no reconocida.")
 
-    # =========================
-    # DEBUG SIEMPRE
-    # =========================
     _actualizar_debug_pipeline()
 
-    # =========================
-    # SALIDA DEL DOMINIO
-    # =========================
-    salida = _construir_salida()
-
-    return salida
+    return _construir_salida()
