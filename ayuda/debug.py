@@ -1,8 +1,27 @@
+# -*- coding: utf-8 -*-
+# ayuda/debug.py
+
 import streamlit as st
 
 
-def debug_guardar(etapa: str, data):
-    if "debug_pipeline" not in st.session_state:
-        st.session_state["debug_pipeline"] = {}
+def seccion_debug():
 
-    st.session_state["debug_pipeline"][etapa] = data
+    st.subheader("🧠 Debug del sistema")
+
+    debug = st.session_state.get("debug_pipeline")
+
+    if not debug:
+        st.info("No hay información de debug aún")
+        return
+
+    st.markdown("### 📊 Estado del Pipeline")
+
+    st.json(debug)
+
+    # =========================
+    # DEBUG COMPLETO
+    # =========================
+    with st.expander("🔍 Ver session_state completo"):
+
+        for k, v in st.session_state.items():
+            st.write(f"**{k}**:", v)
