@@ -191,7 +191,7 @@ def ejecutar_orquestador_interfaz(
         "estructuras": renderizar_estructuras,
         "final": renderizar_final,
         "exportar": renderizar_exportacion,
-        "Debug": seccion_debug,
+        "debug": seccion_debug,
     }
 
     funcion = acciones.get(seccion)
