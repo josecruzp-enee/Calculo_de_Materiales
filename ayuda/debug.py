@@ -25,48 +25,73 @@ def _estado(ok):
 
 
 # =========================================================
-# 🔷 EVALUAR ESTADO REAL DEL SISTEMA (CORREGIDO)
+# 🔷 PIPELINE REAL (RUNTIME)
 # =========================================================
-def _evaluar_pipeline():
+def _pipeline_runtime():
 
     df = st.session_state.get("df_estructuras")
     resultado = st.session_state.get("resultado_calculo")
 
-    # =========================
-    # VALIDACIONES REALES
-    # =========================
-    entradas_ok = isinstance(df, pd.DataFrame) and not df.empty
+    pasos = []
 
-    normalizacion_ok = (
-        entradas_ok
-        and "Punto" in df.columns
+    pasos.append(("UI", True))
+
+    pasos.append((
+        "Entradas",
+        isinstance(df, pd.DataFrame) and not df.empty
+    ))
+
+    pasos.append((
+        "Normalización",
+        isinstance(df, pd.DataFrame)
         and "Estructura" in df.columns
         and df["Estructura"].notna().any()
-    )
+    ))
 
-    materiales_ok = (
+    pasos.append((
+        "Materiales",
         resultado is not None
         and hasattr(resultado, "df_materiales")
-        and isinstance(resultado.df_materiales, pd.DataFrame)
-        and not resultado.df_materiales.empty
-    )
+    ))
 
-    estados = {
-        "UI": True,
-        "Entradas": entradas_ok,
-        "Normalización": normalizacion_ok,
-        "Materiales": materiales_ok,
-        "Exportación": materiales_ok,
-        "PDF": materiales_ok,
-    }
+    pasos.append((
+        "Exportación",
+        resultado is not None
+    ))
 
-    return estados
+    pasos.append((
+        "PDF",
+        resultado is not None
+    ))
+
+    return pasos
 
 
 # =========================================================
-# 🔷 GRAFO PIPELINE
+# 🔷 RENDER PIPELINE
 # =========================================================
-def _grafo_pipeline(estados):
+def _render_pipeline_runtime():
+
+    st.markdown("### 🧠 Pipeline en tiempo real")
+
+    pasos = _pipeline_runtime()
+
+    for nombre, ok in pasos:
+
+        icono = "🟢" if ok else "🔴"
+        st.write(f"{icono} {nombre}")
+
+        if not ok:
+            st.error(f"⚠️ Falla en: {nombre}")
+            break
+
+
+# =========================================================
+# 🔷 GRAFO PIPELINE (VISUAL)
+# =========================================================
+def _grafo_pipeline():
+
+    pasos = _pipeline_runtime()
 
     st.markdown("### 🔄 Flujo del sistema")
 
@@ -75,35 +100,26 @@ def _grafo_pipeline(estados):
 
         dot = graphviz.Digraph()
 
-        dot.node("UI", f"UI\n{_estado(estados['UI'])}")
-        dot.node("ENT", f"Entradas\n{_estado(estados['Entradas'])}")
-        dot.node("NOR", f"Normalización\n{_estado(estados['Normalización'])}")
-        dot.node("MAT", f"Materiales\n{_estado(estados['Materiales'])}")
-        dot.node("EXP", f"Exportación\n{_estado(estados['Exportación'])}")
-        dot.node("PDF", f"PDF\n{_estado(estados['PDF'])}")
+        prev = None
 
-        dot.edge("UI", "ENT")
-        dot.edge("ENT", "NOR")
-        dot.edge("NOR", "MAT")
-        dot.edge("MAT", "EXP")
-        dot.edge("EXP", "PDF")
+        for nombre, ok in pasos:
+
+            estado = "🟢" if ok else "🔴"
+            label = f"{nombre}\n{estado}"
+
+            dot.node(nombre, label)
+
+            if prev:
+                dot.edge(prev, nombre)
+
+            prev = nombre
 
         st.graphviz_chart(dot)
 
     except Exception:
-        st.markdown(f"""
-        UI {_estado(estados['UI'])}  
-        ↓  
-        Entradas {_estado(estados['Entradas'])}  
-        ↓  
-        Normalización {_estado(estados['Normalización'])}  
-        ↓  
-        Materiales {_estado(estados['Materiales'])}  
-        ↓  
-        Exportación {_estado(estados['Exportación'])}  
-        ↓  
-        PDF {_estado(estados['PDF'])}
-        """)
+        for nombre, ok in pasos:
+            estado = "🟢" if ok else "🔴"
+            st.write(f"{estado} {nombre}")
 
 
 # =========================================================
@@ -126,7 +142,7 @@ def _render_valor_debug(valor):
 
 
 # =========================================================
-# 🔷 AUDITORÍA REAL DE ESTRUCTURAS (NUEVO 🔥)
+# 🔷 AUDITORÍA REAL DE ESTRUCTURAS (CRÍTICO)
 # =========================================================
 def _auditar_estructuras():
 
@@ -148,12 +164,11 @@ def _auditar_estructuras():
     st.write("Primeras filas:")
     st.dataframe(df.head(10), use_container_width=True)
 
-    # Validación crítica
     if "Estructura" in df.columns:
         st.write("Valores únicos (Estructura):")
         st.write(sorted(df["Estructura"].dropna().unique())[:20])
     else:
-        st.warning("No existe columna 'Estructura'")
+        st.warning("⚠️ No existe columna 'Estructura'")
 
 
 # =========================================================
@@ -179,15 +194,19 @@ def seccion_debug():
         st.info("No hay información de debug aún")
 
     # =====================================================
-    # 🔴 AUDITORÍA REAL (CLAVE)
+    # 🔴 AUDITORÍA REAL
     # =====================================================
     _auditar_estructuras()
 
     # =====================================================
-    # GRAFO
+    # 🔥 PIPELINE REAL
     # =====================================================
-    estados = _evaluar_pipeline()
-    _grafo_pipeline(estados)
+    _render_pipeline_runtime()
+
+    # =====================================================
+    # 🔄 GRAFO
+    # =====================================================
+    _grafo_pipeline()
 
     # =====================================================
     # SESSION COMPLETA
