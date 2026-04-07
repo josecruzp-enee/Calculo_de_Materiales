@@ -30,7 +30,7 @@ class EntradaMateriales:
         if not col_est:
             raise ValueError(f"No existe columna de estructuras. Columnas: {list(self.estructuras_df.columns)}")
 
-        self.estructuras_df = self.estructuras_df.rename(columns={col_est: "Estructuras"})
+        self.estructuras_df = self.estructuras_df.rename(columns={col_est: "Estructura"})
 
         if not isinstance(self.estructuras_df, pd.DataFrame):
             raise TypeError("estructuras_df debe ser DataFrame")
@@ -38,8 +38,8 @@ class EntradaMateriales:
         if self.estructuras_df.empty:
             raise ValueError("estructuras_df está vacío")
 
-        if "Estructuras" not in self.estructuras_df.columns:
-            raise ValueError("estructuras_df debe contener columna 'Estructuras'")
+        if "Estructura" not in self.estructuras_df.columns:
+            raise ValueError("estructuras_df debe contener columna 'Estructura'")
 
         # --------------------------
         # tensión
