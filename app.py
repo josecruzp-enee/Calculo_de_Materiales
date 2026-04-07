@@ -6,22 +6,19 @@ import os
 import streamlit as st
 
 from interfaz.orquestador_interfaz import ejecutar_orquestador_interfaz
-from entradas.orquestador_entradas import cargar_entrada
+
 
 # =========================================================
 # NAVEGACIÓN
 # =========================================================
-
 SECCIONES = [
     ("datos", "Datos"),
     ("cables", "Cables"),
     ("modo", "Modo de Carga"),
     ("estructuras", "Estructuras"),
-    
     ("final", "Finalizar"),
     ("exportar", "Exportación"),
     ("debug", "Debug"),
-    
 ]
 
 
@@ -32,7 +29,6 @@ def _nav_estado_actual() -> str:
         qp = qp[0] if qp else None
 
     sec = qp or st.session_state.get("sec") or "datos"
-
     st.session_state["sec"] = sec
 
     return sec
@@ -85,25 +81,16 @@ def _barra_nav_botones(seccion_activa: str) -> None:
 
 
 # =========================================================
-# INICIALIZACIÓN GLOBAL
+# INIT
 # =========================================================
-
 def _init_rutas():
     base_dir = os.path.dirname(__file__)
-
     ruta = os.path.join(base_dir, "data", "Estructura_datos.xlsx")
-
     st.session_state.setdefault("ruta_datos_materiales", ruta)
 
 
 def _init_estado_base():
-    """
-    Estado mínimo global (NO lógica de negocio)
-    """
-
     defaults = {
-        "datos_proyecto": {},
-        #"materiales_extra": [],
         "df_estructuras": None,
         "resultado_calculo": None,
         "pdfs_generados": None,
@@ -115,9 +102,8 @@ def _init_estado_base():
 
 
 # =========================================================
-# APP
+# MAIN
 # =========================================================
-
 def main():
 
     st.set_page_config(
@@ -128,14 +114,8 @@ def main():
     _init_rutas()
     _init_estado_base()
 
-    # =====================================================
-    # HEADER
-    # =====================================================
     st.title("⚡ Cálculo de Materiales de Redes")
 
-    # =====================================================
-    # MEMBRETE PDF
-    # =====================================================
     st.radio(
         "Membrete del PDF",
         ["SMART", "ENEE", "SIN LOGO"],
@@ -143,13 +123,19 @@ def main():
         horizontal=True,
     )
 
-    # =====================================================
-    # ORQUESTADOR
-    # =====================================================
-    ejecutar_orquestador_interfaz(
+    # 🔥 SOLO ORQUESTADOR INTERFAZ
+    salida = ejecutar_orquestador_interfaz(
         _nav_estado_actual,
         _barra_nav_botones,
     )
+
+    # 🔍 DEBUG GLOBAL
+    if st.session_state.get("sec") == "debug":
+        st.json({
+            "ok": salida.ok,
+            "errores": salida.errores,
+            "warnings": salida.warnings,
+        })
 
 
 if __name__ == "__main__":
