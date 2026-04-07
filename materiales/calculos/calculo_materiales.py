@@ -186,6 +186,7 @@ def calcular_materiales_proyecto(
     debug_guardar("calc_materiales_conteo", {
         "n_estructuras": len(conteo) if conteo is not None else None
     })
+    debug_guardar("df_materiales_final", df_final)
 
     # =====================================================
     # SALIDA
