@@ -3,23 +3,21 @@
 
 from __future__ import annotations
 
+import pandas as pd
+
 from aplicacion.modelos_proyecto import EntradaProyecto
 
 # =========================
 # DOMINIO
 # =========================
-from entradas.orquestador_entradas import cargar_entrada
 from materiales.orquestador_materiales import ejecutar_materiales
+from materiales.modelos.entrada import EntradaMateriales
+from materiales.modelos.salida import ResultadoMateriales
 
 # =========================
 # BASE
 # =========================
 from entradas.base_datos import cargar_base_datos, obtener_catalogo_materiales
-
-# =========================
-# MODELO DE SALIDA
-# =========================
-from materiales.modelos.salida import ResultadoMateriales
 
 
 # =========================================================
@@ -27,70 +25,185 @@ from materiales.modelos.salida import ResultadoMateriales
 # =========================================================
 def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoMateriales:
     """
-    Orquestador limpio del sistema completo.
-
-    Flujo:
-    EntradaProyecto → Materiales → ResultadoMateriales
+    Flujo maestro:
+    Entradas → Validación → Cálculos → Consolidación → Salidas
     """
+
+    debug = {}
 
     # =====================================================
     # 1. VALIDACIÓN
     # =====================================================
-    if entrada_proyecto is None:
-        return ResultadoMateriales(False, _df_vacio(), ["EntradaProyecto es None"], [])
-
-    if entrada_proyecto.df_estructuras is None or entrada_proyecto.df_estructuras.empty:
-        return ResultadoMateriales(False, _df_vacio(), ["No hay estructuras"], [])
-
-    if not entrada_proyecto.ruta_materiales:
-        return ResultadoMateriales(False, _df_vacio(), ["Ruta de materiales no definida"], [])
+    errores = _validar_entrada(entrada_proyecto)
+    if errores:
+        return _resultado_error("Validación fallida", errores, debug)
 
     # =====================================================
-    # 2. NORMALIZAR OPCIONALES
+    # 2. NORMALIZACIÓN DE OPCIONALES
     # =====================================================
-    df_cables = entrada_proyecto.df_cables
-    if df_cables is not None and not hasattr(df_cables, "empty"):
-        df_cables = None
-
-    df_materiales_extra = entrada_proyecto.df_materiales_extra
-    if df_materiales_extra is not None and not hasattr(df_materiales_extra, "empty"):
-        df_materiales_extra = None
+    df_cables, df_materiales_extra = _normalizar_opcionales(entrada_proyecto)
 
     # =====================================================
-    # 3. BASE DE DATOS
+    # 3. CARGA BASE DE DATOS
     # =====================================================
-    try:
-        base = cargar_base_datos()
-        catalogo = obtener_catalogo_materiales(base)
-    except Exception as e:
-        return ResultadoMateriales(
-            False,
-            _df_vacio(),
-            [f"Error cargando base de datos: {e}"],
-            []
-        )
+    base, catalogo, error_base = _cargar_base()
+    if error_base:
+        return _resultado_error("Error base de datos", [error_base], debug)
 
     # =====================================================
-    # 4. EJECUCIÓN DIRECTA (SIN NORMALIZAR OTRA VEZ)
+    # 4. CONSTRUIR ENTRADA A MATERIALES (BUILDER)
     # =====================================================
-    try:
-        resultado = ejecutar_materiales(
-            entrada_proyecto,   # 🔥 usamos directo
-            catalogo=catalogo
-        )
-    except Exception as e:
-        return ResultadoMateriales(
-            False,
-            _df_vacio(),
-            [f"Error en cálculo: {e}"],
-            []
-        )
+    entrada_materiales, error_builder = _construir_entrada_materiales(
+        entrada_proyecto,
+        base,
+        df_cables,
+        df_materiales_extra
+    )
+
+    if error_builder:
+        return _resultado_error("Error construyendo entrada", [error_builder], debug)
+
+    # =====================================================
+    # DEBUG (ANTES DE CÁLCULO)
+    # =====================================================
+    debug["entrada_materiales"] = {
+        "tension": entrada_materiales.tension,
+        "estructuras_shape": entrada_materiales.estructuras_df.shape,
+        "tiene_base": entrada_materiales.hojas_base is not None,
+        "cables": None if entrada_materiales.df_cables is None else "OK",
+        "materiales_extra": None if entrada_materiales.df_materiales_extra is None else "OK",
+    }
+
+    # =====================================================
+    # 5. CÁLCULO
+    # =====================================================
+    resultado, error_calculo = _ejecutar_materiales_safe(
+        entrada_materiales,
+        catalogo
+    )
+
+    if error_calculo:
+        return _resultado_error("Error en cálculo", [error_calculo], debug)
+
+    # =====================================================
+    # 6. CONSOLIDACIÓN
+    # =====================================================
+    resultado.debug = debug  # 🔥 útil para Streamlit
 
     return resultado
 
+
 # =========================================================
-# HELPERS
+# VALIDACIÓN
+# =========================================================
+def _validar_entrada(entrada: EntradaProyecto) -> list[str]:
+
+    errores = []
+
+    if entrada is None:
+        errores.append("EntradaProyecto es None")
+        return errores
+
+    if entrada.df_estructuras is None or entrada.df_estructuras.empty:
+        errores.append("No hay estructuras")
+
+    if not entrada.ruta_materiales:
+        errores.append("Ruta de materiales no definida")
+
+    return errores
+
+
+# =========================================================
+# NORMALIZACIÓN OPCIONALES
+# =========================================================
+def _normalizar_opcionales(entrada: EntradaProyecto):
+
+    df_cables = entrada.df_cables
+    if df_cables is not None and not hasattr(df_cables, "empty"):
+        df_cables = None
+
+    df_materiales_extra = entrada.df_materiales_extra
+    if df_materiales_extra is not None and not hasattr(df_materiales_extra, "empty"):
+        df_materiales_extra = None
+
+    return df_cables, df_materiales_extra
+
+
+# =========================================================
+# BASE DE DATOS
+# =========================================================
+def _cargar_base():
+
+    try:
+        base = cargar_base_datos()
+        catalogo = obtener_catalogo_materiales(base)
+        return base, catalogo, None
+    except Exception as e:
+        return None, None, str(e)
+
+
+# =========================================================
+# BUILDER MATERIALS
+# =========================================================
+def _construir_entrada_materiales(
+    entrada_proyecto: EntradaProyecto,
+    base,
+    df_cables,
+    df_materiales_extra
+):
+
+    try:
+
+        tension = getattr(entrada_proyecto, "tension", None)
+        if not tension:
+            tension = 34.5  # ⚡ default robusto
+
+        entrada = EntradaMateriales(
+            estructuras_df=entrada_proyecto.df_estructuras,
+            tension=tension,
+            hojas_base=base,
+            df_cables=df_cables,
+            df_materiales_extra=df_materiales_extra,
+        )
+
+        return entrada, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+# =========================================================
+# EJECUCIÓN SEGURA
+# =========================================================
+def _ejecutar_materiales_safe(entrada, catalogo):
+
+    try:
+        resultado = ejecutar_materiales(
+            entrada,
+            catalogo=catalogo
+        )
+        return resultado, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+# =========================================================
+# RESULTADO ERROR
+# =========================================================
+def _resultado_error(titulo, errores, debug):
+
+    return ResultadoMateriales(
+        False,
+        _df_vacio(),
+        [f"{titulo}: {e}" for e in errores],
+        [],
+        debug=debug
+    )
+
+
+# =========================================================
+# DF VACÍO
 # =========================================================
 def _df_vacio():
-    import pandas as pd
     return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
