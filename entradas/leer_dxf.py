@@ -34,11 +34,9 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
                 codigo = lineas[i]
                 valor = lineas[i + 1]
 
-                # capa
                 if codigo == "8":
                     capa = valor.upper()
 
-                # contenido
                 if codigo == "1":
                     texto += " " + valor
 
@@ -54,23 +52,32 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
                 continue
 
             # =========================
-            # 🔥 LIMPIEZA MTEXT (CLAVE)
+            # 🔥 LIMPIEZA FUERTE (FINAL)
             # =========================
 
-            # 1. convertir saltos de línea de AutoCAD
+            # saltos AutoCAD
             texto = texto.replace("\\P", ",")
 
-            # 2. eliminar formato tipo {C7:
-            texto = re.sub(r"\{.*?:", "", texto)
+            # eliminar formato {C7: o similar
+            texto = re.sub(r"\{[^};]*[;:]", "", texto)
 
-            # 3. eliminar llaves
+            # eliminar llaves
             texto = texto.replace("}", "")
 
-            # 4. normalizar espacios
-            texto = re.sub(r"\s+", " ", texto).strip()
+            # eliminar etiquetas tipo P-57
+            texto = re.sub(r"\bP-\d+\b", "", texto)
+
+            # eliminar (P)
+            texto = re.sub(r"\(P\)", "", texto)
+
+            # normalizar comas
+            texto = re.sub(r",+", ",", texto)
+
+            # limpiar espacios
+            texto = re.sub(r"\s+", " ", texto).strip(" ,")
 
             # =========================
-            # OUTPUT CRUDO CONTROLADO
+            # OUTPUT
             # =========================
             resultados.append({
                 "Punto": f"P-{punto}",
