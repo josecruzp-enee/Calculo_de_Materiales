@@ -10,37 +10,34 @@ from interfaz.formularios import formulario_datos_proyecto, mostrar_datos_format
 # =========================================================
 
 def seccion_datos_proyecto() -> dict:
-    """
-    Sección de datos del proyecto.
 
-    ✔ Usa formulario (UI)
-    ✔ Captura retorno (nuevo)
-    ✔ Mantiene compatibilidad con session_state
-    ✔ Retorna datos al orquestador
-    """
-
-    # ============================
-    # FORMULARIO
-    # ============================
     datos_nuevos = formulario_datos_proyecto()
 
-    # ============================
-    # ACTUALIZAR ESTADO (SI HAY NUEVOS DATOS)
-    # ============================
     if datos_nuevos:
         st.session_state["datos_proyecto"] = datos_nuevos
 
-    # ============================
-    # OBTENER DATOS ACTUALES
-    # ============================
     datos_actuales = st.session_state.get("datos_proyecto", {})
 
-    # ============================
-    # MOSTRAR DATOS
+    # =========================================================
+    # 🔥 CONVERSIÓN DE TENSIÓN (AQUÍ ESTÁ LA CLAVE)
+    # =========================================================
+    tension_str = datos_actuales.get("nivel_de_tension", "")
+
+    if "/" in tension_str:
+        try:
+            _, t = tension_str.split("/")
+            datos_actuales["tension"] = float(t)
+        except:
+            datos_actuales["tension"] = None
+    else:
+        try:
+            datos_actuales["tension"] = float(tension_str)
+        except:
+            datos_actuales["tension"] = None
+
+    st.session_state["datos_proyecto"] = datos_actuales
+
     # ============================
     mostrar_datos_formateados()
 
-    # ============================
-    # RETORNAR AL ORQUESTADOR
-    # ============================
     return datos_actuales
