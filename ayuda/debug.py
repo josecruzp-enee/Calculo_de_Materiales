@@ -10,9 +10,6 @@ import pandas as pd
 # 🔷 GUARDAR DEBUG GLOBAL (UNIFICADO)
 # =========================================================
 def debug_guardar(clave: str, valor):
-    """
-    Guarda información de debug accesible desde cualquier capa.
-    """
 
     if "debug_pipeline" not in st.session_state:
         st.session_state["debug_pipeline"] = {}
@@ -28,20 +25,39 @@ def _estado(ok):
 
 
 # =========================================================
-# 🔷 EVALUAR ESTADO REAL DEL SISTEMA
+# 🔷 EVALUAR ESTADO REAL DEL SISTEMA (CORREGIDO)
 # =========================================================
 def _evaluar_pipeline():
 
     df = st.session_state.get("df_estructuras")
     resultado = st.session_state.get("resultado_calculo")
 
+    # =========================
+    # VALIDACIONES REALES
+    # =========================
+    entradas_ok = isinstance(df, pd.DataFrame) and not df.empty
+
+    normalizacion_ok = (
+        entradas_ok
+        and "Punto" in df.columns
+        and "Estructura" in df.columns
+        and df["Estructura"].notna().any()
+    )
+
+    materiales_ok = (
+        resultado is not None
+        and hasattr(resultado, "df_materiales")
+        and isinstance(resultado.df_materiales, pd.DataFrame)
+        and not resultado.df_materiales.empty
+    )
+
     estados = {
         "UI": True,
-        "Entradas": isinstance(df, pd.DataFrame) and not df.empty,
-        "Normalización": isinstance(df, pd.DataFrame) and "Punto" in df.columns,
-        "Materiales": resultado is not None,
-        "Exportación": resultado is not None,
-        "PDF": resultado is not None,
+        "Entradas": entradas_ok,
+        "Normalización": normalizacion_ok,
+        "Materiales": materiales_ok,
+        "Exportación": materiales_ok,
+        "PDF": materiales_ok,
     }
 
     return estados
@@ -59,7 +75,6 @@ def _grafo_pipeline(estados):
 
         dot = graphviz.Digraph()
 
-        # Nodos
         dot.node("UI", f"UI\n{_estado(estados['UI'])}")
         dot.node("ENT", f"Entradas\n{_estado(estados['Entradas'])}")
         dot.node("NOR", f"Normalización\n{_estado(estados['Normalización'])}")
@@ -67,7 +82,6 @@ def _grafo_pipeline(estados):
         dot.node("EXP", f"Exportación\n{_estado(estados['Exportación'])}")
         dot.node("PDF", f"PDF\n{_estado(estados['PDF'])}")
 
-        # Flujo
         dot.edge("UI", "ENT")
         dot.edge("ENT", "NOR")
         dot.edge("NOR", "MAT")
@@ -77,7 +91,6 @@ def _grafo_pipeline(estados):
         st.graphviz_chart(dot)
 
     except Exception:
-        # fallback simple
         st.markdown(f"""
         UI {_estado(estados['UI'])}  
         ↓  
@@ -98,22 +111,49 @@ def _grafo_pipeline(estados):
 # =========================================================
 def _render_valor_debug(valor):
 
-    # DataFrame
     if isinstance(valor, pd.DataFrame):
         st.caption(f"Filas: {len(valor)} | Columnas: {list(valor.columns)}")
         st.dataframe(valor.head(10), use_container_width=True)
 
-    # Diccionario
     elif isinstance(valor, dict):
         st.json(valor)
 
-    # Objetos tipo dataclass
     elif hasattr(valor, "__dict__"):
         st.json(valor.__dict__)
 
-    # Otros
     else:
         st.write(valor)
+
+
+# =========================================================
+# 🔷 AUDITORÍA REAL DE ESTRUCTURAS (NUEVO 🔥)
+# =========================================================
+def _auditar_estructuras():
+
+    st.markdown("### 🔍 Auditoría de estructuras")
+
+    df = st.session_state.get("df_estructuras")
+
+    if df is None:
+        st.error("df_estructuras = None")
+        return
+
+    if not isinstance(df, pd.DataFrame):
+        st.error(f"df_estructuras no es DataFrame: {type(df)}")
+        return
+
+    st.write("Shape:", df.shape)
+    st.write("Columnas:", list(df.columns))
+
+    st.write("Primeras filas:")
+    st.dataframe(df.head(10), use_container_width=True)
+
+    # Validación crítica
+    if "Estructura" in df.columns:
+        st.write("Valores únicos (Estructura):")
+        st.write(sorted(df["Estructura"].dropna().unique())[:20])
+    else:
+        st.warning("No existe columna 'Estructura'")
 
 
 # =========================================================
@@ -124,7 +164,7 @@ def seccion_debug():
     st.title("🧠 Debug del sistema")
 
     # =====================================================
-    # ESTADO DEL PIPELINE
+    # DEBUG GLOBAL
     # =====================================================
     debug = st.session_state.get("debug_pipeline")
 
@@ -139,7 +179,12 @@ def seccion_debug():
         st.info("No hay información de debug aún")
 
     # =====================================================
-    # GRAFO DEL SISTEMA
+    # 🔴 AUDITORÍA REAL (CLAVE)
+    # =====================================================
+    _auditar_estructuras()
+
+    # =====================================================
+    # GRAFO
     # =====================================================
     estados = _evaluar_pipeline()
     _grafo_pipeline(estados)
