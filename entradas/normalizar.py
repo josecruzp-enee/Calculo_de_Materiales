@@ -16,7 +16,7 @@ def normalizar_estructuras(df: pd.DataFrame):
 
     if df is None or df.empty:
         return (
-            pd.DataFrame(columns=["punto", "codigodeestructura", "cantidad"]),
+            pd.DataFrame(columns=["Punto", "Estructura", "Cantidad"]),
             ["Entrada vacía"],
             []
         )
@@ -55,6 +55,20 @@ def normalizar_estructuras(df: pd.DataFrame):
         .size()
         .rename(columns={"size": "cantidad"})
     )
+
+    # ======================================================
+    # 🔥 ADAPTADOR AL CONTRATO DEL SISTEMA
+    # ======================================================
+    df_final = df_final.rename(columns={
+        "punto": "Punto",
+        "codigodeestructura": "Estructura",
+        "cantidad": "Cantidad"
+    })
+
+    # asegurar tipos
+    df_final["Punto"] = df_final["Punto"].astype(str)
+    df_final["Estructura"] = df_final["Estructura"].astype(str)
+    df_final["Cantidad"] = pd.to_numeric(df_final["Cantidad"], errors="coerce").fillna(0)
 
     return df_final, [], []
 
