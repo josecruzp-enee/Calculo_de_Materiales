@@ -20,7 +20,8 @@ from materiales.validaciones.materiales_validacion import (
     validar_datos_proyecto,
 )
 
-from entradas.normalizar import normalizar_estructuras
+# ❌ ELIMINADO:
+# from entradas.normalizar import normalizar_estructuras
 
 
 # =========================================================
@@ -44,16 +45,19 @@ def _merge_materiales(
         return df_a
 
     df = pd.concat([df_a, df_b], ignore_index=True)
+
     if not set(["Materiales", "Unidad", "Cantidad"]).issubset(df.columns):
-        return df  # deja pasar; la validación fuerte está en ResultadoMateriales
+        return df
 
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
+
     df_out = (
         df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
         .sort_values(["Materiales", "Unidad"])
         .reset_index(drop=True)
     )
+
     return df_out
 
 
@@ -70,15 +74,17 @@ def ejecutar_materiales(
     tension: Optional[float] = None,
 ) -> ResultadoMateriales:
     """
-    Pipeline:
+    Pipeline limpio:
+
         1) Validación de datos_proyecto
-        2) Normalización de estructuras
-        3) Cálculo de materiales por estructuras
+        2) Uso directo de estructuras (YA NORMALIZADAS)
+        3) Cálculo de materiales
         4) Integración de cables
         5) Integración de materiales extra
         6) Consolidación final
 
-    NO depende de interfaz.
+    🔥 IMPORTANTE:
+        Este módulo NO normaliza estructuras
     """
 
     errores: List[str] = []
@@ -93,23 +99,12 @@ def ejecutar_materiales(
         warnings.append(f"validar_datos_proyecto: {e}")
 
     # -----------------------------------------------------
-    # 2) NORMALIZAR ESTRUCTURAS
+    # 2) USAR ESTRUCTURAS (YA LIMPIAS)
     # -----------------------------------------------------
-    try:
-        df_norm, err_norm, warn_norm = normalizar_estructuras(estructuras_df)
-        errores.extend(err_norm or [])
-        warnings.extend(warn_norm or [])
-    except Exception as e:
-        errores.append(f"Error normalizando estructuras: {e}")
-        return ResultadoMateriales(
-            df_materiales=_df_vacio(),
-            df_materiales_detalle=_df_vacio(),
-            errores=errores,
-            warnings=warnings,
-        )
+    df_norm = estructuras_df
 
     if df_norm is None or df_norm.empty:
-        warnings.append("No hay estructuras luego de normalización.")
+        warnings.append("No hay estructuras para procesar.")
         return ResultadoMateriales(
             df_materiales=_df_vacio(),
             df_materiales_detalle=_df_vacio(),
@@ -118,7 +113,7 @@ def ejecutar_materiales(
         )
 
     # -----------------------------------------------------
-    # 3) CÁLCULO PRINCIPAL (ESTRUCTURAS)
+    # 3) CÁLCULO PRINCIPAL
     # -----------------------------------------------------
     try:
         resultado_calc = calcular_materiales_proyecto(
@@ -135,15 +130,17 @@ def ejecutar_materiales(
             warnings=warnings,
         )
 
-    # resultado_calc esperado como dict o tupla
+    # -----------------------------------------------------
+    # 4) EXTRAER RESULTADOS
+    # -----------------------------------------------------
     df_materiales = None
     df_detalle = None
 
     if isinstance(resultado_calc, dict):
         df_materiales = resultado_calc.get("df_materiales")
         df_detalle = resultado_calc.get("df_materiales_detalle")
+
     elif isinstance(resultado_calc, tuple):
-        # fallback común
         if len(resultado_calc) >= 1:
             df_materiales = resultado_calc[0]
         if len(resultado_calc) >= 2:
@@ -156,7 +153,7 @@ def ejecutar_materiales(
         df_detalle = _df_vacio()
 
     # -----------------------------------------------------
-    # 4) INTEGRAR CABLES (SI EXISTEN)
+    # 5) INTEGRAR CABLES
     # -----------------------------------------------------
     if isinstance(df_cables, pd.DataFrame) and not df_cables.empty:
         try:
@@ -164,11 +161,12 @@ def ejecutar_materiales(
 
             df_cab = materiales_desde_cables(df_cables)
             df_materiales = _merge_materiales(df_materiales, df_cab)
+
         except Exception as e:
             warnings.append(f"Error integrando cables: {e}")
 
     # -----------------------------------------------------
-    # 5) INTEGRAR MATERIALES EXTRA
+    # 6) INTEGRAR MATERIALES EXTRA
     # -----------------------------------------------------
     if isinstance(df_materiales_extra, pd.DataFrame) and not df_materiales_extra.empty:
         try:
@@ -177,7 +175,7 @@ def ejecutar_materiales(
             warnings.append(f"Error integrando materiales extra: {e}")
 
     # -----------------------------------------------------
-    # 6) RESULTADO FINAL
+    # 7) RESULTADO FINAL
     # -----------------------------------------------------
     try:
         resultado = ResultadoMateriales(
@@ -186,8 +184,8 @@ def ejecutar_materiales(
             errores=errores,
             warnings=warnings,
         )
+
     except Exception as e:
-        # última barrera de seguridad
         errores.append(f"Error construyendo ResultadoMateriales: {e}")
         resultado = ResultadoMateriales(
             df_materiales=_df_vacio(),
