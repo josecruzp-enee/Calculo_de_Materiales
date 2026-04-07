@@ -8,6 +8,8 @@ from materiales.calculos.materiales_puntos import (
     extraer_conteo_estructuras,
 )
 
+from ayuda.debug import debug_guardar
+
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
@@ -26,7 +28,11 @@ def _validar_df_estructuras(df: pd.DataFrame):
         raise ValueError("df_estructuras está vacío")
 
     if "Estructura" not in df.columns:
-        raise ValueError("df_estructuras debe contener columna 'Estructura'")
+        raise ValueError(
+            f"df_estructuras debe contener columna 'Estructura'. "
+            f"Columnas actuales: {list(df.columns)}"
+        )
+
 
 def _validar_hojas_base(hojas_base):
 
@@ -46,7 +52,10 @@ def _validar_df_salida(df: pd.DataFrame):
         raise ValueError("Resultado de materiales vacío")
 
     if not set(COLUMNAS_STD).issubset(df.columns):
-        raise ValueError("Columnas inválidas en salida")
+        raise ValueError(
+            f"Columnas inválidas en salida. Esperadas: {COLUMNAS_STD}, "
+            f"recibidas: {list(df.columns)}"
+        )
 
     if df["Materiales"].isna().any():
         raise ValueError("Materiales contiene valores nulos")
@@ -86,49 +95,101 @@ def calcular_materiales_proyecto(
     tabla_conectores_mt=None,
 ) -> dict:
 
-    # =========================
+    # =====================================================
+    # 🔷 DEBUG ENTRADA
+    # =====================================================
+    debug_guardar("calc_materiales_input", {
+        "columnas": None if df_estructuras is None else list(df_estructuras.columns),
+        "filas": None if df_estructuras is None else len(df_estructuras),
+        "tension": tension,
+        "hojas_base_count": None if hojas_base is None else len(hojas_base),
+    })
+
+    # =====================================================
     # VALIDACIONES INICIALES
-    # =========================
-    _validar_df_estructuras(df_estructuras)
-    _validar_hojas_base(hojas_base)
+    # =====================================================
+    try:
+        _validar_df_estructuras(df_estructuras)
+        _validar_hojas_base(hojas_base)
 
-    if tension is None or float(tension) <= 0:
-        raise ValueError("tension no válida")
+        if tension is None or float(tension) <= 0:
+            raise ValueError("tension no válida")
 
-    # =========================
-    # CÁLCULO REAL (FUENTE ÚNICA)
-    # =========================
-    df_detalle = calcular_materiales_por_punto(
-        hojas_base=hojas_base,
-        df_estructuras=df_estructuras,
-        tension=tension,
-        calibre_mt=calibre_mt,
-        tabla_conectores_mt=tabla_conectores_mt
-    )
+    except Exception as e:
+        debug_guardar("calc_materiales_error_validacion", {
+            "error": str(e),
+            "columnas": None if df_estructuras is None else list(df_estructuras.columns)
+        })
+        raise
 
-    # =========================
+    # =====================================================
+    # CÁLCULO REAL
+    # =====================================================
+    try:
+        df_detalle = calcular_materiales_por_punto(
+            hojas_base=hojas_base,
+            df_estructuras=df_estructuras,
+            tension=tension,
+            calibre_mt=calibre_mt,
+            tabla_conectores_mt=tabla_conectores_mt
+        )
+
+        debug_guardar("calc_materiales_detalle", {
+            "rows": len(df_detalle),
+            "columns": list(df_detalle.columns)
+        })
+
+    except Exception as e:
+        debug_guardar("calc_materiales_error_calculo", {
+            "error": str(e)
+        })
+        raise
+
+    # =====================================================
     # VALIDACIÓN DETALLE
-    # =========================
-    _validar_df_salida(df_detalle)
+    # =====================================================
+    try:
+        _validar_df_salida(df_detalle)
+    except Exception as e:
+        debug_guardar("calc_materiales_error_detalle", {
+            "error": str(e),
+            "columns": list(df_detalle.columns) if df_detalle is not None else None
+        })
+        raise
 
-    # =========================
+    # =====================================================
     # CONSOLIDACIÓN
-    # =========================
+    # =====================================================
     df_resumen = _consolidar(df_detalle)
 
-    # =========================
-    # VALIDACIÓN FINAL
-    # =========================
-    _validar_df_salida(df_resumen)
+    debug_guardar("calc_materiales_resumen", {
+        "rows": len(df_resumen),
+        "columns": list(df_resumen.columns)
+    })
 
-    # =========================
-    # CONTEO (solo informativo)
-    # =========================
+    # =====================================================
+    # VALIDACIÓN FINAL
+    # =====================================================
+    try:
+        _validar_df_salida(df_resumen)
+    except Exception as e:
+        debug_guardar("calc_materiales_error_final", {
+            "error": str(e)
+        })
+        raise
+
+    # =====================================================
+    # CONTEO
+    # =====================================================
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
 
-    # =========================
+    debug_guardar("calc_materiales_conteo", {
+        "n_estructuras": len(conteo) if conteo is not None else None
+    })
+
+    # =====================================================
     # SALIDA
-    # =========================
+    # =====================================================
     return {
         "ok": True,
         "df_materiales": df_resumen,
