@@ -44,75 +44,103 @@ def _vista_previa_conteo(df_estructuras: pd.DataFrame | None):
 # =========================================================
 def seccion_finalizar_calculo():
 
+    import streamlit as st
+    import pandas as pd
+
+    from interfaz.contratos import SalidaInterfaz
+    from entradas.orquestador_entradas import ejecutar_entradas
+    from aplicacion.modelos_proyecto import EntradaProyecto
+    from aplicacion.orquestador_proyecto import ejecutar_proyecto
+
     st.subheader("⚙️ Finalizar cálculo")
 
-    tipo = st.session_state.get("tipo_entrada")
+    tipo = st.session_state.get("modo_carga_seleccionado")
     data = st.session_state.get("data_entrada")
 
     if data is None:
         st.warning("Debe ingresar estructuras antes de calcular")
         return
 
-    # Vista previa SOLO si es DF (UI manual)
+    # =========================
+    # Vista previa (solo manual)
+    # =========================
     if isinstance(data, pd.DataFrame):
         _vista_previa_conteo(data)
 
+    # =========================
+    # EJECUCIÓN
+    # =========================
     if st.button("🚀 Ejecutar cálculo"):
 
-        from entradas.orquestador_entradas import cargar_entrada
-
         try:
-            # =========================
-            # 🔥 PIPELINE REAL
-            # =========================
-            entrada_materiales = cargar_entrada(
-                tipo=tipo,
-                data=data,
-                tension=13.8,  # luego lo haces dinámico
+            # =====================================================
+            # 1. ARMAR CONTRATO INTERFAZ
+            # =====================================================
+            salida_ui = SalidaInterfaz(
+                ok=True,
+                tipo_entrada=tipo,
+                data_entrada=data,
+                datos_proyecto=st.session_state.get("datos_proyecto", {}),
                 df_cables=st.session_state.get("cables_proyecto_df"),
                 df_materiales_extra=pd.DataFrame(
                     st.session_state.get("materiales_extra", [])
                 ),
             )
 
+            # =====================================================
+            # 2. PIPELINE ENTRADAS
+            # =====================================================
+            salida_entradas = ejecutar_entradas(
+                salida_ui,
+                tension=13.8
+            )
+
+            if not salida_entradas.ok:
+                st.error("❌ Error en entradas:")
+                for e in salida_entradas.errores:
+                    st.error(f"- {e}")
+                return
+
+            # =====================================================
+            # 3. ADAPTADOR → PROYECTO
+            # =====================================================
+            entrada_proyecto = EntradaProyecto(
+                df_estructuras=salida_entradas.df_estructuras,
+                df_cables=salida_entradas.df_cables,
+                df_materiales_extra=salida_entradas.df_materiales_extra,
+                ruta_materiales=st.session_state.get("ruta_datos_materiales"),
+            )
+
+            # =====================================================
+            # 4. EJECUCIÓN PROYECTO
+            # =====================================================
+            with st.spinner("Calculando materiales..."):
+                resultado = ejecutar_proyecto(entrada_proyecto)
+
+            if resultado is None:
+                st.error("❌ Resultado vacío")
+                return
+
+            if not resultado.ok:
+                st.error("❌ Error en el cálculo:")
+                for e in resultado.errores:
+                    st.error(f"- {e}")
+                return
+
+            if resultado.warnings:
+                for w in resultado.warnings:
+                    st.warning(w)
+
+            # =====================================================
+            # 5. GUARDAR RESULTADO
+            # =====================================================
+            st.session_state["resultado_calculo"] = resultado
+            st.session_state["calculo_finalizado"] = True
+
+            st.success("✅ Cálculo completado correctamente")
+
         except Exception as e:
-            st.error(f"Error en entrada: {e}")
-            return
-
-        # =========================
-        # 🔥 CONVERTIR A PROYECTO
-        # =========================
-        entrada = EntradaProyecto(
-            df_estructuras=entrada_materiales.estructuras_df,
-            df_cables=entrada_materiales.df_cables,
-            df_materiales_extra=entrada_materiales.datos_proyecto.get("materiales_extra"),
-            ruta_materiales=st.session_state.get("ruta_datos_materiales"),
-        )
-
-        # =========================
-        # EJECUTAR
-        # =========================
-        with st.spinner("Calculando materiales..."):
-            resultado = ejecutar_proyecto(entrada)
-
-        if resultado is None:
-            st.error("❌ Resultado vacío")
-            return
-
-        if not resultado.ok:
-            st.error("❌ Error en el cálculo:")
-            for e in resultado.errores:
-                st.error(f"- {e}")
-            return
-
-        if resultado.warnings:
-            for w in resultado.warnings:
-                st.warning(w)
-
-        st.session_state["resultado_calculo"] = resultado
-        st.session_state["calculo_finalizado"] = True
-
-        st.success("✅ Cálculo completado correctamente")
+            st.error(f"❌ Error general: {str(e)}")
 # =========================================================
 # SECCIÓN EXPORTACIÓN
 # =========================================================
