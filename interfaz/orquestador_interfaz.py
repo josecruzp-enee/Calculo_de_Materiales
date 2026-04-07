@@ -61,11 +61,8 @@ def renderizar_cables():
 
 
 def renderizar_modo_carga():
-    modo = seleccionar_modo_carga()
+    seleccionar_modo_carga()
 
-    
-    st.session_state["modo_carga_seleccionado"] = modo
-    st.session_state["tipo_entrada"] = modo
 
 def renderizar_estructuras():
     modo = st.session_state.get("modo_carga_seleccionado")
