@@ -24,11 +24,11 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
         raise ValueError("archivo_dxf es None")
 
     # =========================================================
-    # 🔥 LECTURA SEGURA (FIX CRÍTICO)
+    # 🔥 LECTURA SEGURA
     # =========================================================
     try:
         if hasattr(archivo_dxf, "seek"):
-            archivo_dxf.seek(0)  # 🔥 resetear puntero SIEMPRE
+            archivo_dxf.seek(0)
 
         raw = archivo_dxf.read()
 
@@ -57,6 +57,9 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             capa = None
             texto = ""
 
+            # =================================================
+            # LECTURA MTEXT (MULTILÍNEA REAL)
+            # =================================================
             while i < len(lineas) - 1 and lineas[i] != "0":
 
                 codigo = lineas[i]
@@ -65,15 +68,16 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
                 if codigo == "8":
                     capa = valor.upper()
 
-                if codigo == "1":
+                # 🔥 FIX CRÍTICO: leer líneas tipo 1 y 3
+                if codigo in ("1", "3"):
                     texto += " " + valor
 
                 i += 2
 
             # =================================================
-            # FILTRO DE CAPA
+            # FILTRO DE CAPA (ROBUSTO)
             # =================================================
-            if capa != "ESTRUCTURAS":
+            if not capa or "ESTRUCT" not in capa:
                 continue
 
             if not texto.strip():
@@ -86,14 +90,14 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             # saltos AutoCAD
             texto = texto.replace("\\P", ",")
 
-            # eliminar formato tipo {C7:
+            # eliminar formatos tipo {C7:
             texto = re.sub(r"\{[^};]*[;:]", "", texto)
 
             # eliminar llaves
             texto = texto.replace("{", "").replace("}", "")
 
-            # eliminar etiquetas tipo P-57
-            texto = re.sub(r"\bP-\d+\b", "", texto)
+            # ⚠️ NO eliminar P-XX (se puede usar después)
+            # texto = re.sub(r"\bP-\d+\b", "", texto)
 
             # eliminar (P), (E), etc
             texto = re.sub(r"\([^)]*\)", "", texto)
@@ -102,14 +106,18 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             texto = texto.replace(";", ",")
             texto = texto.replace("|", ",")
 
-            # normalizar comas múltiples
+            # limpiar comas múltiples
             texto = re.sub(r",+", ",", texto)
 
-            # separar códigos pegados por espacio
-            texto = re.sub(r"\s(?=[A-Z]+-)", ",", texto)
+            # 🔥 FIX: separación controlada (NO rompe TS-37.5 KVA)
+            texto = re.sub(r"\s+(?=[A-Z]{1,3}-\d)", ",", texto)
 
-            # limpiar espacios
+            # limpiar espacios finales
             texto = re.sub(r"\s+", " ", texto).strip(" ,")
+
+            # evitar registros vacíos tras limpieza
+            if not texto:
+                continue
 
             # =================================================
             # OUTPUT
@@ -125,7 +133,7 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             i += 1
 
     # =========================================================
-    # OUTPUT FINAL
+    # OUTPUT FINAL (ALINEADO A CONTRATO)
     # =========================================================
     if not resultados:
         df = pd.DataFrame(columns=["Punto", "Estructura"])
