@@ -2,6 +2,7 @@
 
 import pandas as pd
 import re
+from ayuda.debug import debug_guardar
 
 
 # ==========================================================
@@ -14,10 +15,6 @@ def _limpiar_str(v) -> str:
 
 
 def _parse_tension_col(col) -> float | None:
-    """
-    Extrae valor numérico de columnas tipo:
-    13.8, 13.8 kV, 13,8KV, etc.
-    """
     if col is None:
         return None
 
@@ -33,18 +30,20 @@ def _parse_tension_col(col) -> float | None:
 # ==========================================================
 # LECTOR PRINCIPAL
 # ==========================================================
-
-
 def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | None:
-    """
-    Procesa un DataFrame de materiales y devuelve:
-    Materiales | Unidad | Cantidad
-    """
+
+    # =========================
+    # DEBUG ENTRADA
+    # =========================
+    debug_guardar("lector_input_shape", getattr(df, "shape", None))
+    debug_guardar("lector_input_columns", list(df.columns) if df is not None else None)
+    debug_guardar("lector_tension", tension)
 
     # =========================
     # VALIDACIÓN FUERTE
     # =========================
     if df is None or df.empty:
+        debug_guardar("lector_error", "df vacío o None")
         return None
 
     if tension is None:
@@ -59,16 +58,25 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
     df.columns = df.columns.map(str).str.strip()
 
     # =========================
+    # DEBUG COLUMNAS LIMPIAS
+    # =========================
+    debug_guardar("lector_columns_clean", list(df.columns))
+
+    # =========================
     # VALIDAR COLUMNAS BASE
     # =========================
     if "Materiales" not in df.columns:
+        debug_guardar("lector_error", {
+            "msg": "Columna 'Materiales' no encontrada",
+            "columnas": list(df.columns)
+        })
         raise ValueError("Columna 'Materiales' no encontrada")
 
     if "Unidad" not in df.columns:
         df["Unidad"] = ""
 
     # =========================
-    # BUSCAR COLUMNA DE TENSIÓN (ROBUSTO)
+    # BUSCAR COLUMNA DE TENSIÓN
     # =========================
     col_tension = None
 
@@ -82,8 +90,11 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
             col_tension = c
             break
 
+    debug_guardar("lector_columna_tension", col_tension)
+
     if col_tension is None:
-        return None  # válido pero sin datos
+        debug_guardar("lector_warning", "No se encontró columna de tensión")
+        return None
 
     # =========================
     # LIMPIEZA
@@ -96,7 +107,7 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
     ).fillna(0)
 
     # =========================
-    # FILTRO SEGURO (🔥 CLAVE)
+    # FILTRO
     # =========================
     mask = (
         (df[col_tension] > 0)
@@ -112,14 +123,23 @@ def leer_hoja_materiales(df: pd.DataFrame, tension: float) -> pd.DataFrame | Non
     df_out.rename(columns={col_tension: "Cantidad"}, inplace=True)
 
     # =========================
+    # DEBUG SALIDA
+    # =========================
+    debug_guardar("lector_output_preview", df_out.head(10))
+    debug_guardar("lector_output_shape", df_out.shape)
+
+    # =========================
     # VALIDACIÓN FINAL
     # =========================
     if df_out.empty:
+        debug_guardar("lector_resultado", "vacío")
         return None
 
     columnas_esperadas = {"Materiales", "Unidad", "Cantidad"}
 
     if not columnas_esperadas.issubset(df_out.columns):
         raise ValueError(f"Formato inválido: {df_out.columns}")
+
+    debug_guardar("lector_resultado", "ok")
 
     return df_out
