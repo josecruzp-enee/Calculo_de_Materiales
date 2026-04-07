@@ -54,7 +54,10 @@ def _merge_materiales(df_a, df_b):
         return df
 
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
-
+    debug_guardar(
+        "estructuras_antes_materiales",
+        sorted(df_estructuras["Estructura"].unique())
+    )
     return (
         df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
