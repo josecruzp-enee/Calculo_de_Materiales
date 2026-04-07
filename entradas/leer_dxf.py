@@ -158,13 +158,13 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
     # 🔥 ÚNICAS (CLAVE)
     debug_guardar(
         "DXF_UNICAS",
-        sorted(set(resultados))
+        sorted({r["Estructura"] for r in resultados})
     )
 
     # 🔥 SOLO CS (FOCO DEL PROBLEMA)
     debug_guardar(
         "DXF_SOLO_CS",
-        sorted({r for r in resultados if "CS" in str(r)})
+        sorted({r["Estructura"] for r in resultados if "CS" in str(r["Estructura"])})
     )
 
     return df
