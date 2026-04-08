@@ -130,27 +130,48 @@ def extraer_transformadores(df_estructuras, df_mat):
 
     s = df_estructuras["CodigoEstructura"].astype(str).str.upper()
 
+    # 🔍 Extraer solo transformadores
     ext = s.str.extract(r"^(TS|TD|TT)-(\d+(?:\.\d+)?)KVA", expand=True)
 
     mask = ext[0].notna()
     if not mask.any():
         return 0, "", []
 
-    qty = pd.to_numeric(df_estructuras.loc[mask, "Cantidad"], errors="coerce").fillna(0)
+    qty = pd.to_numeric(
+        df_estructuras.loc[mask, "Cantidad"],
+        errors="coerce"
+    ).fillna(0)
 
     bancos = {}
     mult = {"TS": 1, "TD": 2, "TT": 3}
 
+    # 🔥 LOOP CORREGIDO (ANTI-NaN)
     for p, k, q in zip(ext[0], ext[1], qty):
+
+        # ignorar basura
+        if pd.isna(p) or pd.isna(k):
+            continue
+
         key = f"{p}-{k} kVA"
         bancos[key] = bancos.get(key, 0) + int(q)
 
-    total = sum(bancos[k] * mult[k.split("-")[0]] for k in bancos)
+    # 🔥 limpieza extra (doble protección)
+    bancos = {
+        k: v for k, v in bancos.items()
+        if k and str(k).strip().lower() != "nan"
+    }
 
-    resumen = " + ".join([f"{v} x {k}" for k, v in bancos.items()])
+    # 🔥 cálculo seguro
+    total = sum(
+        v * mult.get(k.split("-")[0], 0)
+        for k, v in bancos.items()
+    )
+
+    resumen = " + ".join([
+        f"{v} x {k}" for k, v in bancos.items()
+    ])
 
     return total, resumen, list(bancos.keys())
-
 
 def extraer_luminarias(df_estructuras, df_mat):
 
