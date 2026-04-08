@@ -57,7 +57,7 @@ def _add_file(archivos, errores, nombre, contenido):
 # =========================================================
 # 📄 GENERADORES
 # =========================================================
-df_estructuras.columns = df_estructuras.columns.str.lower()
+
 
 
 
@@ -112,10 +112,11 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
     archivos: Dict[str, bytes] = {}
     errores: list[str] = []
     debug: dict = {}
-
+    df_estructuras.columns = df_estructuras.columns.str.lower()
     # -----------------------------------------------------
     # INPUT NORMALIZADO
     # -----------------------------------------------------
+    
     df_e = _fix_punto(data.get("df_estructuras"))
     df_m = data.get("df_materiales")
     df_r = data.get("df_resumen")
