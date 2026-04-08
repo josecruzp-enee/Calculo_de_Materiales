@@ -21,7 +21,7 @@ from materiales.modelos.entrada import EntradaMateriales
 
 # 🔥 COSTOS
 from costos_precios.orquestador_costos import ejecutar_costos
-from core.costos_estructuras import calcular_costos_por_estructura
+from costos_precios.costos_estructuras import calcular_costos_por_estructura
 
 # =========================
 # BASE
