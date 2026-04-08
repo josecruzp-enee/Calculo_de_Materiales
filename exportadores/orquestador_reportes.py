@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import traceback
 import streamlit as st
 
-# PDFs
+# PDFs simples
 from exportadores.pdf_reportes_simples import (
     generar_pdf_estructuras_global,
     generar_pdf_estructuras_por_punto,
@@ -13,173 +13,149 @@ from exportadores.pdf_reportes_simples import (
     generar_pdf_materiales_por_punto,
 )
 
+# PDF completo
+from exportadores.pdf_completo import generar_pdf_completo
+
 # Excel
 from exportadores.excel_utils import exportar_excel
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL
+# 🧩 HELPERS
+# =========================================================
+
+def _safe_punto(df):
+    """Asegura que exista columna Punto"""
+    if df is not None and "Punto" not in df.columns:
+        df["Punto"] = "General"
+    return df
+
+
+def _add_file(archivos, errores, nombre, contenido):
+    if isinstance(contenido, (bytes, bytearray)):
+        archivos[nombre] = contenido
+    else:
+        errores.append(f"{nombre} inválido")
+
+
+def _safe_exec(nombre, fn):
+    try:
+        return fn(), None
+    except Exception as e:
+        return None, f"{nombre}: {str(e)}\n{traceback.format_exc()}"
+
+
+# =========================================================
+# 📄 GENERADORES INDIVIDUALES
+# =========================================================
+
+def _gen_estructuras_global(df, nombre):
+    if df is None:
+        return None
+    return generar_pdf_estructuras_global(df, nombre)
+
+
+def _gen_estructuras_por_punto(df, nombre):
+    if df is None:
+        return None
+    return generar_pdf_estructuras_por_punto(df, nombre)
+
+
+def _gen_materiales(df, nombre):
+    if df is None:
+        return None
+    return generar_pdf_materiales(df, nombre)
+
+
+def _gen_materiales_por_punto(df, nombre):
+    if df is None:
+        return None
+    return generar_pdf_materiales_por_punto(df, nombre)
+
+
+def _gen_pdf_completo(df_est, df_mat, df_pp, nombre):
+    if df_est is None or df_mat is None:
+        return None
+
+    return generar_pdf_completo(
+        df_mat=df_mat,
+        df_estructuras=df_est,
+        df_estructuras_por_punto=df_est,
+        df_mat_por_punto=df_pp,
+        datos_proyecto={"nombre": nombre},
+    )
+
+
+def _gen_excel(df_resumen, df_est, df_pp):
+    if df_resumen is None:
+        return None
+
+    return exportar_excel(
+        df_resumen=df_resumen,
+        df_estructuras_resumen=df_est,
+        df_resumen_por_punto=df_pp,
+        df_adicionales=None,
+        ruta_excel=None,  # 🔥 FIX
+    )
+
+
+# =========================================================
+# 🚀 ORQUESTADOR PRINCIPAL
 # =========================================================
 
 def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
 
     archivos: Dict[str, bytes] = {}
     errores: list[str] = []
-    debug_exportadores = {}
 
     # -----------------------------------------------------
-    # EXTRAER DATA
+    # INPUT
     # -----------------------------------------------------
-    df_estructuras = data.get("df_estructuras")
+    df_estructuras = _safe_punto(data.get("df_estructuras"))
     df_materiales = data.get("df_materiales")
     df_resumen = data.get("df_resumen")
-    df_por_punto = data.get("df_por_punto")
+    df_por_punto = _safe_punto(data.get("df_por_punto"))
 
-    # 🔥 OPCIONAL (ya no rompe si no viene)
-    nombre_proy = data.get("nombre_proyecto", "Proyecto")
+    nombre = data.get("nombre_proyecto", "Proyecto")
 
-    debug_exportadores["INPUT"] = {
-        "df_estructuras": type(df_estructuras).__name__,
-        "df_materiales": type(df_materiales).__name__,
-        "df_resumen": type(df_resumen).__name__,
-        "df_por_punto": type(df_por_punto).__name__,
-        "nombre_proy": nombre_proy,
-    }
+    st.write("📊 DEBUG INPUT:", {
+        "estructuras": type(df_estructuras).__name__,
+        "materiales": type(df_materiales).__name__,
+        "resumen": type(df_resumen).__name__,
+        "por_punto": type(df_por_punto).__name__,
+    })
 
     # =====================================================
-    # PDF: ESTRUCTURAS GLOBAL
+    # 📄 EJECUCIÓN MODULAR
     # =====================================================
-    try:
-        if df_estructuras is not None:
-            pdf = generar_pdf_estructuras_global(df_estructuras, nombre_proy)
 
-            debug_exportadores["estructuras_global"] = {
-                "tipo": str(type(pdf)),
-                "ok": isinstance(pdf, (bytes, bytearray)),
-            }
+    tasks = [
+        ("estructuras_global.pdf", lambda: _gen_estructuras_global(df_estructuras, nombre)),
+        ("estructuras_por_punto.pdf", lambda: _gen_estructuras_por_punto(df_estructuras, nombre)),
+        ("materiales.pdf", lambda: _gen_materiales(df_materiales, nombre)),
+        ("materiales_por_punto.pdf", lambda: _gen_materiales_por_punto(df_por_punto, nombre)),
+        ("reporte_completo.pdf", lambda: _gen_pdf_completo(df_estructuras, df_materiales, df_por_punto, nombre)),
+        ("reporte.xlsx", lambda: _gen_excel(df_resumen, df_estructuras, df_por_punto)),
+    ]
 
-            if isinstance(pdf, (bytes, bytearray)):
-                archivos["estructuras_global.pdf"] = pdf
-            else:
-                errores.append("estructuras_global devolvió tipo inválido")
+    for nombre_archivo, fn in tasks:
+        contenido, err = _safe_exec(nombre_archivo, fn)
 
-    except Exception as e:
-        errores.append(f"Error en estructuras_global: {str(e)}")
-        debug_exportadores["estructuras_global"] = {
-            "error": traceback.format_exc()
-        }
+        if err:
+            errores.append(err)
+            continue
 
-    # =====================================================
-    # PDF: ESTRUCTURAS POR PUNTO
-    # =====================================================
-    try:
-        if df_estructuras is not None:
-            pdf = generar_pdf_estructuras_por_punto(df_estructuras, nombre_proy)
-
-            debug_exportadores["estructuras_por_punto"] = {
-                "tipo": str(type(pdf)),
-                "ok": isinstance(pdf, (bytes, bytearray)),
-            }
-
-            if isinstance(pdf, (bytes, bytearray)):
-                archivos["estructuras_por_punto.pdf"] = pdf
-            else:
-                errores.append("estructuras_por_punto devolvió tipo inválido")
-
-    except Exception as e:
-        errores.append(f"Error en estructuras_por_punto: {str(e)}")
-        debug_exportadores["estructuras_por_punto"] = {
-            "error": traceback.format_exc()
-        }
+        if contenido:
+            _add_file(archivos, errores, nombre_archivo, contenido)
 
     # =====================================================
-    # PDF: MATERIALES GLOBAL
+    # DEBUG FINAL
     # =====================================================
-    try:
-        if df_materiales is not None:
-            pdf = generar_pdf_materiales(df_materiales, nombre_proy)
-
-            debug_exportadores["materiales"] = {
-                "tipo": str(type(pdf)),
-                "ok": isinstance(pdf, (bytes, bytearray)),
-            }
-
-            if isinstance(pdf, (bytes, bytearray)):
-                archivos["materiales.pdf"] = pdf
-            else:
-                errores.append("materiales devolvió tipo inválido")
-
-    except Exception as e:
-        errores.append(f"Error en materiales: {str(e)}")
-        debug_exportadores["materiales"] = {
-            "error": traceback.format_exc()
-        }
-
-    # =====================================================
-    # PDF: MATERIALES POR PUNTO
-    # =====================================================
-    try:
-        if df_por_punto is not None:
-            pdf = generar_pdf_materiales_por_punto(df_por_punto, nombre_proy)
-
-            debug_exportadores["materiales_por_punto"] = {
-                "tipo": str(type(pdf)),
-                "ok": isinstance(pdf, (bytes, bytearray)),
-            }
-
-            if isinstance(pdf, (bytes, bytearray)):
-                archivos["materiales_por_punto.pdf"] = pdf
-            else:
-                errores.append("materiales_por_punto devolvió tipo inválido")
-
-    except Exception as e:
-        errores.append(f"Error en materiales_por_punto: {str(e)}")
-        debug_exportadores["materiales_por_punto"] = {
-            "error": traceback.format_exc()
-        }
-
-    # =====================================================
-    # EXCEL
-    # =====================================================
-    try:
-        if df_resumen is not None:
-            excel_bytes = exportar_excel(
-                df_resumen=df_resumen,
-                df_estructuras_resumen=df_estructuras,
-                df_resumen_por_punto=df_por_punto,
-                df_adicionales=None,
-            )
-
-            debug_exportadores["excel"] = {
-                "tipo": str(type(excel_bytes)),
-                "ok": isinstance(excel_bytes, (bytes, bytearray)),
-            }
-
-            if isinstance(excel_bytes, (bytes, bytearray)):
-                archivos["reporte.xlsx"] = excel_bytes
-            else:
-                errores.append("excel devolvió tipo inválido")
-
-    except Exception as e:
-        errores.append(f"Error en excel: {str(e)}")
-        debug_exportadores["excel"] = {
-            "error": traceback.format_exc()
-        }
-
-    # =====================================================
-    # DEBUG GLOBAL (como tu pipeline)
-    # =====================================================
-    debug_pipeline = st.session_state.get("debug_pipeline", {})
-    debug_pipeline["EXPORTADORES"] = {
-        "archivos_generados": list(archivos.keys()),
+    st.session_state["debug_exportadores"] = {
+        "archivos": list(archivos.keys()),
         "errores": errores,
-        "detalle": debug_exportadores,
     }
-    st.session_state["debug_pipeline"] = debug_pipeline
 
-    # =====================================================
-    # RESULTADO FINAL
-    # =====================================================
     return {
         "archivos": archivos,
         "errores": errores,
