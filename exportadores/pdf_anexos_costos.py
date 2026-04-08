@@ -19,10 +19,7 @@ from exportadores.pdf_base import styles, styleN, formatear_material
 # ANEXO: COSTOS DE MATERIALES (TABLA)
 # ==========================================================
 def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
-    """
-    Construye flowables ReportLab para el anexo de costos.
-    Formato de moneda: "L 5.00"
-    """
+
     titulo = Paragraph("ANEXO – Costos de Materiales", styles["Heading2"])
 
     if df_costos is None or df_costos.empty:
@@ -30,48 +27,94 @@ def tabla_costos_materiales_pdf(df_costos: pd.DataFrame):
 
     df = df_costos.copy()
 
-    # Normalizar columnas
+    # ----------------------------------------
+    # NORMALIZAR COLUMNAS
+    # ----------------------------------------
     df.columns = [str(c).replace("\u00A0", " ").strip() for c in df.columns]
 
-    # Aliases
-    ren = {}
-    for c in df.columns:
-        cc = c.lower().replace(" ", "_")
-        if cc in {"material", "materiales", "descripcion", "descripción"}:
-            ren[c] = "Materiales"
-        elif cc in {"unidad", "unid"}:
-            ren[c] = "Unidad"
-        elif cc in {"cantidad", "qty"}:
-            ren[c] = "Cantidad"
-        elif cc in {"precio_unitario", "precio", "costo_unitario"}:
-            ren[c] = "Precio Unitario"
-        elif cc in {"costo", "costo_total", "costototal"}:
-            ren[c] = "Costo Total"
-    df = df.rename(columns=ren)
+    # 🔥 MAPEO REAL DE TU MOTOR
+    if "Costo Total" not in df.columns:
+        if "Costo" in df.columns:
+            df["Costo Total"] = df["Costo"]
+        else:
+            df["Costo Total"] = 0.0
 
-    # Columnas mínimas defensivas
-    for c, default in [
-        ("Materiales", ""),
-        ("Unidad", ""),
-        ("Cantidad", 0.0),
-        ("Precio Unitario", pd.NA),
-        ("Costo Total", pd.NA),
-    ]:
-        if c not in df.columns:
-            df[c] = default
+    if "Precio Unitario" not in df.columns:
+        df["Precio Unitario"] = 0.0
 
-    # Numéricos
+    if "Unidad" not in df.columns:
+        df["Unidad"] = ""
+
+    if "Cantidad" not in df.columns:
+        df["Cantidad"] = 0.0
+
+    if "Materiales" not in df.columns:
+        df["Materiales"] = ""
+
+    # ----------------------------------------
+    # TIPOS
+    # ----------------------------------------
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
     df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce")
     df["Costo Total"] = pd.to_numeric(df["Costo Total"], errors="coerce")
 
     df["Tiene_Precio"] = (df["Precio Unitario"].fillna(0.0) > 0)
+
     df = df.sort_values(["Tiene_Precio", "Materiales"], ascending=[False, True])
 
-    subtotal = df.loc[df["Tiene_Precio"] == True, "Costo Total"].fillna(0.0).sum()
+    # ----------------------------------------
+    # TOTALES
+    # ----------------------------------------
+    subtotal = df.loc[df["Tiene_Precio"], "Costo Total"].fillna(0.0).sum()
     iva = subtotal * 0.15
     total = subtotal + iva
 
+    def _money(v):
+        if v is None or pd.isna(v):
+            return ""
+        return f"L {float(v):,.2f}"
+
+    # ----------------------------------------
+    # TABLA
+    # ----------------------------------------
+    data = [["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo Total"]]
+
+    for _, r in df.iterrows():
+        data.append([
+            Paragraph(formatear_material(str(r["Materiales"])), styleN),
+            escape(str(r["Unidad"])),
+            f"{r['Cantidad']:,.2f}",
+            _money(r["Precio Unitario"]),
+            _money(r["Costo Total"]),
+        ])
+
+    # Totales
+    data.append(["", "", "", "SUBTOTAL", _money(subtotal)])
+    data.append(["", "", "", "ISV 15%", _money(iva)])
+    data.append(["", "", "", "TOTAL", _money(total)])
+
+    t = Table(
+        data,
+        repeatRows=1,
+        colWidths=[3.7 * inch, 0.8 * inch, 0.9 * inch, 1.2 * inch, 1.2 * inch],
+    )
+
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+        ("ALIGN", (1, 1), (1, -2), "CENTER"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (3, -3), (4, -1), "Helvetica-Bold"),
+    ]))
+
+    nota = Paragraph(
+        "Nota: Los precios están sujetos a cambios sin previo aviso.",
+        styles["Normal"]
+    )
+
+    return [Spacer(1, 8), titulo, Spacer(1, 8), t, Spacer(1, 8), nota]
     def _money(v):
         if v is None or pd.isna(v):
             return ""
