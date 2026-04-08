@@ -89,6 +89,9 @@ def ejecutar_costos(data: Dict[str, Any]) -> Dict[str, Any]:
         "df_costos_materiales": df_costos_materiales,
         "total_materiales": round(total_materiales, 2),
 
+        # 🔥 estructuras (CRÍTICO)
+        "df_costos_estructuras": df_costos_estructuras,
+
         # 🔹 detalle por punto
         "df_costos_por_punto": df_detalle_punto,
 
