@@ -185,21 +185,15 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         # ==================================================
         # CLASIFICAR
         # ==================================================
-        poste = None
         estructuras = []
-
         for cod in lista_codigos:
-
             if re.match(r"^P-?\d+$", cod):
-                numero = re.findall(r"\d+", cod)[0]
-                poste = f"P-{numero}"
-            else:
-                estructuras.append(cod)
+                continue
 
-        # ==================================================
-        # PUNTO FINAL
-        # ==================================================
-        punto_final = poste if poste else punto_original
+            estructuras.append(cod)
+        punto_final = punto_original
+
+        
 
         # ==================================================
         # RESOLUCIÓN FINAL
