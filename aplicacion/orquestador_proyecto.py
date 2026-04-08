@@ -236,6 +236,7 @@ def _construir_entrada_materiales(
         return EntradaMateriales(
             estructuras_df=df.copy(),
             tension=tension,
+            datos_proyecto=entrada_proyecto.datos_proyecto,
             df_cables=df_cables,
             df_materiales_extra=df_materiales_extra,
         ), None
