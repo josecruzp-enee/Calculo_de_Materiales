@@ -55,7 +55,9 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
 
             i += 2
             capa = None
-            texto = ""
+
+            # 🔥 NUEVO: acumulador correcto de líneas MTEXT
+            lineas_mtext = []
 
             # =================================================
             # LECTURA MTEXT (MULTILÍNEA REAL)
@@ -68,11 +70,16 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
                 if codigo == "8":
                     capa = valor.upper()
 
-                # 🔥 FIX CRÍTICO: leer líneas tipo 1 y 3
+                # 🔥 FIX CRÍTICO
                 if codigo in ("1", "3"):
-                    texto += " " + valor
+                    limpio = valor.strip()
+                    if limpio:
+                        lineas_mtext.append(limpio)
 
                 i += 2
+
+            # 🔥 reconstrucción final del texto
+            texto = ",".join(lineas_mtext)
 
             # =================================================
             # FILTRO DE CAPA (ROBUSTO)
@@ -87,35 +94,25 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             # LIMPIEZA
             # =================================================
 
-            # saltos AutoCAD
             texto = texto.replace("\\P", ",")
 
-            # eliminar formatos tipo {C7:
             texto = re.sub(r"\{[^};]*[;:]", "", texto)
 
-            # eliminar llaves
             texto = texto.replace("{", "").replace("}", "")
-
-            # ⚠️ NO eliminar P-XX (se puede usar después)
-            # texto = re.sub(r"\bP-\d+\b", "", texto)
 
             # eliminar (P), (E), etc
             texto = re.sub(r"\([^)]*\)", "", texto)
 
-            # normalizar separadores
             texto = texto.replace(";", ",")
             texto = texto.replace("|", ",")
 
-            # limpiar comas múltiples
             texto = re.sub(r",+", ",", texto)
 
-            # 🔥 FIX: separación controlada (NO rompe TS-37.5 KVA)
-            #texto = re.sub(r"\s+(?=[A-Z]{1,3}-\d)", ",", texto)
+            # ⚠️ NO romper TS-37.5 KVA
+            # texto = re.sub(r"\s+(?=[A-Z]{1,3}-\d)", ",", texto)
 
-            # limpiar espacios finales
             texto = re.sub(r"\s+", " ", texto).strip(" ,")
 
-            # evitar registros vacíos tras limpieza
             if not texto:
                 continue
 
@@ -133,7 +130,7 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             i += 1
 
     # =========================================================
-    # OUTPUT FINAL (ALINEADO A CONTRATO)
+    # OUTPUT FINAL
     # =========================================================
     if not resultados:
         df = pd.DataFrame(columns=["Punto", "Estructura"])
@@ -143,25 +140,18 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
     # =========================================================
     # DEBUG
     # =========================================================
-    # =========================================================
-    # DEBUG DXF (COMPLETO)
-    # =========================================================
     print("\n=== DEBUG DXF ===")
     print("registros encontrados:", len(df))
 
-    # 🔥 DataFrame final
     debug_guardar("DXF_DF_FINAL", df)
 
-    # 🔥 TODAS las estructuras detectadas
     debug_guardar("DXF_TODAS", resultados)
 
-    # 🔥 ÚNICAS (CLAVE)
     debug_guardar(
         "DXF_UNICAS",
         sorted({r["Estructura"] for r in resultados})
     )
 
-    # 🔥 SOLO CS (FOCO DEL PROBLEMA)
     debug_guardar(
         "DXF_SOLO_CS",
         sorted({r["Estructura"] for r in resultados if "CS" in str(r["Estructura"])})
