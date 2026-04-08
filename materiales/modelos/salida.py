@@ -7,7 +7,7 @@ COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
 @dataclass(slots=True)
-class ResultadoMateriales:
+class SalidaMateriales:
 
     ok: bool
 
