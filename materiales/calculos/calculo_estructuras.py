@@ -1,12 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-calculo_estructuras.py
-
-Genera:
-1) Conteo global de estructuras
-2) Descripción de estructuras por punto
-"""
-
 from __future__ import annotations
 
 import pandas as pd
@@ -15,9 +7,8 @@ from entradas.normalizar import limpiar_codigo
 
 
 # ==========================================================
-# 🔧 NORMALIZACIÓN
+# NORMALIZACIÓN
 # ==========================================================
-
 def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 
     if df is None or df.empty:
@@ -40,14 +31,13 @@ def _obtener_columna(df, opciones):
 
 
 # ==========================================================
-# 🔥 EXTRACCIÓN BASE
+# EXTRACCIÓN BASE
 # ==========================================================
-
 def _extraer_datos(df_estructuras):
 
     df = _normalizar_df(df_estructuras)
 
-    if df is None or df.empty:
+    if df.empty:
         return []
 
     col_est = _obtener_columna(df, ["codigoestructura", "estructura"])
@@ -86,9 +76,8 @@ def _extraer_datos(df_estructuras):
 
 
 # ==========================================================
-# 📊 GLOBAL
+# GLOBAL
 # ==========================================================
-
 def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
 
     registros = _extraer_datos(df_estructuras)
@@ -101,18 +90,15 @@ def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
     for r in registros:
         conteo[r["Estructura"]] += r["Cantidad"]
 
-    data = [
+    return pd.DataFrame([
         {"Estructura": est, "Cantidad": cant}
         for est, cant in conteo.items()
-    ]
-
-    return pd.DataFrame(data)
+    ])
 
 
 # ==========================================================
-# 📍 POR PUNTO
+# POR PUNTO
 # ==========================================================
-
 def calcular_estructuras_por_punto(df_estructuras) -> pd.DataFrame:
 
     registros = _extraer_datos(df_estructuras)
@@ -122,20 +108,17 @@ def calcular_estructuras_por_punto(df_estructuras) -> pd.DataFrame:
 
     df = pd.DataFrame(registros)
 
-    df_agr = (
+    return (
         df
         .groupby(["Punto", "Estructura"], as_index=False)["Cantidad"]
         .sum()
     )
 
-    return df_agr
-
 
 # ==========================================================
-# 🧠 DESCRIPCIÓN POR PUNTO (CLAVE)
+# DESCRIPCIÓN
 # ==========================================================
-
-def generar_descripcion_por_punto(df_estructuras) -> dict:
+def generar_descripcion_estructuras(df_estructuras) -> dict:
 
     df = calcular_estructuras_por_punto(df_estructuras)
 
@@ -148,13 +131,10 @@ def generar_descripcion_por_punto(df_estructuras) -> dict:
 
         df_p = df[df["Punto"] == punto]
 
-        partes = []
-
-        for _, row in df_p.iterrows():
-            est = row["Estructura"]
-            cant = int(row["Cantidad"])
-
-            partes.append(f"{est} ({cant})")
+        partes = [
+            f"{row['Estructura']} ({int(row['Cantidad'])})"
+            for _, row in df_p.iterrows()
+        ]
 
         resultado[punto] = ", ".join(partes)
 
@@ -162,17 +142,12 @@ def generar_descripcion_por_punto(df_estructuras) -> dict:
 
 
 # ==========================================================
-# 🚀 FUNCIÓN PRINCIPAL
+# FUNCIÓN PRINCIPAL
 # ==========================================================
-
 def calcular_estructuras_proyecto(df_estructuras):
 
-    df_global = calcular_estructuras_global(df_estructuras)
-    df_por_punto = calcular_estructuras_por_punto(df_estructuras)
-    descripcion = generar_descripcion_por_punto(df_estructuras)
-
     return {
-        "df_estructuras": df_global,
-        "df_estructuras_por_punto": df_por_punto,
-        "descripcion_por_punto": descripcion
+        "df_estructuras": calcular_estructuras_global(df_estructuras),
+        "df_estructuras_por_punto": calcular_estructuras_por_punto(df_estructuras),
+        "descripcion_estructuras": generar_descripcion_estructuras(df_estructuras),
     }
