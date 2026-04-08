@@ -7,21 +7,40 @@ from ayuda.debug import debug_guardar
 
 
 # ==========================================================
-# HELPERS INTERNOS (única fuente de verdad)
+# DEBUG HELPERS
+# ==========================================================
+def _debug(nombre, valor):
+    debug_guardar(f"NORMALIZAR::{nombre}", valor)
+
+
+def _check(nombre, cond, detalle=None):
+    debug_guardar(f"CHECK::NORMALIZAR::{nombre}", {
+        "ok": bool(cond),
+        "detalle": str(detalle)[:200]
+    })
+
+
+# ==========================================================
+# HELPERS
 # ==========================================================
 def limpiar_codigo(codigo: str) -> str:
     if codigo is None:
         return ""
+
     codigo = str(codigo).strip().upper()
+
     if not codigo:
         return ""
+
     codigo = re.sub(r"\(.*?\)", "", codigo)
     codigo = codigo.replace(" ", "")
     codigo = re.sub(r"[^A-Z0-9\-\.\+]", "", codigo)
+
     return codigo
 
 
 def _expandir_multiplicador(token: str):
+
     if not token:
         return []
 
@@ -29,106 +48,63 @@ def _expandir_multiplicador(token: str):
 
     match = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
     if match:
-        n = int(match.group(1))
-        val = match.group(2).strip()
-        return [val] * n
-
-    match = re.match(r"^\s*(\d+)[xX]([A-Z0-9\-\.]+)$", token)
-    if match:
-        n = int(match.group(1))
-        val = match.group(2).strip()
-        return [val] * n
+        return [match.group(2).strip()] * int(match.group(1))
 
     return [token]
 
 
 def _split_bloques(texto: str):
+
     if texto is None:
         return []
 
-    texto = texto.replace(";", ",")
-    texto = texto.replace("|", ",")
+    texto = texto.replace(";", ",").replace("|", ",")
 
     partes = re.split(r"[,\n]+", texto)
 
-    resultado = []
-    buffer = None
-
-    for p in partes:
-        p = p.strip()
-        if not p:
-            continue
-
-        # une "3 X" con siguiente
-        if re.match(r"^\d+\s*[xX]$", p):
-            buffer = p
-            continue
-
-        if buffer:
-            p = f"{buffer} {p}"
-            buffer = None
-
-        resultado.append(p)
-
-    return resultado
+    return [p.strip() for p in partes if p.strip()]
 
 
 def expandir_lista_codigos(texto: str):
 
-    debug_guardar("raw_texto_entrada", texto)
+    _debug("raw_texto", texto)
 
     if texto is None:
         return []
 
     texto = str(texto).upper()
 
-    # limpieza DXF
     texto = re.sub(r"\{[^:]*:", "", texto)
     texto = texto.replace("{", "").replace("}", "")
     texto = texto.replace("\\P", ",")
 
     partes = _split_bloques(texto)
+
     resultado = []
 
     for p in partes:
-        if not p:
-            continue
-
-        p = re.sub(r"\(.*?\)", "", p)
-
         tokens = _expandir_multiplicador(p)
 
         for t in tokens:
-            t = t.strip()
-            if not t:
-                continue
-
             codigo = limpiar_codigo(t)
             if codigo:
                 resultado.append(codigo)
 
-    debug_guardar("codigos_expandidos", resultado)
+    _debug("codigos_expandidos", resultado)
+
     return resultado
 
 
 # ==========================================================
-# DETECCIÓN DE POSTE (mínima)
+# CORE
 # ==========================================================
-def _es_poste(codigo: str) -> bool:
-    if not codigo:
-        return False
-    codigo = codigo.upper()
-    return codigo.startswith(("PC-", "PM-", "PT-"))
-
-
-# ==========================================================
-# CONVERSIÓN A FORMATO LARGO (CORE)
-# ==========================================================
-
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
     df.columns = df.columns.str.strip()
+
+    _debug("input_columnas", list(df.columns))
+    _debug("input_shape", df.shape)
 
     registros = []
 
@@ -136,12 +112,9 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
         punto = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
 
-        # =====================================================
-        # DETECCIÓN ROBUSTA DE COLUMNA DE ESTRUCTURA
-        # =====================================================
         estructura_raw = None
 
-        # 1. Búsqueda directa por nombre
+        # 🔥 detectar columna
         for col in df.columns:
             col_norm = col.lower().replace(" ", "")
 
@@ -149,52 +122,36 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
                 estructura_raw = row.get(col)
                 break
 
-        # 2. Fallback → primera columna tipo texto
-        if estructura_raw is None:
-            for col in df.columns:
-                if df[col].dtype == object:
-                    estructura_raw = row.get(col)
-                    break
-
         if estructura_raw is None:
             continue
 
-        # =====================================================
-        # EXPANSIÓN DE CÓDIGOS
-        # =====================================================
         lista_codigos = expandir_lista_codigos(estructura_raw)
 
-        poste_detectado = None
+        _debug(f"fila_{idx}_codigos", lista_codigos)
 
-        for raw in lista_codigos:
+        for cod in lista_codigos:
 
-            if not raw:
-                continue
-
-            if _es_poste(raw):
-                poste_detectado = limpiar_codigo(raw)
-                continue
-
-            cod = limpiar_codigo(raw)
+            cod = limpiar_codigo(cod)
 
             if not cod:
                 continue
 
-            if re.match(r"^\d+X$", cod):
-                continue
-
-            if cod == "LL-1":
-                continue
-
             registros.append({
                 "punto": str(punto).strip(),
-                "poste": poste_detectado,
+
+                # 🔥 CLAVE: doble columna para compatibilidad
                 "codigodeestructura": cod,
+                "Estructura": cod,
+
                 "cantidad": 1
             })
 
-    return pd.DataFrame(registros)
+    df_out = pd.DataFrame(registros)
 
+    _debug("output_shape", df_out.shape)
+    _check("output_no_vacio", not df_out.empty, len(df_out))
+
+    return df_out
 
 
 # ==========================================================
@@ -208,4 +165,7 @@ def normalizar_estructuras(df: pd.DataFrame):
         return df_norm, [], []
 
     except Exception as e:
+
+        _debug("error", str(e))
+
         return pd.DataFrame(), [str(e)], []
