@@ -181,5 +181,12 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 # ==========================================================
 # FUNCIÓN PÚBLICA
 # ==========================================================
-def normalizar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
-    return _convertir_a_largo(df)
+def normalizar_estructuras(df: pd.DataFrame):
+
+    try:
+        df_norm = _convertir_a_largo(df)
+
+        return df_norm, [], []
+
+    except Exception as e:
+        return pd.DataFrame(), [str(e)], []
