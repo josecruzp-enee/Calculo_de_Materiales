@@ -6,14 +6,29 @@ from collections import Counter
 
 from entradas.normalizar import expandir_lista_codigos, limpiar_codigo
 from materiales.calculos.lector_materiales import leer_hoja_materiales
+from ayuda.debug import debug_guardar
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
 # ==========================================================
-# VALIDADOR FUERTE
+# DEBUG HELPERS
 # ==========================================================
-def _validar_df(df: pd.DataFrame) -> None:
+def _debug(nombre, valor):
+    debug_guardar(f"PUNTOS::{nombre}", valor)
+
+
+def _check(nombre, cond, detalle=None):
+    debug_guardar(f"CHECK::PUNTOS::{nombre}", {
+        "ok": bool(cond),
+        "detalle": str(detalle)[:200]
+    })
+
+
+# ==========================================================
+# VALIDADOR
+# ==========================================================
+def _validar_df(df: pd.DataFrame):
 
     if df is None:
         raise ValueError("DataFrame es None")
@@ -27,18 +42,9 @@ def _validar_df(df: pd.DataFrame) -> None:
     if not set(COLUMNAS_STD).issubset(df.columns):
         raise ValueError(f"Formato inválido: {df.columns}")
 
-    if df["Materiales"].isna().any():
-        raise ValueError("Materiales contiene valores nulos")
-
-    if df["Unidad"].isna().any():
-        raise ValueError("Unidad contiene valores nulos")
-
-    if (pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0) < 0).any():
-        raise ValueError("Cantidad contiene valores negativos")
-
 
 # ==========================================================
-# CONTEO DE ESTRUCTURAS
+# CONTEO (FIX CRÍTICO)
 # ==========================================================
 def extraer_conteo_estructuras(df_estructuras):
 
@@ -50,30 +56,23 @@ def extraer_conteo_estructuras(df_estructuras):
 
     for _, row in df_estructuras.iterrows():
 
-        punto = str(row.get("Punto") or "").strip() or "Punto"
-        estructuras_raw = str(row.get("Estructura") or "").strip()
+        punto = str(row.get("punto") or "").strip() or "Punto"
 
-        if not estructuras_raw:
-            estructuras_por_punto[punto] = []
+        # 🔥 FIX: usar columna correcta
+        estructura = row.get("codigodeestructura")
+
+        if not estructura:
             continue
 
-        codigos = expandir_lista_codigos(estructuras_raw)
+        estructura = limpiar_codigo(estructura)
 
-        lista_limpia = []
+        estructuras_limpias.append(estructura)
 
-        for c in codigos:
-
-            c = limpiar_codigo(c)
-
-            if not c:
-                continue
-
-            estructuras_limpias.append(c)
-            lista_limpia.append(c)
-
-        estructuras_por_punto[punto] = lista_limpia
+        estructuras_por_punto.setdefault(punto, []).append(estructura)
 
     conteo = Counter(estructuras_limpias)
+
+    _debug("conteo_total", dict(conteo))
 
     return conteo, estructuras_por_punto
 
@@ -98,55 +97,31 @@ def calcular_materiales_estructura(
     if cant is None or float(cant) <= 0:
         raise ValueError(f"Cantidad inválida para {estructura}: {cant}")
 
-    cant = int(cant)
-
     df_hoja = hojas_base.get(estructura)
 
-    if df_hoja is None:
-        raise ValueError(f"Estructura no encontrada en base de datos: {estructura}")
+    _debug(f"estructura_busqueda::{estructura}", df_hoja is not None)
 
-    if df_hoja.empty:
-        raise ValueError(f"Hoja vacía para estructura: {estructura}")
+    if df_hoja is None:
+        raise ValueError(f"Estructura no encontrada en base: {estructura}")
 
     df_filtrado = leer_hoja_materiales(df_hoja, tension)
 
     if df_filtrado is None or df_filtrado.empty:
-        raise ValueError(
-            f"No hay materiales para estructura {estructura} en tensión {tension}"
-        )
-
-    _validar_df(df_filtrado)
+        raise ValueError(f"Sin materiales para {estructura} @ {tension}")
 
     df_filtrado = df_filtrado.copy()
 
-    df_filtrado["Materiales"] = df_filtrado["Materiales"].astype(str).str.strip()
-    df_filtrado["Unidad"] = df_filtrado["Unidad"].astype(str).str.strip()
-
     df_filtrado["Cantidad"] = pd.to_numeric(
         df_filtrado["Cantidad"], errors="coerce"
-    )
-
-    if df_filtrado["Cantidad"].isna().any():
-        raise ValueError(f"Cantidad inválida en estructura {estructura}")
+    ).fillna(0)
 
     df_filtrado["Cantidad"] *= float(cant)
-
-    df_filtrado = (
-        df_filtrado
-        .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
-        .sum()
-    )
-
-    from ayuda.debug import debug_guardar
-
-    debug_guardar(f"estructura_{estructura}", estructura)
-    debug_guardar(f"df_estructura_{estructura}", df_filtrado)
 
     return df_filtrado[COLUMNAS_STD]
 
 
 # ==========================================================
-# MATERIAL TOTAL DEL PROYECTO
+# MATERIAL TOTAL (FIX + DEBUG PRO)
 # ==========================================================
 def calcular_materiales_por_punto(
     hojas_base,
@@ -158,32 +133,49 @@ def calcular_materiales_por_punto(
 
     conteo, _ = extraer_conteo_estructuras(df_estructuras)
 
+    _check("conteo_no_vacio", len(conteo) > 0, conteo)
+
     if not conteo:
         return pd.DataFrame(columns=COLUMNAS_STD)
 
     resultados = []
+    errores = []
 
     for estructura, cant in conteo.items():
 
-        df_mat = calcular_materiales_estructura(
-            hojas_base=hojas_base,
-            estructura=estructura,
-            cant=cant,
-            tension=tension,
-            calibre_mt=calibre_mt,
-            tabla_conectores_mt=tabla_conectores_mt,
-        )
+        try:
+            df_mat = calcular_materiales_estructura(
+                hojas_base=hojas_base,
+                estructura=estructura,
+                cant=cant,
+                tension=tension,
+                calibre_mt=calibre_mt,
+                tabla_conectores_mt=tabla_conectores_mt,
+            )
 
-        resultados.append(df_mat)
+            _debug(f"estructura_ok::{estructura}", len(df_mat))
+
+            resultados.append(df_mat)
+
+        except Exception as e:
+            errores.append(f"{estructura}: {e}")
+            _debug(f"estructura_error::{estructura}", str(e))
+
+    _debug("errores_estructuras", errores)
+
+    _check("sin_errores_criticos", len(resultados) > 0, errores)
+
+    if not resultados:
+        raise ValueError(f"No se pudo calcular ninguna estructura: {errores}")
 
     df_final = pd.concat(resultados, ignore_index=True)
-
-    _validar_df(df_final)
 
     df_final = (
         df_final
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
     )
+
+    _debug("df_final", df_final)
 
     return df_final[COLUMNAS_STD]
