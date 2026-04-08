@@ -9,10 +9,7 @@ from typing import Dict, Any
 from costos_precios.costos_materiales import calcular_costos_desde_resumen
 from costos_precios.costos_por_punto import calcular_costos_por_punto
 
-# =====================================================
-# PRESUPUESTO (DOMINIO)
-# =====================================================
-from costos_precios.presupuesto import generar_presupuesto_df
+
 
 
 def ejecutar_costos(data: Dict[str, Any]) -> Dict[str, Any]:
