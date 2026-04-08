@@ -107,14 +107,14 @@ def generar_pdf_completo(
 
     elems += _seccion_info(datos_proyecto, df_estructuras, df_mat)
 
-    df_precios = procesar_precios_estructura()
-    elems += generar_tabla_presupuesto(doc, styles, df_estructuras, df_precios)
+    #df_precios = procesar_precios_estructura()
+    #elems += generar_tabla_presupuesto(doc, styles, df_estructuras, df_precios)
 
     elems += _seccion_estructuras_global(doc, df_estructuras)
     elems += _seccion_materiales_global(doc, df_mat)
     elems += _seccion_costos_materiales(df_costos)
-    elems += _seccion_mano_obra(df_mo_estructuras)
-    elems += _seccion_cotizacion(doc, df_costos, df_mo_estructuras)
+    #elems += _seccion_mano_obra(df_mo_estructuras)
+    #elems += _seccion_cotizacion(doc, df_costos, df_mo_estructuras)
     elems += _seccion_estructuras_por_punto(doc, df_estructuras_por_punto)
     elems += _seccion_materiales_por_punto(doc, df_mat_por_punto)
 
