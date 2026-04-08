@@ -6,48 +6,33 @@ from __future__ import annotations
 # =====================================================
 from materiales.orquestador_materiales import ejecutar_materiales
 from costos_precios.orquestador_costos import ejecutar_costos
-from entradas.orquestador_entradas import ejecutar_entradas
 
 # =====================================================
 # CONTRATOS
 # =====================================================
 from materiales.modelos.entrada import EntradaMateriales
-from interfaz.contratos import SalidaInterfaz
+from aplicacion.modelos_proyecto import EntradaProyecto
 
 
-def ejecutar_proyecto(entrada: SalidaInterfaz):
-
-    if not isinstance(entrada, SalidaInterfaz):
-        raise TypeError("entrada debe ser SalidaInterfaz")
-
-    if not entrada.ok:
-        return {
-            "ok": False,
-            "error": "Error en interfaz",
-            "detalle": entrada.errores,
-        }
+def ejecutar_proyecto(entrada: EntradaProyecto):
 
     # =====================================================
-    # ENTRADAS
+    # VALIDACIÓN
     # =====================================================
-    salida_entradas = ejecutar_entradas(entrada)
+    if not isinstance(entrada, EntradaProyecto):
+        raise TypeError("entrada debe ser EntradaProyecto")
 
-    if not salida_entradas.ok:
-        return {
-            "ok": False,
-            "error": "Error en entradas",
-            "detalle": salida_entradas.errores,
-        }
+    entrada.validar()
 
     # =====================================================
-    # MATERIALES
+    # 1. MATERIALES
     # =====================================================
     entrada_materiales = EntradaMateriales(
-        estructuras_df=salida_entradas.df_estructuras,
-        tension=salida_entradas.datos_proyecto.get("tension"),
-        datos_proyecto=salida_entradas.datos_proyecto,
-        df_cables=salida_entradas.df_cables,
-        df_materiales_extra=salida_entradas.df_materiales_extra,
+        estructuras_df=entrada.df_estructuras,
+        tension=entrada.tension,
+        datos_proyecto=entrada.datos_proyecto,
+        df_cables=entrada.df_cables,
+        df_materiales_extra=entrada.df_materiales_extra,
     )
 
     salida_materiales = ejecutar_materiales(entrada_materiales)
@@ -60,23 +45,36 @@ def ejecutar_proyecto(entrada: SalidaInterfaz):
         }
 
     # =====================================================
-    # COSTOS
+    # 2. COSTOS
     # =====================================================
-    salida_costos = ejecutar_costos({
-        "df_resumen": salida_materiales.df_materiales,
-        "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
-        "df_estructuras": salida_materiales.df_estructuras,
-        "datos_proyecto": salida_entradas.datos_proyecto,
-        "archivo_precios_materiales": None,
-    })
+    salida_costos = None
+
+    if entrada.calcular_costos:
+        salida_costos = ejecutar_costos({
+            "df_resumen": salida_materiales.df_materiales,
+            "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
+            "df_costos_estructuras": entrada.df_costos_estructuras,
+            "df_precios_materiales": entrada.df_precios_materiales,
+            "archivo_precios_materiales": entrada.ruta_materiales,
+            "datos_proyecto": entrada.datos_proyecto,
+
+            # parámetros de costos
+            "costo_cuadrilla_dia": entrada.costo_cuadrilla_dia,
+            "fraccion_jornada": entrada.fraccion_jornada,
+            "costo_equipos": entrada.costo_equipos,
+            "costo_logistica": entrada.costo_logistica,
+            "margen_utilidad": entrada.margen_utilidad,
+        })
 
     # =====================================================
-    # OUTPUT
+    # 3. OUTPUT FINAL
     # =====================================================
     return {
         "ok": True,
         "materiales": salida_materiales,
         "costos": salida_costos,
+
+        # accesos rápidos
         "df_materiales": salida_materiales.df_materiales,
         "df_materiales_por_punto": salida_materiales.df_materiales_por_punto,
         "df_estructuras": salida_materiales.df_estructuras,
