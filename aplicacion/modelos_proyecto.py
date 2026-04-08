@@ -3,13 +3,9 @@ from typing import Optional, Dict, Any
 import pandas as pd
 
 
-from dataclasses import dataclass
-from typing import Optional, Dict, Any
-import pandas as pd
-
-
 @dataclass
 class EntradaProyecto:
+
     # =====================================================
     # 🔹 DATOS PRINCIPALES
     # =====================================================
@@ -31,31 +27,47 @@ class EntradaProyecto:
     # =====================================================
     # 🔥 COSTOS
     # =====================================================
-    # Fuente 1: DataFrame directo (prioridad alta)
+
+    # 🔹 Fuente de precios materiales
     df_precios_materiales: Optional[pd.DataFrame] = None
 
-    # Fuente 2: Excel (fallback)
-    # 👉 ya es ruta_materiales
-
-    # Costos estructuras (OBLIGATORIO si calcular_costos=True)
+    # 🔹 Override manual (OPCIONAL)
     df_costos_estructuras: Optional[pd.DataFrame] = None
 
-    # Control de ejecución
+    # 🔹 Parámetros operativos (NUEVO)
+    costo_cuadrilla_dia: float = 1250
+    fraccion_jornada: float = 1/16
+    costo_equipos: float = 0.0
+    costo_logistica: float = 0.0
+    margen_utilidad: float = 0.15
+
+    # 🔹 Control
     calcular_costos: bool = True
 
     # =====================================================
-    # 🔧 VALIDACIÓN INTERNA (NUEVO)
+    # 🔧 VALIDACIÓN
     # =====================================================
     def validar_costos(self):
+
         if not self.calcular_costos:
             return
 
+        # -----------------------------
+        # PRECIOS MATERIALES
+        # -----------------------------
         if self.df_precios_materiales is None and not self.ruta_materiales:
             raise ValueError(
                 "Debe proporcionar df_precios_materiales o ruta_materiales"
             )
 
-        if self.df_costos_estructuras is None:
-            raise ValueError(
-                "df_costos_estructuras es requerido para cálculo de costos"
-            )
+        # -----------------------------
+        # PARÁMETROS OPERATIVOS
+        # -----------------------------
+        if self.costo_cuadrilla_dia <= 0:
+            raise ValueError("costo_cuadrilla_dia inválido")
+
+        if self.fraccion_jornada <= 0:
+            raise ValueError("fraccion_jornada inválida")
+
+        if self.margen_utilidad < 0:
+            raise ValueError("margen_utilidad inválido")
