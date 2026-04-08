@@ -190,7 +190,7 @@ def _construir_entrada_materiales(
             raise ValueError("Tensión debe ser mayor que 0")
 
         # =====================================================
-        # 🔴 NORMALIZAR DF ESTRUCTURAS (CONTRATO)
+        # 🔴 VALIDAR DF ESTRUCTURAS (FORMATO NORMALIZADO)
         # =====================================================
         df = entrada_proyecto.df_estructuras
 
@@ -199,13 +199,10 @@ def _construir_entrada_materiales(
 
         df = df.copy()
 
-        # 🔥 asegurar columna correcta
-        if "Estructuras" in df.columns:
-            df = df.rename(columns={"Estructuras": "Estructura"})
-
-        if "Estructura" not in df.columns:
+        # 🔥 estándar interno
+        if "codigodeestructura" not in df.columns:
             raise ValueError(
-                f"No existe columna 'Estructura'. Columnas actuales: {list(df.columns)}"
+                f"No existe columna 'codigodeestructura'. Columnas actuales: {list(df.columns)}"
             )
 
         # =====================================================
@@ -229,7 +226,6 @@ def _construir_entrada_materiales(
 
     except Exception as e:
         return None, str(e)
-
 # =========================================================
 # EJECUCIÓN SEGURA
 # =========================================================
