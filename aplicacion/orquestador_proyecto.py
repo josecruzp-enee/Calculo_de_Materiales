@@ -140,15 +140,9 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
     # =====================================================
     try:
 
-        df_resumen = salida_materiales.df_resumen
+        df_resumen = salida_materiales.df_materiales
         df_ep = salida_materiales.df_estructuras_por_punto
-
-        df_costos_estructuras = getattr(
-            salida_materiales,
-            "df_costos_estructuras",
-            None
-        )
-
+        df_costos_estructuras = entrada_proyecto.df_costos_estructuras
         if df_costos_estructuras is None:
             raise ValueError("df_costos_estructuras no disponible en salida_materiales")
 
