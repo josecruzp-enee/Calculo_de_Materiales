@@ -151,7 +151,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
                 continue
 
             registros.append({
-                "punto": str(punto).strip(),
+                "Punto": str(punto).strip(),
 
                 # 🔥 FIX CRÍTICO (NO TOCAR)
                 "codigodeestructura": cod,
