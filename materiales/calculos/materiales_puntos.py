@@ -126,7 +126,7 @@ def calcular_materiales_estructura(
 
 
 # ==========================================================
-# 🔥 MATERIAL TOTAL (GLOBAL)
+# 🔥 MATERIAL POR PUNTO
 # ==========================================================
 def calcular_materiales_por_punto(
     hojas_base,
@@ -136,52 +136,46 @@ def calcular_materiales_por_punto(
     tabla_conectores_mt=None,
 ):
 
-    conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
+    _, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
 
-    _check("conteo_no_vacio", len(conteo) > 0, conteo)
-
-    if not conteo:
-        return pd.DataFrame(columns=COLUMNAS_STD)
+    if not estructuras_por_punto:
+        return pd.DataFrame(columns=["Punto", "Materiales", "Unidad", "Cantidad"])
 
     resultados = []
     errores = []
 
-    for estructura, cant in conteo.items():
+    for punto, estructuras in estructuras_por_punto.items():
 
-        try:
-            df_mat = calcular_materiales_estructura(
-                hojas_base=hojas_base,
-                estructura=estructura,
-                cant=cant,
-                tension=tension,
-                calibre_mt=calibre_mt,
-                tabla_conectores_mt=tabla_conectores_mt,
-            )
+        for estructura in estructuras:
 
-            _debug(f"estructura_ok::{estructura}", len(df_mat))
+            try:
+                df_mat = calcular_materiales_estructura(
+                    hojas_base=hojas_base,
+                    estructura=estructura,
+                    cant=1,
+                    tension=tension,
+                    calibre_mt=calibre_mt,
+                    tabla_conectores_mt=tabla_conectores_mt,
+                )
 
-            resultados.append(df_mat)
+                df_mat = df_mat.copy()
+                df_mat["Punto"] = punto
 
-        except Exception as e:
-            errores.append(f"{estructura}: {e}")
-            _debug(f"estructura_error::{estructura}", str(e))
+                resultados.append(df_mat)
 
-    _debug("errores_estructuras", errores)
-
-    _check("sin_errores_criticos", len(resultados) > 0, errores)
+            except Exception as e:
+                errores.append(f"{estructura}: {e}")
+                _debug(f"estructura_error::{estructura}", str(e))
 
     if not resultados:
         raise ValueError(f"No se pudo calcular ninguna estructura: {errores}")
 
     df_final = pd.concat(resultados, ignore_index=True)
 
-    # 🔥 IMPORTANTE: cálculo GLOBAL (no incluye Punto)
     df_final = (
         df_final
-        .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+        .groupby(["Punto", "Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
     )
 
-    _debug("df_final_global", df_final)
-
-    return df_final[COLUMNAS_STD]
+    return df_final[["Punto", "Materiales", "Unidad", "Cantidad"]]
