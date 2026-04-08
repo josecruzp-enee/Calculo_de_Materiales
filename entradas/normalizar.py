@@ -39,6 +39,37 @@ def limpiar_codigo(codigo: str) -> str:
     return codigo
 
 
+# ==========================================================
+# 🔥 NUEVO: RESOLUCIÓN DE CATÁLOGO
+# ==========================================================
+def resolver_codigo_catalogo(codigo: str) -> str:
+    """
+    Convierte códigos incompletos o ambiguos en códigos válidos de catálogo.
+    Esta función es CRÍTICA para evitar errores de lookup en materiales.
+    """
+    codigo = codigo.strip().upper()
+
+    # =========================================
+    # 🔥 LUMINARIAS (LL)
+    # =========================================
+    if codigo.startswith("LL-"):
+
+        # ya viene completo (ej: LL-1-50W)
+        if re.search(r"LL-\d+-\d+W", codigo):
+            return codigo
+
+        # viene incompleto (ej: LL-1)
+        return f"{codigo}-50W"
+
+    # =========================================
+    # (FUTURO) OTROS CASOS
+    # =========================================
+    # if codigo.startswith("TS-"):
+    #     ...
+
+    return codigo
+
+
 def _expandir_multiplicador(token: str):
 
     if not token:
@@ -82,7 +113,7 @@ def expandir_lista_codigos(texto: str):
 
     partes_expandido = []
     for p in partes:
-        subpartes = p.split()  # ← CLAVE
+        subpartes = p.split()
         partes_expandido.extend(subpartes)
 
     partes = partes_expandido
@@ -151,7 +182,6 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         # ==================================================
         poste = None
         estructuras = []
-        otros = []
 
         for cod in lista_codigos:
             cod = limpiar_codigo(cod)
@@ -171,14 +201,23 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         punto_final = poste if poste else punto_original
 
         # ==================================================
-        # CREAR REGISTROS SOLO PARA ESTRUCTURAS
+        # 🔥 RESOLUCIÓN FINAL DE CÓDIGOS
         # ==================================================
         for est in estructuras:
 
+            est_limpio = limpiar_codigo(est)
+            est_final = resolver_codigo_catalogo(est_limpio)
+
+            _debug("resolver_codigo", {
+                "original": est,
+                "limpio": est_limpio,
+                "final": est_final
+            })
+
             registros.append({
-                "Punto": punto_final,              # 👈 POSTE REAL
-                "codigodeestructura": est,
-                "Estructura": est,
+                "Punto": punto_final,
+                "codigodeestructura": est_final,
+                "Estructura": est_final,
                 "cantidad": 1
             })
 
@@ -193,6 +232,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
     _check("output_no_vacio", not df_out.empty, len(df_out))
 
     return df_out
+
 
 # ==========================================================
 # FUNCIÓN PÚBLICA
