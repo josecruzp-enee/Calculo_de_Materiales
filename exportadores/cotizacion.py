@@ -21,35 +21,28 @@ def generar_seccion_presupuesto(doc, styles, costos):
     elems.append(Spacer(1, 12))
 
     # =====================================================
-    # 🔹 DATA DESDE MOTOR
+    # 🔹 DATA DESDE DOMINIO (🔥 NUEVO)
     # =====================================================
     if costos is None:
         raise ValueError("costos es None")
 
-    df = costos.get("df_costos_por_punto")
+    df = costos.get("df_presupuesto")  # 🔥 CAMBIO CLAVE
 
     if df is None or df.empty:
         elems.append(Paragraph("No hay datos de cotización.", styles["BodyText"]))
         return elems
 
     # =====================================================
-    # 🔹 NORMALIZACIÓN
+    # 🔹 NORMALIZACIÓN (mínima)
     # =====================================================
     df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Validaciones críticas
-    required = ["codigodeestructura", "Cantidad", "Precio Unitario"]
+    required = ["Categoria", "Descripción", "Unidad", "Cantidad", "Precio Unitario", "Total"]
     faltantes = [c for c in required if c not in df.columns]
 
     if faltantes:
-        raise ValueError(f"Faltan columnas en df_costos_por_punto: {faltantes}")
-
-    if "Subtotal Precio" not in df.columns:
-        df["Subtotal Precio"] = df["Cantidad"] * df["Precio Unitario"]
-
-    if "Categoria" not in df.columns:
-        df["Categoria"] = "SUMINISTRO E INSTALACIÓN DE ESTRUCTURAS"
+        raise ValueError(f"Faltan columnas en df_presupuesto: {faltantes}")
 
     categorias = df["Categoria"].unique()
 
@@ -72,32 +65,19 @@ def generar_seccion_presupuesto(doc, styles, costos):
 
         for _, r in df_cat.iterrows():
 
-            estructura = str(r["codigodeestructura"]).strip()
-
-            cant = float(r["Cantidad"] or 0)
-            pu = float(r["Precio Unitario"] or 0)
-
-            # 🔥 VALIDACIÓN FUERTE
-            if pu <= 0:
-                raise ValueError(f"Estructura sin precio válido: {estructura}")
-
-            if "Subtotal Precio" in r:
-                total = float(r["Subtotal Precio"])
-            else:
-                total = pu * cant
+            descripcion = str(r["Descripción"]).strip()
+            unidad = str(r["Unidad"])
+            cant = float(r["Cantidad"])
+            pu = float(r["Precio Unitario"])
+            total = float(r["Total"])
 
             total_cat += total
-
-            descripcion = (
-                f"Suministro e instalación de {int(cant)} "
-                f"estructura tipo {estructura}"
-            )
 
             data.append([
                 f"{item_cat}.{item_sub:02d}",
                 descripcion,
-                "Und",
-                f"{int(cant)}",
+                unidad,
+                f"{cant:,.2f}",
                 f"L {pu:,.2f}",
                 f"L {total:,.2f}",
             ])
@@ -127,18 +107,18 @@ def generar_seccion_presupuesto(doc, styles, costos):
         )
 
         tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
 
-            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
 
-            ("ALIGN", (2,1), (-1,-1), "CENTER"),
-            ("ALIGN", (4,1), (-1,-1), "RIGHT"),
-            ("ALIGN", (5,1), (-1,-1), "RIGHT"),
+            ("ALIGN", (2, 1), (-1, -1), "CENTER"),
+            ("ALIGN", (4, 1), (-1, -1), "RIGHT"),
+            ("ALIGN", (5, 1), (-1, -1), "RIGHT"),
 
-            ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#EFEFEF")),
-            ("FONTNAME", (0,-1), (-1,-1), "Helvetica-Bold"),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFEFEF")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ]))
 
         elems.append(tabla)
@@ -149,7 +129,7 @@ def generar_seccion_presupuesto(doc, styles, costos):
     # =====================================================
     # 🔹 TOTAL GENERAL
     # =====================================================
-    total_general = float(df["Subtotal Precio"].sum())
+    total_general = float(df["Total"].sum())
 
     elems.append(Spacer(1, 10))
     elems.append(
