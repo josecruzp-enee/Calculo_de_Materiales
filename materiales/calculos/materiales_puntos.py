@@ -4,10 +4,7 @@ from __future__ import annotations
 import pandas as pd
 from collections import Counter
 
-from materiales.auxiliares.materiales_aux import (
-    limpiar_codigo,
-    expandir_lista_codigos,
-)
+from entradas.normalizar import expandir_lista_codigos, limpiar_codigo
 from materiales.calculos.lector_materiales import leer_hoja_materiales
 
 
