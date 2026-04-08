@@ -1,73 +1,82 @@
-from dataclasses import dataclass
-from typing import Optional, Dict, Any
-import pandas as pd
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+from materiales.orquestador_materiales import ejecutar_materiales
+from costos_precios.orquestador_costos import ejecutar_costos
+
+from aplicacion.modelos_proyecto import EntradaProyecto
+from materiales.modelos.entrada import EntradaMateriales
 
 
-@dataclass
-class EntradaProyecto:
-
-    # =====================================================
-    # 🔹 DATOS PRINCIPALES
-    # =====================================================
-    df_estructuras: pd.DataFrame
-
-    # =====================================================
-    # 🔹 OPCIONALES DE ENTRADA
-    # =====================================================
-    df_cables: Optional[pd.DataFrame] = None
-    df_materiales_extra: Optional[pd.DataFrame] = None
+def ejecutar_proyecto(entrada: EntradaProyecto):
 
     # =====================================================
-    # 🔹 CONFIGURACIÓN PROYECTO
+    # 0. VALIDACIÓN CENTRAL
     # =====================================================
-    ruta_materiales: Optional[str] = None
-    tension: Optional[float] = None
-    datos_proyecto: Optional[Dict[str, Any]] = None
+    entrada.validar_costos()
 
     # =====================================================
-    # 🔥 COSTOS
+    # 1. ADAPTADOR → MATERIALES
     # =====================================================
-
-    # 🔹 Fuente de precios materiales
-    df_precios_materiales: Optional[pd.DataFrame] = None
-
-    # 🔹 Override manual (OPCIONAL)
-    df_costos_estructuras: Optional[pd.DataFrame] = None
-
-    # 🔹 Parámetros operativos (NUEVO)
-    costo_cuadrilla_dia: float = 1250
-    fraccion_jornada: float = 1/16
-    costo_equipos: float = 0.0
-    costo_logistica: float = 0.0
-    margen_utilidad: float = 0.15
-
-    # 🔹 Control
-    calcular_costos: bool = True
+    entrada_materiales = EntradaMateriales(
+        estructuras_df=entrada.df_estructuras,
+        tension=entrada.tension,
+        datos_proyecto=entrada.datos_proyecto,
+        df_cables=entrada.df_cables,
+        df_materiales_extra=entrada.df_materiales_extra,
+    )
 
     # =====================================================
-    # 🔧 VALIDACIÓN
+    # 2. MATERIALES
     # =====================================================
-    def validar_costos(self):
+    salida_materiales = ejecutar_materiales(entrada_materiales)
 
-        if not self.calcular_costos:
-            return
+    if not salida_materiales.ok:
+        return {
+            "ok": False,
+            "fase": "materiales",
+            "errores": salida_materiales.errores,
+        }
 
-        # -----------------------------
-        # PRECIOS MATERIALES
-        # -----------------------------
-        if self.df_precios_materiales is None and not self.ruta_materiales:
-            raise ValueError(
-                "Debe proporcionar df_precios_materiales o ruta_materiales"
-            )
+    # =====================================================
+    # 3. COSTOS
+    # =====================================================
+    salida_costos = None
 
-        # -----------------------------
-        # PARÁMETROS OPERATIVOS
-        # -----------------------------
-        if self.costo_cuadrilla_dia <= 0:
-            raise ValueError("costo_cuadrilla_dia inválido")
+    if entrada.calcular_costos:
 
-        if self.fraccion_jornada <= 0:
-            raise ValueError("fraccion_jornada inválida")
+        salida_costos = ejecutar_costos({
+            "df_resumen": salida_materiales.df_materiales,
+            "df_estructuras": salida_materiales.df_estructuras,
+            "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
 
-        if self.margen_utilidad < 0:
-            raise ValueError("margen_utilidad inválido")
+            # 🔹 fuente precios
+            "df_precios_materiales": entrada.df_precios_materiales,
+            "ruta_materiales": entrada.ruta_materiales,
+
+            # 🔹 override
+            "df_costos_estructuras": entrada.df_costos_estructuras,
+
+            # 🔹 parámetros operativos
+            "costo_cuadrilla_dia": entrada.costo_cuadrilla_dia,
+            "fraccion_jornada": entrada.fraccion_jornada,
+            "costo_equipos": entrada.costo_equipos,
+            "costo_logistica": entrada.costo_logistica,
+            "margen_utilidad": entrada.margen_utilidad,
+        })
+
+    # =====================================================
+    # 4. OUTPUT
+    # =====================================================
+    return {
+        "ok": True,
+
+        "materiales": salida_materiales,
+        "costos": salida_costos,
+
+        # 🔹 acceso rápido
+        "df_materiales": salida_materiales.df_materiales,
+        "df_materiales_por_punto": salida_materiales.df_materiales_por_punto,
+        "df_estructuras": salida_materiales.df_estructuras,
+        "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
+    }
