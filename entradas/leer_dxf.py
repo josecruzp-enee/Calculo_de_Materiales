@@ -110,7 +110,7 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             texto = re.sub(r",+", ",", texto)
 
             # 🔥 FIX: separación controlada (NO rompe TS-37.5 KVA)
-            texto = re.sub(r"\s+(?=[A-Z]{1,3}-\d)", ",", texto)
+            #texto = re.sub(r"\s+(?=[A-Z]{1,3}-\d)", ",", texto)
 
             # limpiar espacios finales
             texto = re.sub(r"\s+", " ", texto).strip(" ,")
