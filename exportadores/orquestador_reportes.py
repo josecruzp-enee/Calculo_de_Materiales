@@ -112,16 +112,18 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
     archivos: Dict[str, bytes] = {}
     errores: list[str] = []
     debug: dict = {}
-    df_estructuras.columns = df_estructuras.columns.str.lower()
+    
     # -----------------------------------------------------
     # INPUT NORMALIZADO
     # -----------------------------------------------------
     
     df_e = _fix_punto(data.get("df_estructuras"))
+    if df_e is not None:
+        df_e.columns = df_e.columns.str.strip().str.lower()
     df_m = data.get("df_materiales")
     df_r = data.get("df_resumen")
     df_p = _fix_punto(data.get("df_por_punto"))
-
+    
     nombre = data.get("nombre_proyecto", "Proyecto")
 
     debug["input"] = {
