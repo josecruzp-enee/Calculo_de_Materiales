@@ -19,6 +19,8 @@ class SalidaMateriales:
     df_estructuras: Optional[pd.DataFrame] = None
     df_estructuras_por_punto: Optional[pd.DataFrame] = None
     descripcion_estructuras: Optional[Dict[str, str]] = None
+    datos_proyecto: Optional[Dict] = None
+    debug: Optional[Dict] = None
 
     # 🔹 META
     errores: List[str] = field(default_factory=list)
