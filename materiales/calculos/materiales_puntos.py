@@ -136,36 +136,39 @@ def calcular_materiales_por_punto(
     tabla_conectores_mt=None,
 ):
 
-    _, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
-
-    if not estructuras_por_punto:
+    if df_estructuras is None or df_estructuras.empty:
         return pd.DataFrame(columns=["Punto", "Materiales", "Unidad", "Cantidad"])
 
     resultados = []
     errores = []
 
-    for punto, estructuras in estructuras_por_punto.items():
+    for _, row in df_estructuras.iterrows():
 
-        for estructura in estructuras:
+        punto = str(row.get("Punto") or row.get("punto") or "").strip() or "General"
+        estructura = row.get("codigodeestructura") or row.get("Estructura")
+        cantidad = row.get("cantidad", 1)
 
-            try:
-                df_mat = calcular_materiales_estructura(
-                    hojas_base=hojas_base,
-                    estructura=estructura,
-                    cant=1,
-                    tension=tension,
-                    calibre_mt=calibre_mt,
-                    tabla_conectores_mt=tabla_conectores_mt,
-                )
+        if not estructura:
+            continue
 
-                df_mat = df_mat.copy()
-                df_mat["Punto"] = punto
+        try:
+            df_mat = calcular_materiales_estructura(
+                hojas_base=hojas_base,
+                estructura=estructura,
+                cant=cantidad,
+                tension=tension,
+                calibre_mt=calibre_mt,
+                tabla_conectores_mt=tabla_conectores_mt,
+            )
 
-                resultados.append(df_mat)
+            df_mat = df_mat.copy()
+            df_mat["Punto"] = punto
 
-            except Exception as e:
-                errores.append(f"{estructura}: {e}")
-                _debug(f"estructura_error::{estructura}", str(e))
+            resultados.append(df_mat)
+
+        except Exception as e:
+            errores.append(f"{estructura}: {e}")
+            _debug(f"estructura_error::{estructura}", str(e))
 
     if not resultados:
         raise ValueError(f"No se pudo calcular ninguna estructura: {errores}")
