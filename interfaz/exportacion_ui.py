@@ -185,9 +185,6 @@ def seccion_finalizar_calculo():
             st.error(f"❌ Error general: {str(e)}")
 
 
-# =========================================================
-# SECCIÓN EXPORTACIÓN
-# =========================================================
 def seccion_exportacion():
 
     st.subheader("📤 Exportación de resultados")
@@ -225,7 +222,7 @@ def seccion_exportacion():
         st.success("Reportes generados correctamente")
 
     # =====================================================
-    # DESCARGAS
+    # DESCARGAS (FIX AQUÍ 🔥)
     # =====================================================
     pdfs = st.session_state.get("pdfs_generados")
 
@@ -234,9 +231,30 @@ def seccion_exportacion():
         st.markdown("### 📥 Descargar archivos")
 
         for nombre, archivo in pdfs.items():
+
+            # 🔥 NORMALIZACIÓN CLAVE
+            data = None
+
+            if archivo is None:
+                st.error(f"{nombre} está vacío")
+                continue
+
+            elif isinstance(archivo, bytes):
+                data = archivo
+
+            elif hasattr(archivo, "getvalue"):
+                data = archivo.getvalue()
+
+            else:
+                st.error(f"{nombre} tiene formato inválido: {type(archivo)}")
+                continue
+
             st.download_button(
                 label=f"Descargar {nombre}",
-                data=archivo,
+                data=data,
                 file_name=nombre,
                 mime="application/pdf"
             )
+
+
+
