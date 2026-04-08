@@ -84,6 +84,7 @@ def _merge_materiales(df_a, df_b):
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
+
 def ejecutar_materiales(
     entrada: EntradaMateriales,
     catalogo: Optional[Dict[str, Any]] = None,
@@ -104,32 +105,12 @@ def ejecutar_materiales(
 
     _debug("INPUT", "df_estructuras", df_norm)
     _debug("INPUT", "tension", tension)
-    _debug("INPUT", "df_cables", df_cables)
-    _debug("INPUT", "df_materiales_extra", df_materiales_extra)
-
-    _check("INPUT", "df_valido",
-        isinstance(df_norm, pd.DataFrame) and not df_norm.empty,
-        getattr(df_norm, "shape", None)
-    )
-
-    _check("INPUT", "hojas_base_ok",
-        isinstance(hojas_base, dict) and len(hojas_base) > 0,
-        type(hojas_base).__name__
-    )
 
     # =====================================================
     # 2. VALIDACIÓN
     # =====================================================
-    try:
-        validar_datos_proyecto({})
-    except Exception as e:
-        warnings.append(f"validar_datos_proyecto: {e}")
-        _debug("VALIDACION", "warning_validacion", str(e))
-
     if df_norm is None or df_norm.empty:
         warnings.append("No hay estructuras para procesar.")
-
-        _debug("VALIDACION", "sin_estructuras", True)
 
         return SalidaMateriales(
             ok=True,
@@ -137,21 +118,12 @@ def ejecutar_materiales(
             warnings=warnings,
             df_materiales=_df_vacio(),
             df_materiales_por_punto=_df_vacio(),
+            datos_proyecto=entrada.datos_proyecto,
             debug=debug
         )
 
     # =====================================================
-    # 3. PRE CÁLCULO
-    # =====================================================
-    _debug("PRE", "n_estructuras", len(df_norm))
-    _debug("PRE", "columnas", list(df_norm.columns))
-
-    if "Estructura" in df_norm.columns:
-        estructuras = df_norm["Estructura"].dropna().unique().tolist()
-        _debug("PRE", "estructuras_unicas", estructuras[:50])
-
-    # =====================================================
-    # 4. CÁLCULO PRINCIPAL
+    # 3. CÁLCULO MATERIALES
     # =====================================================
     try:
         resultado_calc = calcular_materiales_proyecto(
@@ -160,12 +132,8 @@ def ejecutar_materiales(
             tension=float(tension) if tension is not None else None,
         )
 
-        _debug("CALCULO", "resultado_raw", resultado_calc)
-
     except Exception as e:
         errores.append(f"Error en cálculo de materiales: {e}")
-
-        _debug("ERROR", "calculo", str(e))
 
         return SalidaMateriales(
             ok=False,
@@ -173,30 +141,27 @@ def ejecutar_materiales(
             warnings=warnings,
             df_materiales=_df_vacio(),
             df_materiales_por_punto=_df_vacio(),
+            datos_proyecto=entrada.datos_proyecto,
             debug=debug
         )
 
     # =====================================================
-    # 4.1 CÁLCULO DE ESTRUCTURAS (NUEVO)
+    # 4. CÁLCULO ESTRUCTURAS
     # =====================================================
     try:
         resultado_estructuras = calcular_estructuras_proyecto(df_norm)
 
         df_estructuras = resultado_estructuras.get("df_estructuras")
         df_estructuras_por_punto = resultado_estructuras.get("df_estructuras_por_punto")
-        descripcion_estructuras = resultado_estructuras.get("descripcion_por_punto")
-
-        _debug("ESTRUCTURAS", "global", df_estructuras)
-        _debug("ESTRUCTURAS", "por_punto", df_estructuras_por_punto)
+        descripcion_estructuras = resultado_estructuras.get("descripcion_estructuras")
 
     except Exception as e:
         warnings.append(f"Error en cálculo de estructuras: {e}")
-        _debug("ERROR", "estructuras", str(e))
 
         df_estructuras = None
         df_estructuras_por_punto = None
-        descripcion_estructuras = {}
-    
+        descripcion_estructuras = None
+
     # =====================================================
     # 5. EXTRAER RESULTADOS
     # =====================================================
@@ -205,7 +170,11 @@ def ejecutar_materiales(
 
     if isinstance(resultado_calc, dict):
         df_materiales = resultado_calc.get("df_materiales")
-        df_detalle = resultado_calc.get("df_materiales_detalle")
+        df_detalle = resultado_calc.get("df_materiales_por_punto")
+
+        # fallback compatibilidad vieja
+        if df_detalle is None:
+            df_detalle = resultado_calc.get("df_materiales_detalle")
 
     elif isinstance(resultado_calc, tuple):
         if len(resultado_calc) >= 1:
@@ -213,17 +182,11 @@ def ejecutar_materiales(
         if len(resultado_calc) >= 2:
             df_detalle = resultado_calc[1]
 
-    _check("POST", "df_materiales_existe", df_materiales is not None)
-    _check("POST", "df_detalle_existe", df_detalle is not None)
-
     if df_materiales is None:
         df_materiales = _df_vacio()
 
     if df_detalle is None:
         df_detalle = _df_vacio()
-
-    _debug("POST", "df_materiales", df_materiales)
-    _debug("POST", "df_detalle", df_detalle)
 
     # =====================================================
     # 6. CABLES
@@ -232,43 +195,39 @@ def ejecutar_materiales(
         try:
             from materiales.cables.cables_materiales import materiales_desde_cables
             df_cab = materiales_desde_cables(df_cables)
-
-            _debug("CABLES", "df_cables_convertido", df_cab)
-
             df_materiales = _merge_materiales(df_materiales, df_cab)
-
         except Exception as e:
             warnings.append(f"Error integrando cables: {e}")
-            _debug("ERROR", "cables", str(e))
 
     # =====================================================
     # 7. MATERIALES EXTRA
     # =====================================================
     if isinstance(df_materiales_extra, pd.DataFrame) and not df_materiales_extra.empty:
         try:
-            _debug("EXTRA", "df_materiales_extra", df_materiales_extra)
-
             df_materiales = _merge_materiales(df_materiales, df_materiales_extra)
-
         except Exception as e:
             warnings.append(f"Error integrando materiales extra: {e}")
-            _debug("ERROR", "materiales_extra", str(e))
 
     # =====================================================
     # 8. OUTPUT FINAL
     # =====================================================
-    _debug("OUTPUT", "filas_final", len(df_materiales))
-    _debug("OUTPUT", "columnas_final", list(df_materiales.columns))
-
     return SalidaMateriales(
         ok=True,
         errores=errores,
         warnings=warnings,
+
+        # 🔹 materiales
+        df_materiales=df_materiales,
+        df_materiales_por_punto=df_detalle,
+
+        # 🔹 estructuras
         df_estructuras=df_estructuras,
         df_estructuras_por_punto=df_estructuras_por_punto,
         descripcion_estructuras=descripcion_estructuras,
-        df_materiales=df_materiales,
-        df_materiales_por_punto=df_detalle,
+
+        # 🔹 contexto
         datos_proyecto=entrada.datos_proyecto,
+
+        # 🔹 debug
         debug=debug
     )
