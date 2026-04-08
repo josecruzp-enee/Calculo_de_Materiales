@@ -57,7 +57,6 @@ def cargar_precios(archivo_materiales: str) -> pd.DataFrame:
     try:
         xls = pd.ExcelFile(archivo_materiales)
 
-        # prioridad de hojas
         if "precios" in xls.sheet_names:
             hoja = "precios"
         elif "Materiales" in xls.sheet_names:
@@ -100,7 +99,7 @@ def cargar_precios(archivo_materiales: str) -> pd.DataFrame:
     df = df.rename(columns=ren)
 
     # ----------------------------------------
-    # VALIDACIÓN (NO SILENCIOSA)
+    # VALIDACIÓN
     # ----------------------------------------
     if "Materiales" not in df.columns:
         raise ValueError("No se encontró columna de materiales en archivo de precios")
@@ -196,6 +195,13 @@ def calcular_costos_desde_resumen(
     if df_precios is None or df_precios.empty:
         raise ValueError("df_precios vacío o inválido")
 
+    # 🔥 VALIDACIÓN DE PRECIOS
+    required_precios = {"Materiales_norm", "Unidad_norm", "Precio Unitario"}
+    if not required_precios.issubset(df_precios.columns):
+        raise ValueError(
+            f"df_precios inválido, faltan columnas: {required_precios}"
+        )
+
     # ----------------------------------------
     # LIMPIEZA BASE
     # ----------------------------------------
@@ -238,9 +244,10 @@ def calcular_costos_desde_resumen(
     )
 
     out["Moneda"] = out["Moneda"].fillna("L").astype(str).str.strip()
+    out.loc[out["Moneda"].eq(""), "Moneda"] = "L"
 
     # ----------------------------------------
-    # LÓGICA DE COSTO (CONTROLADA)
+    # LÓGICA DE COSTO
     # ----------------------------------------
     out["Tiene_Precio"] = (
         out["Precio Unitario"].notna()
@@ -257,7 +264,7 @@ def calcular_costos_desde_resumen(
     ).round(2)
 
     # ----------------------------------------
-    # OUTPUT FINAL LIMPIO
+    # OUTPUT FINAL
     # ----------------------------------------
     return out[
         [
