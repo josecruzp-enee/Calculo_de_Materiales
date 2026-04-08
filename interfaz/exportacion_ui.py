@@ -22,9 +22,6 @@ from exportadores.orquestador_reportes import generar_reportes
 # HELPERS
 # =========================================================
 def _vista_previa_conteo(df_estructuras: pd.DataFrame | None):
-    """
-    Vista rápida antes de ejecutar cálculo
-    """
 
     if df_estructuras is None or df_estructuras.empty:
         st.info("No hay estructuras cargadas")
@@ -39,22 +36,18 @@ def _vista_previa_conteo(df_estructuras: pd.DataFrame | None):
         st.dataframe(df_estructuras, use_container_width=True)
 
 
-# =========================================================
-# DEBUG CONTROLADO
-# =========================================================
 def _debug_final(tension, data):
     st.markdown("### 🧠 Debug previo a cálculo")
 
-    st.write("Tensión en session_state:", tension)
+    st.write("Tensión:", tension)
     st.write("Tipo de data:", type(data))
 
     if isinstance(data, pd.DataFrame):
-        st.caption(f"Tipo de data: {type(data).__name__}")
         st.write("Columnas:", list(data.columns))
 
 
 # =========================================================
-# SECCIÓN FINALIZAR
+# FINALIZAR CÁLCULO
 # =========================================================
 def seccion_finalizar_calculo():
 
@@ -72,66 +65,38 @@ def seccion_finalizar_calculo():
         st.error("❌ No se encontró tensión en datos del proyecto")
         return
 
-    # =========================
-    # NORMALIZAR TENSIÓN
-    # =========================
     try:
-        if "34.5" in str(tension_raw):
-            tension = 34.5
-        else:
-            tension = 13.8
-    except:
+        tension = 34.5 if "34.5" in str(tension_raw) else 13.8
+    except Exception:
         st.error(f"❌ Error interpretando tensión: {tension_raw}")
         return
 
-    # =====================================================
-    # VALIDACIONES
-    # =====================================================
     if data is None:
         st.warning("Debe ingresar estructuras antes de calcular")
         return
 
-    if tension is None:
-        st.error("❌ Tensión no definida. Seleccione 13.8 kV o 34.5 kV en 'Modo de Carga'")
-        return
-
-    # =====================================================
-    # DEBUG (clave para no volvernos locos)
-    # =====================================================
     _debug_final(tension, data)
 
-    # =====================================================
-    # Vista previa (solo manual)
-    # =====================================================
     if isinstance(data, pd.DataFrame):
         _vista_previa_conteo(data)
 
-    # =====================================================
-    # EJECUCIÓN
-    # =====================================================
     if st.button("🚀 Ejecutar cálculo"):
 
         try:
-            # =====================================================
-            # 1. CONTRATO INTERFAZ
-            # =====================================================
             salida_ui = SalidaInterfaz(
                 ok=True,
                 tipo_entrada=tipo,
                 data_entrada=data,
-                datos_proyecto=st.session_state.get("datos_proyecto", {}),
+                datos_proyecto=datos,
                 df_cables=st.session_state.get("cables_proyecto_df"),
                 df_materiales_extra=pd.DataFrame(
                     st.session_state.get("materiales_extra", [])
                 ),
             )
 
-            # =====================================================
-            # 2. ENTRADAS (CON TENSIÓN REAL)
-            # =====================================================
             salida_entradas = ejecutar_entradas(
                 salida_ui,
-                tension=float(tension)  # 🔥 YA NO HARDCODE
+                tension=float(tension)
             )
 
             if not salida_entradas.ok:
@@ -142,40 +107,25 @@ def seccion_finalizar_calculo():
 
             st.session_state["df_estructuras"] = salida_entradas.df_estructuras
 
-            # =====================================================
-            # 3. ADAPTADOR → PROYECTO
-            # =====================================================
             entrada_proyecto = EntradaProyecto(
                 df_estructuras=salida_entradas.df_estructuras,
                 df_cables=salida_entradas.df_cables,
                 df_materiales_extra=salida_entradas.df_materiales_extra,
                 ruta_materiales=st.session_state.get("ruta_datos_materiales"),
-                tension=float(tension),  # 🔥 CRÍTICO
+                tension=float(tension),
             )
 
-            # =====================================================
-            # 4. EJECUCIÓN PROYECTO
-            # =====================================================
             with st.spinner("Calculando materiales..."):
                 resultado = ejecutar_proyecto(entrada_proyecto)
 
-            if resultado is None:
-                st.error("❌ Resultado vacío")
-                return
-
-            if not resultado.ok:
-                st.error("❌ Error en el cálculo:")
-                for e in resultado.errores:
-                    st.error(f"- {e}")
+            if not resultado or not resultado.ok:
+                st.error("❌ Error en cálculo")
                 return
 
             if resultado.warnings:
                 for w in resultado.warnings:
                     st.warning(w)
 
-            # =====================================================
-            # 5. GUARDAR RESULTADO
-            # =====================================================
             st.session_state["resultado_calculo"] = resultado
             st.session_state["calculo_finalizado"] = True
 
@@ -185,6 +135,9 @@ def seccion_finalizar_calculo():
             st.error(f"❌ Error general: {str(e)}")
 
 
+# =========================================================
+# EXPORTACIÓN
+# =========================================================
 def seccion_exportacion():
 
     st.subheader("📤 Exportación de resultados")
@@ -192,9 +145,6 @@ def seccion_exportacion():
     resultado = st.session_state.get("resultado_calculo")
     calculo_ok = st.session_state.get("calculo_finalizado")
 
-    # =====================================================
-    # VALIDACIÓN
-    # =====================================================
     if not calculo_ok or resultado is None:
         st.info("Debe ejecutar el cálculo antes de exportar")
         return
@@ -207,23 +157,38 @@ def seccion_exportacion():
         with st.spinner("Generando archivos..."):
 
             try:
-                pdfs = generar_reportes(resultado)
-                st.write("DEBUG pdfs:", type(pdfs), pdfs.keys() if isinstance(pdfs, dict) else pdfs)
+                # 🔥 ADAPTADOR CORRECTO
+                data_export = {
+                    "df_estructuras": getattr(resultado, "df_estructuras", None),
+                    "df_materiales": getattr(resultado, "df_materiales", None),
+                    "df_resumen": getattr(resultado, "df_resumen", None),
+                    "df_por_punto": getattr(resultado, "df_por_punto", None),
+                }
+
+                out = generar_reportes(data_export)
+
+                archivos = out.get("archivos", {})
+                errores = out.get("errores", [])
 
             except Exception as e:
                 st.error(f"Error generando reportes: {e}")
                 return
 
-        if not pdfs:
+        if not archivos:
             st.warning("No se generaron archivos")
             return
 
-        st.session_state["pdfs_generados"] = pdfs
+        st.session_state["pdfs_generados"] = archivos
 
         st.success("Reportes generados correctamente")
 
+        if errores:
+            st.error("Algunos reportes fallaron:")
+            for e in errores:
+                st.error(e)
+
     # =====================================================
-    # DESCARGAS + DEBUG 🔥
+    # DESCARGAS
     # =====================================================
     pdfs = st.session_state.get("pdfs_generados")
 
@@ -233,58 +198,13 @@ def seccion_exportacion():
 
         for nombre, archivo in pdfs.items():
 
-            st.write(f"DEBUG archivo → {nombre}: {type(archivo)}")
+            if not isinstance(archivo, (bytes, bytearray)):
+                st.error(f"{nombre} tipo inválido: {type(archivo)}")
+                continue
 
-            data = None
-
-            try:
-                # ----------------------------
-                # CASO 1: bytes
-                # ----------------------------
-                if isinstance(archivo, bytes):
-                    data = archivo
-                    st.write("✔️ Es bytes")
-
-                # ----------------------------
-                # CASO 2: BytesIO
-                # ----------------------------
-                elif hasattr(archivo, "getvalue"):
-                    data = archivo.getvalue()
-                    st.write("✔️ Es BytesIO")
-
-                # ----------------------------
-                # CASO 3: string
-                # ----------------------------
-                elif isinstance(archivo, str):
-                    data = archivo.encode("utf-8")
-                    st.write("✔️ Es string convertido")
-
-                # ----------------------------
-                # OTRO TIPO
-                # ----------------------------
-                else:
-                    st.error(f"{nombre} tipo no soportado: {type(archivo)}")
-                    continue
-
-                # ----------------------------
-                # VALIDACIÓN FINAL
-                # ----------------------------
-                st.write("DEBUG data tipo:", type(data))
-
-                if not data or not isinstance(data, (bytes, bytearray)):
-                    st.error(f"{nombre} no es un archivo válido")
-                    continue
-
-                # ----------------------------
-                # BOTÓN DESCARGA
-                # ----------------------------
-                st.download_button(
-                    label=f"Descargar {nombre}",
-                    data=data,
-                    file_name=nombre,
-                    mime="application/pdf"
-                )
-
-            except Exception as e:
-                st.error(f"Error procesando {nombre}: {e}")
-
+            st.download_button(
+                label=f"Descargar {nombre}",
+                data=archivo,
+                file_name=nombre,
+                mime="application/octet-stream"
+            )
