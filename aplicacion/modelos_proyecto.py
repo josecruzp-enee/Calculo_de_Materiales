@@ -6,37 +6,33 @@ import pandas as pd
 
 @dataclass
 class EntradaProyecto:
-    """
-    Contrato de entrada principal del sistema.
-    Totalmente alineado con orquestador_proyecto.
-    """
 
     # =====================================================
-    # 🔹 DATA PRINCIPAL
+    # DATA PRINCIPAL
     # =====================================================
     df_estructuras: pd.DataFrame
 
     # =====================================================
-    # 🔹 OPCIONALES (MATERIALES)
+    # OPCIONALES (MATERIALES)
     # =====================================================
     df_cables: Optional[pd.DataFrame] = None
     df_materiales_extra: Optional[pd.DataFrame] = None
 
     # =====================================================
-    # 🔹 CONTEXTO
+    # CONTEXTO
     # =====================================================
     ruta_materiales: Optional[str] = None
     tension: Optional[float] = None
-    datos_proyecto: Optional[Dict[str, Any]] = None
+    datos_proyecto: Dict[str, Any] = None  # 👈 FIX
 
     # =====================================================
-    # 🔹 COSTOS - INPUTS
+    # COSTOS - INPUTS
     # =====================================================
     df_precios_materiales: Optional[pd.DataFrame] = None
     df_costos_estructuras: Optional[pd.DataFrame] = None
 
     # =====================================================
-    # 🔹 COSTOS - PARÁMETROS
+    # COSTOS - PARÁMETROS
     # =====================================================
     costo_cuadrilla_dia: float = 1250
     fraccion_jornada: float = 1 / 16
@@ -47,39 +43,33 @@ class EntradaProyecto:
     calcular_costos: bool = True
 
     # =====================================================
-    # 🔹 VALIDACIÓN
+    # VALIDACIÓN
     # =====================================================
     def validar(self):
 
-        # -------------------------------
-        # ESTRUCTURAS
-        # -------------------------------
+        # -------- estructuras --------
         if self.df_estructuras is None or self.df_estructuras.empty:
             raise ValueError("df_estructuras vacío")
 
-        # -------------------------------
-        # CONTEXTO
-        # -------------------------------
-        if self.datos_proyecto is None:
+        # -------- contexto --------
+        if not self.datos_proyecto:
             self.datos_proyecto = {}
 
-        # fallback de tensión
+        # -------- tensión --------
         if self.tension is None:
             self.tension = self.datos_proyecto.get("tension")
 
-        # -------------------------------
+        # =================================================
         # COSTOS
-        # -------------------------------
+        # =================================================
         if not self.calcular_costos:
             return
 
         # precios
         if self.df_precios_materiales is None and not self.ruta_materiales:
-            raise ValueError(
-                "Debe proporcionar df_precios_materiales o ruta_materiales"
-            )
+            raise ValueError("Debe proporcionar precios")
 
-        # costos por estructura
+        # estructuras costos
         if self.df_costos_estructuras is None:
             raise ValueError("Falta df_costos_estructuras")
 
