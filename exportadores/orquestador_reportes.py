@@ -25,7 +25,6 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
 
     archivos: Dict[str, bytes] = {}
     errores: list[str] = []
-
     debug_exportadores = {}
 
     # -----------------------------------------------------
@@ -36,11 +35,15 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
     df_resumen = data.get("df_resumen")
     df_por_punto = data.get("df_por_punto")
 
+    # 🔥 OPCIONAL (ya no rompe si no viene)
+    nombre_proy = data.get("nombre_proyecto", "Proyecto")
+
     debug_exportadores["INPUT"] = {
         "df_estructuras": type(df_estructuras).__name__,
         "df_materiales": type(df_materiales).__name__,
         "df_resumen": type(df_resumen).__name__,
         "df_por_punto": type(df_por_punto).__name__,
+        "nombre_proy": nombre_proy,
     }
 
     # =====================================================
@@ -48,7 +51,7 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
     # =====================================================
     try:
         if df_estructuras is not None:
-            pdf = generar_pdf_estructuras_global(df_estructuras)
+            pdf = generar_pdf_estructuras_global(df_estructuras, nombre_proy)
 
             debug_exportadores["estructuras_global"] = {
                 "tipo": str(type(pdf)),
@@ -60,8 +63,8 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 errores.append("estructuras_global devolvió tipo inválido")
 
-    except Exception:
-        errores.append("Error en estructuras_global")
+    except Exception as e:
+        errores.append(f"Error en estructuras_global: {str(e)}")
         debug_exportadores["estructuras_global"] = {
             "error": traceback.format_exc()
         }
@@ -71,7 +74,7 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
     # =====================================================
     try:
         if df_estructuras is not None:
-            pdf = generar_pdf_estructuras_por_punto(df_estructuras)
+            pdf = generar_pdf_estructuras_por_punto(df_estructuras, nombre_proy)
 
             debug_exportadores["estructuras_por_punto"] = {
                 "tipo": str(type(pdf)),
@@ -83,18 +86,18 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 errores.append("estructuras_por_punto devolvió tipo inválido")
 
-    except Exception:
-        errores.append("Error en estructuras_por_punto")
+    except Exception as e:
+        errores.append(f"Error en estructuras_por_punto: {str(e)}")
         debug_exportadores["estructuras_por_punto"] = {
             "error": traceback.format_exc()
         }
 
     # =====================================================
-    # PDF: MATERIALES
+    # PDF: MATERIALES GLOBAL
     # =====================================================
     try:
         if df_materiales is not None:
-            pdf = generar_pdf_materiales(df_materiales)
+            pdf = generar_pdf_materiales(df_materiales, nombre_proy)
 
             debug_exportadores["materiales"] = {
                 "tipo": str(type(pdf)),
@@ -106,8 +109,8 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 errores.append("materiales devolvió tipo inválido")
 
-    except Exception:
-        errores.append("Error en materiales")
+    except Exception as e:
+        errores.append(f"Error en materiales: {str(e)}")
         debug_exportadores["materiales"] = {
             "error": traceback.format_exc()
         }
@@ -117,7 +120,7 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
     # =====================================================
     try:
         if df_por_punto is not None:
-            pdf = generar_pdf_materiales_por_punto(df_por_punto)
+            pdf = generar_pdf_materiales_por_punto(df_por_punto, nombre_proy)
 
             debug_exportadores["materiales_por_punto"] = {
                 "tipo": str(type(pdf)),
@@ -129,8 +132,8 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 errores.append("materiales_por_punto devolvió tipo inválido")
 
-    except Exception:
-        errores.append("Error en materiales_por_punto")
+    except Exception as e:
+        errores.append(f"Error en materiales_por_punto: {str(e)}")
         debug_exportadores["materiales_por_punto"] = {
             "error": traceback.format_exc()
         }
@@ -157,14 +160,14 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 errores.append("excel devolvió tipo inválido")
 
-    except Exception:
-        errores.append("Error en excel")
+    except Exception as e:
+        errores.append(f"Error en excel: {str(e)}")
         debug_exportadores["excel"] = {
             "error": traceback.format_exc()
         }
 
     # =====================================================
-    # GUARDAR DEBUG GLOBAL 🔥
+    # DEBUG GLOBAL (como tu pipeline)
     # =====================================================
     debug_pipeline = st.session_state.get("debug_pipeline", {})
     debug_pipeline["EXPORTADORES"] = {
