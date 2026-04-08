@@ -10,7 +10,7 @@ from entradas.base_datos import cargar_base_datos
 # =========================================================
 # CONTRATO OFICIAL
 # =========================================================
-from interfaz.contratos import SalidaMateriales
+from interfaz.contratos import ResultadoMateriales
 
 # =========================================================
 # MODELOS
