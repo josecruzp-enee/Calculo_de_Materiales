@@ -28,6 +28,10 @@ from materiales.validaciones.materiales_validacion import (
     validar_datos_proyecto,
 )
 
+from materiales.calculos.calculo_estructuras import (
+    calcular_estructuras_proyecto
+)
+
 # =========================================================
 # DEBUG
 # =========================================================
@@ -173,6 +177,27 @@ def ejecutar_materiales(
         )
 
     # =====================================================
+    # 4.1 CÁLCULO DE ESTRUCTURAS (NUEVO)
+    # =====================================================
+    try:
+        resultado_estructuras = calcular_estructuras_proyecto(df_norm)
+
+        df_estructuras = resultado_estructuras.get("df_estructuras")
+        df_estructuras_por_punto = resultado_estructuras.get("df_estructuras_por_punto")
+        descripcion_estructuras = resultado_estructuras.get("descripcion_por_punto")
+
+        _debug("ESTRUCTURAS", "global", df_estructuras)
+        _debug("ESTRUCTURAS", "por_punto", df_estructuras_por_punto)
+
+    except Exception as e:
+        warnings.append(f"Error en cálculo de estructuras: {e}")
+        _debug("ERROR", "estructuras", str(e))
+
+        df_estructuras = None
+        df_estructuras_por_punto = None
+        descripcion_estructuras = {}
+    
+    # =====================================================
     # 5. EXTRAER RESULTADOS
     # =====================================================
     df_materiales = None
@@ -239,6 +264,9 @@ def ejecutar_materiales(
         ok=True,
         errores=errores,
         warnings=warnings,
+        df_estructuras=df_estructuras,
+        df_estructuras_por_punto=df_estructuras_por_punto,
+        descripcion_estructuras=descripcion_estructuras,
         df_materiales=df_materiales,
         df_materiales_por_punto=df_detalle,
         datos_proyecto=entrada.datos_proyecto,
