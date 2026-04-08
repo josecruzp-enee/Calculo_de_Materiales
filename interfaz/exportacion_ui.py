@@ -208,6 +208,7 @@ def seccion_exportacion():
 
             try:
                 pdfs = generar_reportes(resultado)
+                st.write("DEBUG pdfs:", type(pdfs), pdfs.keys() if isinstance(pdfs, dict) else pdfs)
 
             except Exception as e:
                 st.error(f"Error generando reportes: {e}")
@@ -222,7 +223,7 @@ def seccion_exportacion():
         st.success("Reportes generados correctamente")
 
     # =====================================================
-    # DESCARGAS (FIX AQUÍ 🔥)
+    # DESCARGAS + DEBUG 🔥
     # =====================================================
     pdfs = st.session_state.get("pdfs_generados")
 
@@ -232,29 +233,58 @@ def seccion_exportacion():
 
         for nombre, archivo in pdfs.items():
 
-            # 🔥 NORMALIZACIÓN CLAVE
+            st.write(f"DEBUG archivo → {nombre}: {type(archivo)}")
+
             data = None
 
-            if archivo is None:
-                st.error(f"{nombre} está vacío")
-                continue
+            try:
+                # ----------------------------
+                # CASO 1: bytes
+                # ----------------------------
+                if isinstance(archivo, bytes):
+                    data = archivo
+                    st.write("✔️ Es bytes")
 
-            elif isinstance(archivo, bytes):
-                data = archivo
+                # ----------------------------
+                # CASO 2: BytesIO
+                # ----------------------------
+                elif hasattr(archivo, "getvalue"):
+                    data = archivo.getvalue()
+                    st.write("✔️ Es BytesIO")
 
-            elif hasattr(archivo, "getvalue"):
-                data = archivo.getvalue()
+                # ----------------------------
+                # CASO 3: string
+                # ----------------------------
+                elif isinstance(archivo, str):
+                    data = archivo.encode("utf-8")
+                    st.write("✔️ Es string convertido")
 
-            else:
-                st.error(f"{nombre} tiene formato inválido: {type(archivo)}")
-                continue
+                # ----------------------------
+                # OTRO TIPO
+                # ----------------------------
+                else:
+                    st.error(f"{nombre} tipo no soportado: {type(archivo)}")
+                    continue
 
-            st.download_button(
-                label=f"Descargar {nombre}",
-                data=data,
-                file_name=nombre,
-                mime="application/pdf"
-            )
+                # ----------------------------
+                # VALIDACIÓN FINAL
+                # ----------------------------
+                st.write("DEBUG data tipo:", type(data))
 
+                if not data or not isinstance(data, (bytes, bytearray)):
+                    st.error(f"{nombre} no es un archivo válido")
+                    continue
 
+                # ----------------------------
+                # BOTÓN DESCARGA
+                # ----------------------------
+                st.download_button(
+                    label=f"Descargar {nombre}",
+                    data=data,
+                    file_name=nombre,
+                    mime="application/pdf"
+                )
+
+            except Exception as e:
+                st.error(f"Error procesando {nombre}: {e}")
 
