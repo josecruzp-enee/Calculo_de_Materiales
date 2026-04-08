@@ -8,47 +8,34 @@ def validar_estructuras(
     df: pd.DataFrame,
     df_indice: pd.DataFrame | None = None,
 ):
-    """
-    Valida estructuras contra catálogo.
-
-    INPUT:
-        df: DataFrame normalizado (Punto, Estructura, Cantidad)
-        df_indice: catálogo (opcional)
-
-    OUTPUT:
-        lista de errores (list[str])
-    """
 
     errores = []
 
     # =====================================================
-    # VALIDACIONES BÁSICAS
+    # VALIDACIÓN BÁSICA (POST-NORMALIZACIÓN)
     # =====================================================
     if df is None or df.empty:
         return ["DataFrame de estructuras vacío"]
 
-    if "Estructura" not in df.columns:
-        return ["Falta columna 'Estructura'"]
+    columnas = set(c.lower().strip() for c in df.columns)
+
+    requeridas = {
+        "punto",
+        "codigodeestructura",
+        "cantidad"
+    }
+
+    faltantes = requeridas - columnas
+
+    if faltantes:
+        return [f"Faltan columnas requeridas: {list(faltantes)}"]
 
     # =====================================================
-    # NORMALIZACIÓN LOCAL
-    # =====================================================
-    codigos = (
-        df["Estructura"]
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-
-    # =====================================================
-    # VALIDACIÓN BÁSICA (sin catálogo)
+    # VALIDACIÓN CONTRA CATÁLOGO (OPCIONAL)
     # =====================================================
     if df_indice is None or df_indice.empty:
         return []
 
-    # =====================================================
-    # NORMALIZAR CATÁLOGO
-    # =====================================================
     df_indice.columns = df_indice.columns.str.strip().str.lower()
 
     if "codigodeestructura" in df_indice.columns:
@@ -56,7 +43,7 @@ def validar_estructuras(
     elif "estructura" in df_indice.columns:
         col_catalogo = "estructura"
     else:
-        return ["Índice no tiene columna de estructuras válida"]
+        return ["Índice no tiene columna válida"]
 
     catalogo = set(
         df_indice[col_catalogo]
@@ -65,9 +52,13 @@ def validar_estructuras(
         .str.upper()
     )
 
-    # =====================================================
-    # VALIDACIÓN
-    # =====================================================
+    codigos = (
+        df["codigodeestructura"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
     no_encontrados = sorted(set(c for c in codigos if c not in catalogo))
 
     if no_encontrados:
