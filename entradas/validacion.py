@@ -36,6 +36,7 @@ def validar_estructuras(
     if df_indice is None or df_indice.empty:
         return []
 
+    df_indice = df_indice.copy()
     df_indice.columns = df_indice.columns.str.strip().str.lower()
 
     if "codigodeestructura" in df_indice.columns:
