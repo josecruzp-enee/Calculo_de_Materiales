@@ -3,9 +3,16 @@ from __future__ import annotations
 
 from typing import Dict, Any
 
+# =====================================================
+# ORQUESTADORES
+# =====================================================
 from materiales.orquestador_materiales import ejecutar_materiales
 from costos_precios.orquestador_costos import ejecutar_costos
-from costos_precios.costos_estructuras import calcular_costos_por_estructura
+
+# =====================================================
+# CONTRATOS
+# =====================================================
+from materiales.modelos.entrada import EntradaMateriales
 
 
 def ejecutar_proyecto(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -14,48 +21,51 @@ def ejecutar_proyecto(data: Dict[str, Any]) -> Dict[str, Any]:
         raise TypeError("data debe ser dict")
 
     # =====================================================
-    # 1. MATERIALES
+    # 1. ADAPTAR INPUT → MODELO FUERTE
     # =====================================================
-    salida_materiales = ejecutar_materiales(data)
-
-    df_materiales = salida_materiales["df_materiales"]
-    df_por_punto = salida_materiales["df_materiales_por_punto"]
-    conteo = salida_materiales["conteo_estructuras"]
-
-    base = data.get("hojas_base")
-
-    # =====================================================
-    # 2. COSTOS POR ESTRUCTURA
-    # =====================================================
-    df_costos_estructuras = calcular_costos_por_estructura(
-        hojas_base=base,
-        conteo=conteo,
-        tension_ll=data.get("tension"),
-        calibre_mt=data.get("calibre_mt"),
-        tabla_conectores_mt=data.get("tabla_conectores_mt"),
-
-        costo_cuadrilla_dia=data.get("costo_cuadrilla_dia", 1250),
-        fraccion_jornada=data.get("fraccion_jornada", 1/16),
-        costo_equipos=data.get("costo_equipos", 0),
-        costo_logistica=data.get("costo_logistica", 0),
-        margen_utilidad=data.get("margen_utilidad", 0.15),
+    entrada_materiales = EntradaMateriales(
+        estructuras_df=data.get("df_estructuras"),
+        tension=data.get("tension"),
+        datos_proyecto=data.get("datos_proyecto"),
+        df_cables=data.get("df_cables"),
+        df_materiales_extra=data.get("df_materiales_extra"),
     )
 
     # =====================================================
-    # 3. COSTOS GENERALES
+    # 2. MATERIALES
     # =====================================================
-    costos = ejecutar_costos({
-        "df_resumen": df_materiales,
-        "df_estructuras_por_punto": data.get("df_estructuras"),
-        "df_costos_estructuras": df_costos_estructuras,
+    salida_materiales = ejecutar_materiales(entrada_materiales)
+
+    if not salida_materiales.ok:
+        return {
+            "ok": False,
+            "error": "Error en materiales",
+            "detalle": salida_materiales.errores,
+        }
+
+    # =====================================================
+    # 3. COSTOS (🔥 SOLO ORQUESTADOR)
+    # =====================================================
+    salida_costos = ejecutar_costos({
+        "df_resumen": salida_materiales.df_materiales,
+        "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
+        "df_estructuras": salida_materiales.df_estructuras,
+        "datos_proyecto": data.get("datos_proyecto"),
         "archivo_precios_materiales": data.get("archivo_materiales"),
     })
 
     # =====================================================
-    # 4. OUTPUT FINAL
+    # 4. OUTPUT FINAL LIMPIO
     # =====================================================
     return {
+        "ok": True,
+
         "materiales": salida_materiales,
-        "costos": costos,
-        "df_costos_estructuras": df_costos_estructuras,
+        "costos": salida_costos,
+
+        # 🔹 acceso rápido (para reportes)
+        "df_materiales": salida_materiales.df_materiales,
+        "df_materiales_por_punto": salida_materiales.df_materiales_por_punto,
+        "df_estructuras": salida_materiales.df_estructuras,
+        "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
     }
