@@ -80,6 +80,13 @@ def expandir_lista_codigos(texto: str):
 
     partes = _split_bloques(texto)
 
+    partes_expandido = []
+    for p in partes:
+        subpartes = p.split()  # ← CLAVE
+        partes_expandido.extend(subpartes)
+
+    partes = partes_expandido
+
     resultado = []
 
     for p in partes:
