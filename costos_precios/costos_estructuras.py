@@ -7,7 +7,6 @@ from typing import Dict, Optional
 from materiales.calculos.materiales_puntos import calcular_materiales_estructura
 from costos_precios.costos_materiales import calcular_costos_desde_resumen
 from costos_precios.costos_operativos import calcular_costos_operativos
-from costos_precios.precios_venta import calcular_precio_venta
 
 
 def calcular_costos_por_estructura(
