@@ -19,8 +19,9 @@ from interfaz.contratos import ResultadoProyecto
 from materiales.orquestador_materiales import ejecutar_materiales
 from materiales.modelos.entrada import EntradaMateriales
 
-# 🔥 NUEVO: COSTOS
+# 🔥 COSTOS
 from costos_precios.orquestador_costos import ejecutar_costos
+from core.costos_estructuras import calcular_costos_por_estructura
 
 # =========================
 # BASE
@@ -52,17 +53,18 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
     debug = {}
 
     # =====================================================
-    # 1. INPUT
+    # 1. VALIDACIÓN
     # =====================================================
-    _debug("INPUT", "entrada_proyecto", entrada_proyecto)
+    try:
+        entrada_proyecto.validar_costos()
+    except Exception as e:
+        return ResultadoProyecto(
+            ok=False,
+            errores=[str(e)],
+            debug={"fase": "validacion_costos"}
+        )
 
-    # =====================================================
-    # 2. VALIDACIÓN
-    # =====================================================
     errores = _validar_entrada(entrada_proyecto)
-
-    _debug("VALIDACION", "errores", errores)
-    _check("VALIDACION", "sin_errores", not errores, errores)
 
     if errores:
         return ResultadoProyecto(
@@ -72,23 +74,14 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         )
 
     # =====================================================
-    # 3. NORMALIZACIÓN OPCIONALES
+    # 2. NORMALIZACIÓN OPCIONALES
     # =====================================================
     df_cables, df_materiales_extra = _normalizar_opcionales(entrada_proyecto)
 
-    _debug("NORMALIZACION", "df_cables", df_cables)
-    _debug("NORMALIZACION", "df_materiales_extra", df_materiales_extra)
-
     # =====================================================
-    # 4. BASE DE DATOS
+    # 3. BASE DE DATOS
     # =====================================================
     base, catalogo, error_base = _cargar_base()
-
-    _debug("BASE", "base_keys", list(base.keys())[:10] if isinstance(base, dict) else None)
-    _debug("BASE", "catalogo", type(catalogo).__name__)
-
-    _check("BASE", "base_ok", base is not None)
-    _check("BASE", "catalogo_ok", catalogo is not None)
 
     if error_base:
         return ResultadoProyecto(
@@ -98,7 +91,7 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         )
 
     # =====================================================
-    # 5. BUILDER
+    # 4. BUILDER
     # =====================================================
     entrada_materiales, error_builder = _construir_entrada_materiales(
         entrada_proyecto,
@@ -106,9 +99,6 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         df_cables,
         df_materiales_extra
     )
-
-    _debug("BUILDER", "entrada_materiales", entrada_materiales)
-    _check("BUILDER", "builder_ok", entrada_materiales is not None)
 
     if error_builder:
         return ResultadoProyecto(
@@ -118,71 +108,83 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         )
 
     # =====================================================
-    # 6. EJECUCIÓN MATERIALES
+    # 5. EJECUCIÓN MATERIALES
     # =====================================================
     salida_materiales, error_calculo = _ejecutar_materiales_safe(
         entrada_materiales,
         catalogo
     )
 
-    _debug("CALCULO", "salida_materiales", salida_materiales)
-    _check("CALCULO", "salida_ok", salida_materiales is not None)
-
     if error_calculo:
         return ResultadoProyecto(
             ok=False,
             errores=[error_calculo],
-            debug={"fase": "calculo"}
+            debug={"fase": "calculo_materiales"}
         )
 
     # =====================================================
-    # 7. COSTOS
+    # 6. COSTOS POR ESTRUCTURA
     # =====================================================
     try:
 
-        df_resumen = salida_materiales.df_materiales
-        df_ep = salida_materiales.df_estructuras_por_punto
-        df_costos_estructuras = entrada_proyecto.df_costos_estructuras
-        if df_costos_estructuras is None:
-            raise ValueError("df_costos_estructuras no disponible en salida_materiales")
+        # 🔹 usar override si viene
+        if entrada_proyecto.df_costos_estructuras is not None:
+            df_costos_estructuras = entrada_proyecto.df_costos_estructuras
 
-        costos = ejecutar_costos({
-            "df_resumen": df_resumen,
-            "df_estructuras_por_punto": df_ep,
-            "df_costos_estructuras": df_costos_estructuras,
-            "archivo_precios_materiales": entrada_proyecto.ruta_materiales,
-        })
+        else:
+            df_costos_estructuras = calcular_costos_por_estructura(
+                archivo_materiales=entrada_proyecto.ruta_materiales,
+                conteo=salida_materiales.conteo_estructuras,
+                tension_ll=entrada_proyecto.tension,
+                calibre_mt=salida_materiales.calibre_mt,
+                tabla_conectores_mt=salida_materiales.tabla_conectores_mt,
 
-        _debug("COSTOS", "costos_keys", list(costos.keys()))
+                # 🔥 parámetros operativos
+                costo_cuadrilla_dia=entrada_proyecto.costo_cuadrilla_dia,
+                fraccion_jornada=entrada_proyecto.fraccion_jornada,
+                costo_equipos=entrada_proyecto.costo_equipos,
+                costo_logistica=entrada_proyecto.costo_logistica,
+                margen_utilidad=entrada_proyecto.margen_utilidad,
+            )
 
     except Exception as e:
         return ResultadoProyecto(
             ok=False,
-            errores=[f"Error en costos: {str(e)}"],
-            debug={"fase": "costos"}
+            errores=[f"Error en costos por estructura: {str(e)}"],
+            debug={"fase": "costos_estructura"}
+        )
+
+    # =====================================================
+    # 7. COSTOS POR PUNTO
+    # =====================================================
+    try:
+
+        costos = ejecutar_costos({
+            "df_resumen": salida_materiales.df_materiales,
+            "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
+            "df_costos_estructuras": df_costos_estructuras,
+            "archivo_precios_materiales": entrada_proyecto.ruta_materiales,
+        })
+
+    except Exception as e:
+        return ResultadoProyecto(
+            ok=False,
+            errores=[f"Error en costos por punto: {str(e)}"],
+            debug={"fase": "costos_punto"}
         )
 
     # =====================================================
     # 8. OUTPUT FINAL
     # =====================================================
-    debug["pipeline"] = {
-        "ok": salida_materiales.ok,
-        "errores": salida_materiales.errores,
-        "warnings": salida_materiales.warnings,
-    }
-
-    debug["materiales"] = salida_materiales.debug
     debug["costos"] = list(costos.keys())
 
-    _debug("OUTPUT", "resultado_final_ok", salida_materiales.ok)
-
     return ResultadoProyecto(
-        ok=salida_materiales.ok,
-        errores=salida_materiales.errores,
-        warnings=salida_materiales.warnings,
+        ok=True,
+        errores=[],
+        warnings=[],
         materiales=salida_materiales,
 
-        # 🔥 NUEVO BLOQUE
+        # 🔥 COSTOS COMPLETOS
         costos=costos,
 
         datos_proyecto=entrada_proyecto.__dict__,
@@ -203,8 +205,8 @@ def _validar_entrada(entrada: EntradaProyecto) -> list[str]:
     if entrada.df_estructuras is None or entrada.df_estructuras.empty:
         errores.append("No hay estructuras")
 
-    if not entrada.ruta_materiales:
-        errores.append("Ruta de materiales no definida")
+    if entrada.tension is None:
+        errores.append("Tensión no definida")
 
     return errores
 
@@ -253,12 +255,7 @@ def _construir_entrada_materiales(
 ):
 
     try:
-        tension = getattr(entrada_proyecto, "tension", None)
-
-        if tension is None:
-            raise ValueError("Tensión no definida")
-
-        tension = float(tension)
+        tension = float(entrada_proyecto.tension)
 
         df = entrada_proyecto.df_estructuras
 
