@@ -98,7 +98,6 @@ def expandir_lista_codigos(texto: str):
 # ==========================================================
 # CORE
 # ==========================================================
-
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
@@ -112,9 +111,10 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
     for idx, row in df.iterrows():
 
         # ==================================================
-        # PUNTO
+        # PUNTO ORIGINAL (fallback)
         # ==================================================
-        punto = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
+        punto_original = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
+        punto_original = str(punto_original).strip()
 
         # ==================================================
         # DETECTAR COLUMNA DE ESTRUCTURA
@@ -128,21 +128,24 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
                 estructura_raw = row.get(col)
                 break
 
-        # 🔴 DEBUG SI NO ENCUENTRA
         if estructura_raw is None:
             _debug(f"fila_{idx}_sin_estructura", dict(row))
             continue
 
         # ==================================================
-        # EXPANDIR
+        # EXPANDIR CÓDIGOS
         # ==================================================
         lista_codigos = expandir_lista_codigos(estructura_raw)
 
         _debug(f"fila_{idx}_codigos", lista_codigos)
 
         # ==================================================
-        # CREAR REGISTROS
+        # CLASIFICAR
         # ==================================================
+        poste = None
+        estructuras = []
+        otros = []
+
         for cod in lista_codigos:
 
             cod = limpiar_codigo(cod)
@@ -150,13 +153,25 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             if not cod:
                 continue
 
+            if cod.startswith("P-"):
+                poste = cod  # 👈 ESTE ES EL PUNTO REAL
+            else:
+                estructuras.append(cod)
+
+        # ==================================================
+        # DEFINIR PUNTO FINAL
+        # ==================================================
+        punto_final = poste if poste else punto_original
+
+        # ==================================================
+        # CREAR REGISTROS SOLO PARA ESTRUCTURAS
+        # ==================================================
+        for est in estructuras:
+
             registros.append({
-                "Punto": str(punto).strip(),
-
-                # 🔥 FIX CRÍTICO (NO TOCAR)
-                "codigodeestructura": cod,
-                "Estructura": cod,
-
+                "Punto": punto_final,              # 👈 POSTE REAL
+                "codigodeestructura": est,
+                "Estructura": est,
                 "cantidad": 1
             })
 
@@ -165,7 +180,6 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
     # ==================================================
     df_out = pd.DataFrame(registros)
 
-    # 🔥 DEBUG CLAVE (esto te dirá si funciona)
     _debug("output_columnas", list(df_out.columns))
     _debug("output_shape", df_out.shape)
 
