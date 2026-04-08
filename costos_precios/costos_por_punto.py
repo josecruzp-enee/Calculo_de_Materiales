@@ -1,3 +1,4 @@
+import pandas as pd
 def calcular_costos_por_punto(
     df_estructuras_por_punto: pd.DataFrame,
     df_costos_estructuras: pd.DataFrame,
