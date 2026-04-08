@@ -87,7 +87,7 @@ def _merge_materiales(df_a, df_b):
 def ejecutar_materiales(
     entrada: EntradaMateriales,
     catalogo: Optional[Dict[str, Any]] = None,
-) -> SalidaMateriales:
+) -> ResultadoMateriales:
 
     errores: List[str] = []
     warnings: List[str] = []
