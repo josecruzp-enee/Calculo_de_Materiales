@@ -57,6 +57,9 @@ def _add_file(archivos, errores, nombre, contenido):
 # =========================================================
 # 📄 GENERADORES
 # =========================================================
+df_estructuras.columns = df_estructuras.columns.str.lower()
+
+
 
 def _gen_estructuras_global(df, nombre):
     return generar_pdf_estructuras_global(df, nombre) if df is not None else None
