@@ -81,13 +81,15 @@ def _split_bloques(texto: str):
     if texto is None:
         return []
 
-    # 🔥 AutoCAD salto real
-    texto = texto.replace("\\P", "\n")
+    # 🔥 Unificar TODOS los separadores a salto de línea
+    texto = texto.replace("\\P", "\n")   # AutoCAD
+    texto = texto.replace(",", "\n")     # 🔥 CLAVE (tu caso actual)
+    texto = texto.replace(";", "\n")
+    texto = texto.replace("|", "\n")
 
-    # separadores secundarios
-    texto = texto.replace(";", "\n").replace("|", "\n")
+    # limpiar duplicados
+    texto = re.sub(r"\n+", "\n", texto)
 
-    # 🔥 dividir SOLO por línea
     partes = texto.split("\n")
 
     return [p.strip() for p in partes if p.strip()]
