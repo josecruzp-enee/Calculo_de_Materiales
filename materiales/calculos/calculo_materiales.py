@@ -181,6 +181,7 @@ def calcular_materiales_proyecto(
     return {
         "ok": True,
         "df_materiales": df_resumen,
+        "df_por_punto": df_detalle,
         "df_materiales_detalle": df_detalle,
         "conteo_estructuras": conteo,
         "estructuras_por_punto": estructuras_por_punto,
