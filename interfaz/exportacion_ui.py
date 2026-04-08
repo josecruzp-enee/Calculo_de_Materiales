@@ -153,20 +153,24 @@ def seccion_exportacion():
     # GENERAR REPORTES
     # =====================================================
     if st.button("📄 Generar reportes"):
-        st.write("FUNC:", generar_reportes)
-        st.write("MODULO:", generar_reportes.__module__)
-        st.write("FILE:", generar_reportes.__code__.co_filename)
-        
+
         with st.spinner("Generando archivos..."):
 
             try:
-                # 🔥 ADAPTADOR CORRECTO
+                # 🔥 FIX REAL: usar datos correctos
+                mat = resultado.materiales
+
                 data_export = {
-                    "df_estructuras": getattr(resultado, "df_estructuras", None),
-                    "df_materiales": getattr(resultado, "df_materiales", None),
-                    "df_resumen": getattr(resultado, "df_resumen", None),
-                    "df_por_punto": getattr(resultado, "df_por_punto", None),
+                    "df_estructuras": st.session_state.get("df_estructuras"),  # ✅ FIX
+                    "df_materiales": mat.df_materiales,                        # ✅ OK
+                    "df_resumen": mat.df_materiales,                           # ✅ fallback
+                    "df_por_punto": getattr(mat, "df_materiales_por_punto", None),  # ✅ FIX
                 }
+
+                # 🔍 DEBUG (opcional pero recomendado)
+                st.write("DEBUG EXPORT:", {
+                    k: type(v).__name__ for k, v in data_export.items()
+                })
 
                 out = generar_reportes(data_export)
 
