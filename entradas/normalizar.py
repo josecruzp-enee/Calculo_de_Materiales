@@ -40,36 +40,25 @@ def limpiar_codigo(codigo: str) -> str:
 
 
 # ==========================================================
-# 🔥 NUEVO: RESOLUCIÓN DE CATÁLOGO
+# 🔥 RESOLUCIÓN DE CATÁLOGO
 # ==========================================================
 def resolver_codigo_catalogo(codigo: str) -> str:
-    """
-    Convierte códigos incompletos o ambiguos en códigos válidos de catálogo.
-    Esta función es CRÍTICA para evitar errores de lookup en materiales.
-    """
     codigo = codigo.strip().upper()
 
     # =========================================
-    # 🔥 LUMINARIAS (LL)
+    # LUMINARIAS
     # =========================================
     if codigo.startswith("LL-"):
-
-        # ya viene completo (ej: LL-1-50W)
         if re.search(r"LL-\d+-\d+W", codigo):
             return codigo
-
-        # viene incompleto (ej: LL-1)
         return f"{codigo}-50W"
-
-    # =========================================
-    # (FUTURO) OTROS CASOS
-    # =========================================
-    # if codigo.startswith("TS-"):
-    #     ...
 
     return codigo
 
 
+# ==========================================================
+# EXPANSIÓN
+# ==========================================================
 def _expandir_multiplicador(token: str):
 
     if not token:
@@ -84,18 +73,29 @@ def _expandir_multiplicador(token: str):
     return [token]
 
 
+# ==========================================================
+# 🔥 SPLIT CORRECTO PARA DXF
+# ==========================================================
 def _split_bloques(texto: str):
 
     if texto is None:
         return []
 
-    texto = texto.replace(";", ",").replace("|", ",")
+    # 🔥 AutoCAD salto real
+    texto = texto.replace("\\P", "\n")
 
-    partes = re.split(r"[,\n]+", texto)
+    # separadores secundarios
+    texto = texto.replace(";", "\n").replace("|", "\n")
+
+    # 🔥 dividir SOLO por línea
+    partes = texto.split("\n")
 
     return [p.strip() for p in partes if p.strip()]
 
 
+# ==========================================================
+# EXPANDIR LISTA
+# ==========================================================
 def expandir_lista_codigos(texto: str):
 
     _debug("raw_texto", texto)
@@ -107,26 +107,29 @@ def expandir_lista_codigos(texto: str):
 
     texto = re.sub(r"\{[^:]*:", "", texto)
     texto = texto.replace("{", "").replace("}", "")
-    texto = texto.replace("\\P", ",")
+    texto = texto.replace("\\P", "\n")
 
     partes = _split_bloques(texto)
 
-    partes_expandido = []
-    for p in partes:
-        subpartes = p.split()
-        partes_expandido.extend(subpartes)
-
-    partes = partes_expandido
-
+    # 🔥 CLAVE: NO dividir por espacios
     resultado = []
 
     for p in partes:
+
         tokens = _expandir_multiplicador(p)
 
         for t in tokens:
             codigo = limpiar_codigo(t)
-            if codigo:
-                resultado.append(codigo)
+
+            if not codigo:
+                continue
+
+            # 🔥 FILTRO ANTI-BASURA (CS-32 fantasma)
+            if codigo.startswith("CS-") and codigo not in {"CS-1", "CS-2"}:
+                _debug("codigo_descartado", codigo)
+                continue
+
+            resultado.append(codigo)
 
     _debug("codigos_expandidos", resultado)
 
@@ -149,13 +152,13 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
     for idx, row in df.iterrows():
 
         # ==================================================
-        # PUNTO ORIGINAL (fallback)
+        # PUNTO ORIGINAL
         # ==================================================
         punto_original = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
         punto_original = str(punto_original).strip()
 
         # ==================================================
-        # DETECTAR COLUMNA DE ESTRUCTURA
+        # DETECTAR COLUMNA
         # ==================================================
         estructura_raw = None
 
@@ -171,7 +174,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         # ==================================================
-        # EXPANDIR CÓDIGOS
+        # EXPANDIR
         # ==================================================
         lista_codigos = expandir_lista_codigos(estructura_raw)
 
@@ -184,10 +187,6 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         estructuras = []
 
         for cod in lista_codigos:
-            cod = limpiar_codigo(cod)
-
-            if not cod:
-                continue
 
             if re.match(r"^P-?\d+$", cod):
                 numero = re.findall(r"\d+", cod)[0]
@@ -196,21 +195,19 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
                 estructuras.append(cod)
 
         # ==================================================
-        # DEFINIR PUNTO FINAL
+        # PUNTO FINAL
         # ==================================================
         punto_final = poste if poste else punto_original
 
         # ==================================================
-        # 🔥 RESOLUCIÓN FINAL DE CÓDIGOS
+        # RESOLUCIÓN FINAL
         # ==================================================
         for est in estructuras:
 
-            est_limpio = limpiar_codigo(est)
-            est_final = resolver_codigo_catalogo(est_limpio)
+            est_final = resolver_codigo_catalogo(est)
 
             _debug("resolver_codigo", {
                 "original": est,
-                "limpio": est_limpio,
                 "final": est_final
             })
 
@@ -222,7 +219,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             })
 
     # ==================================================
-    # DATAFRAME FINAL
+    # OUTPUT
     # ==================================================
     df_out = pd.DataFrame(registros)
 
@@ -241,7 +238,6 @@ def normalizar_estructuras(df: pd.DataFrame):
 
     try:
         df_norm = _convertir_a_largo(df)
-
         return df_norm, [], []
 
     except Exception as e:
