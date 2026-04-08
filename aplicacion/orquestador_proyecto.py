@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Dict, Any
-
 # =====================================================
 # ORQUESTADORES
 # =====================================================
@@ -13,22 +11,33 @@ from costos_precios.orquestador_costos import ejecutar_costos
 # CONTRATOS
 # =====================================================
 from materiales.modelos.entrada import EntradaMateriales
+from interfaz.contratos import SalidaInterfaz
 
 
-def ejecutar_proyecto(data: Dict[str, Any]) -> Dict[str, Any]:
+def ejecutar_proyecto(entrada: SalidaInterfaz):
 
-    if not isinstance(data, dict):
-        raise TypeError("data debe ser dict")
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
+    if not isinstance(entrada, SalidaInterfaz):
+        raise TypeError("entrada debe ser SalidaInterfaz")
+
+    if not entrada.ok:
+        return {
+            "ok": False,
+            "error": "Error en interfaz",
+            "detalle": entrada.errores,
+        }
 
     # =====================================================
     # 1. ADAPTAR INPUT → MODELO FUERTE
     # =====================================================
     entrada_materiales = EntradaMateriales(
-        estructuras_df=data.get("df_estructuras"),
-        tension=data.get("tension"),
-        datos_proyecto=data.get("datos_proyecto"),
-        df_cables=data.get("df_cables"),
-        df_materiales_extra=data.get("df_materiales_extra"),
+        estructuras_df=entrada.data_entrada,
+        tension=entrada.datos_proyecto.get("tension"),
+        datos_proyecto=entrada.datos_proyecto,
+        df_cables=entrada.df_cables,
+        df_materiales_extra=entrada.df_materiales_extra,
     )
 
     # =====================================================
@@ -44,18 +53,18 @@ def ejecutar_proyecto(data: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     # =====================================================
-    # 3. COSTOS (🔥 SOLO ORQUESTADOR)
+    # 3. COSTOS (se mantiene dict por compatibilidad)
     # =====================================================
     salida_costos = ejecutar_costos({
         "df_resumen": salida_materiales.df_materiales,
         "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
         "df_estructuras": salida_materiales.df_estructuras,
-        "datos_proyecto": data.get("datos_proyecto"),
-        "archivo_precios_materiales": data.get("archivo_materiales"),
+        "datos_proyecto": entrada.datos_proyecto,
+        "archivo_precios_materiales": None,  # ajusta si usas archivo real
     })
 
     # =====================================================
-    # 4. OUTPUT FINAL LIMPIO
+    # 4. OUTPUT FINAL
     # =====================================================
     return {
         "ok": True,
@@ -63,7 +72,7 @@ def ejecutar_proyecto(data: Dict[str, Any]) -> Dict[str, Any]:
         "materiales": salida_materiales,
         "costos": salida_costos,
 
-        # 🔹 acceso rápido (para reportes)
+        # 🔹 accesos rápidos (para reportes/UI)
         "df_materiales": salida_materiales.df_materiales,
         "df_materiales_por_punto": salida_materiales.df_materiales_por_punto,
         "df_estructuras": salida_materiales.df_estructuras,
