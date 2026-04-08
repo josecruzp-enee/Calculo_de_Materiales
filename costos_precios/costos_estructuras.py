@@ -1,7 +1,21 @@
+# -*- coding: utf-8 -*-
+
+from __future__ import annotations
+
+import pandas as pd
+from typing import Dict, Optional
+
+# 🔥 IMPORTS CORRECTOS (CRÍTICO)
+from materiales.calculos.calculo_estructura import calcular_materiales_estructura
+from costos_precios.costos_materiales import calcular_costos_desde_resumen
+
 from costos.costos_operativos import calcular_costos_operativos
 from costos.precios_venta import calcular_precio_venta
 
 
+# =========================================================
+# COSTOS POR ESTRUCTURA
+# =========================================================
 def calcular_costos_por_estructura(
     *,
     archivo_materiales: str,
@@ -11,7 +25,7 @@ def calcular_costos_por_estructura(
     tabla_conectores_mt: pd.DataFrame,
     df_indice: Optional[pd.DataFrame] = None,
 
-    # 🔥 NUEVOS PARÁMETROS
+    # 🔥 PARÁMETROS OPERATIVOS
     costo_cuadrilla_dia: float = 1250,
     fraccion_jornada: float = 1/16,
     costo_equipos: float = 0.0,
@@ -36,14 +50,17 @@ def calcular_costos_por_estructura(
         # -------------------------------------------------
         # 1) MATERIALES UNITARIOS
         # -------------------------------------------------
-        df_mat = calcular_materiales_estructura(
-            archivo_materiales,
-            cod,
-            1,
-            tension_ll,
-            calibre_mt,
-            tabla_conectores_mt,
-        )
+        try:
+            df_mat = calcular_materiales_estructura(
+                archivo_materiales,
+                cod,
+                1,
+                tension_ll,
+                calibre_mt,
+                tabla_conectores_mt,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Error materiales estructura {cod}: {e}")
 
         if df_mat is None or df_mat.empty:
             costo_material = 0.0
@@ -60,7 +77,7 @@ def calcular_costos_por_estructura(
             )
 
         # -------------------------------------------------
-        # 2) COSTOS OPERATIVOS (por estructura)
+        # 2) COSTOS OPERATIVOS
         # -------------------------------------------------
         costos_op = calcular_costos_operativos(
             costo_cuadrilla_dia=costo_cuadrilla_dia,
@@ -87,6 +104,12 @@ def calcular_costos_por_estructura(
         precio_unitario = venta["precio_venta"]
 
         # -------------------------------------------------
+        # VALIDACIÓN FUERTE (IMPORTANTE)
+        # -------------------------------------------------
+        if precio_unitario <= 0:
+            raise ValueError(f"Estructura sin precio válido: {cod}")
+
+        # -------------------------------------------------
         # RESULTADO
         # -------------------------------------------------
         filas.append({
@@ -100,6 +123,6 @@ def calcular_costos_por_estructura(
         })
 
     if not filas:
-        return pd.DataFrame()
+        raise ValueError("No se generaron costos por estructura")
 
     return pd.DataFrame(filas).sort_values("codigodeestructura").reset_index(drop=True)
