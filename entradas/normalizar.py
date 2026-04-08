@@ -1,97 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import annotations
-
-import pandas as pd
-from ayuda.debug import debug_guardar
-from materiales.auxiliares.materiales_aux import (
-    expandir_lista_codigos,
-    limpiar_codigo,
-)
-import re
-
-# ==========================================================
-# API PRINCIPAL
-# ==========================================================
-def normalizar_estructuras(df: pd.DataFrame):
-
-    if df is None or df.empty:
-        return (
-            pd.DataFrame(columns=["Punto", "Estructura", "Cantidad"]),
-            ["Entrada vacía"],
-            []
-        )
-
-    # ======================================================
-    # FORMATO
-    # ======================================================
-    if _es_formato_largo(df):
-        df_base = df.copy()
-    else:
-        df_base = _convertir_a_largo(df)
-
-    if df_base.empty:
-        return df_base, ["No se pudo normalizar"], []
-
-    debug_guardar("ANTES_NORMALIZAR", df.copy())
-
-    # ======================================================
-    # LIMPIEZA
-    # ======================================================
-    df_base.columns = df_base.columns.str.strip().str.lower()
-
-    if "punto" not in df_base.columns:
-        return df_base, ["Falta columna Punto"], []
-
-    if "codigodeestructura" not in df_base.columns:
-        return df_base, ["Falta columna Estructura"], []
-
-    df_base["punto"] = df_base["punto"].astype(str).str.strip()
-    df_base["codigodeestructura"] = df_base["codigodeestructura"].astype(str).str.strip()
-
-    # ======================================================
-    # AGRUPACIÓN
-    # ======================================================
-    df_final = (
-        df_base
-        .groupby(["punto", "codigodeestructura"], as_index=False)
-        .size()
-        .rename(columns={"size": "cantidad"})
-    )
-
-    # 🔥 DEBUG CORRECTO (ya existe df_final)
-    debug_guardar("DESPUES_NORMALIZAR", df_final.copy())
-
-    # ======================================================
-    # CONTRATO
-    # ======================================================
-    df_final = df_final.rename(columns={
-        "punto": "Punto",
-        "codigodeestructura": "Estructura",
-        "cantidad": "Cantidad"
-    })
-
-    # ======================================================
-    # TIPOS
-    # ======================================================
-    df_final["Punto"] = df_final["Punto"].astype(str)
-    df_final["Estructura"] = df_final["Estructura"].astype(str)
-    df_final["Cantidad"] = pd.to_numeric(
-        df_final["Cantidad"], errors="coerce"
-    ).fillna(0)
-
-    return df_final, [], []
-
-# ==========================================================
-# DETECCIÓN DE FORMATO
-# ==========================================================
-def _es_formato_largo(df: pd.DataFrame) -> bool:
-    cols = [c.lower().strip() for c in df.columns]
-    return "punto" in cols and "codigodeestructura" in cols
-
-
-# ==========================================================
-# CONVERSIÓN A FORMATO LARGO
-# ==========================================================
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
@@ -114,35 +20,40 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         lista_codigos = expandir_lista_codigos(estructura_raw)
+
         debug_guardar("RAW_ESTRUCTURA", estructura_raw)
         debug_guardar("LISTA_CODIGOS", lista_codigos)
-        for cod in lista_codigos:
 
-            cod = limpiar_codigo(cod)
+        poste_detectado = None  # 🔥 CLAVE
+
+        for raw in lista_codigos:
+
+            if not raw:
+                continue
+
+            # =========================================
+            # 🔥 DETECTAR POSTE (ANTES DE LIMPIAR)
+            # =========================================
+            if _es_poste(raw):
+                poste_detectado = limpiar_codigo(raw)
+                continue
+
+            cod = limpiar_codigo(raw)
 
             if not cod:
                 continue
 
-            # ======================================================
-            # 🔥 FILTRO CRÍTICO (AQUÍ ESTABA EL PROBLEMA)
-            # ======================================================
-
-            # ❌ eliminar multiplicadores tipo 3X
+            # ❌ eliminar multiplicadores basura
             if re.match(r"^\d+X$", cod):
-                continue
-
-            # ❌ eliminar puntos tipo P-01
-            if re.match(r"^P-\d+$", cod):
                 continue
 
             # ❌ eliminar luminaria incompleta
             if cod == "LL-1":
                 continue
 
-            # ======================================================
-
             registros.append({
                 "punto": str(punto).strip(),
+                "poste": poste_detectado,   # 🔥 NUEVO
                 "codigodeestructura": cod,
                 "cantidad": 1
             })
