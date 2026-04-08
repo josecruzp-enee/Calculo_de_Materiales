@@ -96,9 +96,9 @@ def calcular_materiales_proyecto(
 ) -> dict:
 
     # =====================================================
-    # 🔷 DEBUG ENTRADA
+    # DEBUG INPUT
     # =====================================================
-    debug_guardar("calc_materiales_input", {
+    debug_guardar("CALCULO::input", {
         "columnas": None if df_estructuras is None else list(df_estructuras.columns),
         "filas": None if df_estructuras is None else len(df_estructuras),
         "tension": tension,
@@ -106,7 +106,7 @@ def calcular_materiales_proyecto(
     })
 
     # =====================================================
-    # VALIDACIONES INICIALES
+    # VALIDACIONES
     # =====================================================
     try:
         _validar_df_estructuras(df_estructuras)
@@ -116,14 +116,11 @@ def calcular_materiales_proyecto(
             raise ValueError("tension no válida")
 
     except Exception as e:
-        debug_guardar("calc_materiales_error_validacion", {
-            "error": str(e),
-            "columnas": None if df_estructuras is None else list(df_estructuras.columns)
-        })
+        debug_guardar("CALCULO::error_validacion", str(e))
         raise
 
     # =====================================================
-    # CÁLCULO REAL
+    # CÁLCULO
     # =====================================================
     try:
         df_detalle = calcular_materiales_por_punto(
@@ -134,15 +131,13 @@ def calcular_materiales_proyecto(
             tabla_conectores_mt=tabla_conectores_mt
         )
 
-        debug_guardar("calc_materiales_detalle", {
+        debug_guardar("CALCULO::detalle", {
             "rows": len(df_detalle),
             "columns": list(df_detalle.columns)
         })
 
     except Exception as e:
-        debug_guardar("calc_materiales_error_calculo", {
-            "error": str(e)
-        })
+        debug_guardar("CALCULO::error_calculo", str(e))
         raise
 
     # =====================================================
@@ -151,10 +146,7 @@ def calcular_materiales_proyecto(
     try:
         _validar_df_salida(df_detalle)
     except Exception as e:
-        debug_guardar("calc_materiales_error_detalle", {
-            "error": str(e),
-            "columns": list(df_detalle.columns) if df_detalle is not None else None
-        })
+        debug_guardar("CALCULO::error_detalle", str(e))
         raise
 
     # =====================================================
@@ -162,7 +154,7 @@ def calcular_materiales_proyecto(
     # =====================================================
     df_resumen = _consolidar(df_detalle)
 
-    debug_guardar("calc_materiales_resumen", {
+    debug_guardar("CALCULO::resumen", {
         "rows": len(df_resumen),
         "columns": list(df_resumen.columns)
     })
@@ -173,9 +165,7 @@ def calcular_materiales_proyecto(
     try:
         _validar_df_salida(df_resumen)
     except Exception as e:
-        debug_guardar("calc_materiales_error_final", {
-            "error": str(e)
-        })
+        debug_guardar("CALCULO::error_final", str(e))
         raise
 
     # =====================================================
@@ -183,10 +173,7 @@ def calcular_materiales_proyecto(
     # =====================================================
     conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
 
-    debug_guardar("calc_materiales_conteo", {
-        "n_estructuras": len(conteo) if conteo is not None else None
-    })
-    debug_guardar("df_materiales_final", df_final)
+    debug_guardar("CALCULO::conteo", len(conteo))
 
     # =====================================================
     # SALIDA
