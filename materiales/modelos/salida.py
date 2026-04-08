@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass, field
 import pandas as pd
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
@@ -9,28 +9,45 @@ COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 @dataclass(slots=True)
 class SalidaMateriales:
 
+    # ======================================================
+    # CONTROL
+    # ======================================================
     ok: bool
 
-    # 🔹 PRINCIPAL
+    errores: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    # ======================================================
+    # RESULTADOS MATERIALES
+    # ======================================================
     df_materiales: Optional[pd.DataFrame] = None
     df_materiales_por_punto: Optional[pd.DataFrame] = None
 
-    # 🔹 NUEVO (ESTRUCTURAS)
+    # ======================================================
+    # RESULTADOS ESTRUCTURAS (parte del dominio)
+    # ======================================================
     df_estructuras: Optional[pd.DataFrame] = None
     df_estructuras_por_punto: Optional[pd.DataFrame] = None
     descripcion_estructuras: Optional[Dict[str, str]] = None
-    datos_proyecto: Optional[Dict] = None
-    debug: Optional[Dict] = None
 
-    # 🔹 META
-    errores: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    # ======================================================
+    # CONTEXTO
+    # ======================================================
+    datos_proyecto: Optional[Dict[str, Any]] = None
+
+    # ======================================================
+    # DEBUG
+    # ======================================================
+    debug: Optional[Dict[str, Any]] = None
 
     # ======================================================
     # VALIDACIÓN
     # ======================================================
     def __post_init__(self):
 
+        # --------------------------
+        # CASO ERROR
+        # --------------------------
         if not self.ok:
             if not self.errores:
                 raise ValueError("ok=False sin errores")
@@ -86,6 +103,9 @@ class SalidaMateriales:
             if not isinstance(self.descripcion_estructuras, dict):
                 raise TypeError("descripcion_estructuras debe ser dict")
 
+        # --------------------------
+        # CONSISTENCIA FINAL
+        # --------------------------
         if self.errores:
             raise ValueError("ok=True pero hay errores")
 
@@ -96,4 +116,4 @@ class SalidaMateriales:
         return len(self.warnings) > 0
 
     def cantidad_total(self) -> float:
-        return float(self.df_materiales["Cantidad"].sum()) if self.df_materiales is not None else 0.0
+        return float(self.df_materiales["Cantidad"].sum())
