@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-import pandas as pd
+from typing import Optional, Dict, Any
 
 @dataclass
 class EntradaProyecto:
@@ -7,6 +6,7 @@ class EntradaProyecto:
     df_cables: pd.DataFrame | None = None
     df_materiales_extra: pd.DataFrame | None = None
     ruta_materiales: str | None = None
-
-    # 🔥 AGREGA ESTO
     tension: float | None = None
+
+    # 👇 ESTE ES EL FIX
+    datos_proyecto: Optional[Dict[str, Any]] = None
