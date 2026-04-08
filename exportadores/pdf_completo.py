@@ -8,7 +8,7 @@ from reportlab.platypus import (
 from reportlab.lib.pagesizes import letter
 
 from exportadores.pdf_base import styles, fondo_pagina
-from exportadores.seccion_presupuesto import generar_seccion_presupuesto
+from exportadores.cotizacion import generar_seccion_presupuesto
 
 
 def generar_pdf_completo(
