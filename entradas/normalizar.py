@@ -98,6 +98,7 @@ def expandir_lista_codigos(texto: str):
 # ==========================================================
 # CORE
 # ==========================================================
+
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
@@ -110,11 +111,16 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     for idx, row in df.iterrows():
 
+        # ==================================================
+        # PUNTO
+        # ==================================================
         punto = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
 
+        # ==================================================
+        # DETECTAR COLUMNA DE ESTRUCTURA
+        # ==================================================
         estructura_raw = None
 
-        # 🔥 detectar columna
         for col in df.columns:
             col_norm = col.lower().replace(" ", "")
 
@@ -122,13 +128,21 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
                 estructura_raw = row.get(col)
                 break
 
+        # 🔴 DEBUG SI NO ENCUENTRA
         if estructura_raw is None:
+            _debug(f"fila_{idx}_sin_estructura", dict(row))
             continue
 
+        # ==================================================
+        # EXPANDIR
+        # ==================================================
         lista_codigos = expandir_lista_codigos(estructura_raw)
 
         _debug(f"fila_{idx}_codigos", lista_codigos)
 
+        # ==================================================
+        # CREAR REGISTROS
+        # ==================================================
         for cod in lista_codigos:
 
             cod = limpiar_codigo(cod)
@@ -139,20 +153,25 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             registros.append({
                 "punto": str(punto).strip(),
 
-                # 🔥 CLAVE: doble columna para compatibilidad
+                # 🔥 FIX CRÍTICO (NO TOCAR)
                 "codigodeestructura": cod,
                 "Estructura": cod,
 
                 "cantidad": 1
             })
 
+    # ==================================================
+    # DATAFRAME FINAL
+    # ==================================================
     df_out = pd.DataFrame(registros)
 
+    # 🔥 DEBUG CLAVE (esto te dirá si funciona)
+    _debug("output_columnas", list(df_out.columns))
     _debug("output_shape", df_out.shape)
+
     _check("output_no_vacio", not df_out.empty, len(df_out))
 
     return df_out
-
 
 # ==========================================================
 # FUNCIÓN PÚBLICA
