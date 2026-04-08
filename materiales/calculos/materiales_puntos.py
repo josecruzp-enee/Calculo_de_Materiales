@@ -7,7 +7,6 @@ from collections import Counter
 from entradas.normalizar import expandir_lista_codigos, limpiar_codigo
 from materiales.calculos.lector_materiales import leer_hoja_materiales
 
-
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
@@ -39,40 +38,7 @@ def _validar_df(df: pd.DataFrame) -> None:
 
 
 # ==========================================================
-# LIMPIEZA SIMPLE
-# ==========================================================
-def _limpiar_str(v) -> str:
-    if pd.isna(v):
-        return ""
-    return str(v).strip()
-
-
-# ==========================================================
-# NORMALIZAR UNA ESTRUCTURA
-# ==========================================================
-def _normalizar_estructura(e: str) -> str | None:
-
-    e = _limpiar_str(e)
-
-    if not e or e.lower() in {"nan", "none", "0"}:
-        return None
-
-    codigos = expandir_lista_codigos(e)
-
-    if not codigos:
-        return None
-
-    # solo tomamos el primero (una estructura por iteración)
-    c = limpiar_codigo(codigos[0])
-
-    if not c:
-        return None
-
-    return c
-
-
-# ==========================================================
-# CONTEO DE ESTRUCTURAS (CORREGIDO)
+# CONTEO DE ESTRUCTURAS
 # ==========================================================
 def extraer_conteo_estructuras(df_estructuras):
 
@@ -84,14 +50,13 @@ def extraer_conteo_estructuras(df_estructuras):
 
     for _, row in df_estructuras.iterrows():
 
-        punto = _limpiar_str(row.get("Punto")) or "Punto"
-        estructuras_raw = _limpiar_str(row.get("Estructura"))
+        punto = str(row.get("Punto") or "").strip() or "Punto"
+        estructuras_raw = str(row.get("Estructura") or "").strip()
 
         if not estructuras_raw:
             estructuras_por_punto[punto] = []
             continue
 
-        # 🔥 USAR PARSER BUENO
         codigos = expandir_lista_codigos(estructuras_raw)
 
         lista_limpia = []
@@ -125,7 +90,7 @@ def calcular_materiales_estructura(
     tabla_conectores_mt=None,
 ):
 
-    estructura = _limpiar_str(estructura).upper()
+    estructura = str(estructura or "").strip().upper()
 
     if not estructura:
         raise ValueError("Estructura vacía")
@@ -171,10 +136,12 @@ def calcular_materiales_estructura(
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
     )
+
     from ayuda.debug import debug_guardar
 
     debug_guardar(f"estructura_{estructura}", estructura)
     debug_guardar(f"df_estructura_{estructura}", df_filtrado)
+
     return df_filtrado[COLUMNAS_STD]
 
 
