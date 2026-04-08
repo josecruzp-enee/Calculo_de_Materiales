@@ -10,24 +10,11 @@ from costos_precios.costos_materiales import calcular_costos_desde_resumen
 from costos_precios.costos_por_punto import calcular_costos_por_punto
 
 
-
-
 def ejecutar_costos(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Orquestador de dominio para costos.
-
-    Flujo:
-        1. Costos materiales
-        2. Costos por punto
-        3. Generación de presupuesto (df limpio)
-
-    OUTPUT:
-        dict con todos los resultados consolidados
     """
 
-    # =====================================================
-    # VALIDACIÓN INPUT
-    # =====================================================
     if not isinstance(data, dict):
         raise TypeError("data debe ser dict")
 
@@ -66,7 +53,7 @@ def ejecutar_costos(data: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # =====================================================
-    # 3. CONSOLIDACIÓN BASE
+    # 3. CONSOLIDACIÓN
     # =====================================================
     resultados = {
         "df_costos_materiales": df_costos_materiales,
@@ -76,23 +63,4 @@ def ejecutar_costos(data: Dict[str, Any]) -> Dict[str, Any]:
         "df_resumen_precios_punto": df_resumen_precios,
     }
 
-    # =====================================================
-    # 4. PRESUPUESTO (🔥 DOMINIO)
-    # =====================================================
-    try:
-        df_presupuesto = generar_presupuesto_df(resultados)
-    except Exception as e:
-        raise ValueError(f"Error generando presupuesto: {e}")
-
-    resultados["df_presupuesto"] = df_presupuesto
-
-    # =====================================================
-    # 5. VALIDACIÓN FINAL (opcional pero profesional)
-    # =====================================================
-    if df_presupuesto is None:
-        raise ValueError("df_presupuesto no fue generado")
-
-    # =====================================================
-    # OUTPUT FINAL
-    # =====================================================
     return resultados
