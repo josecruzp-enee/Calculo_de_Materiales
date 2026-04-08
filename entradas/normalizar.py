@@ -124,6 +124,7 @@ def _es_poste(codigo: str) -> bool:
 # ==========================================================
 # CONVERSIÓN A FORMATO LARGO (CORE)
 # ==========================================================
+
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
@@ -135,15 +136,32 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
         punto = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
 
+        # =====================================================
+        # DETECCIÓN ROBUSTA DE COLUMNA DE ESTRUCTURA
+        # =====================================================
         estructura_raw = None
+
+        # 1. Búsqueda directa por nombre
         for col in df.columns:
-            if col.lower() in ["estructura", "estructuras", "codigodeestructura"]:
+            col_norm = col.lower().replace(" ", "")
+
+            if col_norm in ["estructura", "estructuras", "codigodeestructura"]:
                 estructura_raw = row.get(col)
                 break
+
+        # 2. Fallback → primera columna tipo texto
+        if estructura_raw is None:
+            for col in df.columns:
+                if df[col].dtype == object:
+                    estructura_raw = row.get(col)
+                    break
 
         if estructura_raw is None:
             continue
 
+        # =====================================================
+        # EXPANSIÓN DE CÓDIGOS
+        # =====================================================
         lista_codigos = expandir_lista_codigos(estructura_raw)
 
         poste_detectado = None
@@ -176,6 +194,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             })
 
     return pd.DataFrame(registros)
+
 
 
 # ==========================================================
