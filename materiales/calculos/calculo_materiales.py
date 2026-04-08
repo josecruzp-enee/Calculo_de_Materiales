@@ -133,4 +133,5 @@ def calcular_materiales_proyecto(
     return {
         "ok": True,
         "df_materiales": df_global
+        "df_materiales_por_punto": df_detalle
     }
