@@ -19,6 +19,9 @@ from interfaz.contratos import ResultadoProyecto
 from materiales.orquestador_materiales import ejecutar_materiales
 from materiales.modelos.entrada import EntradaMateriales
 
+# 🔥 NUEVO: COSTOS
+from costos_precios.orquestador_costos import ejecutar_costos
+
 # =========================
 # BASE
 # =========================
@@ -133,7 +136,40 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         )
 
     # =====================================================
-    # 7. OUTPUT FINAL
+    # 7. COSTOS
+    # =====================================================
+    try:
+
+        df_resumen = salida_materiales.df_resumen
+        df_ep = salida_materiales.df_estructuras_por_punto
+
+        df_costos_estructuras = getattr(
+            salida_materiales,
+            "df_costos_estructuras",
+            None
+        )
+
+        if df_costos_estructuras is None:
+            raise ValueError("df_costos_estructuras no disponible en salida_materiales")
+
+        costos = ejecutar_costos({
+            "df_resumen": df_resumen,
+            "df_estructuras_por_punto": df_ep,
+            "df_costos_estructuras": df_costos_estructuras,
+            "archivo_precios_materiales": entrada_proyecto.ruta_materiales,
+        })
+
+        _debug("COSTOS", "costos_keys", list(costos.keys()))
+
+    except Exception as e:
+        return ResultadoProyecto(
+            ok=False,
+            errores=[f"Error en costos: {str(e)}"],
+            debug={"fase": "costos"}
+        )
+
+    # =====================================================
+    # 8. OUTPUT FINAL
     # =====================================================
     debug["pipeline"] = {
         "ok": salida_materiales.ok,
@@ -142,6 +178,7 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
     }
 
     debug["materiales"] = salida_materiales.debug
+    debug["costos"] = list(costos.keys())
 
     _debug("OUTPUT", "resultado_final_ok", salida_materiales.ok)
 
@@ -150,6 +187,10 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         errores=salida_materiales.errores,
         warnings=salida_materiales.warnings,
         materiales=salida_materiales,
+
+        # 🔥 NUEVO BLOQUE
+        costos=costos,
+
         datos_proyecto=entrada_proyecto.__dict__,
         debug=debug
     )
