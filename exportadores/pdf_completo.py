@@ -1,170 +1,441 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
+"""
+exportadores/pdf_completo.py
+PDF PROFESIONAL FINAL (CORREGIDO + ROBUSTO + PRO)
+"""
+import exportadores.precios_estructura as pe
+print(dir(pe))
+import re
+from io import BytesIO
+from reportlab.platypus import (
+    BaseDocTemplate, PageTemplate, Frame,
+    Paragraph, Spacer, Table, TableStyle, PageBreak
+)
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
+from reportlab.lib import colors
 
-from typing import Dict, Any
-import traceback
+from exportadores.cables_pdf import tabla_cables_pdf
+from exportadores.hoja_info import hoja_info_proyecto
 
-# PDFs simples
-from exportadores.pdf_reportes_simples import (
-    generar_pdf_estructuras_global,
-    generar_pdf_estructuras_por_punto,
-    generar_pdf_materiales,
-    generar_pdf_materiales_por_punto,
+from exportadores.pdf_base import (
+    styles, styleN, styleH,
+    fondo_pagina,
+    extender_flowables, quitar_saltos_finales,
+    formatear_material,
+    _calibres_por_tipo,
 )
 
-# PDF completo
-from exportadores.pdf_completo import generar_pdf_completo
+from exportadores.pdf_reportes_simples import _tabla_estructuras_por_punto
+from exportadores.pdf_anexos_costos import (
+    tabla_costos_materiales_pdf,
+    tabla_mano_obra_estructuras_pdf,
+)
+from exportadores.precios_estructura import (
+    generar_tabla_presupuesto,
+    procesar_precios_estructura
+)
 
-# Excel
-from exportadores.excel_utils import exportar_excel
+# ==========================================================
+# 🔥 UTILIDAD ROBUSTA (FIX REAL)
+# ==========================================================
 
+def _sumar_costos(df):
+    if df is None or df.empty:
+        return 0.0
 
-# =========================================================
-# 🧩 HELPERS
-# =========================================================
+    for col in df.columns:
+        nombre = str(col).lower().strip()
 
-def _fix_punto(df):
-    """Normaliza columna Punto"""
-    if df is None:
-        return df
+        if "costo" in nombre or "total" in nombre:
+            df_clean = df.copy()
 
-    if "punto" in df.columns and "Punto" not in df.columns:
-        df = df.rename(columns={"punto": "Punto"})
+            # eliminar filas resumen
+            for c in df_clean.columns:
+                if "material" in str(c).lower():
+                    df_clean = df_clean[
+                        ~df_clean[c].astype(str).str.upper().str.contains(
+                            "SUBTOTAL|ISV|TOTAL", na=False
+                        )
+                    ]
 
-    if "Punto" not in df.columns:
-        df = df.copy()
-        df["Punto"] = "General"
+            return float(df_clean[col].fillna(0).sum())
 
-    return df
-
-
-def _safe_exec(nombre, fn):
-    """Ejecuta sin romper flujo"""
-    try:
-        return fn(), None
-    except Exception as e:
-        return None, f"{nombre}: {str(e)}\n{traceback.format_exc()}"
-
-
-def _add_file(archivos, errores, nombre, contenido):
-    """Agrega archivo si es válido"""
-    if isinstance(contenido, (bytes, bytearray)):
-        archivos[nombre] = contenido
-    else:
-        errores.append(f"{nombre} inválido")
+    return 0.0
 
 
-# =========================================================
-# 📄 GENERADORES
-# =========================================================
+# ==========================================================
+# ORQUESTADOR
+# ==========================================================
 
-def _gen_estructuras_global(df, nombre):
-    return generar_pdf_estructuras_global(df, nombre) if df is not None else None
+def generar_pdf_completo(
+    df_mat,
+    df_estructuras,
+    df_estructuras_por_punto,
+    df_mat_por_punto,
+    datos_proyecto,
+    df_costos=None,
+    df_mo_estructuras=None,
+):
+    buffer, doc, elems = _crear_documento(datos_proyecto)
+
+    elems += _seccion_info(datos_proyecto, df_estructuras, df_mat)
+    df_precios = procesar_precios_estructura()
+    elems += generar_tabla_presupuesto(doc, styles, df_estructuras, df_precios)
+    elems += _seccion_estructuras_global(doc, df_estructuras)
+    elems += _seccion_materiales_global(doc, df_mat)
+    elems += _seccion_costos_materiales(df_costos)
+    elems += _seccion_mano_obra(df_mo_estructuras)
+    elems += _seccion_cotizacion(doc, df_costos, df_mo_estructuras)
+    elems += _seccion_estructuras_por_punto(doc, df_estructuras_por_punto)
+    elems += _seccion_materiales_por_punto(doc, df_mat_por_punto)
+
+    quitar_saltos_finales(elems)
+    doc.build(elems)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
 
 
-def _gen_estructuras_por_punto(df, nombre):
-    return generar_pdf_estructuras_por_punto(df, nombre) if df is not None else None
 
 
-def _gen_materiales(df, nombre):
-    return generar_pdf_materiales(df, nombre) if df is not None else None
+# ==========================================================
+# BASE DOCUMENTO
+# ==========================================================
+
+def _crear_documento(datos_proyecto):
+    buffer = BytesIO()
+
+    doc = BaseDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=60,
+        rightMargin=60,
+        topMargin=160,
+        bottomMargin=50
+    )
+
+    doc.membrete_pdf = datos_proyecto.get("membrete_pdf", "SMART")
+
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
+
+    template = PageTemplate(
+        id="fondo",
+        frames=[frame],
+        onPage=fondo_pagina
+    )
+
+    doc.addPageTemplates([template])
+
+    return buffer, doc, []
 
 
-def _gen_materiales_por_punto(df, nombre):
-    return generar_pdf_materiales_por_punto(df, nombre) if df is not None else None
+# ==========================================================
+# ESTILO TABLA PRO
+# ==========================================================
+
+def _tabla_estilo_pro():
+    return TableStyle([
+        ("LINEBELOW", (0,0), (-1,0), 1.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#EAEAEA")),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+
+        ("ALIGN", (1,1), (-1,-1), "RIGHT"),
+        ("ALIGN", (0,0), (0,-1), "LEFT"),
+
+        ("LEFTPADDING", (0,0), (-1,-1), 8),
+        ("RIGHTPADDING", (0,0), (-1,-1), 8),
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+
+        ("ROWBACKGROUNDS", (0,1), (-1,-1),
+         [colors.white, colors.HexColor("#F7F7F7")])
+    ])
 
 
-def _gen_pdf_completo(df_e, df_m, df_p, nombre):
-    if df_e is None or df_m is None:
-        return None
+# ==========================================================
+# SECCIONES
+# ==========================================================
 
-    return generar_pdf_completo(
-        df_mat=df_m,
-        df_estructuras=df_e,
-        df_estructuras_por_punto=df_e,
-        df_mat_por_punto=df_p,
-        datos_proyecto={"nombre": nombre},
+def _seccion_info(datos_proyecto, df_estructuras, df_mat):
+    return extender_flowables(
+        [],
+        hoja_info_proyecto(
+            datos_proyecto,
+            df_estructuras,
+            df_mat,
+            styles=styles,
+            styleN=styleN,
+            styleH=styleH,
+            _calibres_por_tipo=_calibres_por_tipo
+        )
     )
 
 
-def _gen_excel(df_r, df_e, df_p):
-    if df_r is None:
-        return None
+def _seccion_estructuras_global(doc, df):
+    elems = [PageBreak()]
 
-    return exportar_excel(
-        df_resumen=df_r,
-        df_estructuras_resumen=df_e,
-        df_resumen_por_punto=df_p,
-        df_adicionales=None,
-        ruta_excel=None  # 🔥 FIX
+    elems.append(Paragraph("<b>2. LISTA DE ESTRUCTURAS</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 0.3 * inch))
+
+    if df is None or df.empty:
+        elems.append(Paragraph("No hay estructuras.", styleN))
+        return elems
+
+    import pandas as pd
+    import unicodedata
+    import streamlit as st
+
+    def limpiar(s):
+        return ''.join(
+            c for c in unicodedata.normalize('NFKD', str(s))
+            if not unicodedata.combining(c)
+        )
+
+    # =========================
+    # DEBUG
+    # =========================
+    st.write("📊 df ORIGINAL estructuras:", df.head())
+    st.write("📊 columnas:", df.columns)
+
+    # =========================
+    # NORMALIZAR COLUMNAS
+    # =========================
+    df.columns = [limpiar(c).strip().upper() for c in df.columns]
+
+    # =========================
+    # DETECTAR COLUMNAS
+    # =========================
+    col_est = None
+    col_cant = None
+
+    for c in df.columns:
+        if "ESTRUCT" in c:
+            col_est = c
+        if "CANT" in c:
+            col_cant = c
+
+    if col_est is None:
+        elems.append(Paragraph("Error: no se encontró columna de estructuras", styleN))
+        return elems
+
+    # =========================
+    # CREAR FORMATO CORRECTO
+    # =========================
+    df_fix = pd.DataFrame({
+        "Estructura": df[col_est],
+        "Descripción": df[col_est],
+        "Cantidad": df[col_cant] if col_cant else 1
+    })
+
+    st.write("📊 df FIX estructuras:", df_fix.head())
+
+    # =========================
+    # TABLA FINAL
+    # =========================
+    elems.append(_tabla_estructuras_por_punto("GLOBAL", df_fix, doc.width))
+
+    return elems
+
+def _seccion_materiales_global(doc, df_mat):
+    elems = [PageBreak()]
+
+    elems.append(Paragraph("<b>3. LISTA DE MATERIALES</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 0.3 * inch))
+
+    if df_mat is None or df_mat.empty:
+        elems.append(Paragraph("No hay materiales.", styleN))
+        return elems
+
+    df_agr = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
+    data = [["Material", "Unidad", "Cantidad"]]
+
+    for _, r in df_agr.iterrows():
+        data.append([
+            Paragraph(formatear_material(r["Materiales"]), styleN),
+            r["Unidad"],
+            f"{float(r['Cantidad']):,.2f}",
+        ])
+
+    tabla = Table(
+        data,
+        colWidths=[doc.width * 0.65, doc.width * 0.15, doc.width * 0.20]
     )
+    tabla.setStyle(_tabla_estilo_pro())
+
+    elems.append(tabla)
+    return elems
 
 
-# =========================================================
-# 🚀 ORQUESTADOR PRINCIPAL
-# =========================================================
+def _seccion_costos_materiales(df_costos):
+    if df_costos is None or df_costos.empty:
+        return []
 
-def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
+    elems = [PageBreak()]
+    elems.append(Paragraph("<b>4. COSTOS DE MATERIALES</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 0.3 * inch))
 
-    archivos: Dict[str, bytes] = {}
-    errores: list[str] = []
-    debug: dict = {}
+    return extender_flowables(elems, tabla_costos_materiales_pdf(df_costos))
 
-    # -----------------------------------------------------
-    # INPUT NORMALIZADO
-    # -----------------------------------------------------
-    df_e = _fix_punto(data.get("df_estructuras"))
-    df_m = data.get("df_materiales")
-    df_r = data.get("df_resumen")
-    df_p = _fix_punto(data.get("df_por_punto"))
 
-    nombre = data.get("nombre_proyecto", "Proyecto")
+def _seccion_mano_obra(df):
+    if df is None or df.empty:
+        return []
 
-    debug["input"] = {
-        "df_estructuras": type(df_e).__name__,
-        "df_materiales": type(df_m).__name__,
-        "df_resumen": type(df_r).__name__,
-        "df_por_punto": type(df_p).__name__,
-    }
+    elems = [PageBreak()]
+    elems.append(Paragraph("<b>5. COSTOS DE MANO DE OBRA</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 0.3 * inch))
 
-    # =====================================================
-    # 📄 TAREAS
-    # =====================================================
-    tasks = [
-        ("estructuras_global.pdf", lambda: _gen_estructuras_global(df_e, nombre)),
-        ("estructuras_por_punto.pdf", lambda: _gen_estructuras_por_punto(df_e, nombre)),
-        ("materiales.pdf", lambda: _gen_materiales(df_m, nombre)),
-        ("materiales_por_punto.pdf", lambda: _gen_materiales_por_punto(df_p, nombre)),
+    return extender_flowables(elems, tabla_mano_obra_estructuras_pdf(df))
 
-        # 🔥 PDF COMPLETO (EL IMPORTANTE)
-        ("reporte_completo.pdf", lambda: _gen_pdf_completo(df_e, df_m, df_p, nombre)),
 
-        ("reporte.xlsx", lambda: _gen_excel(df_r, df_e, df_p)),
+def _seccion_cotizacion(doc, df_costos, df_mo):
+
+    elems = [PageBreak()]
+    elems.append(Paragraph("<b>6. COTIZACIÓN DEL PROYECTO</b>", styles["Heading1"]))
+    elems.append(Spacer(1, 0.5 * inch))
+
+    total_materiales = _sumar_costos(df_costos)
+    total_mo = _sumar_costos(df_mo)
+
+    subtotal = total_materiales + total_mo
+
+    # 🔥 desglose del 15%
+    adm = subtotal * 0.04
+    ing = subtotal * 0.03
+    log = subtotal * 0.02
+    seg = subtotal * 0.02
+    enee = subtotal * 0.02
+    imp = subtotal * 0.01
+    otros = subtotal * 0.01
+
+    gastos_total = adm + ing + log + seg + enee + imp + otros
+
+    isv = (subtotal + gastos_total) * 0.15
+    total = subtotal + gastos_total + isv
+
+    data = [
+        ["Concepto", "Monto (L)"],
+
+        ["Materiales", f"{total_materiales:,.2f}"],
+        ["Mano de Obra", f"{total_mo:,.2f}"],
+
+        ["Subtotal", f"{subtotal:,.2f}"],
+
+        ["", ""],  # separación visual
+
+        ["Gastos Administrativos (4%)", f"{adm:,.2f}"],
+        ["Ingeniería (3%)", f"{ing:,.2f}"],
+        ["Logística y Transporte (2%)", f"{log:,.2f}"],
+        ["Higiene y Seguridad (2%)", f"{seg:,.2f}"],
+        ["Gestión y Aprobación ENEE (2%)", f"{enee:,.2f}"],
+        ["Imprevistos (1%)", f"{imp:,.2f}"],
+        ["Otros (1%)", f"{otros:,.2f}"],
+
+        ["Total Gastos", f"{gastos_total:,.2f}"],
+
+        ["ISV (15%)", f"{isv:,.2f}"],
+
+        ["TOTAL OFERTA", f"{total:,.2f}"],
     ]
 
-    # =====================================================
-    # ⚙️ EJECUCIÓN
-    # =====================================================
-    for nombre_archivo, fn in tasks:
+    tabla = Table(
+        data,
+        colWidths=[doc.width * 0.7, doc.width * 0.3]
+    )
 
-        contenido, err = _safe_exec(nombre_archivo, fn)
+    tabla.hAlign = "CENTER"
 
-        if err:
-            errores.append(err)
-            debug[nombre_archivo] = "ERROR"
-            continue
+    tabla.setStyle(TableStyle([
+        # encabezado
+        ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
 
-        if contenido:
-            _add_file(archivos, errores, nombre_archivo, contenido)
-            debug[nombre_archivo] = "OK"
-        else:
-            debug[nombre_archivo] = "EMPTY"
+        # alineación
+        ("ALIGN", (1,1), (-1,-1), "RIGHT"),
 
-    # =====================================================
-    # OUTPUT
-    # =====================================================
-    return {
-        "archivos": archivos,
-        "errores": errores,
-        "debug": debug,
-    }
+        # subtotal
+        ("BACKGROUND", (0,3), (-1,3), colors.HexColor("#F2F2F2")),
+
+        # bloque de gastos
+        ("BACKGROUND", (0,5), (-1,11), colors.HexColor("#FAFAFA")),
+
+        # total gastos
+        ("BACKGROUND", (0,12), (-1,12), colors.HexColor("#EFEFEF")),
+        ("FONTNAME", (0,12), (-1,12), "Helvetica-Bold"),
+
+        # total final
+        ("BACKGROUND", (0,-1), (-1,-1), colors.darkblue),
+        ("TEXTCOLOR", (0,-1), (-1,-1), colors.white),
+        ("FONTNAME", (0,-1), (-1,-1), "Helvetica-Bold"),
+        ("LINEABOVE", (0,-1), (-1,-1), 1.5, colors.black),
+
+        # padding (más presencia)
+        ("LEFTPADDING", (0,0), (-1,-1), 10),
+        ("RIGHTPADDING", (0,0), (-1,-1), 10),
+        ("TOPPADDING", (0,0), (-1,-1), 10),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 10),
+    ]))
+
+    elems.append(tabla)
+    return elems
+
+def _seccion_estructuras_por_punto(doc, df):
+    if df is None or df.empty:
+        return []
+
+    elems = [PageBreak()]
+    elems.append(Paragraph("<b>7. DETALLE POR PUNTO</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 0.3 * inch))
+
+    puntos = sorted(df["Punto"].unique(), key=lambda x: int(re.sub(r"\D", "", str(x)) or 0))
+
+    for p in puntos:
+        num = re.search(r"\d+", str(p)).group()
+        elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading3"]))
+
+        df_p = df[df["Punto"] == p]
+        elems.append(_tabla_estructuras_por_punto(num, df_p, doc.width))
+        elems.append(Spacer(1, 0.2 * inch))
+
+    return elems
+
+
+def _seccion_materiales_por_punto(doc, df):
+    if df is None or df.empty:
+        return []
+
+    elems = [PageBreak()]
+    elems.append(Paragraph("<b>8. MATERIALES POR PUNTO</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 0.3 * inch))
+
+    for p in sorted(df["Punto"].unique()):
+        num = re.search(r"\d+", str(p)).group()
+        elems.append(Paragraph(f"<b>Punto {num}</b>", styles["Heading3"]))
+
+        df_p = df[df["Punto"] == p]
+        df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
+        data = [["Material", "Unidad", "Cantidad"]]
+
+        for _, r in df_agr.iterrows():
+            data.append([
+                Paragraph(formatear_material(r["Materiales"]), styleN),
+                r["Unidad"],
+                f"{float(r['Cantidad']):,.2f}",
+            ])
+
+        tabla = Table(
+            data,
+            colWidths=[doc.width * 0.65, doc.width * 0.15, doc.width * 0.20]
+        )
+        tabla.setStyle(_tabla_estilo_pro())
+
+        elems.append(tabla)
+        elems.append(Spacer(1, 0.3 * inch))
+
+    return elems
