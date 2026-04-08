@@ -1,16 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-costos_precios/costos_por_punto.py
-
-Calcula costos por punto a partir de:
-- estructuras por punto
-- costos unitarios por estructura
-"""
-
-from __future__ import annotations
-import pandas as pd
-
-
 def calcular_costos_por_punto(
     df_estructuras_por_punto: pd.DataFrame,
     df_costos_estructuras: pd.DataFrame,
@@ -18,7 +5,8 @@ def calcular_costos_por_punto(
     """
     Retorna:
     - df_detalle
-    - df_resumen
+    - df_resumen_costos
+    - df_resumen_precios
     """
 
     # -----------------------------
@@ -30,24 +18,33 @@ def calcular_costos_por_punto(
     if df_costos_estructuras is None or df_costos_estructuras.empty:
         raise ValueError("df_costos_estructuras vacío")
 
-    # -----------------------------
-    # NORMALIZAR COSTOS
-    # -----------------------------
-    if "codigodeestructura" not in df_costos_estructuras.columns:
-        raise ValueError("df_costos_estructuras debe tener 'codigodeestructura'")
+    required_cols = {"codigodeestructura", "Costo Unitario", "Precio Unitario"}
+    if not required_cols.issubset(df_costos_estructuras.columns):
+        raise ValueError(f"df_costos_estructuras debe tener {required_cols}")
 
-    if "Costo Unitario" not in df_costos_estructuras.columns:
-        raise ValueError("df_costos_estructuras debe tener 'Costo Unitario'")
+    # -----------------------------
+    # MAPAS
+    # -----------------------------
+    df_costos_estructuras["codigodeestructura"] = (
+        df_costos_estructuras["codigodeestructura"].astype(str).str.strip()
+    )
 
-    dict_costos = dict(
+    dict_costo = dict(
         zip(
-            df_costos_estructuras["codigodeestructura"].astype(str).str.strip(),
+            df_costos_estructuras["codigodeestructura"],
             df_costos_estructuras["Costo Unitario"]
         )
     )
 
+    dict_precio = dict(
+        zip(
+            df_costos_estructuras["codigodeestructura"],
+            df_costos_estructuras["Precio Unitario"]
+        )
+    )
+
     # -----------------------------
-    # CALCULO DETALLE
+    # DETALLE
     # -----------------------------
     resultados = []
 
@@ -57,27 +54,42 @@ def calcular_costos_por_punto(
         estructura = str(row.get("codigodeestructura", "")).strip()
         cantidad = float(row.get("Cantidad", 0) or 0)
 
-        precio = dict_costos.get(estructura, 0)
-        subtotal = cantidad * precio
+        costo_unit = float(dict_costo.get(estructura, 0))
+        precio_unit = float(dict_precio.get(estructura, 0))
+
+        subtotal_costo = cantidad * costo_unit
+        subtotal_precio = cantidad * precio_unit
 
         resultados.append({
             "Punto": punto,
             "codigodeestructura": estructura,
             "Cantidad": cantidad,
-            "Precio Unitario": precio,
-            "Subtotal": subtotal
+            "Costo Unitario": round(costo_unit, 2),
+            "Precio Unitario": round(precio_unit, 2),
+            "Subtotal Costo": round(subtotal_costo, 2),
+            "Subtotal Precio": round(subtotal_precio, 2),
         })
 
     df_detalle = pd.DataFrame(resultados)
 
     # -----------------------------
-    # RESUMEN
+    # RESUMEN COSTOS
     # -----------------------------
-    df_resumen = (
-        df_detalle.groupby("Punto")["Subtotal"]
+    df_resumen_costos = (
+        df_detalle.groupby("Punto")["Subtotal Costo"]
         .sum()
         .reset_index()
-        .rename(columns={"Subtotal": "TOTAL_PUNTO"})
+        .rename(columns={"Subtotal Costo": "TOTAL_COSTO_PUNTO"})
     )
 
-    return df_detalle, df_resumen
+    # -----------------------------
+    # RESUMEN PRECIOS
+    # -----------------------------
+    df_resumen_precios = (
+        df_detalle.groupby("Punto")["Subtotal Precio"]
+        .sum()
+        .reset_index()
+        .rename(columns={"Subtotal Precio": "TOTAL_PRECIO_PUNTO"})
+    )
+
+    return df_detalle, df_resumen_costos, df_resumen_precios
