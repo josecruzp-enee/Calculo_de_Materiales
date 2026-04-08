@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 from collections import Counter
 
-from entradas.normalizar import expandir_lista_codigos, limpiar_codigo
+from entradas.normalizar import limpiar_codigo
 from materiales.calculos.lector_materiales import leer_hoja_materiales
 from ayuda.debug import debug_guardar
 
@@ -44,7 +44,7 @@ def _validar_df(df: pd.DataFrame):
 
 
 # ==========================================================
-# CONTEO (FIX CRÍTICO)
+# 🔥 CONTEO CORREGIDO (CLAVE)
 # ==========================================================
 def extraer_conteo_estructuras(df_estructuras):
 
@@ -56,10 +56,13 @@ def extraer_conteo_estructuras(df_estructuras):
 
     for _, row in df_estructuras.iterrows():
 
-        punto = str(row.get("punto") or "").strip() or "Punto"
+        # ✅ FIX: leer correctamente Punto
+        punto = str(
+            row.get("Punto") or row.get("punto") or ""
+        ).strip() or "General"
 
-        # 🔥 FIX: usar columna correcta
-        estructura = row.get("codigodeestructura")
+        # ✅ estructura
+        estructura = row.get("codigodeestructura") or row.get("Estructura")
 
         if not estructura:
             continue
@@ -68,11 +71,13 @@ def extraer_conteo_estructuras(df_estructuras):
 
         estructuras_limpias.append(estructura)
 
+        # ✅ mantener relación por punto
         estructuras_por_punto.setdefault(punto, []).append(estructura)
 
     conteo = Counter(estructuras_limpias)
 
     _debug("conteo_total", dict(conteo))
+    _debug("estructuras_por_punto", estructuras_por_punto)
 
     return conteo, estructuras_por_punto
 
@@ -121,7 +126,7 @@ def calcular_materiales_estructura(
 
 
 # ==========================================================
-# MATERIAL TOTAL (FIX + DEBUG PRO)
+# 🔥 MATERIAL TOTAL (GLOBAL)
 # ==========================================================
 def calcular_materiales_por_punto(
     hojas_base,
@@ -131,7 +136,7 @@ def calcular_materiales_por_punto(
     tabla_conectores_mt=None,
 ):
 
-    conteo, _ = extraer_conteo_estructuras(df_estructuras)
+    conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
 
     _check("conteo_no_vacio", len(conteo) > 0, conteo)
 
@@ -170,12 +175,13 @@ def calcular_materiales_por_punto(
 
     df_final = pd.concat(resultados, ignore_index=True)
 
+    # 🔥 IMPORTANTE: cálculo GLOBAL (no incluye Punto)
     df_final = (
         df_final
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
     )
 
-    _debug("df_final", df_final)
+    _debug("df_final_global", df_final)
 
     return df_final[COLUMNAS_STD]
