@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pandas as pd
 
 
@@ -9,22 +10,28 @@ ARCH_PUNTOS = "estructura_lista.xlsx"
 
 
 # =========================================================
-# CARGAR COSTOS
+# CARGAR COSTOS (AHORA PRECIO UNITARIO)
 # =========================================================
 def cargar_costos():
 
     df = pd.read_excel(ARCH_COSTOS)
-
     df.columns = [str(c).strip() for c in df.columns]
 
-    dict_costos = dict(
+    # 🔥 VALIDACIÓN NUEVA
+    if "codigodeestructura" not in df.columns:
+        raise ValueError("Falta 'codigodeestructura' en costos")
+
+    if "Precio Unitario" not in df.columns:
+        raise ValueError("Falta 'Precio Unitario' en costos")
+
+    dict_precios = dict(
         zip(
-            df["Estructura"].astype(str).str.strip(),
-            df["TOTAL"]
+            df["codigodeestructura"].astype(str).str.strip(),
+            df["Precio Unitario"]
         )
     )
 
-    return dict_costos
+    return dict_precios
 
 
 # =========================================================
@@ -32,49 +39,61 @@ def cargar_costos():
 # =========================================================
 def procesar_puntos():
 
-    dict_costos = cargar_costos()
+    dict_precios = cargar_costos()
 
     df = pd.read_excel(ARCH_PUNTOS)
-
     df.columns = [str(c).strip() for c in df.columns]
 
     resultados = []
 
     for _, row in df.iterrows():
 
-        punto = row["Punto"]
-        estructura = str(row["Estructura"]).strip()
-        cantidad = row["Cantidad"]
+        punto = row.get("Punto")
+        estructura = str(row.get("Estructura", "")).strip()
+        cantidad = float(row.get("Cantidad", 0) or 0)
 
-        precio = dict_costos.get(estructura, 0)
+        # 🔥 VALIDACIÓN FUERTE
+        if estructura not in dict_precios:
+            raise ValueError(f"Estructura sin precio: {estructura}")
 
-        subtotal = cantidad * precio
+        precio_unit = float(dict_precios[estructura])
+        subtotal = cantidad * precio_unit
 
         resultados.append({
             "Punto": punto,
             "Estructura": estructura,
             "Cantidad": cantidad,
-            "Precio Unitario": precio,
-            "Subtotal": subtotal
+            "Precio Unitario": round(precio_unit, 2),
+            "Subtotal Precio": round(subtotal, 2),
         })
 
     df_detalle = pd.DataFrame(resultados)
 
     # =====================================================
-    # TOTAL POR PUNTO
+    # RESUMEN POR PUNTO (PRECIO)
     # =====================================================
-    df_resumen = df_detalle.groupby("Punto")["Subtotal"].sum().reset_index()
-    df_resumen.rename(columns={"Subtotal": "TOTAL_PUNTO"}, inplace=True)
+    df_resumen = (
+        df_detalle.groupby("Punto")["Subtotal Precio"]
+        .sum()
+        .reset_index()
+        .rename(columns={"Subtotal Precio": "TOTAL_PRECIO_PUNTO"})
+    )
+
+    # =====================================================
+    # TOTAL PROYECTO
+    # =====================================================
+    total_proyecto = df_resumen["TOTAL_PRECIO_PUNTO"].sum()
 
     # =====================================================
     # EXPORTAR
     # =====================================================
-    with pd.ExcelWriter("costos_puntos.xlsx") as writer:
+    with pd.ExcelWriter("precios_por_punto.xlsx") as writer:
         df_detalle.to_excel(writer, sheet_name="Detalle", index=False)
         df_resumen.to_excel(writer, sheet_name="Resumen", index=False)
 
-    print("\n✅ Costos por punto generados:\n")
+    print("\n✅ Precios por punto generados:\n")
     print(df_resumen)
+    print(f"\n💰 TOTAL PROYECTO: L {total_proyecto:,.2f}")
 
 
 # =========================================================
