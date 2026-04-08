@@ -3,6 +3,11 @@ from typing import Optional, Dict, Any
 import pandas as pd
 
 
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
+import pandas as pd
+
+
 @dataclass
 class EntradaProyecto:
     # =====================================================
@@ -24,13 +29,33 @@ class EntradaProyecto:
     datos_proyecto: Optional[Dict[str, Any]] = None
 
     # =====================================================
-    # 🔥 COSTOS (NUEVO BLOQUE)
+    # 🔥 COSTOS
     # =====================================================
-    # precios de materiales (puede ser DF o Excel)
+    # Fuente 1: DataFrame directo (prioridad alta)
     df_precios_materiales: Optional[pd.DataFrame] = None
 
-    # costos unitarios de estructuras
+    # Fuente 2: Excel (fallback)
+    # 👉 ya es ruta_materiales
+
+    # Costos estructuras (OBLIGATORIO si calcular_costos=True)
     df_costos_estructuras: Optional[pd.DataFrame] = None
 
-    # flag opcional para activar/desactivar costos
+    # Control de ejecución
     calcular_costos: bool = True
+
+    # =====================================================
+    # 🔧 VALIDACIÓN INTERNA (NUEVO)
+    # =====================================================
+    def validar_costos(self):
+        if not self.calcular_costos:
+            return
+
+        if self.df_precios_materiales is None and not self.ruta_materiales:
+            raise ValueError(
+                "Debe proporcionar df_precios_materiales o ruta_materiales"
+            )
+
+        if self.df_costos_estructuras is None:
+            raise ValueError(
+                "df_costos_estructuras es requerido para cálculo de costos"
+            )
