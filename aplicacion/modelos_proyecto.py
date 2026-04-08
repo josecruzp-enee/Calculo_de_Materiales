@@ -1,4 +1,7 @@
+from dataclasses import dataclass
 from typing import Optional, Dict, Any
+import pandas as pd
+
 
 @dataclass
 class EntradaProyecto:
@@ -7,6 +10,4 @@ class EntradaProyecto:
     df_materiales_extra: pd.DataFrame | None = None
     ruta_materiales: str | None = None
     tension: float | None = None
-
-    # 👇 ESTE ES EL FIX
     datos_proyecto: Optional[Dict[str, Any]] = None
