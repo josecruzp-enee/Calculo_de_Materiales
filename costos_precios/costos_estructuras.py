@@ -71,14 +71,9 @@ def calcular_costos_por_estructura(
         costo_total = costo_material + costo_operativo
 
         # -------------------------------------------------
-        # 4) PRECIO
+        # 4) PRECIO (SIN DEPENDENCIA EXTERNA)
         # -------------------------------------------------
-        venta = calcular_precio_venta(
-            costo_total=costo_total,
-            margen_utilidad=margen_utilidad
-        )
-
-        precio_unitario = venta["precio_venta"]
+        precio_unitario = costo_total * (1 + margen_utilidad)
 
         if precio_unitario <= 0:
             raise ValueError(f"Estructura sin precio: {cod}")
