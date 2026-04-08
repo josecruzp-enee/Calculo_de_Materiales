@@ -49,7 +49,20 @@ def _validar_columnas(df, requeridas, nombre):
     if faltantes:
         raise ValueError(f"{nombre} no tiene columnas: {faltantes}")
 
+def _seccion_costos_materiales(df_costos):
+    elems = [PageBreak()]
 
+    elems.append(Paragraph("<b>4. COSTOS DE MATERIALES</b>", styles["Heading2"]))
+    elems.append(Spacer(1, 0.3 * inch))
+
+    if df_costos is None or df_costos.empty:
+        elems.append(Paragraph("No hay costos de materiales.", styleN))
+        return elems
+
+    elems += tabla_costos_materiales_pdf(df_costos)
+
+    return elems
+    
 # ==========================================================
 # 🔥 UTILIDAD COSTOS
 # ==========================================================
