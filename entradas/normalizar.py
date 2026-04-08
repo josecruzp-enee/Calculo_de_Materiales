@@ -147,14 +147,14 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         otros = []
 
         for cod in lista_codigos:
-
             cod = limpiar_codigo(cod)
 
             if not cod:
                 continue
 
-            if cod.startswith("P-"):
-                poste = cod  # 👈 ESTE ES EL PUNTO REAL
+            if re.match(r"^P-?\d+$", cod):
+                numero = re.findall(r"\d+", cod)[0]
+                poste = f"P-{numero}"
             else:
                 estructuras.append(cod)
 
