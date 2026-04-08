@@ -120,6 +120,7 @@ def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
     df_e = _fix_punto(data.get("df_estructuras"))
     if df_e is not None:
         df_e.columns = df_e.columns.str.strip().str.lower()
+        df_e.rename(columns={"punto": "Punto"}, inplace=True)
     df_m = data.get("df_materiales")
     df_r = data.get("df_resumen")
     df_p = _fix_punto(data.get("df_por_punto"))
