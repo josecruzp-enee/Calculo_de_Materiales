@@ -10,7 +10,7 @@ from entradas.base_datos import cargar_base_datos
 # =========================================================
 # CONTRATO OFICIAL
 # =========================================================
-from interfaz.contratos import ResultadoMateriales
+from interfaz.contratos import SalidaMateriales
 
 # =========================================================
 # MODELOS
@@ -87,7 +87,7 @@ def _merge_materiales(df_a, df_b):
 def ejecutar_materiales(
     entrada: EntradaMateriales,
     catalogo: Optional[Dict[str, Any]] = None,
-) -> ResultadoMateriales:
+) -> SalidaMateriales:
 
     errores: List[str] = []
     warnings: List[str] = []
@@ -260,7 +260,7 @@ def ejecutar_materiales(
     _debug("OUTPUT", "filas_final", len(df_materiales))
     _debug("OUTPUT", "columnas_final", list(df_materiales.columns))
 
-    return ResultadoMateriales(
+    return SalidaMateriales(
         ok=True,
         errores=errores,
         warnings=warnings,
