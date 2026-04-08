@@ -1,198 +1,34 @@
 # -*- coding: utf-8 -*-
-import pandas as pd
-import os
-import streamlit as st
+"""
+reportes/presupuesto_estructuras.py
 
-# =========================================================
-# CONFIGURACIÓN
-# =========================================================
-BASE_DIR = os.path.dirname(__file__)
-ARCHIVO = os.path.join(BASE_DIR, "..", "data", "Estructura_datos.xlsx")
+Genera tabla PDF de estructuras usando costos ya calculados.
+NO calcula costos.
+"""
 
-CUADRILLA = 1250
-FACTOR_TIEMPO = 0.25
-FACTOR_EQUIPO = 0.20
-FACTOR_UTILIDAD = 0.15
+from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
 
 
-# =========================================================
-# VALIDACIÓN ARCHIVO
-# =========================================================
-def validar_archivo(ruta):
-    if not os.path.exists(ruta):
-        raise FileNotFoundError(f"No existe el archivo: {ruta}")
-
-
-# =========================================================
-# LIMPIEZA TEXTO (QUITAR TILDES)
-# =========================================================
-def limpiar_texto(s):
-    import unicodedata
-    return ''.join(
-        c for c in unicodedata.normalize('NFKD', str(s))
-        if not unicodedata.combining(c)
-    )
-
-
-# =========================================================
-# CARGAR PRECIOS
-# =========================================================
-def cargar_precios(xls):
-
-    df_precios = pd.read_excel(xls, sheet_name="Materiales")
-
-    df_precios.columns = [
-        limpiar_texto(c).strip().upper()
-        for c in df_precios.columns
-    ]
-
-    st.write("📊 Columnas precios:", df_precios.columns)
-
-    col_codigo = None
-    col_precio = None
-
-    for c in df_precios.columns:
-        if "CODIGO" in c:
-            col_codigo = c
-        if "COSTO" in c:
-            col_precio = c
-
-    if col_codigo is None:
-        raise KeyError(f"No se encontró columna CODIGO: {df_precios.columns}")
-
-    if col_precio is None:
-        raise KeyError(f"No se encontró columna COSTO: {df_precios.columns}")
-
-    dict_precios = dict(
-        zip(
-            df_precios[col_codigo].astype(str).str.strip(),
-            df_precios[col_precio]
-        )
-    )
-
-    return dict_precios
-
-
-# =========================================================
-# CALCULAR MATERIAL
-# =========================================================
-def calcular_material(df, dict_precios):
-
-    total = 0
-
-    for _, row in df.iterrows():
-
-        codigo = str(row.get("COD. ENEE", "")).strip()
-
-        if not codigo:
-            continue
-
-        cantidad = 0
-
-        if "34.5" in df.columns:
-            cantidad += row.get("34.5", 0)
-
-        if "13.8" in df.columns:
-            cantidad += row.get("13.8", 0)
-
-        precio = dict_precios.get(codigo, 0)
-
-        if precio == 0:
-            print(f"⚠️ Material sin precio: {codigo}")
-
-        total += cantidad * precio
-
-    return total
-
-
-# =========================================================
-# COSTOS
-# =========================================================
-def calcular_costos(material):
-
-    equipos = material * FACTOR_EQUIPO
-    mano_obra = CUADRILLA * FACTOR_TIEMPO
-    utilidad = (material + equipos + mano_obra) * FACTOR_UTILIDAD
-
-    total = material + equipos + mano_obra + utilidad
-
-    return equipos, mano_obra, utilidad, total
-
-
-# =========================================================
-# PROCESAR PRECIOS
-# =========================================================
-def procesar_precios_estructura(ruta_archivo=None, exportar=False):
-
-    if ruta_archivo is None:
-        ruta_archivo = ARCHIVO
-
-    validar_archivo(ruta_archivo)
-
-    xls = pd.ExcelFile(ruta_archivo)
-    dict_precios = cargar_precios(xls)
-
-    resultados = []
-
-    for hoja in xls.sheet_names:
-
-        if hoja.lower() in ["materiales", "indice", "internos", "conectores"]:
-            continue
-
-        df = pd.read_excel(xls, sheet_name=hoja)
-
-        if "COD. ENEE" not in df.columns:
-            continue
-
-        material_total = calcular_material(df, dict_precios)
-        equipos, mo, utilidad, total = calcular_costos(material_total)
-
-        resultados.append({
-            "Estructura": hoja,
-            "Material": round(material_total, 2),
-            "Equipos": round(equipos, 2),
-            "Mano de Obra": round(mo, 2),
-            "Utilidad": round(utilidad, 2),
-            "Precio Unitario": round(total, 2)
-        })
-
-    df_final = pd.DataFrame(resultados)
-    df_final = df_final.sort_values("Estructura")
-
-    if exportar:
-        df_final.to_excel("precios_estructuras.xlsx", index=False)
-
-    return df_final
-
-
-# =========================================================
-# TABLA PDF (FIX COMPLETO)
-# =========================================================
-def generar_tabla_presupuesto(doc, styles, df_estructuras, df_precios):
-
-    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib import colors
+def generar_tabla_presupuesto(doc, styles, df_estructuras, df_costos_estructuras):
 
     elems = []
 
+    # -----------------------------------------------------
+    # VALIDACIÓN
+    # -----------------------------------------------------
     if df_estructuras is None or df_estructuras.empty:
         elems.append(Paragraph("No hay datos de estructuras.", styles["BodyText"]))
         return elems
 
-    # 🔥 DEBUG
-    st.write("📊 Columnas estructuras ORIGINAL:", df_estructuras.columns)
+    if df_costos_estructuras is None or df_costos_estructuras.empty:
+        raise ValueError("df_costos_estructuras vacío")
 
-    # =====================================================
-    # NORMALIZAR df_estructuras
-    # =====================================================
-    df_estructuras.columns = [
-        limpiar_texto(c).strip().upper()
-        for c in df_estructuras.columns
-    ]
+    # -----------------------------------------------------
+    # NORMALIZAR
+    # -----------------------------------------------------
+    df_estructuras.columns = [str(c).strip().upper() for c in df_estructuras.columns]
 
-    st.write("📊 Columnas estructuras LIMPIAS:", df_estructuras.columns)
-
-    # buscar columna estructura
     col_est = None
     for c in df_estructuras.columns:
         if "ESTRUCT" in c:
@@ -200,24 +36,32 @@ def generar_tabla_presupuesto(doc, styles, df_estructuras, df_precios):
             break
 
     if col_est is None:
-        raise KeyError(f"No se encontró columna de estructura en: {df_estructuras.columns}")
+        raise KeyError("No se encontró columna de estructura")
 
-    df_estructuras = df_estructuras.rename(columns={col_est: "Estructura"})
+    df_estructuras = df_estructuras.rename(columns={col_est: "codigodeestructura"})
 
-    st.write("📊 df_estructuras listo:", df_estructuras.head())
+    # -----------------------------------------------------
+    # PREPARAR COSTOS
+    # -----------------------------------------------------
+    df_costos_estructuras["codigodeestructura"] = (
+        df_costos_estructuras["codigodeestructura"].astype(str).str.strip()
+    )
 
-    # =====================================================
+    if "Precio Unitario" not in df_costos_estructuras.columns:
+        raise ValueError("df_costos_estructuras debe tener 'Precio Unitario'")
+
+    # -----------------------------------------------------
     # MERGE
-    # =====================================================
-    df = df_estructuras.merge(df_precios, on="Estructura", how="left")
+    # -----------------------------------------------------
+    df = df_estructuras.merge(
+        df_costos_estructuras,
+        on="codigodeestructura",
+        how="left"
+    )
 
-    st.write("📊 Resultado merge:", df.head())
-
-    df["Precio Unitario"] = df["Precio Unitario"].fillna(0)
-
-    # =====================================================
+    # -----------------------------------------------------
     # TABLA
-    # =====================================================
+    # -----------------------------------------------------
     data = [["ITEM", "DESCRIPCIÓN", "CANT", "P.U.", "TOTAL"]]
 
     total_general = 0
@@ -225,16 +69,23 @@ def generar_tabla_presupuesto(doc, styles, df_estructuras, df_precios):
 
     for _, row in df.iterrows():
 
-        pu = row["Precio Unitario"]
-        cant = row.get("Cantidad", 1)
+        estructura = row["codigodeestructura"]
+        cant = float(row.get("Cantidad", 1) or 0)
+
+        pu = float(row.get("Precio Unitario", 0))
         total = pu * cant
 
         total_general += total
 
+        descripcion = (
+            f"Instalación y suministro de {int(cant)} "
+            f"estructura(s) tipo {estructura}"
+        )
+
         data.append([
             f"2.{item:02d}",
-            f"Suministro e instalación de estructura {row['Estructura']}",
-            cant,
+            descripcion,
+            f"{int(cant)}",
             f"L {pu:,.2f}",
             f"L {total:,.2f}"
         ])
@@ -243,6 +94,9 @@ def generar_tabla_presupuesto(doc, styles, df_estructuras, df_precios):
 
     data.append(["", "TOTAL GENERAL", "", "", f"L {total_general:,.2f}"])
 
+    # -----------------------------------------------------
+    # FORMATO
+    # -----------------------------------------------------
     tabla = Table(
         data,
         colWidths=[
