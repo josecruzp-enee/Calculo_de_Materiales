@@ -134,7 +134,7 @@ def extraer_postes(df_estructuras: Optional[pd.DataFrame]) -> Tuple[Optional[Dic
     resumen: Dict[str, int] = {}
     for _, r in postes.iterrows():
         cod = str(r.get("codigodeestructura", "")).strip()
-        cant = int(_float_safe(r.get("Cantidad", 0), 0))
+        cant = int(_float_safe(r.get("cantidad", 0), 0))
         if cod:
             resumen[cod] = resumen.get(cod, 0) + cant
 
@@ -258,7 +258,7 @@ def extraer_luminarias(
         mask = s.str.match(pat, na=False)
 
         if mask.any():
-            qty = pd.to_numeric(df_estructuras.loc[mask, "Cantidad"], errors="coerce").fillna(0)
+            qty = pd.to_numeric(df_estructuras.loc[mask, "cantidad"], errors="coerce").fillna(0)
 
             det: Dict[str, int] = {}
             for cod, q in zip(df_estructuras.loc[mask, "codigodeestructura"].astype(str), qty):
