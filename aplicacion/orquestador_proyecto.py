@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import pandas as pd
+import streamlit as st
 
 from aplicacion.modelos_proyecto import EntradaProyecto
 
 # =========================
 # CONTRATOS
 # =========================
-from interfaz.contratos import ResultadoProyecto, SalidaMateriales
+from interfaz.contratos import ResultadoProyecto
 
 # =========================
 # DOMINIO
@@ -23,6 +24,22 @@ from materiales.modelos.entrada import EntradaMateriales
 # =========================
 from entradas.base_datos import cargar_base_datos, obtener_catalogo_materiales
 
+# =========================
+# DEBUG
+# =========================
+from ayuda.debug import debug_guardar
+
+
+def _debug(etapa, nombre, valor):
+    debug_guardar(f"PROYECTO::{etapa}::{nombre}", valor)
+
+
+def _check(etapa, nombre, condicion, detalle=None):
+    debug_guardar(f"CHECK::PROYECTO::{etapa}::{nombre}", {
+        "ok": bool(condicion),
+        "detalle": str(detalle)[:200]
+    })
+
 
 # =========================================================
 # ORQUESTADOR PRINCIPAL
@@ -32,9 +49,18 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
     debug = {}
 
     # =====================================================
-    # 1. VALIDACIÓN
+    # 1. INPUT
+    # =====================================================
+    _debug("INPUT", "entrada_proyecto", entrada_proyecto)
+
+    # =====================================================
+    # 2. VALIDACIÓN
     # =====================================================
     errores = _validar_entrada(entrada_proyecto)
+
+    _debug("VALIDACION", "errores", errores)
+    _check("VALIDACION", "sin_errores", not errores, errores)
+
     if errores:
         return ResultadoProyecto(
             ok=False,
@@ -43,14 +69,24 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         )
 
     # =====================================================
-    # 2. NORMALIZACIÓN
+    # 3. NORMALIZACIÓN OPCIONALES
     # =====================================================
     df_cables, df_materiales_extra = _normalizar_opcionales(entrada_proyecto)
 
+    _debug("NORMALIZACION", "df_cables", df_cables)
+    _debug("NORMALIZACION", "df_materiales_extra", df_materiales_extra)
+
     # =====================================================
-    # 3. BASE DE DATOS
+    # 4. BASE DE DATOS
     # =====================================================
     base, catalogo, error_base = _cargar_base()
+
+    _debug("BASE", "base_keys", list(base.keys())[:10] if isinstance(base, dict) else None)
+    _debug("BASE", "catalogo", type(catalogo).__name__)
+
+    _check("BASE", "base_ok", base is not None)
+    _check("BASE", "catalogo_ok", catalogo is not None)
+
     if error_base:
         return ResultadoProyecto(
             ok=False,
@@ -59,7 +95,7 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         )
 
     # =====================================================
-    # 4. BUILDER
+    # 5. BUILDER
     # =====================================================
     entrada_materiales, error_builder = _construir_entrada_materiales(
         entrada_proyecto,
@@ -67,6 +103,9 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         df_cables,
         df_materiales_extra
     )
+
+    _debug("BUILDER", "entrada_materiales", entrada_materiales)
+    _check("BUILDER", "builder_ok", entrada_materiales is not None)
 
     if error_builder:
         return ResultadoProyecto(
@@ -76,12 +115,15 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         )
 
     # =====================================================
-    # 5. EJECUCIÓN MATERIALES
+    # 6. EJECUCIÓN MATERIALES
     # =====================================================
     salida_materiales, error_calculo = _ejecutar_materiales_safe(
         entrada_materiales,
         catalogo
     )
+
+    _debug("CALCULO", "salida_materiales", salida_materiales)
+    _check("CALCULO", "salida_ok", salida_materiales is not None)
 
     if error_calculo:
         return ResultadoProyecto(
@@ -91,9 +133,17 @@ def ejecutar_proyecto(entrada_proyecto: EntradaProyecto) -> ResultadoProyecto:
         )
 
     # =====================================================
-    # 6. CONSOLIDACIÓN FINAL
+    # 7. OUTPUT FINAL
     # =====================================================
+    debug["pipeline"] = {
+        "ok": salida_materiales.ok,
+        "errores": salida_materiales.errores,
+        "warnings": salida_materiales.warnings,
+    }
+
     debug["materiales"] = salida_materiales.debug
+
+    _debug("OUTPUT", "resultado_final_ok", salida_materiales.ok)
 
     return ResultadoProyecto(
         ok=salida_materiales.ok,
@@ -145,19 +195,18 @@ def _normalizar_opcionales(entrada: EntradaProyecto):
 # =========================================================
 def _cargar_base():
 
-    import streamlit as st  # 👈 agregar
-
     try:
         base = cargar_base_datos()
         catalogo = obtener_catalogo_materiales(base)
 
-        # 🔥 ESTA LÍNEA RESUELVE TODO
         st.session_state["hojas_base"] = base
 
         return base, catalogo, None
 
     except Exception as e:
         return None, None, str(e)
+
+
 # =========================================================
 # BUILDER
 # =========================================================
@@ -168,64 +217,33 @@ def _construir_entrada_materiales(
     df_materiales_extra
 ):
 
-    import streamlit as st
-
     try:
-        # =====================================================
-        # 🔴 VALIDAR Y OBTENER TENSIÓN (CRÍTICO)
-        # =====================================================
         tension = getattr(entrada_proyecto, "tension", None)
 
         if tension is None:
-            raise ValueError(
-                "Tensión no definida. Debe seleccionar 13.8 kV o 34.5 kV antes de calcular."
-            )
+            raise ValueError("Tensión no definida")
 
-        try:
-            tension = float(tension)
-        except Exception:
-            raise ValueError(f"Tensión inválida: {tension}")
+        tension = float(tension)
 
-        if tension <= 0:
-            raise ValueError("Tensión debe ser mayor que 0")
-
-        # =====================================================
-        # 🔴 VALIDAR DF ESTRUCTURAS (FORMATO NORMALIZADO)
-        # =====================================================
         df = entrada_proyecto.df_estructuras
 
         if df is None or df.empty:
-            raise ValueError("df_estructuras vacío en builder")
+            raise ValueError("df_estructuras vacío")
 
-        df = df.copy()
-
-        # 🔥 estándar interno
         if "codigodeestructura" not in df.columns:
-            raise ValueError(
-                f"No existe columna 'codigodeestructura'. Columnas actuales: {list(df.columns)}"
-            )
+            raise ValueError("Falta columna codigodeestructura")
 
-        # =====================================================
-        # 🔴 DEBUG CLAVE
-        # =====================================================
-        st.session_state["debug_tension"] = tension
-        st.session_state["debug_df_estructuras_cols"] = list(df.columns)
-        st.session_state["debug_df_estructuras_shape"] = df.shape
-
-        # =====================================================
-        # 🔴 CREAR DTO
-        # =====================================================
-        entrada = EntradaMateriales(
-            estructuras_df=df,
+        return EntradaMateriales(
+            estructuras_df=df.copy(),
             tension=tension,
             df_cables=df_cables,
             df_materiales_extra=df_materiales_extra,
-        )
-
-        return entrada, None
+        ), None
 
     except Exception as e:
         return None, str(e)
+
+
 # =========================================================
 # EJECUCIÓN SEGURA
 # =========================================================
