@@ -16,7 +16,7 @@ from reportlab.lib import colors
 # ==========================================================
 # SECCIÓN PRESUPUESTO (ROBUSTA)
 # ==========================================================
-def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
+def generar_presupuesto_df(doc, styles, resultados_costos):
 
     elems = [PageBreak()]
 
