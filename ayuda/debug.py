@@ -304,7 +304,7 @@ def seccion_debug():
 
         st.markdown("### 🔍 Conteo por estructura")
         st.dataframe(
-            df.groupby("Estructura")["Cantidad"]
+            df.groupby("codigodeestructura")["cantidad"]
             .sum()
             .sort_values(ascending=False)
         )
