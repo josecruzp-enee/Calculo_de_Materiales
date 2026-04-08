@@ -115,6 +115,7 @@ def renderizar_estructuras():
 
         st.info("➡️ Ahora puedes ir a la pestaña 'Finalizar' para procesar")
 
+
 def renderizar_final():
     seccion_finalizar_calculo()
 
@@ -163,7 +164,6 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
-
 def ejecutar_orquestador_interfaz(
     _nav_estado_actual,
     _barra_nav_botones,
@@ -210,15 +210,31 @@ def ejecutar_orquestador_interfaz(
             st.session_state["df_estructuras"] = salida_entradas.df_estructuras
 
     # =====================================================
-    # DEBUG PIPELINE
+    # DEBUG PIPELINE (FIX REAL)
     # =====================================================
-    st.session_state["debug_pipeline"] = {
-        "interfaz_ok": salida_interfaz.ok,
-        "entradas_ok": salida_entradas.ok if salida_entradas else False,
-        "errores_interfaz": salida_interfaz.errores,
-        "errores_entradas": salida_entradas.errores if salida_entradas else [],
+    debug_actual = st.session_state.get("debug_pipeline", {})
+
+    # 🔹 Estado interfaz
+    debug_actual["INTERFAZ"] = {
+        "ok": salida_interfaz.ok,
+        "errores": salida_interfaz.errores,
         "tipo_entrada": salida_interfaz.tipo_entrada,
         "tiene_data": salida_interfaz.data_entrada is not None,
     }
+
+    # 🔹 Estado entradas
+    if salida_entradas:
+        debug_actual["RESULTADO_ENTRADAS"] = {
+            "ok": salida_entradas.ok,
+            "errores": salida_entradas.errores,
+            "warnings": salida_entradas.warnings,
+            "tiene_df": salida_entradas.df_estructuras is not None,
+            "filas": (
+                len(salida_entradas.df_estructuras)
+                if salida_entradas.df_estructuras is not None else 0
+            )
+        }
+
+    st.session_state["debug_pipeline"] = debug_actual
 
     return salida_entradas
