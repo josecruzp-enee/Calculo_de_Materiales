@@ -49,7 +49,7 @@ def _debug_final(tension, data):
     st.write("Tipo de data:", type(data))
 
     if isinstance(data, pd.DataFrame):
-        st.write("Filas:", len(data))
+        st.caption(f"Tipo de data: {type(data).__name__}")
         st.write("Columnas:", list(data.columns))
 
 
