@@ -153,7 +153,10 @@ def seccion_exportacion():
     # GENERAR REPORTES
     # =====================================================
     if st.button("📄 Generar reportes"):
-
+        st.write("FUNC:", generar_reportes)
+        st.write("MODULO:", generar_reportes.__module__)
+        st.write("FILE:", generar_reportes.__code__.co_filename)
+        
         with st.spinner("Generando archivos..."):
 
             try:
