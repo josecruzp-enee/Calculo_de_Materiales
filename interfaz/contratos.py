@@ -74,18 +74,20 @@ class SalidaEntradas:
 # =========================================================
 @dataclass
 class SalidaMateriales:
-    """
-    Materiales entrega esto a exportadores
-    """
 
     # CONTROL
     ok: bool = False
     errores: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
-    # RESULTADOS
+    # RESULTADOS EXISTENTES (NO TOCAR)
     df_materiales: pd.DataFrame = field(default_factory=pd.DataFrame)
     df_materiales_por_punto: pd.DataFrame = field(default_factory=pd.DataFrame)
+
+    # 🔥 NUEVO (SIN ROMPER)
+    df_estructuras: Optional[pd.DataFrame] = None
+    df_estructuras_por_punto: Optional[pd.DataFrame] = None
+    descripcion_estructuras: Optional[Dict[str, Any]] = None
 
     # CONTEXTO
     datos_proyecto: Dict[str, Any] = field(default_factory=dict)
