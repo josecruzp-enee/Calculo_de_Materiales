@@ -260,7 +260,7 @@ def ejecutar_materiales(
     _debug("OUTPUT", "filas_final", len(df_materiales))
     _debug("OUTPUT", "columnas_final", list(df_materiales.columns))
 
-    return SalidaMateriales(
+    return ResultadoMateriales(
         ok=True,
         errores=errores,
         warnings=warnings,
