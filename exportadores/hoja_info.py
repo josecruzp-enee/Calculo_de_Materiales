@@ -172,7 +172,7 @@ def extraer_transformadores(
         ext = s.str.extract(r"^(TS|TD|TT)\s*-\s*(\d+(?:\.\d+)?)\s*KVA$", expand=True)
         mask = ext[0].notna()
         if mask.any():
-            qty = pd.to_numeric(df_estructuras.loc[mask, "Cantidad"], errors="coerce").fillna(0)
+            qty = pd.to_numeric(df_estructuras.loc[mask, "cantidad"], errors="coerce").fillna(0)
             pref = ext.loc[mask, 0].astype(str).str.upper()
             kva = pd.to_numeric(ext.loc[mask, 1], errors="coerce").fillna(0)
 
