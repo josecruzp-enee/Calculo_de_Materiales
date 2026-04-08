@@ -173,7 +173,6 @@ def _seccion_info(datos_proyecto, df_estructuras, df_mat):
             datos_proyecto,
             df_estructuras,
             df_mat,
-            styles=styles,
             styleN=styleN,
             styleH=styleH,
             _calibres_por_tipo=_calibres_por_tipo
