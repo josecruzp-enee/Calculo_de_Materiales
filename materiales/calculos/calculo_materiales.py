@@ -1,13 +1,8 @@
 # -*- coding: utf-8 -*-
-
 from __future__ import annotations
 import pandas as pd
 
-from materiales.calculos.materiales_puntos import (
-    calcular_materiales_por_punto,
-    extraer_conteo_estructuras,
-)
-
+from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
 from ayuda.debug import debug_guardar
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
@@ -53,29 +48,29 @@ def _validar_df_salida(df: pd.DataFrame):
 
     if not set(COLUMNAS_STD).issubset(df.columns):
         raise ValueError(
-            f"Columnas inválidas en salida. Esperadas: {COLUMNAS_STD}, "
+            f"Columnas inválidas. Esperadas: {COLUMNAS_STD}, "
             f"recibidas: {list(df.columns)}"
         )
 
     if df["Materiales"].isna().any():
-        raise ValueError("Materiales contiene valores nulos")
+        raise ValueError("Materiales contiene nulos")
 
     if df["Unidad"].isna().any():
-        raise ValueError("Unidad contiene valores nulos")
+        raise ValueError("Unidad contiene nulos")
 
     cantidades = pd.to_numeric(df["Cantidad"], errors="coerce")
 
     if cantidades.isna().any():
-        raise ValueError("Cantidad contiene valores inválidos")
+        raise ValueError("Cantidad inválida")
 
     if (cantidades < 0).any():
-        raise ValueError("Cantidad contiene valores negativos")
+        raise ValueError("Cantidad negativa")
 
 
+# =========================================================
+# CONSOLIDACIÓN GLOBAL
+# =========================================================
 def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
-
-    if df is None or df.empty:
-        return pd.DataFrame(columns=COLUMNAS_STD)
 
     return (
         df
@@ -85,7 +80,7 @@ def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =========================================================
-# FUNCIÓN PRINCIPAL
+# FUNCIÓN PRINCIPAL (SOLO GLOBAL)
 # =========================================================
 def calcular_materiales_proyecto(
     hojas_base,
@@ -95,94 +90,47 @@ def calcular_materiales_proyecto(
     tabla_conectores_mt=None,
 ) -> dict:
 
-    # =====================================================
-    # DEBUG INPUT
-    # =====================================================
+    # -----------------------------
+    # DEBUG
+    # -----------------------------
     debug_guardar("CALCULO::input", {
-        "columnas": None if df_estructuras is None else list(df_estructuras.columns),
-        "filas": None if df_estructuras is None else len(df_estructuras),
+        "filas_estructuras": None if df_estructuras is None else len(df_estructuras),
         "tension": tension,
-        "hojas_base_count": None if hojas_base is None else len(hojas_base),
     })
 
-    # =====================================================
+    # -----------------------------
     # VALIDACIONES
-    # =====================================================
-    try:
-        _validar_df_estructuras(df_estructuras)
-        _validar_hojas_base(hojas_base)
+    # -----------------------------
+    _validar_df_estructuras(df_estructuras)
+    _validar_hojas_base(hojas_base)
 
-        if tension is None or float(tension) <= 0:
-            raise ValueError("tension no válida")
+    if tension is None or float(tension) <= 0:
+        raise ValueError("tension no válida")
 
-    except Exception as e:
-        debug_guardar("CALCULO::error_validacion", str(e))
-        raise
+    # -----------------------------
+    # CÁLCULO DETALLE
+    # -----------------------------
+    df_detalle = calcular_materiales_por_punto(
+        hojas_base=hojas_base,
+        df_estructuras=df_estructuras,
+        tension=tension,
+        calibre_mt=calibre_mt,
+        tabla_conectores_mt=tabla_conectores_mt
+    )
 
-    # =====================================================
-    # CÁLCULO
-    # =====================================================
-    try:
-        df_detalle = calcular_materiales_por_punto(
-            hojas_base=hojas_base,
-            df_estructuras=df_estructuras,
-            tension=tension,
-            calibre_mt=calibre_mt,
-            tabla_conectores_mt=tabla_conectores_mt
-        )
+    _validar_df_salida(df_detalle)
 
-        debug_guardar("CALCULO::detalle", {
-            "rows": len(df_detalle),
-            "columns": list(df_detalle.columns)
-        })
+    # -----------------------------
+    # CONSOLIDADO GLOBAL
+    # -----------------------------
+    df_global = _consolidar(df_detalle)
 
-    except Exception as e:
-        debug_guardar("CALCULO::error_calculo", str(e))
-        raise
+    _validar_df_salida(df_global)
 
-    # =====================================================
-    # VALIDACIÓN DETALLE
-    # =====================================================
-    try:
-        _validar_df_salida(df_detalle)
-    except Exception as e:
-        debug_guardar("CALCULO::error_detalle", str(e))
-        raise
-
-    # =====================================================
-    # CONSOLIDACIÓN
-    # =====================================================
-    df_resumen = _consolidar(df_detalle)
-
-    debug_guardar("CALCULO::resumen", {
-        "rows": len(df_resumen),
-        "columns": list(df_resumen.columns)
-    })
-
-    # =====================================================
-    # VALIDACIÓN FINAL
-    # =====================================================
-    try:
-        _validar_df_salida(df_resumen)
-    except Exception as e:
-        debug_guardar("CALCULO::error_final", str(e))
-        raise
-
-    # =====================================================
-    # CONTEO
-    # =====================================================
-    conteo, estructuras_por_punto = extraer_conteo_estructuras(df_estructuras)
-
-    debug_guardar("CALCULO::conteo", len(conteo))
-
-    # =====================================================
-    # SALIDA
-    # =====================================================
+    # -----------------------------
+    # SALIDA FINAL
+    # -----------------------------
     return {
         "ok": True,
-        "df_materiales": df_resumen,
-        "df_por_punto": df_detalle,
-        "df_materiales_detalle": df_detalle,
-        "conteo_estructuras": conteo,
-        "estructuras_por_punto": estructuras_por_punto,
+        "df_materiales": df_global
     }
