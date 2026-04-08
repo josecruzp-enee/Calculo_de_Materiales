@@ -118,10 +118,29 @@ def seccion_finalizar_calculo():
             with st.spinner("Calculando materiales..."):
                 resultado = ejecutar_proyecto(entrada_proyecto)
 
+            # ===============================
+            # 🔥 FIX: mostrar error real
+            # ===============================
             if not resultado or not resultado.ok:
                 st.error("❌ Error en cálculo")
+
+                if resultado and hasattr(resultado, "errores"):
+                    for err in resultado.errores:
+                        st.error(f"• {err}")
+
+                if resultado and hasattr(resultado, "warnings"):
+                    for w in resultado.warnings:
+                        st.warning(f"⚠️ {w}")
+
+                if resultado and hasattr(resultado, "debug"):
+                    with st.expander("🧠 Debug técnico"):
+                        st.json(resultado.debug)
+
                 return
 
+            # ===============================
+            # warnings normales
+            # ===============================
             if resultado.warnings:
                 for w in resultado.warnings:
                     st.warning(w)
@@ -132,7 +151,12 @@ def seccion_finalizar_calculo():
             st.success("✅ Cálculo completado correctamente")
 
         except Exception as e:
+            import traceback
+
             st.error(f"❌ Error general: {str(e)}")
+
+            with st.expander("🧠 Traceback completo"):
+                st.code(traceback.format_exc())
 
 
 # =========================================================
@@ -157,17 +181,15 @@ def seccion_exportacion():
         with st.spinner("Generando archivos..."):
 
             try:
-                # 🔥 FIX REAL: usar datos correctos
                 mat = resultado.materiales
 
                 data_export = {
-                    "df_estructuras": st.session_state.get("df_estructuras"),  # ✅ FIX
-                    "df_materiales": mat.df_materiales,                        # ✅ OK
-                    "df_resumen": mat.df_materiales,                           # ✅ fallback
-                    "df_por_punto": getattr(mat, "df_materiales_por_punto", None),  # ✅ FIX
+                    "df_estructuras": st.session_state.get("df_estructuras"),
+                    "df_materiales": mat.df_materiales,
+                    "df_resumen": mat.df_materiales,
+                    "df_por_punto": getattr(mat, "df_materiales_por_punto", None),
                 }
 
-                # 🔍 DEBUG (opcional pero recomendado)
                 st.write("DEBUG EXPORT:", {
                     k: type(v).__name__ for k, v in data_export.items()
                 })
