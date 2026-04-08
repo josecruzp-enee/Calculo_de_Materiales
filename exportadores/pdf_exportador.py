@@ -78,8 +78,10 @@ def _conteo_desde_df_estructuras(df_eg):
 
 def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
     """
-    Recibe resultados ya calculados y devuelve bytes de PDFs.
+    Genera PDFs a partir de resultados YA CALCULADOS.
+    No realiza ningún cálculo adicional.
     """
+
     if not isinstance(resultados, dict):
         raise TypeError("generar_pdfs() esperaba un dict 'resultados'.")
 
@@ -98,25 +100,27 @@ def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
     if any(x is None for x in (df_resumen, df_eg, df_ep, df_mpp)):
         raise ValueError("Uno o más DataFrames vienen como None en 'resultados'.")
 
-    # ✅ costos materiales (si aplica)
-    df_costos = resultados.get("df_costos_materiales", None)
-
-    # ✅ ruta Excel base (Estructura_datos.xlsx)
-    ruta_datos_materiales = resultados.get("ruta_datos_materiales")
-
-    # ✅ conteo para MO desde resumen de estructuras
-    conteo_estructuras = _conteo_desde_df_estructuras(df_eg)
-
-    # ✅ MO desde indice (Precio)
+    # opcionales
+    df_costos = resultados.get("df_costos_materiales")
     df_mo_estructuras = resultados.get("df_mo_estructuras")
 
-# si no hay ruta, se omite MO y el PDF igual se genera
-
+    # -------------------------------------------------
+    # GENERACIÓN (SIN LÓGICA)
+    # -------------------------------------------------
 
     pdf_materiales = generar_pdf_materiales(df_resumen, nombre, dp)
-    pdf_estructuras_global = generar_pdf_estructuras_global(df_eg, nombre)
-    pdf_estructuras_por_punto = generar_pdf_estructuras_por_punto(df_ep, nombre)
-    pdf_materiales_por_punto = generar_pdf_materiales_por_punto(df_mpp, nombre)
+
+    pdf_estructuras_global = generar_pdf_estructuras_global(
+        df_eg, nombre
+    )
+
+    pdf_estructuras_por_punto = generar_pdf_estructuras_por_punto(
+        df_ep, nombre
+    )
+
+    pdf_materiales_por_punto = generar_pdf_materiales_por_punto(
+        df_mpp, nombre
+    )
 
     pdf_completo = generar_pdf_completo(
         df_resumen,
@@ -125,7 +129,7 @@ def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
         df_mpp,
         dp,
         df_costos=df_costos,
-        df_mo_estructuras=df_mo_estructuras,  # ✅ ANEXO B (MO)
+        df_mo_estructuras=df_mo_estructuras,
     )
 
     return {
