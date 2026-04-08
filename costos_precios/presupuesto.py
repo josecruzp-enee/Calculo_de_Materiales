@@ -13,6 +13,9 @@ from reportlab.lib import colors
 # ==========================================================
 # SECCIÓN PRESUPUESTO
 # ==========================================================
+# ==========================================================
+# SECCIÓN PRESUPUESTO (ROBUSTA)
+# ==========================================================
 def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
 
     elems = [PageBreak()]
@@ -21,7 +24,7 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
     elems.append(Spacer(1, 12))
 
     # =====================================================
-    # 🔹 NUEVO: DATA DESDE DOMINIO
+    # 🔹 DATA DESDE DOMINIO
     # =====================================================
     df = resultados_costos.get("df_presupuesto")
 
@@ -32,13 +35,39 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
     df = df.copy()
 
     # =====================================================
-    # 🔹 AGRUPACIÓN
+    # 🔹 NORMALIZACIÓN DE COLUMNAS
     # =====================================================
-    categorias = df["Categoria"].unique()
+    df.columns = [str(c).strip() for c in df.columns]
+
+    columnas_req = [
+        "Categoria", "Descripción", "Unidad",
+        "Cantidad", "Precio Unitario", "Total"
+    ]
+
+    for col in columnas_req:
+        if col not in df.columns:
+            raise ValueError(f"Falta columna en presupuesto: {col}")
+
+    # =====================================================
+    # 🔹 LIMPIEZA TIPOS
+    # =====================================================
+    df["Cantidad"] = df["Cantidad"].fillna(0).astype(float)
+    df["Precio Unitario"] = df["Precio Unitario"].fillna(0).astype(float)
+    df["Total"] = df["Total"].fillna(0).astype(float)
+
+    # =====================================================
+    # 🔹 ORDEN
+    # =====================================================
+    df = df.sort_values(by=["Categoria", "Descripción"])
+
+    categorias = df["Categoria"].dropna().unique()
 
     item_cat = 1
-    total_general = 0
+    total_general = 0.0
 
+    # =====================================================
+    # 🔹 LOOP PRINCIPAL
+    # =====================================================
     for cat in categorias:
 
         elems.append(Paragraph(f"<b>{item_cat}.00 {cat}</b>", styles["Heading3"]))
@@ -49,7 +78,7 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
         data = [["ITEM", "DESCRIPCIÓN", "UND", "CANT", "P.U.", "TOTAL"]]
 
         item_sub = 1
-        total_cat = 0
+        total_cat = 0.0
 
         for _, r in df_cat.iterrows():
 
@@ -74,7 +103,9 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
 
             item_sub += 1
 
+        # =================================================
         # 🔹 SUBTOTAL
+        # =================================================
         data.append([
             "",
             f"SUBTOTAL {cat}",
@@ -87,7 +118,7 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
         total_general += total_cat
 
         # =================================================
-        # TABLA
+        # 🔹 TABLA
         # =================================================
         tabla = Table(
             data,
@@ -102,18 +133,17 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
         )
 
         tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
 
-            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
 
-            ("ALIGN", (2,1), (3,-1), "CENTER"),
-            ("ALIGN", (4,1), (-1,-1), "RIGHT"),
-            ("ALIGN", (5,1), (-1,-1), "RIGHT"),
+            ("ALIGN", (2, 1), (3, -1), "CENTER"),
+            ("ALIGN", (4, 1), (-1, -1), "RIGHT"),
 
-            ("BACKGROUND", (0,-1), (-1,-1), colors.HexColor("#EFEFEF")),
-            ("FONTNAME", (0,-1), (-1,-1), "Helvetica-Bold"),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFEFEF")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ]))
 
         elems.append(tabla)
