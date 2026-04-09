@@ -129,18 +129,33 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         punto_final = poste if poste else punto
 
         # -------------------------
-        # OUTPUT
+        # OUTPUT ESTANDARIZADO 🔥
         # -------------------------
         for est in estructuras:
             est_final = _resolver_catalogo(est)
 
             registros.append({
                 "Punto": punto_final,
-                "codigodeestructura": est_final,
-                "cantidad": 1
+                "Estructura": est_final,   # 🔥 CORREGIDO
+                "Cantidad": 1              # 🔥 CORREGIDO
             })
 
-    return pd.DataFrame(registros)
+    df_out = pd.DataFrame(registros)
+
+    # ======================================================
+    # VALIDACIÓN FUERTE
+    # ======================================================
+    required = {"Punto", "Estructura", "Cantidad"}
+
+    if df_out.empty:
+        return pd.DataFrame()
+
+    if not required.issubset(df_out.columns):
+        raise ValueError(
+            f"Formato inválido. Columnas actuales: {list(df_out.columns)}"
+        )
+
+    return df_out
 
 
 # ==========================================================
