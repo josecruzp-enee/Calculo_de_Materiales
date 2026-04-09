@@ -16,7 +16,7 @@ def calcular_costos_por_estructura(
     calibre_mt: str,
     tabla_conectores_mt: pd.DataFrame,
 
-    # 🔥 NUEVO: fuente correcta de precios
+    # 🔥 fuente de precios
     df_precios_materiales: pd.DataFrame,
 
     # 🔧 parámetros
@@ -24,13 +24,28 @@ def calcular_costos_por_estructura(
     margen_utilidad: float = 0.15,
 ) -> pd.DataFrame:
 
+    # =====================================================
+    # VALIDACIONES
+    # =====================================================
+    if not hojas_base:
+        raise ValueError("hojas_base vacío")
+
+    if not conteo:
+        raise ValueError("conteo vacío")
+
+    if df_precios_materiales is None or df_precios_materiales.empty:
+        raise ValueError("df_precios_materiales inválido")
+
     filas = []
 
+    # =====================================================
+    # LOOP PRINCIPAL
+    # =====================================================
     for cod, qty in conteo.items():
 
         cod = str(cod).strip().upper()
-
         qty = int(qty or 0)
+
         if qty <= 0:
             continue
 
@@ -46,21 +61,36 @@ def calcular_costos_por_estructura(
             tabla_conectores_mt=tabla_conectores_mt,
         )
 
+        if df_mat is None or df_mat.empty:
+            raise ValueError(f"Estructura sin materiales: {cod}")
+
+        # -------------------------------------------------
+        # 2) VALORIZACIÓN
+        # -------------------------------------------------
         df_val = calcular_costos_desde_resumen(
             df_mat[["Materiales", "Unidad", "Cantidad"]],
-            df_precios_materiales   # ✅ CORREGIDO
+            df_precios_materiales
         )
 
-        costo_material = float(df_val["Costo"].sum())
+        # 🔥 VALIDACIÓN CRÍTICA
+        if not df_val["Tiene_Precio"].all():
+            faltantes = df_val.loc[
+                ~df_val["Tiene_Precio"], "Materiales"
+            ].unique()
+
+            raise ValueError(
+                f"Materiales sin precio en estructura {cod}: {list(faltantes)}"
+            )
 
         # -------------------------------------------------
-        # 2) COSTOS OPERATIVOS (PROPORCIONAL)
+        # 3) COSTOS
         # -------------------------------------------------
+        costo_material = float(
+            pd.to_numeric(df_val["Costo"], errors="coerce").fillna(0).sum()
+        )
+
         costo_operativo = costo_material * porcentaje_operativo
 
-        # -------------------------------------------------
-        # 3) COSTO TOTAL
-        # -------------------------------------------------
         costo_total = costo_material + costo_operativo
 
         # -------------------------------------------------
@@ -71,6 +101,9 @@ def calcular_costos_por_estructura(
         if precio_unitario <= 0:
             raise ValueError(f"Estructura sin precio: {cod}")
 
+        # -------------------------------------------------
+        # 5) SALIDA
+        # -------------------------------------------------
         filas.append({
             "codigodeestructura": cod,
             "Cantidad": qty,
@@ -81,4 +114,7 @@ def calcular_costos_por_estructura(
             "Total": round(precio_unitario * qty, 2),
         })
 
+    # =====================================================
+    # OUTPUT
+    # =====================================================
     return pd.DataFrame(filas)
