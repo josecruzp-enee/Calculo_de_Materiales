@@ -9,7 +9,7 @@ from ayuda.debug import debug_guardar
 
 
 # =========================================================
-# NORMALIZACIÓN TEXTO (FIX REAL)
+# NORMALIZACIÓN TEXTO
 # =========================================================
 def _norm_txt(s: object) -> str:
     if s is None or (isinstance(s, float) and pd.isna(s)):
@@ -23,7 +23,6 @@ def _norm_txt(s: object) -> str:
         if unicodedata.category(c) != "Mn"
     )
 
-    # 🔥 limpieza fuerte para lograr match
     palabras_eliminar = [
         "DE", "DEL", "LA", "EL",
         "ANSI", "TIPO", "CLASE",
@@ -78,13 +77,10 @@ def preparar_df_costos_unitarios(
 
     debug_guardar("costos_unitarios", {
         "rows": len(df),
-        "cols": list(df.columns),
         "preview": df.head(5).to_dict()
     })
 
-    # =====================================================
-    # DETECCIÓN FALTANTES
-    # =====================================================
+    # faltantes
     df_faltantes = pd.DataFrame()
 
     if df_resumen is not None and not df_resumen.empty:
@@ -129,8 +125,6 @@ def preparar_df_costos_unitarios(
 def calcular_costos_desde_resumen(
     df_resumen: pd.DataFrame,
     df_costos: pd.DataFrame,
-    df_estructuras_por_punto=None,
-    df_costos_estructuras=None,
 ) -> pd.DataFrame:
 
     if df_resumen is None or df_resumen.empty:
@@ -147,19 +141,17 @@ def calcular_costos_desde_resumen(
     df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
 
-    debug_guardar("costos_input_materiales", {
+    debug_guardar("costos_input", {
         "rows": len(df),
         "preview": df.head(5).to_dict()
     })
 
-    # MERGE
     df = df.merge(
         df_costos,
         on=["Materiales_norm", "Unidad_norm"],
         how="left"
     )
 
-    # VALIDACIÓN
     faltantes = df[df["Costo Unitario"].isna()]
     if not faltantes.empty:
         debug_guardar("costos_error", {
@@ -167,14 +159,11 @@ def calcular_costos_desde_resumen(
         })
         raise ValueError("Hay materiales sin costo")
 
-    # CÁLCULO
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
     df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
 
-    debug_guardar("costos_calculados", {
-        "rows": len(df),
-        "total": float(df["Costo Total"].sum()),
-        "preview": df.head(5).to_dict()
+    debug_guardar("costos_total", {
+        "total": float(df["Costo Total"].sum())
     })
 
     return df[
@@ -183,20 +172,18 @@ def calcular_costos_desde_resumen(
 
 
 # =========================================================
-# HELPER PRINCIPAL
+# HELPER PRINCIPAL (FIX REAL)
 # =========================================================
 def construir_entrada_costos(
     data,
     df_resumen,
     df_estructuras_por_punto,
-    df_materiales_por_estructura,   # ✅ CAMBIO
 ):
 
     catalogo = obtener_catalogo_materiales(data)
 
     debug_guardar("costos_catalogo", {
         "rows": len(catalogo),
-        "cols": list(catalogo.columns),
         "preview": catalogo.head(5).to_dict()
     })
 
@@ -205,16 +192,10 @@ def construir_entrada_costos(
         df_resumen
     )
 
-    debug_guardar("costos_fuente", {
-        "rows": len(df_costos),
-        "preview": df_costos.head(5).to_dict()
-    })
-
     from costos_precios.orquestador_costos import EntradaCostos
 
     return EntradaCostos(
         df_resumen=df_resumen,
         df_estructuras_por_punto=df_estructuras_por_punto,
-        df_materiales_por_estructura=df_materiales_por_estructura,  # ✅
         fuente_precios=df_costos,
     )
