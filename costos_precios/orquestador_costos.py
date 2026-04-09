@@ -18,96 +18,106 @@ from costos_precios.costos_estructuras import calcular_costos_por_estructura
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
-    df_materiales_por_estructura: Dict[str, pd.DataFrame]  # 🔥 NUEVO
     fuente_precios: Union[pd.DataFrame, str, Path]
 
 
 # =====================================================
-# HELPERS
-# =====================================================
-def _cols_norm(df: pd.DataFrame) -> set:
-    return {str(c).strip().lower() for c in df.columns}
-
-
-def _validar_df(nombre: str, df: pd.DataFrame, cols_minimas=None):
-    if df is None or not isinstance(df, pd.DataFrame):
-        raise TypeError(f"{nombre} debe ser DataFrame")
-
-    if df.empty:
-        raise ValueError(f"{nombre} está vacío")
-
-    if cols_minimas:
-        cols = _cols_norm(df)
-        faltantes = [c for c in cols_minimas if c not in cols]
-        if faltantes:
-            raise ValueError(f"{nombre} no tiene columnas requeridas: {faltantes}")
-
-
-def _validar_fuente_precios(fuente):
-    if not isinstance(fuente, pd.DataFrame) or fuente.empty:
-        raise ValueError("fuente_precios inválida")
-    return fuente
-
-
-# =====================================================
-# ORQUESTADOR (CORRECTO)
+# ORQUESTADOR COSTOS (FINAL + DEBUG)
 # =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
-    if not isinstance(entrada, EntradaCostos):
-        raise TypeError("entrada debe ser EntradaCostos")
+    debug = {}
 
     # =====================================================
-    # VALIDAR ENTRADAS
+    # VALIDACIONES BASE
     # =====================================================
-    _validar_df("df_resumen", entrada.df_resumen, ["materiales", "cantidad"])
-    _validar_df("df_estructuras_por_punto", entrada.df_estructuras_por_punto)
+    if not isinstance(entrada.df_resumen, pd.DataFrame):
+        raise TypeError("df_resumen inválido")
 
-    if not isinstance(entrada.df_materiales_por_estructura, dict):
-        raise ValueError("df_materiales_por_estructura inválido")
+    if not isinstance(entrada.df_estructuras_por_punto, pd.DataFrame):
+        raise TypeError("df_estructuras_por_punto inválido")
 
-    fuente_precios = _validar_fuente_precios(entrada.fuente_precios)
+    if not isinstance(entrada.fuente_precios, pd.DataFrame):
+        raise TypeError("fuente_precios inválida")
+
+    df_ep = entrada.df_estructuras_por_punto.copy()
+
+    debug["input"] = {
+        "resumen_filas": len(entrada.df_resumen),
+        "estructuras_filas": len(df_ep),
+        "precios_filas": len(entrada.fuente_precios),
+        "columnas_estructuras": list(df_ep.columns),
+    }
 
     # =====================================================
     # 1. COSTOS DE MATERIALES
     # =====================================================
     df_costos_materiales = calcular_costos_desde_resumen(
         entrada.df_resumen,
-        fuente_precios
+        entrada.fuente_precios
     )
+
+    debug["materiales"] = {
+        "filas": len(df_costos_materiales),
+        "total": float(df_costos_materiales["Costo Total"].sum())
+    }
 
     if df_costos_materiales.empty:
         raise ValueError("No hay match entre materiales y precios")
 
     # =====================================================
-    # 2. COSTOS POR ESTRUCTURA (REAL)
+    # 2. BOM POR ESTRUCTURA (DERIVADO DESDE PUNTOS)
+    # =====================================================
+    df_materiales_por_estructura = {}
+
+    if "Estructura" not in df_ep.columns:
+        raise ValueError("df_estructuras_por_punto no tiene columna Estructura")
+
+    for est in df_ep["Estructura"].unique():
+
+        df_temp = df_ep[df_ep["Estructura"] == est][
+            ["Materiales", "Unidad", "Cantidad"]
+        ].copy()
+
+        debug.setdefault("bom", {})[est] = {
+            "filas": len(df_temp)
+        }
+
+        df_materiales_por_estructura[est] = df_temp
+
+    debug["bom_total"] = len(df_materiales_por_estructura)
+
+    # =====================================================
+    # 3. COSTOS POR ESTRUCTURA
     # =====================================================
     df_costos_estructuras = calcular_costos_por_estructura(
-        df_estructuras=entrada.df_estructuras_por_punto,
-        df_materiales_por_estructura=entrada.df_materiales_por_estructura,
-        df_precios_materiales=fuente_precios
+        df_estructuras=df_ep,
+        df_materiales_por_estructura=df_materiales_por_estructura,
+        df_precios_materiales=entrada.fuente_precios
     )
 
-    # =====================================================
-    # 3. NORMALIZAR df_estructuras_por_punto
-    # =====================================================
-    df_ep = entrada.df_estructuras_por_punto.copy()
-
-    if "codigodeestructura" not in df_ep.columns:
-        if "Estructura" in df_ep.columns:
-            df_ep["codigodeestructura"] = df_ep["Estructura"]
-        else:
-            raise ValueError("No existe columna codigodeestructura")
-
-    df_ep = df_ep[["Punto", "codigodeestructura", "Cantidad"]]
+    debug["estructuras"] = {
+        "filas": len(df_costos_estructuras)
+    }
 
     # =====================================================
     # 4. COSTOS POR PUNTO
     # =====================================================
+    df_ep2 = df_ep.copy()
+
+    if "codigodeestructura" not in df_ep2.columns:
+        df_ep2["codigodeestructura"] = df_ep2["Estructura"]
+
+    df_ep2 = df_ep2[["Punto", "codigodeestructura", "Cantidad"]]
+
     df_detalle, df_resumen_costos, df_resumen_precios = calcular_costos_por_punto(
-        df_ep,
+        df_ep2,
         df_costos_estructuras
     )
+
+    debug["puntos"] = {
+        "filas": len(df_detalle)
+    }
 
     # =====================================================
     # OUTPUT
@@ -119,4 +129,5 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         "df_costos_por_punto": df_detalle,
         "df_resumen_costos_punto": df_resumen_costos,
         "df_resumen_precios_punto": df_resumen_precios,
+        "debug": debug
     }
