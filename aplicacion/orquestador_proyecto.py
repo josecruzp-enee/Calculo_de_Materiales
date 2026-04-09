@@ -17,7 +17,9 @@ from materiales.orquestador_materiales import ejecutar_materiales
 
 from costos_precios.orquestador_costos import ejecutar_costos
 from costos_precios.costos_estructuras import calcular_costos_por_estructura
+from entradas.base_datos import cargar_base_datos
 
+base_datos = cargar_base_datos(entrada.ruta_materiales)
 
 # =========================================================
 # HELPERS
