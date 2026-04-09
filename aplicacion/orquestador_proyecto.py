@@ -20,7 +20,20 @@ from entradas.base_datos import cargar_base_datos
 # =====================================================
 from materiales.modelos.entrada import EntradaMateriales
 from aplicacion.modelos_proyecto import EntradaProyecto
+# =====================================================
+# HELPERS
+# =====================================================
+import pandas as pd
 
+def _conteo_estructuras(df_estructuras):
+    if df_estructuras is None or df_estructuras.empty:
+        return {}
+
+    df = df_estructuras.copy()
+    df["Estructura"] = df["Estructura"].astype(str).str.strip().str.upper()
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
+
+    return dict(zip(df["Estructura"], df["Cantidad"]))
 
 def ejecutar_proyecto(entrada: EntradaProyecto):
 
