@@ -38,6 +38,9 @@ def _norm_txt(s: object) -> str:
 # =========================================================
 # MOTOR DE COSTOS (OK)
 # =========================================================
+# =========================================================
+# MOTOR DE COSTOS (OK)
+# =========================================================
 def calcular_costos_desde_resumen(df_resumen, df_costos):
 
     if df_resumen is None or df_resumen.empty:
@@ -54,22 +57,52 @@ def calcular_costos_desde_resumen(df_resumen, df_costos):
     df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
 
+    # 🔍 DEBUG ANTES DEL MERGE
+    debug_guardar("DEBUG_PRECIOS_INPUT", {
+        "df_resumen_head": df.head(5).to_dict(),
+        "df_costos_head": df_costos.head(5).to_dict(),
+        "resumen_filas": len(df),
+        "costos_filas": len(df_costos)
+    })
+
     df = df.merge(df_costos, on=["Materiales_norm", "Unidad_norm"], how="left")
 
-    # DEBUG útil
+    # 🔍 DEBUG DESPUÉS DEL MERGE (CRÍTICO)
+    debug_guardar("DEBUG_PRECIOS_MERGE", {
+        "columnas": list(df.columns),
+        "head": df.head(10).to_dict()
+    })
+
+    # 🔍 VER FALTANTES
     faltantes = df[df["Costo Unitario"].isna()]
+    debug_guardar("DEBUG_PRECIOS_FALTANTES", {
+        "cantidad_faltantes": len(faltantes),
+        "muestra": faltantes.head(10).to_dict()
+    })
+
     if not faltantes.empty:
-        debug_guardar("costos_sin_match", faltantes.head(10).to_dict())
         raise ValueError("Hay materiales sin costo")
 
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
     df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
 
+    # 🔥 DEBUG FINAL (TABLA REAL DE COSTOS)
+    debug_guardar("DEBUG_COSTOS_MATERIALES_FINAL", {
+        "columnas": list(df.columns),
+        "preview": df[[
+            "Materiales",
+            "Unidad",
+            "Cantidad",
+            "Costo Unitario",
+            "Costo Total"
+        ]].head(20).to_dict(),
+        "total_costos": float(df["Costo Total"].sum())
+    })
+
     return df[[
         "Materiales", "Unidad", "Cantidad",
         "Costo Unitario", "Costo Total"
     ]].reset_index(drop=True)
-
 
 # =========================================================
 # BUILDER CORRECTO (ALINEADO)
