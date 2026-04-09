@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 import pandas as pd
@@ -19,7 +20,7 @@ class EntradaProyecto:
     datos_proyecto: Optional[Dict[str, Any]] = None
 
     # =========================
-    # 🔥 NECESARIOS (ANTES TE FALTABAN)
+    # NECESARIOS
     # =========================
     calibre_mt: Optional[str] = None
     tabla_conectores_mt: Optional[pd.DataFrame] = None
@@ -34,11 +35,11 @@ class EntradaProyecto:
     # VALIDACIÓN FUERTE
     # =========================
     def validar(self):
-
         if self.df_estructuras is None or self.df_estructuras.empty:
             raise ValueError("df_estructuras vacío")
 
         if not self.ruta_materiales:
             raise ValueError("ruta_materiales requerida")
 
+        # 🔹 Ya no hacemos obligatorio calibre_mt aquí, porque viene desde Streamlit
         return True
