@@ -71,92 +71,67 @@ def _resolver_catalogo(codigo: str) -> str:
 # ==========================================================
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
-    df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
-
     registros = []
 
     for idx, row in df.iterrows():
 
-        # -------------------------
-        # PUNTO
-        # -------------------------
-        punto = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
-        punto = str(punto).strip()
+        texto = " ".join([str(v) for v in row.values if pd.notna(v)])
 
-        # -------------------------
-        # DETECTAR COLUMNA DE ESTRUCTURAS
-        # -------------------------
-        estructura_raw = None
-
-        for col in df.columns:
-            col_norm = _norm_col(col)
-
-            if col_norm in {"estructura", "estructuras", "codigodeestructura"}:
-                estructura_raw = row.get(col)
-                break
-
-        if estructura_raw is None:
+        if not texto:
             continue
 
-        # -------------------------
-        # EXPANDIR
-        # -------------------------
-        partes = _split_bloques(estructura_raw)
+        texto = texto.upper().replace("(P)", "")
+        lineas = re.split(r"\n|\\P|;", texto)
 
-        codigos = []
-        for p in partes:
-            for t in _expandir(p):
-                c = limpiar_codigo(t)
-                if c:
-                    codigos.append(c)
+        punto_actual = None
 
-        # -------------------------
-        # CLASIFICAR
-        # -------------------------
-        poste = None
-        estructuras = []
+        for linea in lineas:
 
-        for c in codigos:
+            linea = linea.strip()
+            if not linea:
+                continue
 
-            # Detecta P, PC, etc.
-            if re.match(r"^P[C]?-?\d+[A-Z]?$", c):
-                num = re.findall(r"\d+", c)[0]
-                poste = f"P-{num}"
-            else:
-                estructuras.append(c)
+            # -----------------------------
+            # DETECTAR POSTE (P-XX)
+            # -----------------------------
+            m_poste = re.match(r"P[-\s]?(\d+)", linea)
 
-        punto_final = poste if poste else punto
+            if m_poste:
+                num = m_poste.group(1)
+                punto_actual = f"P-{num}"
+                continue
 
-        # -------------------------
-        # OUTPUT ESTANDARIZADO 🔥
-        # -------------------------
-        for est in estructuras:
-            est_final = _resolver_catalogo(est)
+            # -----------------------------
+            # EXTRAER ESTRUCTURAS
+            # -----------------------------
+            encontrados = _extraer_estructuras(linea)
 
-            registros.append({
-                "Punto": punto_final,
-                "Estructura": est_final,   # 🔥 CORREGIDO
-                "Cantidad": 1              # 🔥 CORREGIDO
-            })
+            for e in encontrados:
+
+                est = limpiar_codigo(e)
+
+                if not est:
+                    continue
+
+                registros.append({
+                    "Punto": punto_actual if punto_actual else f"P-{idx+1}",
+                    "Estructura": est,
+                    "Cantidad": 1
+                })
 
     df_out = pd.DataFrame(registros)
 
-    # ======================================================
-    # VALIDACIÓN FUERTE
-    # ======================================================
-    required = {"Punto", "Estructura", "Cantidad"}
-
     if df_out.empty:
-        return pd.DataFrame()
+        return df_out
 
-    if not required.issubset(df_out.columns):
-        raise ValueError(
-            f"Formato inválido. Columnas actuales: {list(df_out.columns)}"
-        )
+    # agrupar correctamente
+    df_out = (
+        df_out
+        .groupby(["Punto", "Estructura"], as_index=False)["Cantidad"]
+        .sum()
+    )
 
     return df_out
-
 
 # ==========================================================
 # FUNCIÓN PÚBLICA
