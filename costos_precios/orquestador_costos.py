@@ -55,13 +55,19 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     df_mp = entrada.df_materiales_por_punto.copy()
 
     # =====================================================
-    # DEBUG REAL
+    # 🔥 NORMALIZACIÓN CRÍTICA
+    # =====================================================
+    df_ep["Punto"] = df_ep["Punto"].astype(str).str.strip().str.upper()
+    df_mp["Punto"] = df_mp["Punto"].astype(str).str.strip().str.upper()
+
+    # =====================================================
+    # DEBUG BASE
     # =====================================================
     debug["debug_costos"] = {
-        "df_resumen_cols": list(entrada.df_resumen.columns),
-        "df_ep_cols": list(df_ep.columns),
-        "df_mp_cols": list(df_mp.columns),
-        "filas_materiales": len(df_mp),
+        "df_ep_puntos_sample": df_ep["Punto"].unique()[:10].tolist(),
+        "df_mp_puntos_sample": df_mp["Punto"].unique()[:10].tolist(),
+        "df_ep_total": len(df_ep),
+        "df_mp_total": len(df_mp),
     }
 
     # =====================================================
@@ -71,9 +77,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         entrada.df_resumen,
         entrada.fuente_precios
     )
-
-    if df_costos_materiales is None or df_costos_materiales.empty:
-        raise ValueError("No hay match entre materiales y precios")
 
     debug["materiales"] = {
         "filas": len(df_costos_materiales),
@@ -86,26 +89,41 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     if "Estructura" not in df_ep.columns:
         raise ValueError("df_estructuras_por_punto no tiene columna Estructura")
 
-    df_ep["Estructura"] = df_ep["Estructura"].apply(norm)
+    df_ep["Estructura"] = df_ep["Estructura"].astype(str).str.strip().str.upper()
     df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
+
+    # =====================================================
+    # 🔥 DEBUG ESTRUCTURAS
+    # =====================================================
+    debug["estructuras_input"] = df_ep["Estructura"].unique().tolist()
 
     # =====================================================
     # 3. MAPEO CLAVE (Punto → Estructura)
     # =====================================================
     map_punto_est = dict(zip(df_ep["Punto"], df_ep["Estructura"]))
 
+    debug["map_size"] = len(map_punto_est)
+
     df_materiales_por_estructura = {}
+    puntos_sin_match = []
 
     for punto, df_p in df_mp.groupby("Punto"):
 
         est = map_punto_est.get(punto)
 
         if est is None:
+            puntos_sin_match.append(punto)
             continue
 
         df_temp = df_p[["Materiales", "Unidad", "Cantidad"]].copy()
 
         df_materiales_por_estructura.setdefault(est, []).append(df_temp)
+
+    # =====================================================
+    # 🔥 DEBUG MATCH
+    # =====================================================
+    debug["puntos_sin_match"] = puntos_sin_match[:20]
+    debug["estructuras_con_materiales"] = list(df_materiales_por_estructura.keys())
 
     # =====================================================
     # CONSOLIDAR BOM
@@ -129,7 +147,21 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     if not df_materiales_por_estructura:
         raise ValueError("No se pudo construir BOM por estructura")
 
-    debug["bom_total"] = len(df_materiales_por_estructura)
+    # =====================================================
+    # 🔥 VALIDACIÓN FUERTE (AQUÍ FALLA TU CASO)
+    # =====================================================
+    estructuras_sin_material = []
+
+    for est in df_ep["Estructura"].unique():
+        if est not in df_materiales_por_estructura:
+            estructuras_sin_material.append(est)
+
+    debug["estructuras_sin_material"] = estructuras_sin_material
+
+    if estructuras_sin_material:
+        raise ValueError(
+            f"Estructuras sin materiales: {estructuras_sin_material[:10]}"
+        )
 
     # =====================================================
     # 4. COSTOS POR ESTRUCTURA
@@ -163,9 +195,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         "filas": len(df_detalle)
     }
 
-    # =====================================================
-    # OUTPUT
-    # =====================================================
     return {
         "ok": True,
         "df_costos_materiales": df_costos_materiales,
