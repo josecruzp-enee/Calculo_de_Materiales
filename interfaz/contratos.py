@@ -90,7 +90,7 @@ class SalidaMateriales:
     df_estructuras: Optional[pd.DataFrame] = None
     df_estructuras_por_punto: Optional[pd.DataFrame] = None
     descripcion_estructuras: Optional[Dict[str, Any]] = None
-
+    base_datos: Dict[str, pd.DataFrame] = field(default_factory=dict)
     # CONTEXTO
     datos_proyecto: Dict[str, Any] = field(default_factory=dict)
 
