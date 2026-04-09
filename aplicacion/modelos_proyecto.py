@@ -41,7 +41,4 @@ class EntradaProyecto:
         if not self.ruta_materiales:
             raise ValueError("ruta_materiales requerida")
 
-        if not self.calibre_mt:
-            raise ValueError("calibre_mt requerido")
-
         return True
