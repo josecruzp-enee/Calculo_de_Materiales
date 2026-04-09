@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 import traceback
 import pandas as pd
-
+from costos_precios.costos_materiales import construir_entrada_costos
 # =========================================================
 # CONTRATOS
 # =========================================================
@@ -18,7 +18,7 @@ from entradas.orquestador_entradas import ejecutar_entradas
 
 from materiales.modelos.entrada import EntradaMateriales
 from materiales.orquestador_materiales import ejecutar_materiales
-
+from costos_precios.costos_materiales import construir_entrada_costos
 from costos_precios.orquestador_costos import (
     ejecutar_costos,
     EntradaCostos,
@@ -199,30 +199,26 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 6. COSTOS
         # =====================================================
+        # =====================================================
+        # 6. COSTOS (AUTO DESDE CATÁLOGO)
+        # =====================================================
         df_ep = resultado_materiales.df_estructuras_por_punto
 
         if df_ep is None:
             return _fail("df_estructuras_por_punto no disponible", debug=debug_global)
 
-        if entrada_proyecto.df_precios_materiales is None:
-            return _fail("df_precios_materiales requerido", debug=debug_global)
-
         if entrada_proyecto.df_costos_estructuras is None:
             return _fail("df_costos_estructuras requerido", debug=debug_global)
 
-        entrada_costos = EntradaCostos(
+        # 🔥 CONSTRUIR PRECIOS DESDE BASE_DATOS
+        entrada_costos = construir_entrada_costos(
+            data=entrada_proyecto.base_datos,
             df_resumen=resultado_materiales.df_materiales,
             df_estructuras_por_punto=df_ep,
             df_costos_estructuras=entrada_proyecto.df_costos_estructuras,
-            fuente_precios=entrada_proyecto.df_precios_materiales,
         )
 
         resultado_costos = ejecutar_costos(entrada_costos)
-
-        debug_global["costos"] = getattr(resultado_costos, "debug", {})
-
-        if not resultado_costos or not resultado_costos.ok:
-            return _fail("Error en costos", debug=debug_global)
 
         # =====================================================
         # 7. REPORTES
