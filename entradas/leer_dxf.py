@@ -52,6 +52,9 @@ def _normalizar(codigo: str) -> str:
 # =========================================================
 # FUNCIÓN PRINCIPAL
 # =========================================================
+# =========================================================
+# FUNCIÓN PRINCIPAL
+# =========================================================
 def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
 
     debug = {
@@ -133,7 +136,7 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
 
     debug["proceso"]["capas_detectadas"] = list(capas_detectadas)
     debug["proceso"]["textos_capturados"] = textos_capturados[:10]
-    debug["proceso"]["estructuras_detectadas"] = estructuras[:20]
+    debug["proceso"]["estructuras_detectadas_raw"] = estructuras[:50]
 
     # =====================================================
     # VALIDACIÓN
@@ -174,28 +177,26 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
         raise ValueError("Columnas inválidas en salida DXF")
 
     # =====================================================
-    # OUTPUT
+    # OUTPUT + DEBUG FINAL
     # =====================================================
     debug["output"] = {
         "filas": len(df),
         "columnas": list(df.columns)
     }
 
+    # 🔥 ESTE ES EL IMPORTANTE (LO QUE QUIERES VER)
+    try:
+        debug["estructuras_detectadas"] = sorted(
+            df["Estructura"].astype(str).unique().tolist()
+        )
+    except Exception:
+        debug["estructuras_detectadas"] = "error al extraer estructuras"
+
     debug["estado"] = {"ok": True}
 
     _guardar_debug(debug)
-    # =============================================
-    # DEBUG CRÍTICO (ESTRUCTURAS DETECTADAS)
-    # =============================================
-    try:
-        if not df.empty:
-            debug["estructuras_detectadas"] = sorted(
-                df["Estructura"].astype(str).unique().tolist()
-            )
-    except Exception:
-        debug["estructuras_detectadas"] = "error al extraer estructuras"
-    return df
 
+    return df
 
 # =========================================================
 # GUARDAR DEBUG
