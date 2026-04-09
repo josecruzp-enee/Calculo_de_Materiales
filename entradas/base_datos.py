@@ -126,7 +126,7 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
     out["Referencia"] = df.get("REFERENCIA", "").astype(str).str.strip()
 
     out["Costo"] = pd.to_numeric(
-        df.get("COSTO UNITARIO", 0),
+        df.get("Costo Unitario", 0),
         errors="coerce"
     ).fillna(0)
 
