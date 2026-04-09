@@ -89,28 +89,59 @@ def _render_pipeline_runtime():
 # =========================================================
 def _render_valor_debug(valor):
 
+    # =====================================================
+    # DATAFRAME DIRECTO
+    # =====================================================
     if isinstance(valor, pd.DataFrame):
         st.caption(f"Filas: {len(valor)} | Columnas: {list(valor.columns)}")
-        st.dataframe(valor.head(10), use_container_width=True)
+        st.dataframe(valor, use_container_width=True)
 
+    # =====================================================
+    # DICT (CLAVE: NO convertir todo a string)
+    # =====================================================
     elif isinstance(valor, dict):
-        try:
-            limpio = {str(k): str(v)[:200] for k, v in valor.items()}
-            st.json(limpio)
-        except:
-            st.write(str(valor))
 
+        # Mostrar JSON limpio pero SIN romper estructuras
+        try:
+            st.json({
+                k: v if not isinstance(v, pd.DataFrame) else f"<<DataFrame {v.shape}>>"
+                for k, v in valor.items()
+            })
+        except:
+            st.write(valor)
+
+        # 🔥 DETECTAR DATAFRAMES INTERNOS
+        for k, v in valor.items():
+            if isinstance(v, pd.DataFrame):
+                st.markdown(f"📊 DataFrame interno: `{k}`")
+                st.caption(f"Filas: {len(v)} | Columnas: {list(v.columns)}")
+                st.dataframe(v, use_container_width=True)
+
+    # =====================================================
+    # OBJETO (dataclass / class)
+    # =====================================================
     elif hasattr(valor, "__dict__"):
         try:
-            limpio = {str(k): str(v)[:200] for k, v in vars(valor).items()}
-            st.json(limpio)
+            contenido = vars(valor)
+
+            st.json({
+                k: v if not isinstance(v, pd.DataFrame) else f"<<DataFrame {v.shape}>>"
+                for k, v in contenido.items()
+            })
+
+            for k, v in contenido.items():
+                if isinstance(v, pd.DataFrame):
+                    st.markdown(f"📊 DataFrame interno: `{k}`")
+                    st.dataframe(v, use_container_width=True)
+
         except:
-            st.write(str(valor))
+            st.write(valor)
 
+    # =====================================================
+    # OTROS
+    # =====================================================
     else:
-        st.write(str(valor))
-
-
+        st.write(valor)
 # =========================================================
 # 🔷 AUDITORÍA ESTRUCTURAS
 # =========================================================
