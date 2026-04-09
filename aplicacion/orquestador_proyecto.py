@@ -98,15 +98,17 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_estructuras=salida_entradas.df_estructuras,
             datos_proyecto=salida_entradas.datos_proyecto,
 
-            calibre_mt=salida_entradas.calibre_mt or "",
-            tabla_conectores_mt=salida_entradas.tabla_conectores_mt or {},
-            
+            # 🔹 dominio (desde UI/config)
+            calibre_mt=(salida_entradas.datos_proyecto or {}).get("calibre_mt", ""),
+            tabla_conectores_mt=(salida_entradas.datos_proyecto or {}).get("tabla_conectores_mt", {}),
 
+            # 🔹 passthrough
             df_cables=salida_entradas.df_cables,
             df_materiales_extra=salida_entradas.df_materiales_extra,
 
-            df_precios_materiales=salida_entradas.df_precios_materiales,
-            df_costos_estructuras=salida_entradas.df_costos_estructuras,
+            # 🔹 costos (opcionales)
+            df_precios_materiales=(salida_entradas.datos_proyecto or {}).get("df_precios_materiales"),
+            df_costos_estructuras=(salida_entradas.datos_proyecto or {}).get("df_costos_estructuras"),
         )
 
         # =====================================================
