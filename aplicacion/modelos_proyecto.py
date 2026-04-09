@@ -12,10 +12,10 @@ class EntradaProyecto:
     Contrato maestro del sistema (Aplicación)
 
     RESPONSABILIDAD:
-    - Validar inputs
-    - Garantizar estructura mínima
-    - NO transformar lógica de negocio
-    - NO ejecutar cálculos
+    ✔ Validar inputs
+    ✔ Garantizar estructura mínima
+    ❌ NO transformar lógica de negocio
+    ❌ NO ejecutar cálculos
     """
 
     # =========================
@@ -25,9 +25,8 @@ class EntradaProyecto:
     df_estructuras: pd.DataFrame
 
     # =========================
-    # CONFIG PROYECTO
+    # CONTEXTO PROYECTO
     # =========================
-    tension: Optional[float] = None
     datos_proyecto: Dict[str, Any] = field(default_factory=dict)
 
     # =========================
@@ -84,7 +83,7 @@ class EntradaProyecto:
                 f"df_estructuras debe contener columnas {columnas_requeridas}"
             )
 
-        # Validación sin mutar
+        # Validación SIN mutar el original
         df_tmp = self.df_estructuras.copy()
         df_tmp.columns = df_tmp.columns.str.strip().str.capitalize()
 
@@ -97,16 +96,32 @@ class EntradaProyecto:
             raise ValueError("Cantidad debe ser mayor a 0")
 
         # =====================================================
-        # TENSIÓN
+        # DATOS PROYECTO
         # =====================================================
-        if self.tension is not None:
-            try:
-                t = float(self.tension)
-            except Exception:
-                raise ValueError(f"Tensión inválida: {self.tension}")
+        if not isinstance(self.datos_proyecto, dict):
+            raise TypeError("datos_proyecto debe ser dict")
 
-            if t <= 0:
-                raise ValueError("Tensión debe ser mayor a 0")
+        if not self.datos_proyecto:
+            raise ValueError("datos_proyecto vacío")
+
+        # =====================================================
+        # TENSIÓN (DESDE DATOS_PROYECTO)
+        # =====================================================
+        tension = (
+            self.datos_proyecto.get("tension")
+            or self.datos_proyecto.get("nivel_de_tension")
+        )
+
+        if tension is None:
+            raise ValueError("Tensión no definida en datos_proyecto")
+
+        try:
+            t = float(tension)
+        except Exception:
+            raise ValueError(f"Tensión inválida: {tension}")
+
+        if t <= 0:
+            raise ValueError("Tensión debe ser mayor a 0")
 
         # =====================================================
         # CONECTORES MT
@@ -114,7 +129,6 @@ class EntradaProyecto:
         if not isinstance(self.tabla_conectores_mt, dict):
             raise TypeError("tabla_conectores_mt debe ser dict")
 
-        # Validación ligera de contenido
         for k, v in self.tabla_conectores_mt.items():
             if not isinstance(k, str):
                 raise TypeError("Clave de tabla_conectores_mt debe ser str")
@@ -132,8 +146,3 @@ class EntradaProyecto:
         }.items():
             if df_ is not None and not isinstance(df_, pd.DataFrame):
                 raise TypeError(f"{nombre} debe ser DataFrame o None")
-
-        # =====================================================
-        # NORMALIZACIÓN LIGERA (SEGURA)
-        # =====================================================
-        self.calibre_mt = str(self.calibre_mt or "").strip().upper()
