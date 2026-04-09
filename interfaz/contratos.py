@@ -75,10 +75,7 @@ class SalidaEntradas:
 # =========================================================
 # 🔷 CONTRATO MATERIALES → EXPORTADORES
 # =========================================================
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from materiales.modelos.salida import SalidaMateriales
 
 # =========================================================
 # 🔷 CONTRATO COSTOS → EXPORTADORES
