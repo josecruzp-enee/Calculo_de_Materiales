@@ -160,7 +160,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 # ==========================================================
 # FUNCIÓN PÚBLICA
 # ==========================================================
-def normalizar_estructuras(df: pd.DataFrame):
+def normalizar_estructuras(df: pd.DataFrame, debug: dict):
 
     if not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame(), ["df inválido o vacío"], []
@@ -171,28 +171,23 @@ def normalizar_estructuras(df: pd.DataFrame):
         if df_norm.empty:
             return pd.DataFrame(), ["No se detectaron estructuras válidas"], []
 
+        # =============================================
+        # DEBUG NORMALIZACIÓN
+        # =============================================
+        debug["normalizacion"] = {
+            "filas": len(df_norm),
+            "columnas": df_norm.columns.tolist(),
+            "estructuras_unicas": sorted(
+                df_norm["codigodeestructura"].astype(str).unique().tolist()
+            )
+        }
+
         return df_norm, [], []
 
     except Exception as e:
-
-    # =============================================
-    # DEBUG NORMALIZACIÓN (PIPELINE)
-    # =============================================
-    debug["normalizacion"] = {
-        "filas": int(len(df_norm)) if df_norm is not None else 0,
-        "columnas": df_norm.columns.tolist() if df_norm is not None else [],
-        "preview": (
-            df_norm.head(5).to_dict()
-            if isinstance(df_norm, pd.DataFrame) and not df_norm.empty
-            else {}
-        ),
-        "estructuras_unicas": (
-            sorted(df_norm["codigodeestructura"].astype(str).unique().tolist())
-            if isinstance(df_norm, pd.DataFrame)
-            and not df_norm.empty
-            and "codigodeestructura" in df_norm.columns
-            else []
-        ),
-    }
+        debug["normalizacion"] = {
+            "error": str(e)
+        }
+        return pd.DataFrame(), [str(e)], []
      
         return pd.DataFrame(), [str(e)], []
