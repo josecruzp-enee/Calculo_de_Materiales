@@ -149,5 +149,3 @@ class ResultadoProyecto:
 
     # DEBUG
     debug: Dict[str, Any] = field(default_factory=dict)
-
-    debug: Dict[str, Any] = field(default_factory=dict)
