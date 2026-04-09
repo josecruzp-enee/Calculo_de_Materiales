@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from pathlib import Path
+
 # =====================================================
 # ORQUESTADORES
 # =====================================================
@@ -23,7 +25,7 @@ from aplicacion.modelos_proyecto import EntradaProyecto
 def ejecutar_proyecto(entrada: EntradaProyecto):
 
     # =====================================================
-    # VALIDACIÓN (SOLO INPUT REAL)
+    # VALIDACIÓN INPUT
     # =====================================================
     if not isinstance(entrada, EntradaProyecto):
         raise TypeError("entrada debe ser EntradaProyecto")
@@ -57,10 +59,24 @@ def ejecutar_proyecto(entrada: EntradaProyecto):
 
     if entrada.calcular_costos:
 
-        # 🔥 CARGAR BASE DE DATOS (EXCEL)
-        hojas_base = cargar_base_datos(entrada.ruta_materiales)
+        # -------------------------
+        # RUTA SEGURA
+        # -------------------------
+        ruta_materiales = entrada.ruta_materiales
 
-        # 🔥 CALCULAR COSTOS POR ESTRUCTURA
+        if ruta_materiales is None:
+            raise ValueError("Falta ruta_materiales para costos")
+
+        ruta_materiales = Path(ruta_materiales)
+
+        # -------------------------
+        # BASE DE DATOS
+        # -------------------------
+        hojas_base = cargar_base_datos(ruta_materiales)
+
+        # -------------------------
+        # COSTOS POR ESTRUCTURA
+        # -------------------------
         df_costos_estructuras = calcular_costos_por_estructura(
             hojas_base=hojas_base,
             conteo=salida_materiales.conteo_estructuras,
@@ -70,13 +86,15 @@ def ejecutar_proyecto(entrada: EntradaProyecto):
             df_precios_materiales=entrada.df_precios_materiales,
         )
 
-        # 🔥 EJECUTAR COSTOS GENERALES
+        # -------------------------
+        # COSTOS GENERALES
+        # -------------------------
         salida_costos = ejecutar_costos({
             "df_resumen": salida_materiales.df_materiales,
             "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
             "df_costos_estructuras": df_costos_estructuras,
             "df_precios_materiales": entrada.df_precios_materiales,
-            "archivo_precios_materiales": entrada.ruta_materiales,
+            "archivo_precios_materiales": str(ruta_materiales),
             "datos_proyecto": entrada.datos_proyecto,
         })
 
