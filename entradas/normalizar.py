@@ -6,18 +6,17 @@ import pandas as pd
 
 
 # ==========================================================
-# HELPERS
+# API (usado por otros módulos)
 # ==========================================================
 def limpiar_codigo(codigo: str) -> str:
     if codigo is None:
         return ""
 
     codigo = str(codigo).strip().upper()
-
     if not codigo:
         return ""
 
-    codigo = re.sub(r"\(.*?\)", "", codigo)
+    codigo = re.sub(r"\(.*?\)", "", codigo)     # quitar paréntesis
     codigo = codigo.replace(" ", "")
     codigo = re.sub(r"[^A-Z0-9\-\.\+]", "", codigo)
 
@@ -25,42 +24,22 @@ def limpiar_codigo(codigo: str) -> str:
 
 
 # ==========================================================
-# RESOLUCIÓN DE CATÁLOGO
+# INTERNOS
 # ==========================================================
-def resolver_codigo_catalogo(codigo: str) -> str:
-    codigo = codigo.strip().upper()
-
-    if codigo.startswith("LL-"):
-        if re.search(r"LL-\d+-\d+W", codigo):
-            return codigo
-        return f"{codigo}-50W"
-
-    return codigo
+def _norm_col(s: str) -> str:
+    return (
+        str(s).strip().lower()
+        .replace(" ", "")
+        .replace("á","a").replace("é","e")
+        .replace("í","i").replace("ó","o").replace("ú","u")
+    )
 
 
-# ==========================================================
-# EXPANSIÓN
-# ==========================================================
-def _expandir_multiplicador(token: str):
-    if not token:
-        return []
-
-    token = token.strip().upper()
-
-    match = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
-    if match:
-        return [match.group(2).strip()] * int(match.group(1))
-
-    return [token]
-
-
-# ==========================================================
-# SPLIT ROBUSTO (DXF)
-# ==========================================================
 def _split_bloques(texto: str):
     if texto is None:
         return []
 
+    texto = str(texto)
     texto = texto.replace("\\P", "\n")
     texto = texto.replace(",", "\n")
     texto = texto.replace(";", "\n")
@@ -68,53 +47,32 @@ def _split_bloques(texto: str):
 
     texto = re.sub(r"\n+", "\n", texto)
 
-    partes = texto.split("\n")
-
-    return [p.strip() for p in partes if p.strip()]
+    return [p.strip() for p in texto.split("\n") if p.strip()]
 
 
-# ==========================================================
-# EXPANDIR LISTA
-# ==========================================================
-def expandir_lista_codigos(texto: str):
-    if texto is None:
-        return []
+def _expandir(token: str):
+    m = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
+    if m:
+        return [m.group(2)] * int(m.group(1))
+    return [token]
 
-    texto = str(texto).upper()
 
-    texto = re.sub(r"\{[^:]*:", "", texto)
-    texto = texto.replace("{", "").replace("}", "")
-    texto = texto.replace("\\P", "\n")
-
-    partes = _split_bloques(texto)
-
-    resultado = []
-
-    for p in partes:
-        tokens = _expandir_multiplicador(p)
-
-        for t in tokens:
-            codigo = limpiar_codigo(t)
-
-            if not codigo:
-                continue
-
-            # filtro anti-basura
-            if codigo.startswith("CS-") and codigo not in {"CS-1", "CS-2"}:
-                continue
-
-            resultado.append(codigo)
-
-    return resultado
+def _resolver_catalogo(codigo: str) -> str:
+    # Ejemplo: luminarias LL-
+    if codigo.startswith("LL-"):
+        if re.search(r"LL-\d+-\d+W", codigo):
+            return codigo
+        return f"{codigo}-50W"
+    return codigo
 
 
 # ==========================================================
-# CORE NORMALIZACIÓN
+# CORE
 # ==========================================================
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
-    df.columns = df.columns.str.strip()
+    df.columns = [str(c).strip() for c in df.columns]
 
     registros = []
 
@@ -123,18 +81,18 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         # -------------------------
         # PUNTO
         # -------------------------
-        punto_original = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
-        punto_original = str(punto_original).strip()
+        punto = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
+        punto = str(punto).strip()
 
         # -------------------------
-        # DETECTAR COLUMNA
+        # DETECTAR COLUMNA DE ESTRUCTURAS
         # -------------------------
         estructura_raw = None
 
         for col in df.columns:
-            col_norm = col.lower().replace(" ", "")
+            col_norm = _norm_col(col)
 
-            if col_norm in ["estructura", "estructuras", "codigodeestructura"]:
+            if col_norm in {"estructura", "estructuras", "codigodeestructura"}:
                 estructura_raw = row.get(col)
                 break
 
@@ -144,7 +102,14 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         # -------------------------
         # EXPANDIR
         # -------------------------
-        lista_codigos = expandir_lista_codigos(estructura_raw)
+        partes = _split_bloques(estructura_raw)
+
+        codigos = []
+        for p in partes:
+            for t in _expandir(p):
+                c = limpiar_codigo(t)
+                if c:
+                    codigos.append(c)
 
         # -------------------------
         # CLASIFICAR
@@ -152,35 +117,30 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         poste = None
         estructuras = []
 
-        for cod in lista_codigos:
+        for c in codigos:
 
-            if re.match(r"^P-?\d+$", cod):
-                numero = re.findall(r"\d+", cod)[0]
-                poste = f"P-{numero}"
+            # Detecta P, PC, etc.
+            if re.match(r"^P[C]?-?\d+[A-Z]?$", c):
+                num = re.findall(r"\d+", c)[0]
+                poste = f"P-{num}"
             else:
-                estructuras.append(cod)
+                estructuras.append(c)
 
-        # -------------------------
-        # PUNTO FINAL
-        # -------------------------
-        punto_final = poste if poste else punto_original
+        punto_final = poste if poste else punto
 
         # -------------------------
         # OUTPUT
         # -------------------------
         for est in estructuras:
-
-            est_final = resolver_codigo_catalogo(est)
+            est_final = _resolver_catalogo(est)
 
             registros.append({
                 "Punto": punto_final,
-                "Estructura": est_final,
+                "codigodeestructura": est_final,
                 "cantidad": 1
             })
 
-    df_out = pd.DataFrame(registros)
-
-    return df_out
+    return pd.DataFrame(registros)
 
 
 # ==========================================================
@@ -188,8 +148,15 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 # ==========================================================
 def normalizar_estructuras(df: pd.DataFrame):
 
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame(), ["df inválido o vacío"], []
+
     try:
         df_norm = _convertir_a_largo(df)
+
+        if df_norm.empty:
+            return pd.DataFrame(), ["No se detectaron estructuras válidas"], []
+
         return df_norm, [], []
 
     except Exception as e:
