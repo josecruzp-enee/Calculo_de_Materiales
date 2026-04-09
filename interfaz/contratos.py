@@ -60,6 +60,7 @@ class SalidaEntradas:
     # DATA LIMPIA
     df_estructuras: pd.DataFrame = field(default_factory=pd.DataFrame)
 
+    base_datos: Dict[str, pd.DataFrame] = field(default_factory=dict)
     # CONTEXTO
     datos_proyecto: Dict[str, Any] = field(default_factory=dict)
 
