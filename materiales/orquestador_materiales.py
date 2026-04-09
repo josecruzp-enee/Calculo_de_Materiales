@@ -83,7 +83,6 @@ def _merge_materiales(df_a, df_b):
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
-
 def ejecutar_materiales(
     entrada: EntradaMateriales,
     catalogo: Optional[Dict[str, Any]] = None,
@@ -146,6 +145,9 @@ def ejecutar_materiales(
             "tipo_resultado": str(type(resultado_calc))
         }
 
+        # 🔥 DEBUG CLAVE
+        debug["calc_keys"] = list(resultado_calc.keys()) if isinstance(resultado_calc, dict) else "no_dict"
+
     except Exception as e:
 
         debug["estado"] = {
@@ -202,15 +204,28 @@ def ejecutar_materiales(
         df_materiales = resultado_calc[0] if len(resultado_calc) >= 1 else None
         df_detalle = resultado_calc[1] if len(resultado_calc) >= 2 else None
 
+    # 🔥 DEBUG CRUDO
+    debug["raw_materiales"] = {
+        "df_materiales_none": df_materiales is None,
+        "df_detalle_none": df_detalle is None,
+    }
+
     if df_materiales is None:
         df_materiales = _df_vacio()
 
     if df_detalle is None:
         df_detalle = _df_vacio()
 
+    # 🔥 DEBUG FINAL BUENO
     debug["post_procesado"] = {
         "materiales": len(df_materiales),
         "detalle": len(df_detalle),
+
+        "mat_cols": list(df_materiales.columns),
+        "det_cols": list(df_detalle.columns),
+
+        "mat_head": df_materiales.head(3).to_dict(),
+        "det_head": df_detalle.head(3).to_dict(),
     }
 
     # =====================================================
@@ -218,6 +233,12 @@ def ejecutar_materiales(
     # =====================================================
     if isinstance(df_materiales_extra, pd.DataFrame) and not df_materiales_extra.empty:
         try:
+
+            debug["materiales_extra_input"] = {
+                "filas": len(df_materiales_extra),
+                "columnas": list(df_materiales_extra.columns)
+            }
+
             df_materiales = _merge_materiales(df_materiales, df_materiales_extra)
 
             debug["merge_extra"] = {
