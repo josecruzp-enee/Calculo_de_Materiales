@@ -20,7 +20,12 @@ def _costo_unitario_estructura(
         df_precios_materiales
     )
 
-    # 🔥 usamos Costo Total (ya viene calculado)
+    if not isinstance(df_val, pd.DataFrame) or df_val.empty:
+        raise ValueError("Valorización vacía")
+
+    if "Costo Total" not in df_val.columns:
+        raise ValueError(f"Columnas inválidas: {list(df_val.columns)}")
+
     costo = float(
         pd.to_numeric(df_val["Costo Total"], errors="coerce")
         .fillna(0)
@@ -46,16 +51,22 @@ def calcular_costos_por_estructura(
     if df_estructuras is None or df_estructuras.empty:
         raise ValueError("df_estructuras vacío")
 
+    # -------------------------------
+    # NORMALIZACIÓN
+    # -------------------------------
     df = df_estructuras.copy()
 
     df["codigodeestructura"] = df["Estructura"].astype(str).str.strip().str.upper()
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
-    # 🔥 agrupar (1 fila por estructura)
+    # 🔥 AGRUPAR (1 fila por estructura)
     df_group = df.groupby("codigodeestructura", as_index=False)["Cantidad"].sum()
 
     filas = []
 
+    # -------------------------------
+    # LOOP
+    # -------------------------------
     for _, row in df_group.iterrows():
 
         cod = row["codigodeestructura"]
@@ -75,16 +86,21 @@ def calcular_costos_por_estructura(
         )
 
         filas.append({
-            "codigodeestructura": cod,
-            "Costo Unitario": costo_unit,
+            "codigodeestructura": cod,              # 🔥 OBLIGATORIO
+            "Costo Unitario": costo_unit,           # 🔥 OBLIGATORIO
+            "Precio Unitario": costo_unit,          # 🔥 OBLIGATORIO
             "Cantidad": qty,
             "Costo Total": round(costo_unit * qty, 2),
-            "Precio Unitario": costo_unit,  # 🔥 para compatibilidad pipeline
         })
 
     df_out = pd.DataFrame(filas)
 
     if df_out.empty:
         raise ValueError("No se generaron costos")
+
+    # 🔥 GARANTÍA FINAL DEL CONTRATO (CRÍTICO)
+    required = {"codigodeestructura", "Costo Unitario", "Precio Unitario"}
+    if not required.issubset(df_out.columns):
+        raise ValueError(f"Salida inválida: {df_out.columns}")
 
     return df_out.sort_values("codigodeestructura").reset_index(drop=True)
