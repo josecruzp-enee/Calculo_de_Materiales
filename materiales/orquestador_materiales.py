@@ -1,3 +1,85 @@
+# materiales/orquestador_materiales.py
+
+from __future__ import annotations
+
+from typing import Optional, Dict, Any, List
+import pandas as pd
+
+# =========================================================
+# CONTRATO OFICIAL
+# =========================================================
+from interfaz.contratos import SalidaMateriales
+
+# =========================================================
+# MODELOS
+# =========================================================
+from materiales.modelos.entrada import EntradaMateriales
+
+# =========================================================
+# CÁLCULO
+# =========================================================
+from materiales.calculos.calculo_materiales import (
+    calcular_materiales_proyecto,
+)
+
+from materiales.validaciones.materiales_validacion import (
+    validar_datos_proyecto,
+)
+
+from materiales.calculos.calculo_estructuras import (
+    calcular_estructuras_proyecto
+)
+
+# =========================================================
+# DEBUG
+# =========================================================
+from ayuda.debug import debug_guardar
+
+
+# =========================================================
+# HELPERS DEBUG
+# =========================================================
+def _debug(etapa: str, nombre: str, valor):
+    debug_guardar(f"{etapa}::{nombre}", valor)
+
+
+def _check(etapa: str, nombre: str, condicion: bool, detalle=None):
+    debug_guardar(f"CHECK::{etapa}::{nombre}", {
+        "ok": bool(condicion),
+        "detalle": str(detalle)[:200]
+    })
+
+
+# =========================================================
+# HELPERS
+# =========================================================
+def _df_vacio() -> pd.DataFrame:
+    return pd.DataFrame(columns=["Materiales", "Unidad", "Cantidad"])
+
+
+def _merge_materiales(df_a, df_b):
+    if df_a is None or df_a.empty:
+        return df_b if isinstance(df_b, pd.DataFrame) else _df_vacio()
+
+    if df_b is None or df_b.empty:
+        return df_a
+
+    df = pd.concat([df_a, df_b], ignore_index=True)
+
+    if not set(["Materiales", "Unidad", "Cantidad"]).issubset(df.columns):
+        return df
+
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
+
+    return (
+        df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+        .sum()
+        .sort_values(["Materiales", "Unidad"])
+        .reset_index(drop=True)
+    )
+
+
+
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
