@@ -184,7 +184,16 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
     debug["estado"] = {"ok": True}
 
     _guardar_debug(debug)
-
+    # =============================================
+    # DEBUG CRÍTICO (ESTRUCTURAS DETECTADAS)
+    # =============================================
+    try:
+        if not df.empty:
+            debug["estructuras_detectadas"] = sorted(
+                df["Estructura"].astype(str).unique().tolist()
+            )
+    except Exception:
+        debug["estructuras_detectadas"] = "error al extraer estructuras"
     return df
 
 
