@@ -18,26 +18,18 @@ from costos_precios.costos_estructuras import calcular_costos_por_estructura
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
+    df_materiales_por_estructura: Dict[str, pd.DataFrame]
     fuente_precios: Union[pd.DataFrame, str, Path]
 
 
-# =====================================================
-# HELPERS DEBUG
-# =====================================================
 def norm(x):
     return str(x).strip().upper()
 
 
-# =====================================================
-# ORQUESTADOR COSTOS
-# =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
     debug = {}
 
-    # =====================================================
-    # VALIDACIONES BASE
-    # =====================================================
     if not isinstance(entrada.df_resumen, pd.DataFrame):
         raise TypeError("df_resumen inválido")
 
@@ -49,9 +41,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
     df_ep = entrada.df_estructuras_por_punto.copy()
 
-    # =====================================================
-    # DEBUG INPUT
-    # =====================================================
     debug["input"] = {
         "resumen_filas": len(entrada.df_resumen),
         "estructuras_filas": len(df_ep),
@@ -59,9 +48,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         "columnas_estructuras": list(df_ep.columns),
     }
 
-    # =====================================================
-    # 1. COSTOS MATERIALES
-    # =====================================================
     df_costos_materiales = calcular_costos_desde_resumen(
         entrada.df_resumen,
         entrada.fuente_precios
@@ -75,9 +61,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         "total": float(df_costos_materiales["Costo Total"].sum())
     }
 
-    # =====================================================
-    # 2. NORMALIZACIÓN ESTRUCTURAS (CRÍTICO)
-    # =====================================================
     if "Estructura" not in df_ep.columns:
         raise ValueError("df_estructuras_por_punto no tiene columna Estructura")
 
@@ -86,9 +69,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     df_ep["Unidad"] = df_ep["Unidad"].astype(str).str.strip()
     df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
 
-    # =====================================================
-    # 2. BOM POR ESTRUCTURA
-    # =====================================================
     df_materiales_por_estructura = {}
 
     for est in df_ep["Estructura"].unique():
@@ -99,28 +79,18 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
         df_materiales_por_estructura[norm(est)] = df_temp
 
-        debug.setdefault("bom", {})[est] = {
-            "filas": len(df_temp)
-        }
+        debug.setdefault("bom", {})[est] = {"filas": len(df_temp)}
 
     debug["bom_total"] = len(df_materiales_por_estructura)
 
-    # =====================================================
-    # 3. COSTOS POR ESTRUCTURA
-    # =====================================================
     df_costos_estructuras = calcular_costos_por_estructura(
         df_estructuras=df_ep,
         df_materiales_por_estructura=df_materiales_por_estructura,
         df_precios_materiales=entrada.fuente_precios
     )
 
-    debug["estructuras"] = {
-        "filas": len(df_costos_estructuras)
-    }
+    debug["estructuras"] = {"filas": len(df_costos_estructuras)}
 
-    # =====================================================
-    # 4. COSTOS POR PUNTO
-    # =====================================================
     df_ep2 = df_ep.copy()
 
     if "codigodeestructura" not in df_ep2.columns:
@@ -133,13 +103,8 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         df_costos_estructuras
     )
 
-    debug["puntos"] = {
-        "filas": len(df_detalle)
-    }
+    debug["puntos"] = {"filas": len(df_detalle)}
 
-    # =====================================================
-    # OUTPUT FINAL
-    # =====================================================
     return {
         "ok": True,
         "df_costos_materiales": df_costos_materiales,
