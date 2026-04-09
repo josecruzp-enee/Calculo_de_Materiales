@@ -1,45 +1,32 @@
-# -*- coding: utf-8 -*-
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 import pandas as pd
-
 
 @dataclass
 class EntradaProyecto:
 
-    # =========================
-    # BASE
-    # =========================
-    df_estructuras: pd.DataFrame
+    # BASE OBLIGATORIA
+    df_estructuras: pd.DataFrame = field(default_factory=pd.DataFrame)
+    ruta_materiales: str = ""
 
-    # =========================
-    # CONFIG PROYECTO
-    # =========================
-    ruta_materiales: Optional[str] = None
+    # CONFIGURACIÓN DEL PROYECTO
     tension: Optional[float] = None
-    datos_proyecto: Optional[Dict[str, Any]] = None
+    datos_proyecto: Dict[str, Any] = field(default_factory=dict)
 
-    # =========================
-    # NECESARIOS
-    # =========================
-    calibre_mt: Optional[str] = None
-    tabla_conectores_mt: Optional[pd.DataFrame] = None
+    # NECESARIOS PARA CÁLCULOS
+    calibre_mt: str = ""
+    tabla_conectores_mt: pd.DataFrame = field(default_factory=pd.DataFrame)
+    df_cables: pd.DataFrame = field(default_factory=pd.DataFrame)
+    df_materiales_extra: pd.DataFrame = field(default_factory=pd.DataFrame)
 
-    # =========================
     # COSTOS
-    # =========================
-    df_precios_materiales: Optional[pd.DataFrame] = None
-    df_costos_estructuras: Optional[pd.DataFrame] = None
+    df_precios_materiales: pd.DataFrame = field(default_factory=pd.DataFrame)
+    df_costos_estructuras: pd.DataFrame = field(default_factory=pd.DataFrame)
 
-    # =========================
     # VALIDACIÓN FUERTE
-    # =========================
     def validar(self):
-        if self.df_estructuras is None or self.df_estructuras.empty:
+        if self.df_estructuras.empty:
             raise ValueError("df_estructuras vacío")
-
         if not self.ruta_materiales:
             raise ValueError("ruta_materiales requerida")
-
-        # 🔹 Ya no hacemos obligatorio calibre_mt aquí, porque viene desde Streamlit
         return True
