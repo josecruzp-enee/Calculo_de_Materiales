@@ -20,30 +20,24 @@ PATRONES = [
 
 
 # =========================================================
-# LIMPIEZA TEXTO MTEXT
+# LIMPIEZA MTEXT
 # =========================================================
 def _limpiar_mtext(texto: str) -> str:
 
     if not texto:
         return ""
 
-    # quitar formato { \C7; ... }
     texto = re.sub(r"\{.*?;", "", texto)
-
-    # quitar llaves
     texto = texto.replace("{", "").replace("}", "")
-
-    # saltos de línea DXF
     texto = texto.replace("\\P", " ")
 
-    # limpiar espacios
     texto = " ".join(texto.split())
 
     return texto.upper()
 
 
 # =========================================================
-# EXTRAER ESTRUCTURAS
+# EXTRAER
 # =========================================================
 def _extraer(texto: str) -> list[str]:
 
@@ -71,7 +65,16 @@ def _norm(s: str) -> str:
 # FUNCIÓN PRINCIPAL
 # =========================================================
 def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
+    """
+    ✔ Devuelve DataFrame válido para dominio
+    ✔ Columnas: Estructura, Cantidad
+    ✔ Nunca devuelve None
+    ✔ Lanza excepción si falla
+    """
 
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
     if archivo_dxf is None:
         raise ValueError("archivo_dxf es None")
 
@@ -88,6 +91,9 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
     except Exception as e:
         raise ValueError(f"No se pudo leer DXF: {e}")
 
+    # =====================================================
+    # PARSE DXF
+    # =====================================================
     lineas = contenido.splitlines()
 
     layer_actual = None
@@ -104,14 +110,14 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
         if codigo == "8":
             layer_actual = valor.upper()
 
-        # MTEXT / TEXT
+        # texto MTEXT / TEXT
         if codigo in ("1", "3"):
 
             if layer_actual and CAPA_OBJETIVO in layer_actual:
 
                 buffer_texto += " " + valor
 
-        # corte de entidad (cuando cambia código)
+        # corte de entidad
         if codigo == "0" and buffer_texto:
 
             limpio = _limpiar_mtext(buffer_texto)
@@ -123,28 +129,55 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
 
             buffer_texto = ""
 
-    # último buffer
+    # último bloque
     if buffer_texto:
         limpio = _limpiar_mtext(buffer_texto)
         estructuras.extend(_extraer(limpio))
 
     # =====================================================
-    # VALIDACIÓN
+    # VALIDACIÓN FUERTE (CONTRATO)
     # =====================================================
     if not estructuras:
         raise ValueError(
-            "DXF leído pero no se encontraron estructuras válidas en capa Estructuras"
+            "DXF válido pero no contiene estructuras reconocibles"
         )
 
-    estructuras = [_norm(e) for e in estructuras]
+    # =====================================================
+    # NORMALIZACIÓN FINAL
+    # =====================================================
+    estructuras = [_norm(e) for e in estructuras if e]
 
-    df = pd.DataFrame({"Estructura": estructuras})
+    df = pd.DataFrame({
+        "Estructura": estructuras
+    })
+
+    # ✔ GARANTÍA DE COLUMNA
+    if "Estructura" not in df.columns:
+        raise ValueError("Error interno: columna Estructura no creada")
+
+    # =====================================================
+    # AGRUPACIÓN
+    # =====================================================
     df["Cantidad"] = 1
 
     df = (
         df.groupby("Estructura", as_index=False)["Cantidad"]
         .sum()
-        .sort_values("Estructura")
     )
+
+    # =====================================================
+    # VALIDACIÓN FINAL DEL CONTRATO
+    # =====================================================
+    columnas = set(df.columns)
+
+    required = {"Estructura", "Cantidad"}
+
+    if not required.issubset(columnas):
+        raise ValueError(
+            f"Salida inválida leer_dxf: columnas {columnas}"
+        )
+
+    if df.empty:
+        raise ValueError("leer_dxf generó DataFrame vacío")
 
     return df
