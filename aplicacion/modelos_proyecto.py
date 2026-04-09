@@ -13,7 +13,7 @@ class EntradaProyecto:
     # BASE OBLIGATORIA
     # =====================================================
     df_estructuras: pd.DataFrame = field(default_factory=pd.DataFrame)
-    ruta_materiales: str = ""
+    base_datos: Dict[str, pd.DataFrame]
 
     # =====================================================
     # CONFIGURACIÓN DEL PROYECTO
