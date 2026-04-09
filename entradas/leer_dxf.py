@@ -1,68 +1,31 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import pandas as pd
-import re
 from typing import Any
+import pandas as pd
 import streamlit as st
 
 
 CAPA_OBJETIVO = "ESTRUCTURAS"
 
-PATRONES = [
-    r"A[-\s]?[IVX]+[-\s]?\d+[A-Z]?",
-    r"B[-\s]?[IVX]+[-\s]?\d+[A-Z]?",
-    r"PC[-\s]?\d+[A-Z]?",
-    r"TS[-\s]?\d+\s?KVA",
-    r"CT[-\s]?N",
-    r"R[-\s]?\d+",
-]
 
-
-def _limpiar_texto(texto: str) -> str:
-    if not texto:
-        return ""
-
-    texto = re.sub(r"\{.*?;", "", texto)
-    texto = texto.replace("{", "").replace("}", "")
-    texto = texto.replace("\\P", " ")
-    texto = " ".join(texto.split())
-
-    return texto.upper()
-
-
-def _extraer_estructuras(texto: str) -> list[str]:
-    encontrados = []
-
-    for patron in PATRONES:
-        encontrados.extend(re.findall(patron, texto, flags=re.IGNORECASE))
-
-    return encontrados
-
-
-def _normalizar(codigo: str) -> str:
-    return (
-        codigo.upper()
-        .replace(" ", "-")
-        .replace("--", "-")
-        .strip("-")
-    )
-
-
-# =========================================================
-# FUNCIÓN PRINCIPAL
-# =========================================================
-# =========================================================
-# FUNCIÓN PRINCIPAL
-# =========================================================
 def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
+    """
+    Lector DXF (modo crudo)
+
+    ✔ SOLO extrae texto desde la capa objetivo
+    ✔ NO interpreta estructuras
+    ✔ NO normaliza
+    ✔ NO valida
+
+    OUTPUT:
+        DataFrame con columna:
+            - texto (str)
+    """
 
     debug = {
-        "input": {
-            "tipo": str(type(archivo_dxf))
-        },
+        "input": {"tipo": str(type(archivo_dxf))},
         "proceso": {},
-        "output": {},
         "estado": {}
     }
 
@@ -91,106 +54,77 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
         raise ValueError(f"No se pudo leer DXF: {e}")
 
     # =====================================================
-    # PARSEO
+    # PARSEO (SOLO TEXTO)
     # =====================================================
     lineas = contenido.splitlines()
-    debug["proceso"]["total_lineas"] = len(lineas)
 
     layer_actual = ""
-    buffer_texto = ""
-    estructuras = []
+    buffer_texto = []
+    textos = []
 
     capas_detectadas = set()
-    textos_capturados = []
 
     for i in range(len(lineas) - 1):
 
         codigo = lineas[i].strip()
         valor = lineas[i + 1].strip()
 
+        # Detectar capa
         if codigo == "8":
             layer_actual = valor.upper()
             capas_detectadas.add(layer_actual)
 
-        if codigo in ("1", "3"):
-            if CAPA_OBJETIVO in layer_actual:
-                buffer_texto += " " + valor
+        # Capturar texto solo en capa objetivo
+        if codigo in ("1", "3") and CAPA_OBJETIVO in layer_actual:
+            buffer_texto.append(valor)
 
+        # Fin de entidad
         if codigo == "0" and buffer_texto:
+            texto_unido = " ".join(buffer_texto).strip()
 
-            limpio = _limpiar_texto(buffer_texto)
+            if texto_unido:
+                textos.append(texto_unido)
 
-            if limpio:
-                textos_capturados.append(limpio[:200])
+            buffer_texto = []
 
-            encontrados = _extraer_estructuras(limpio)
-
-            if encontrados:
-                estructuras.extend(encontrados)
-
-            buffer_texto = ""
-
+    # último bloque
     if buffer_texto:
-        limpio = _limpiar_texto(buffer_texto)
-        estructuras.extend(_extraer_estructuras(limpio))
-
-    debug["proceso"]["capas_detectadas"] = list(capas_detectadas)
-    debug["proceso"]["textos_capturados"] = textos_capturados[:10]
-    debug["proceso"]["estructuras_detectadas_raw"] = estructuras[:50]
+        texto_unido = " ".join(buffer_texto).strip()
+        if texto_unido:
+            textos.append(texto_unido)
 
     # =====================================================
     # VALIDACIÓN
     # =====================================================
-    if not estructuras:
+    if not textos:
         debug["estado"] = {
             "ok": False,
-            "error": "No se detectaron estructuras"
+            "error": "No se encontraron textos en capa ESTRUCTURAS"
         }
         _guardar_debug(debug)
-        raise ValueError(
-            "DXF leído pero no se encontraron estructuras en capa Estructuras"
-        )
+        raise ValueError("DXF sin textos en capa ESTRUCTURAS")
 
     # =====================================================
-    # NORMALIZACIÓN
+    # OUTPUT
     # =====================================================
-    estructuras = [_normalizar(e) for e in estructuras if e]
-
     df = pd.DataFrame({
-        "Estructura": estructuras,
-        "Cantidad": 1
+        "texto": textos
     })
 
-    df = df.groupby("Estructura", as_index=False)["Cantidad"].sum()
+    # =====================================================
+    # DEBUG
+    # =====================================================
+    debug["proceso"] = {
+        "total_lineas": len(lineas),
+        "capas_detectadas": list(capas_detectadas),
+        "total_textos": len(textos),
+        "preview_textos": textos[:10]
+    }
 
-    # =====================================================
-    # VALIDACIÓN FINAL
-    # =====================================================
-    if df.empty:
-        debug["estado"] = {"ok": False, "error": "DataFrame vacío"}
-        _guardar_debug(debug)
-        raise ValueError("DataFrame vacío tras procesar DXF")
-
-    if not {"Estructura", "Cantidad"}.issubset(df.columns):
-        debug["estado"] = {"ok": False, "error": "Columnas inválidas"}
-        _guardar_debug(debug)
-        raise ValueError("Columnas inválidas en salida DXF")
-
-    # =====================================================
-    # OUTPUT + DEBUG FINAL
-    # =====================================================
     debug["output"] = {
         "filas": len(df),
         "columnas": list(df.columns)
     }
-
-    # 🔥 ESTE ES EL IMPORTANTE (LO QUE QUIERES VER)
-    try:
-        debug["estructuras_detectadas"] = sorted(
-            df["Estructura"].astype(str).unique().tolist()
-        )
-    except Exception:
-        debug["estructuras_detectadas"] = "error al extraer estructuras"
 
     debug["estado"] = {"ok": True}
 
@@ -198,8 +132,9 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
 
     return df
 
+
 # =========================================================
-# GUARDAR DEBUG
+# DEBUG STORAGE
 # =========================================================
 def _guardar_debug(debug: dict):
     st.session_state.setdefault("debug_pipeline", {})
