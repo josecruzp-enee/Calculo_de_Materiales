@@ -22,7 +22,14 @@ class EntradaCostos:
 
 
 # =====================================================
-# ORQUESTADOR COSTOS (FINAL + DEBUG)
+# HELPERS DEBUG
+# =====================================================
+def norm(x):
+    return str(x).strip().upper()
+
+
+# =====================================================
+# ORQUESTADOR COSTOS
 # =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
@@ -42,6 +49,9 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
     df_ep = entrada.df_estructuras_por_punto.copy()
 
+    # =====================================================
+    # DEBUG INPUT
+    # =====================================================
     debug["input"] = {
         "resumen_filas": len(entrada.df_resumen),
         "estructuras_filas": len(df_ep),
@@ -50,28 +60,36 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     }
 
     # =====================================================
-    # 1. COSTOS DE MATERIALES
+    # 1. COSTOS MATERIALES
     # =====================================================
     df_costos_materiales = calcular_costos_desde_resumen(
         entrada.df_resumen,
         entrada.fuente_precios
     )
 
+    if df_costos_materiales is None or df_costos_materiales.empty:
+        raise ValueError("No hay match entre materiales y precios")
+
     debug["materiales"] = {
         "filas": len(df_costos_materiales),
         "total": float(df_costos_materiales["Costo Total"].sum())
     }
 
-    if df_costos_materiales.empty:
-        raise ValueError("No hay match entre materiales y precios")
-
     # =====================================================
-    # 2. BOM POR ESTRUCTURA (DERIVADO DESDE PUNTOS)
+    # 2. NORMALIZACIÓN ESTRUCTURAS (CRÍTICO)
     # =====================================================
-    df_materiales_por_estructura = {}
-
     if "Estructura" not in df_ep.columns:
         raise ValueError("df_estructuras_por_punto no tiene columna Estructura")
+
+    df_ep["Estructura"] = df_ep["Estructura"].apply(norm)
+    df_ep["Materiales"] = df_ep["Materiales"].astype(str).str.strip()
+    df_ep["Unidad"] = df_ep["Unidad"].astype(str).str.strip()
+    df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
+
+    # =====================================================
+    # 2. BOM POR ESTRUCTURA
+    # =====================================================
+    df_materiales_por_estructura = {}
 
     for est in df_ep["Estructura"].unique():
 
@@ -79,11 +97,11 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             ["Materiales", "Unidad", "Cantidad"]
         ].copy()
 
+        df_materiales_por_estructura[norm(est)] = df_temp
+
         debug.setdefault("bom", {})[est] = {
             "filas": len(df_temp)
         }
-
-        df_materiales_por_estructura[est] = df_temp
 
     debug["bom_total"] = len(df_materiales_por_estructura)
 
@@ -120,7 +138,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     }
 
     # =====================================================
-    # OUTPUT
+    # OUTPUT FINAL
     # =====================================================
     return {
         "ok": True,
