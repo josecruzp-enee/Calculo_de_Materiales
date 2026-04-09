@@ -1,17 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import annotations
-
-import pandas as pd
-
-from entradas.normalizar import limpiar_codigo
-from materiales.calculos.lector_materiales import leer_hoja_materiales
-
-COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
-
-
-# ==========================================================
-# MATERIAL POR ESTRUCTURA
-# ==========================================================
 def calcular_materiales_estructura(
     hojas_base,
     estructura,
@@ -21,84 +7,50 @@ def calcular_materiales_estructura(
     tabla_conectores_mt=None,
 ):
 
-    estructura = str(estructura or "").strip().upper()
+    estructura = _normalizar_codigo(estructura)
 
     if not estructura:
         raise ValueError("Estructura vacía")
 
-    if cantidad is None or float(cantidad) <= 0:
+    try:
+        cantidad = float(cantidad)
+    except Exception:
         raise ValueError(f"Cantidad inválida para {estructura}: {cantidad}")
 
+    if cantidad <= 0:
+        raise ValueError(f"Cantidad inválida para {estructura}: {cantidad}")
+
+    # 🔥 VALIDAR HOJA
     df_hoja = hojas_base.get(estructura)
 
-    if df_hoja is None:
-        raise ValueError(f"Estructura no encontrada: {estructura}")
+    if df_hoja is None or not isinstance(df_hoja, pd.DataFrame):
+        raise ValueError(f"Estructura no encontrada o inválida: {estructura}")
 
-    df_filtrado = leer_hoja_materiales(df_hoja, tension)
+    # 🔥 LEER HOJA CON PROTECCIÓN
+    try:
+        df_filtrado = leer_hoja_materiales(df_hoja, tension)
+    except Exception as e:
+        raise RuntimeError(f"Error leyendo hoja {estructura}: {e}")
 
     if df_filtrado is None or df_filtrado.empty:
         raise ValueError(f"Sin materiales para {estructura} @ {tension}")
 
     df_filtrado = df_filtrado.copy()
 
-    df_filtrado["Cantidad"] = pd.to_numeric(
-        df_filtrado["Cantidad"], errors="coerce"
-    ).fillna(0)
+    # 🔥 NORMALIZAR COLUMNAS
+    df_filtrado.columns = [str(c).strip() for c in df_filtrado.columns]
 
-    df_filtrado["Cantidad"] *= float(cantidad)
-
-    return df_filtrado[COLUMNAS_STD]
-
-
-# ==========================================================
-# FUNCIÓN PRINCIPAL: POR PUNTO
-# ==========================================================
-def calcular_materiales_por_punto(
-    hojas_base,
-    df_estructuras,
-    tension,
-    calibre_mt=None,
-    tabla_conectores_mt=None,
-):
-
-    if df_estructuras is None or df_estructuras.empty:
-        return pd.DataFrame(columns=["Punto", "Materiales", "Unidad", "Cantidad"])
-
-    resultados = []
-
-    for _, row in df_estructuras.iterrows():
-
-        punto = str(row.get("Punto") or row.get("punto") or "").strip() or "General"
-        estructura = row.get("codigodeestructura") or row.get("Estructura")
-        cantidad = row.get("cantidad", 1)
-
-        if not estructura:
-            continue
-
-        df_mat = calcular_materiales_estructura(
-            hojas_base=hojas_base,
-            estructura=estructura,
-            cantidad=cantidad,
-            tension=tension,
-            calibre_mt=calibre_mt,
-            tabla_conectores_mt=tabla_conectores_mt,
+    # 🔥 VALIDAR COLUMNAS
+    if not set(COLUMNAS_STD).issubset(df_filtrado.columns):
+        raise ValueError(
+            f"Formato inválido en hoja {estructura}: {list(df_filtrado.columns)}"
         )
 
-        df_mat = df_mat.copy()
-        df_mat["Punto"] = punto
+    # 🔥 NORMALIZAR CANTIDAD
+    df_filtrado["Cantidad"] = pd.to_numeric(
+        df_filtrado["Cantidad"], errors="coerce"
+    ).fillna(0.0)
 
-        resultados.append(df_mat)
+    df_filtrado["Cantidad"] *= cantidad
 
-    if not resultados:
-        raise ValueError("No se pudo calcular ningún material")
-
-    df_final = pd.concat(resultados, ignore_index=True)
-
-    # 🔥 consolidación por punto
-    df_final = (
-        df_final
-        .groupby(["Punto", "Materiales", "Unidad"], as_index=False)["Cantidad"]
-        .sum()
-    )
-
-    return df_final[["Punto", "Materiales", "Unidad", "Cantidad"]]
+    return df_filtrado[COLUMNAS_STD]
