@@ -67,7 +67,7 @@ class EntradaMateriales:
 # =========================================================
 from materiales.orquestador_materiales import ejecutar_materiales
 from costos_precios.orquestador_costos import ejecutar_costos
-from costos_precios.costos_por_estructura import calcular_costos_por_estructura
+from costos_precios.costos_estructuras import calcular_costos_por_estructura
 
 def ejecutar_proyecto(entrada: EntradaProyecto) -> Dict[str, Any]:
 
