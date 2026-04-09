@@ -208,13 +208,22 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             return _fail("df_estructuras_por_punto no disponible", debug=debug_global)
 
         if entrada_proyecto.df_costos_estructuras is None:
-            
-            debug_global["costos_estructuras_default"] = "Se creó vacío automáticamente"
 
-            entrada_proyecto.df_costos_estructuras = pd.DataFrame({
-            "estructura": [],
-            "costo": []
-        })
+            df_ep = resultado_materiales.df_estructuras_por_punto
+
+            df_auto = (
+                df_ep[["Estructura"]]
+                .drop_duplicates()
+                .copy()
+            )
+
+            df_auto["costo"] = 0  # placeholder
+
+            entrada_proyecto.df_costos_estructuras = df_auto
+
+            debug_global["costos_estructuras_auto"] = {
+            "filas": len(df_auto)
+        }
 
         # 🔥 CONSTRUIR PRECIOS DESDE BASE_DATOS
         entrada_costos = construir_entrada_costos(
