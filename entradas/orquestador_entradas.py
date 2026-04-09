@@ -20,6 +20,7 @@ from entradas.leer_dxf import leer_dxf
 from entradas.normalizar import normalizar_estructuras
 from entradas.validacion import validar_estructuras
 from entradas.base_datos import cargar_base_datos
+
 # =========================================================
 # DEBUG
 # =========================================================
@@ -27,6 +28,9 @@ from ayuda.debug import debug_guardar
 import pandas as pd
 
 
+# =========================================================
+# DEBUG HELPERS
+# =========================================================
 def _debug(etapa: str, nombre: str, valor):
     debug_guardar(f"{etapa}::{nombre}", valor)
 
@@ -39,7 +43,7 @@ def _check(etapa: str, nombre: str, condicion: bool, detalle=None):
 
 
 # =========================================================
-# DISPATCH
+# DISPATCH LECTURA
 # =========================================================
 def _leer(tipo: str, data):
 
@@ -63,13 +67,10 @@ def _leer(tipo: str, data):
 
 
 # =========================================================
-# ORQUESTADOR REAL (PIPELINE)
+# ORQUESTADOR (PIPELINE ENTRADAS)
 # =========================================================
 def ejecutar_entradas(
     entrada: SalidaInterfaz,
-    *,
-    tension: float,
-    validar_catalogo: bool = True,
 ) -> SalidaEntradas:
 
     # =====================================================
@@ -113,6 +114,7 @@ def ejecutar_entradas(
             return SalidaEntradas(
                 ok=False,
                 errores=["No se pudo leer la entrada"],
+                warnings=[],
                 debug={"fase": "lectura"}
             )
 
@@ -172,7 +174,7 @@ def ejecutar_entradas(
             )
 
         # =====================================================
-        # 5. MÉTRICAS CLAVE
+        # 5. MÉTRICAS
         # =====================================================
         estructuras_unicas = (
             df_norm["Estructura"].dropna().unique().tolist()
@@ -184,18 +186,28 @@ def ejecutar_entradas(
         _debug("OUTPUT", "estructuras_unicas", estructuras_unicas[:50])
 
         # =====================================================
-        # 6. OK
+        # 6. BASE DATOS
         # =====================================================
         base_datos = cargar_base_datos()
+
+        # =====================================================
+        # 7. OUTPUT FINAL
+        # =====================================================
         return SalidaEntradas(
             ok=True,
             errores=[],
             warnings=warnings_norm,
+
+            # 🔹 core
             df_estructuras=df_norm,
+            base_datos=base_datos,
+
+            # 🔹 contexto (se mantiene intacto)
             datos_proyecto=entrada.datos_proyecto,
             df_cables=entrada.df_cables,
             df_materiales_extra=entrada.df_materiales_extra,
-            base_datos=base_datos,
+
+            # 🔹 debug
             debug={
                 "fase": "ok",
                 "filas": len(df_norm),
@@ -212,6 +224,7 @@ def ejecutar_entradas(
         return SalidaEntradas(
             ok=False,
             errores=[str(e)],
+            warnings=[],
             debug={
                 "fase": "exception",
                 "tipo": entrada.tipo_entrada
