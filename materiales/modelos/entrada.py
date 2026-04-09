@@ -8,7 +8,7 @@ import pandas as pd
 class EntradaMateriales:
     estructuras_df: pd.DataFrame
     tension: float
-    base_datos: Dict[str, pd.DataFrame] 
+    base_datos: Dict[str, pd.DataFrame]
 
     # 👇 NUEVO (CLAVE)
     datos_proyecto: Optional[Dict[str, Any]] = None
@@ -33,16 +33,45 @@ class EntradaMateriales:
         if self.estructuras_df.empty:
             raise ValueError("estructuras_df está vacío")
 
-        cols = {c.strip().upper(): c for c in self.estructuras_df.columns}
-        col_est = cols.get("ESTRUCTURAS") or cols.get("ESTRUCTURA")
+        # normalizar nombres de columnas
+        self.estructuras_df.columns = [str(c).strip() for c in self.estructuras_df.columns]
+        cols = {c.upper(): c for c in self.estructuras_df.columns}
+
+        # 🔥 ACEPTAR múltiples variantes (incluye codigodeestructura)
+        col_est = (
+            cols.get("ESTRUCTURA") or
+            cols.get("ESTRUCTURAS") or
+            cols.get("CODIGODEESTRUCTURA")
+        )
 
         if not col_est:
-            raise ValueError(f"No existe columna de estructuras. Columnas: {list(self.estructuras_df.columns)}")
+            raise ValueError(
+                f"No existe columna de estructuras. Columnas: {list(self.estructuras_df.columns)}"
+            )
 
-        self.estructuras_df = self.estructuras_df.rename(columns={col_est: "Estructura"})
+        # 🔥 Adapter interno → siempre 'Estructura'
+        if col_est != "Estructura":
+            self.estructuras_df = self.estructuras_df.rename(columns={col_est: "Estructura"})
 
+        # asegurar columna Estructura
         if "Estructura" not in self.estructuras_df.columns:
             raise ValueError("estructuras_df debe contener columna 'Estructura'")
+
+        # limpiar valores
+        self.estructuras_df["Estructura"] = (
+            self.estructuras_df["Estructura"].astype(str).str.strip().str.upper()
+        )
+
+        # 🔥 asegurar Cantidad
+        if "Cantidad" not in self.estructuras_df.columns:
+            self.estructuras_df["Cantidad"] = 1
+        else:
+            cantidades = pd.to_numeric(self.estructuras_df["Cantidad"], errors="coerce")
+            if cantidades.isna().any():
+                raise ValueError("Cantidad inválida en estructuras_df")
+            if (cantidades < 0).any():
+                raise ValueError("Cantidad negativa en estructuras_df")
+            self.estructuras_df["Cantidad"] = cantidades
 
         # --------------------------
         # tensión
@@ -56,13 +85,12 @@ class EntradaMateriales:
             raise ValueError("Tensión debe ser mayor que 0")
 
         # --------------------------
-        # datos_proyecto 👇
+        # datos_proyecto
         # --------------------------
         if self.datos_proyecto is not None:
             if not isinstance(self.datos_proyecto, dict):
                 raise TypeError("datos_proyecto debe ser dict")
 
-            # opcional: normalizar claves
             self.datos_proyecto = {
                 str(k).strip().lower(): v
                 for k, v in self.datos_proyecto.items()
