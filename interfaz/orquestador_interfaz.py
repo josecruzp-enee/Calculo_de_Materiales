@@ -7,7 +7,11 @@ import streamlit as st
 # CONTRATOS
 # =========================================================
 from interfaz.contratos import SalidaInterfaz
-from entradas.orquestador_entradas import ejecutar_entradas
+
+# =========================================================
+# ORQUESTADOR ÚNICO
+# =========================================================
+from aplicacion.orquestador_proyecto import ejecutar_proyecto
 
 # =========================================================
 # UI
@@ -16,12 +20,7 @@ from interfaz.base import seleccionar_modo_carga
 from interfaz.datos_proyecto import seccion_datos_proyecto
 from interfaz.cables_ui import seccion_cables
 from interfaz.estructuras_ui import seccion_entrada_estructuras
-
-from interfaz.exportacion_ui import (
-    seccion_finalizar_calculo,
-    seccion_exportacion,
-)
-
+from interfaz.exportacion_ui import seccion_exportacion
 from ayuda.debug import seccion_debug
 
 
@@ -36,7 +35,8 @@ def _init_state():
         "datos_proyecto": {},
         "cables_proyecto_df": None,
         "df_materiales_extra": None,
-        "df_estructuras": None,
+        "resultado_calculo": None,
+        "ejecutar_proyecto_flag": False,
         "debug_pipeline": {},
     }
 
@@ -71,6 +71,9 @@ def renderizar_estructuras():
         st.warning("⚠️ Primero selecciona modo de carga.")
         return
 
+    # 🔥 sincronización contrato
+    st.session_state["tipo_entrada"] = modo
+
     data = None
 
     # =====================================================
@@ -78,17 +81,18 @@ def renderizar_estructuras():
     # =====================================================
     if modo == "manual":
         df, _ = seccion_entrada_estructuras()
+
         if df is None or df.empty:
             return
 
-        data = df
-        st.session_state["data_entrada"] = data
+        st.session_state["data_entrada"] = df
+        st.session_state["resultado_calculo"] = None  # 🔥 limpiar resultado
 
         st.success("✅ Datos ingresados correctamente")
-        st.info("➡️ Ahora puedes ir a la pestaña 'Finalizar' para procesar")
+        st.info("➡️ Ahora puedes ir a 'Finalizar'")
 
     # =====================================================
-    # ARCHIVOS / INPUTS
+    # ARCHIVOS
     # =====================================================
     elif modo == "excel":
         data = st.file_uploader("Subir Excel", type=["xlsx"])
@@ -103,26 +107,60 @@ def renderizar_estructuras():
         data = st.file_uploader("Subir DXF", type=["dxf"])
 
     # =====================================================
-    # MANEJO GENERAL (UNIFICADO)
+    # MANEJO GENERAL
     # =====================================================
     if data is not None and modo != "manual":
         st.session_state["data_entrada"] = data
+        st.session_state["resultado_calculo"] = None  # 🔥 limpiar resultado
 
         if hasattr(data, "name"):
             st.success(f"✅ Archivo cargado: {data.name}")
         else:
             st.success("✅ Datos cargados correctamente")
 
-        st.info("➡️ Ahora puedes ir a la pestaña 'Finalizar' para procesar")
+        st.info("➡️ Ahora puedes ir a 'Finalizar'")
 
 
 def renderizar_final():
-    seccion_finalizar_calculo()
+    st.subheader("⚙️ Finalizar cálculo")
+
+    salida_interfaz = _construir_salida_interfaz()
+
+    if not salida_interfaz.ok:
+        st.error("❌ Datos incompletos")
+        for e in salida_interfaz.errores:
+            st.error(f"• {e}")
+        return
+
+    # =====================================================
+    # BOTÓN DE EJECUCIÓN
+    # =====================================================
+    if st.button("🚀 Ejecutar proyecto"):
+        st.session_state["ejecutar_proyecto_flag"] = True
+        st.rerun()
+
+    # =====================================================
+    # EJECUCIÓN CONTROLADA
+    # =====================================================
+    if st.session_state.get("ejecutar_proyecto_flag"):
+
+        with st.spinner("Ejecutando proyecto completo..."):
+            resultado = ejecutar_proyecto(salida_interfaz)
+
+        st.session_state["resultado_calculo"] = resultado
+        st.session_state["ejecutar_proyecto_flag"] = False
+
+        if resultado and resultado.ok:
+            st.success("✅ Proyecto ejecutado correctamente")
+        else:
+            st.error("❌ Error en ejecución")
 
 
 def renderizar_exportacion():
-    if st.session_state.get("df_estructuras") is None:
-        st.warning("⚠️ Debes cargar estructuras primero.")
+    resultado = st.session_state.get("resultado_calculo")
+
+    if resultado is None or not getattr(resultado, "ok", False):
+        st.warning("⚠️ Debes ejecutar el cálculo primero.")
         return
 
     seccion_exportacion()
@@ -162,7 +200,7 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL
+# ORQUESTADOR PRINCIPAL UI
 # =========================================================
 def ejecutar_orquestador_interfaz(
     _nav_estado_actual,
@@ -174,9 +212,6 @@ def ejecutar_orquestador_interfaz(
     sec = _nav_estado_actual()
     _barra_nav_botones(sec)
 
-    # =====================================================
-    # RENDER UI
-    # =====================================================
     acciones = {
         "datos": renderizar_datos_proyecto,
         "cables": renderizar_cables,
@@ -191,50 +226,27 @@ def ejecutar_orquestador_interfaz(
         acciones[sec]()
 
     # =====================================================
-    # INTERFAZ → ENTRADAS
+    # DEBUG PIPELINE
     # =====================================================
     salida_interfaz = _construir_salida_interfaz()
+    resultado = st.session_state.get("resultado_calculo")
 
-    salida_entradas = None
-
-    if salida_interfaz.ok and sec == "final":
-        salida_entradas = ejecutar_entradas(
-            salida_interfaz,
-            tension=13.8,
-        )
-
-        # =================================================
-        # PERSISTENCIA
-        # =================================================
-        if salida_entradas.ok:
-            st.session_state["df_estructuras"] = salida_entradas.df_estructuras
-
-    # =====================================================
-    # DEBUG PIPELINE (FIX REAL)
-    # =====================================================
-    debug_actual = st.session_state.get("debug_pipeline", {})
-
-    # 🔹 Estado interfaz
-    debug_actual["INTERFAZ"] = {
-        "ok": salida_interfaz.ok,
-        "errores": salida_interfaz.errores,
-        "tipo_entrada": salida_interfaz.tipo_entrada,
-        "tiene_data": salida_interfaz.data_entrada is not None,
+    debug_actual = {
+        "INTERFAZ": {
+            "ok": salida_interfaz.ok,
+            "errores": salida_interfaz.errores,
+            "tipo_entrada": salida_interfaz.tipo_entrada,
+            "tiene_data": salida_interfaz.data_entrada is not None,
+        }
     }
 
-    # 🔹 Estado entradas
-    if salida_entradas:
-        debug_actual["RESULTADO_ENTRADAS"] = {
-            "ok": salida_entradas.ok,
-            "errores": salida_entradas.errores,
-            "warnings": salida_entradas.warnings,
-            "tiene_df": salida_entradas.df_estructuras is not None,
-            "filas": (
-                len(salida_entradas.df_estructuras)
-                if salida_entradas.df_estructuras is not None else 0
-            )
+    if resultado:
+        debug_actual["RESULTADO_PROYECTO"] = {
+            "ok": resultado.ok,
+            "errores": resultado.errores,
+            "warnings": resultado.warnings,
         }
 
     st.session_state["debug_pipeline"] = debug_actual
 
-    return salida_entradas
+    return resultado
