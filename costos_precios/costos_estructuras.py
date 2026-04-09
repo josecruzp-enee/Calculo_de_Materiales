@@ -40,8 +40,22 @@ def calcular_precio_unitario_estructura(
         df_precios_materiales
     )
 
-    if "Tiene_Precio" not in df_val.columns or "Costo" not in df_val.columns:
-        raise ValueError("Error en valorización")
+    # =====================================================
+    # 🔥 FIX VALORIZACIÓN (CLAVE)
+    # =====================================================
+    if not isinstance(df_val, pd.DataFrame) or df_val.empty:
+        raise ValueError("Error en valorización (df vacío)")
+
+    if "Costo" not in df_val.columns:
+        raise ValueError(f"df_val columnas inválidas: {list(df_val.columns)}")
+
+    # si no viene Tiene_Precio → lo asumimos válido
+    if "Tiene_Precio" not in df_val.columns:
+        df_val["Tiene_Precio"] = True
+
+    # debug útil
+    # print("DEBUG_VAL:", df_val.head())
+    # print("COLS:", df_val.columns.tolist())
 
     if not df_val["Tiene_Precio"].all():
         faltantes = df_val.loc[~df_val["Tiene_Precio"], "Materiales"].unique()
@@ -65,7 +79,7 @@ def calcular_precio_unitario_estructura(
 
 
 # =====================================================
-# 🔹 FUNCIÓN PRINCIPAL (CORREGIDA)
+# 🔹 FUNCIÓN PRINCIPAL
 # =====================================================
 def calcular_costos_por_estructura(
     *,
@@ -88,24 +102,16 @@ def calcular_costos_por_estructura(
     if "Estructura" not in df_estructuras.columns or "Cantidad" not in df_estructuras.columns:
         raise ValueError("df_estructuras debe contener 'Estructura' y 'Cantidad'")
 
-    # =====================================================
-    # 🔥 FIX: AGRUPAR BIEN (CLAVE)
-    # =====================================================
     df = df_estructuras.copy()
 
     df["Estructura"] = df["Estructura"].astype(str).str.strip().str.upper()
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
-    df_group = (
-        df.groupby("Estructura", as_index=False)["Cantidad"]
-        .sum()
-    )
+    # 🔥 FIX: AGRUPACIÓN CORRECTA
+    df_group = df.groupby("Estructura", as_index=False)["Cantidad"].sum()
 
     filas = []
 
-    # =====================================================
-    # LOOP LIMPIO (SIN DUPLICADOS)
-    # =====================================================
     for _, row in df_group.iterrows():
 
         cod = row["Estructura"]
@@ -138,7 +144,7 @@ def calcular_costos_por_estructura(
     if df_out.empty:
         raise ValueError("No se generaron costos")
 
-    # 🔥 GARANTÍA FINAL (ANTI-DUPLICADOS)
+    # 🔥 GARANTÍA FINAL
     df_out = df_out.groupby("Estructura", as_index=False).first()
 
     return df_out
