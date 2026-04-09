@@ -12,8 +12,9 @@ class EntradaProyecto:
     # =====================================================
     # BASE OBLIGATORIA
     # =====================================================
-    df_estructuras: pd.DataFrame = field(default_factory=pd.DataFrame)
     base_datos: Dict[str, pd.DataFrame]
+    df_estructuras: pd.DataFrame = field(default_factory=pd.DataFrame)
+    
 
     # =====================================================
     # CONFIGURACIÓN DEL PROYECTO
