@@ -14,7 +14,12 @@ from interfaz.contratos import ResultadoProyecto, SalidaInterfaz
 from entradas.orquestador_entradas import ejecutar_entradas
 from materiales.modelos.entrada import EntradaMateriales
 from materiales.orquestador_materiales import ejecutar_materiales
-from costos_precios.orquestador_costos import ejecutar_costos
+
+from costos_precios.orquestador_costos import (
+    ejecutar_costos,
+    EntradaCostos,
+)
+
 from exportadores.orquestador_reportes import generar_reportes
 
 
@@ -38,18 +43,9 @@ def _safe_list(x):
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL (ÚNICO CEREBRO)
+# ORQUESTADOR PRINCIPAL
 # =========================================================
 def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
-    """
-    Orquestador maestro del sistema.
-
-    RESPONSABILIDAD:
-    ✔ Coordinar flujo
-    ✔ Definir contexto (tensión, etc)
-    ❌ NO hacer cálculos
-    ❌ NO transformar lógica de dominio
-    """
 
     # =====================================================
     # VALIDACIÓN INICIAL
@@ -116,17 +112,34 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 4. COSTOS
         # =====================================================
-        data_costos = {
-            "df_resumen": resultado_materiales.df_materiales,
-            "df_estructuras_por_punto": resultado_materiales.df_estructuras_por_punto,
-            "df_costos_estructuras": getattr(salida_entradas, "df_costos_estructuras", None),
-            "df_precios_materiales": getattr(salida_entradas, "df_precios_materiales", None),
-        }
+        df_ep = resultado_materiales.df_estructuras_por_punto
 
-        resultado_costos = ejecutar_costos(data_costos)
+        if df_ep is None:
+            return _fail("df_estructuras_por_punto no disponible para costos")
 
-        if not resultado_costos:
-            return _fail("Error en costos")
+        fuente_precios = getattr(salida_entradas, "df_precios_materiales", None)
+        df_costos_est = getattr(salida_entradas, "df_costos_estructuras", None)
+
+        if fuente_precios is None:
+            return _fail("No se proporcionó fuente de precios")
+
+        if df_costos_est is None:
+            return _fail("No se proporcionó df_costos_estructuras")
+
+        entrada_costos = EntradaCostos(
+            df_resumen=resultado_materiales.df_materiales,
+            df_estructuras_por_punto=df_ep,
+            df_costos_estructuras=df_costos_est,
+            fuente_precios=fuente_precios,
+        )
+
+        resultado_costos = ejecutar_costos(entrada_costos)
+
+        if not resultado_costos or not resultado_costos.ok:
+            return _fail(
+                "Error en costos",
+                debug={"errores": getattr(resultado_costos, "errores", [])},
+            )
 
         # =====================================================
         # 5. REPORTES
@@ -141,8 +154,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         resultado_reportes = generar_reportes(data_reportes)
 
-        if not resultado_reportes:
-            return _fail("Error generando reportes")
+        if not isinstance(resultado_reportes, dict):
+            return _fail("Salida de reportes inválida")
 
         # =====================================================
         # 6. CONSOLIDACIÓN
