@@ -19,7 +19,7 @@ from costos_precios.orquestador_costos import ejecutar_costos
 from costos_precios.costos_estructuras import calcular_costos_por_estructura
 from entradas.base_datos import cargar_base_datos
 
-base_datos = cargar_base_datos(entrada.ruta_materiales)
+
 
 # =========================================================
 # HELPERS
@@ -60,13 +60,14 @@ def ejecutar_proyecto(entrada: EntradaProyecto) -> Dict[str, Any]:
 
     if entrada.tension is None:
         raise ValueError("tension es requerida")
-
+    base_datos = cargar_base_datos(entrada.ruta_materiales)
     # =========================================
     # 1. MATERIALES
     # =========================================
     entrada_mat = EntradaMateriales(
         estructuras_df=entrada.df_estructuras,
         tension=entrada.tension,
+        base_datos=base_datos,
         datos_proyecto=entrada.datos_proyecto,
         df_cables=getattr(entrada, "df_cables", None),
         df_materiales_extra=getattr(entrada, "df_materiales_extra", None),
