@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 import traceback
 import pandas as pd
-from costos_precios.costos_materiales import construir_entrada_costos
+
 # =========================================================
 # CONTRATOS
 # =========================================================
@@ -230,7 +230,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             data=entrada_proyecto.base_datos,
             df_resumen=resultado_materiales.df_materiales,
             df_estructuras_por_punto=df_ep,
-            df_costos_estructuras=entrada_proyecto.df_costos_estructuras,
+           
         )
 
         resultado_costos = ejecutar_costos(entrada_costos)
