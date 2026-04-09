@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
-# interfaz/contratos.py
-
 from dataclasses import dataclass, field
 import pandas as pd
 from typing import Optional, Literal, Dict, Any, List
-from dataclasses import dataclass, field
-
 
 
 # =========================================================
@@ -19,27 +15,18 @@ ModoEntrada = Literal["excel", "tabla", "pdf", "dxf", "manual"]
 # =========================================================
 @dataclass
 class SalidaInterfaz:
-    """
-    Interfaz entrega esto al dominio de entradas
-    """
-
-    # CONTROL
     ok: bool = False
     errores: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
-    # ENTRADA CRUDA
     tipo_entrada: ModoEntrada = "manual"
     data_entrada: Any = None
 
-    # CONTEXTO
     datos_proyecto: Dict[str, Any] = field(default_factory=dict)
 
-    # OPCIONALES
     df_cables: Optional[pd.DataFrame] = None
     df_materiales_extra: Optional[pd.DataFrame] = None
 
-    # DEBUG
     debug: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -48,33 +35,20 @@ class SalidaInterfaz:
 # =========================================================
 @dataclass
 class SalidaEntradas:
-    """
-    Entradas entrega esto a materiales
-    """
-
-    # CONTROL
     ok: bool = False
     errores: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
-    # DATA LIMPIA
     df_estructuras: pd.DataFrame = field(default_factory=pd.DataFrame)
 
     base_datos: Dict[str, pd.DataFrame] = field(default_factory=dict)
-    # CONTEXTO
+
     datos_proyecto: Dict[str, Any] = field(default_factory=dict)
 
-    # PASSTHROUGH
     df_cables: Optional[pd.DataFrame] = None
     df_materiales_extra: Optional[pd.DataFrame] = None
 
-    # DEBUG
     debug: Dict[str, Any] = field(default_factory=dict)
-
-
-# =========================================================
-# 🔷 CONTRATO MATERIALES → EXPORTADORES
-# =========================================================
 
 
 # =========================================================
@@ -82,10 +56,6 @@ class SalidaEntradas:
 # =========================================================
 @dataclass
 class SalidaCostos:
-    """
-    Costos / precios
-    """
-
     ok: bool = False
     errores: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -99,42 +69,16 @@ class SalidaCostos:
 
 
 # =========================================================
-# 🔷 CONTRATO FINAL (PARA EXPORTACIÓN)
+# 🔷 CONTRATO FINAL (ORQUESTADOR)
 # =========================================================
-
 @dataclass(slots=True)
 class ResultadoProyecto:
-    """
-    Salida única del sistema (orquestador_proyecto)
-
-    ✔ Contrato fuerte
-    ✔ Usado por UI
-    ✔ No contiene lógica
-    """
-
-    # CONTROL
     ok: bool = False
     errores: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
-    # RESULTADOS DE DOMINIO
     materiales: Optional[Any] = None
     costos: Optional[Any] = None
     reportes: Optional[Dict[str, Any]] = None
 
-    # DEBUG
     debug: Dict[str, Any] = field(default_factory=dict)
-
-    from dataclasses import dataclass, field
-    from typing import List, Optional
-    import pandas as pd
-
-
-    @dataclass
-    class SalidaMateriales:
-        ok: bool = False
-        errores: List[str] = field(default_factory=list)
-        warnings: List[str] = field(default_factory=list)
-
-        df_materiales: Optional[pd.DataFrame] = None
-        df_resumen: Optional[pd.DataFrame] = None
