@@ -51,9 +51,6 @@ def _debug_final(tension, data):
 # =========================================================
 def seccion_finalizar_calculo():
 
-    from interfaz.contratos import SalidaInterfaz
-    
-
     st.subheader("⚙️ Finalizar cálculo")
 
     tipo = st.session_state.get("modo_carga_seleccionado")
@@ -80,33 +77,28 @@ def seccion_finalizar_calculo():
     if isinstance(data, pd.DataFrame):
         _vista_previa_conteo(data)
 
+    # =====================================================
+    # EJECUCIÓN (YA NO LLAMA ENTRADAS)
+    # =====================================================
     if st.button("🚀 Ejecutar cálculo"):
 
+        # 🔥 Tomar datos del pipeline correcto
+        df_estructuras = st.session_state.get("df_estructuras")
+
+        if df_estructuras is None:
+            st.error("❌ No hay estructuras procesadas. Ejecuta primero el flujo de entradas.")
+            return
+
+        base_datos = st.session_state.get("base_datos")
+
+        # ⚠️ No rompe si aún no migras base_datos
+        if base_datos is None:
+            st.warning("⚠️ base_datos no encontrado (modo compatibilidad activado)")
+
         try:
-            salida_ui = SalidaInterfaz(
-                ok=True,
-                tipo_entrada=tipo,
-                data_entrada=data,
-                datos_proyecto=datos,
-                df_cables=st.session_state.get("cables_proyecto_df"),
-                df_materiales_extra=pd.DataFrame(
-                    st.session_state.get("materiales_extra", [])
-                ),
-            )
-
-            
-
-            if not salida_entradas.ok:
-                st.error("❌ Error en entradas:")
-                for e in salida_entradas.errores:
-                    st.error(f"- {e}")
-                return
-
-            st.session_state["df_estructuras"] = salida_entradas.df_estructuras
-
             entrada_proyecto = EntradaProyecto(
-                df_estructuras=salida_entradas.df_estructuras,
-                ruta_materiales=st.session_state.get("ruta_datos_materiales"),
+                df_estructuras=df_estructuras,
+                base_datos=base_datos,  # 🔥 NUEVO
                 tension=float(tension),
             )
 
@@ -114,27 +106,27 @@ def seccion_finalizar_calculo():
                 resultado = ejecutar_proyecto(entrada_proyecto)
 
             # ===============================
-            # 🔥 FIX: mostrar error real
+            # MANEJO DE ERRORES
             # ===============================
             if not resultado or not resultado.ok:
                 st.error("❌ Error en cálculo")
 
-                if resultado and hasattr(resultado, "errores"):
+                if hasattr(resultado, "errores"):
                     for err in resultado.errores:
                         st.error(f"• {err}")
 
-                if resultado and hasattr(resultado, "warnings"):
+                if hasattr(resultado, "warnings"):
                     for w in resultado.warnings:
                         st.warning(f"⚠️ {w}")
 
-                if resultado and hasattr(resultado, "debug"):
+                if hasattr(resultado, "debug"):
                     with st.expander("🧠 Debug técnico"):
                         st.json(resultado.debug)
 
                 return
 
             # ===============================
-            # warnings normales
+            # WARNINGS
             # ===============================
             if resultado.warnings:
                 for w in resultado.warnings:
