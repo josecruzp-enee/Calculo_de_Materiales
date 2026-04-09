@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 from dataclasses import dataclass, field
 import pandas as pd
 from typing import Optional, Literal, Dict, Any, List
@@ -52,7 +53,7 @@ class SalidaEntradas:
 
 
 # =========================================================
-# 🔷 CONTRATO COSTOS → EXPORTADORES
+# 🔷 CONTRATO COSTOS
 # =========================================================
 @dataclass
 class SalidaCostos:
@@ -69,7 +70,7 @@ class SalidaCostos:
 
 
 # =========================================================
-# 🔷 CONTRATO FINAL (ORQUESTADOR)
+# 🔷 CONTRATO FINAL DEL SISTEMA
 # =========================================================
 @dataclass(slots=True)
 class ResultadoProyecto:
@@ -82,3 +83,16 @@ class ResultadoProyecto:
     reportes: Optional[Dict[str, Any]] = None
 
     debug: Dict[str, Any] = field(default_factory=dict)
+
+
+# =========================================================
+# 🔷 CONTRATO MATERIALES (IMPORTANTE: NIVEL MÓDULO)
+# =========================================================
+@dataclass
+class SalidaMateriales:
+    ok: bool = False
+    errores: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    df_materiales: Optional[pd.DataFrame] = None
+    df_resumen: Optional[pd.DataFrame] = None
