@@ -208,3 +208,83 @@ def construir_entrada_costos(
     )
 
     return entrada
+# =========================================================
+# COSTOS - EJECUCIÓN COMPLETA CON DEBUG
+# =========================================================
+
+from costos_precios.costos_materiales import construir_entrada_costos
+from costos_precios.orquestador_costos import ejecutar_costos
+
+try:
+
+    # =====================================================
+    # 1. DEBUG INPUT
+    # =====================================================
+    debug["costos_input"] = {
+        "materiales_rows": len(df_materiales),
+        "materiales_cols": list(df_materiales.columns),
+
+        "detalle_rows": len(df_detalle),
+        "detalle_cols": list(df_detalle.columns),
+
+        "estructuras_rows": len(df_estructuras) if df_estructuras is not None else 0,
+        "base_datos_ok": isinstance(entrada.base_datos, dict),
+    }
+
+    # =====================================================
+    # 2. CONSTRUIR ENTRADA COSTOS (🔥 AQUÍ SE CALCULA PRECIOS)
+    # =====================================================
+    entrada_costos = construir_entrada_costos(
+        data=entrada.base_datos,
+        df_resumen=df_materiales,
+        df_estructuras_por_punto=df_detalle,
+        df_costos_estructuras=df_estructuras,
+    )
+
+    # =====================================================
+    # 3. DEBUG PRECIOS GENERADOS
+    # =====================================================
+    df_precios = entrada_costos.fuente_precios
+
+    debug["costos_precios"] = {
+        "rows": len(df_precios),
+        "cols": list(df_precios.columns),
+        "preview": df_precios.head(5).to_dict()
+    }
+
+    # =====================================================
+    # 4. EJECUTAR COSTOS
+    # =====================================================
+    resultado_costos = ejecutar_costos(entrada_costos)
+
+    df_costos_materiales = resultado_costos["df_costos_materiales"]
+
+    # =====================================================
+    # 5. DEBUG RESULTADO
+    # =====================================================
+    debug["costos_output"] = {
+        "rows": len(df_costos_materiales),
+        "cols": list(df_costos_materiales.columns),
+        "preview": df_costos_materiales.head(5).to_dict(),
+        "total_proyecto": float(df_costos_materiales["Costo Total"].sum())
+    }
+
+    # =====================================================
+    # 6. RESULTADO FINAL
+    # =====================================================
+    resultado_final_costos = {
+        "ok": True,
+        "df_costos_materiales": df_costos_materiales,
+        "total": float(df_costos_materiales["Costo Total"].sum()),
+        "debug": debug
+    }
+
+except Exception as e:
+
+    debug["costos_error"] = str(e)
+
+    resultado_final_costos = {
+        "ok": False,
+        "error": str(e),
+        "debug": debug
+    }
