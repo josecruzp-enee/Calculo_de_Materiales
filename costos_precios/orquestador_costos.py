@@ -15,6 +15,9 @@ def ejecutar_costos(data: Dict[str, Any]) -> Dict[str, Any]:
     Orquestador de dominio para costos.
     """
 
+    # =====================================================
+    # VALIDACIÓN INPUT
+    # =====================================================
     if not isinstance(data, dict):
         raise TypeError("data debe ser dict")
 
@@ -32,20 +35,28 @@ def ejecutar_costos(data: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("Falta df_costos_estructuras")
 
     # =====================================================
-    # 1. COSTOS DE MATERIALES
+    # 1. FUENTE DE PRECIOS (FIX REAL)
     # =====================================================
-    fuente_precios = (
-        data.get("df_precios_materiales")
-        or data.get("archivo_precios_materiales")
-    )
+    fuente_precios = data.get("df_precios_materiales")
 
+    if fuente_precios is None:
+        fuente_precios = data.get("archivo_precios_materiales")
+
+    if fuente_precios is None:
+        raise ValueError(
+            "Debe proporcionar df_precios_materiales o archivo_precios_materiales"
+        )
+
+    # =====================================================
+    # 2. COSTOS DE MATERIALES
+    # =====================================================
     df_costos_materiales = calcular_costos_desde_resumen(
         df_resumen,
         fuente_precios
     )
 
     # =====================================================
-    # 2. COSTOS POR PUNTO
+    # 3. COSTOS POR PUNTO
     # =====================================================
     df_detalle, df_resumen_costos, df_resumen_precios = calcular_costos_por_punto(
         df_ep,
@@ -53,7 +64,7 @@ def ejecutar_costos(data: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # =====================================================
-    # 3. CONSOLIDACIÓN
+    # 4. CONSOLIDACIÓN
     # =====================================================
     resultados = {
         "df_costos_materiales": df_costos_materiales,
