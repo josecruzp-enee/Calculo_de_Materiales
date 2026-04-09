@@ -137,12 +137,24 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         entrada.df_materiales_por_punto
     )
 
-    debug["base"] = {
-        "puntos_ep": df_ep["Punto"].unique()[:10].tolist(),
-        "puntos_mp": df_mp["Punto"].unique()[:10].tolist(),
-        "estructuras": df_ep["Estructura"].unique().tolist(),
+    # =====================================================
+    # 🔍 DEBUG BASE
+    # =====================================================
+    debug["DEBUG_BASE"] = {
+        "estructuras_por_punto_head": df_ep.head(5).to_dict(),
+        "materiales_por_punto_head": df_mp.head(5).to_dict(),
         "filas_ep": len(df_ep),
         "filas_mp": len(df_mp),
+        "estructuras_unicas": df_ep["Estructura"].unique().tolist()[:20]
+    }
+
+    # =====================================================
+    # 🔍 DEBUG PRECIOS
+    # =====================================================
+    debug["DEBUG_PRECIOS"] = {
+        "columnas": list(entrada.fuente_precios.columns),
+        "preview": entrada.fuente_precios.head(5).to_dict(),
+        "filas": len(entrada.fuente_precios)
     }
 
     # =====================================================
@@ -153,9 +165,10 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         entrada.fuente_precios
     )
 
-    debug["materiales"] = {
-        "filas": len(df_costos_materiales),
-        "total": float(df_costos_materiales["Costo Total"].sum())
+    debug["DEBUG_COSTOS_MATERIALES"] = {
+        "head": df_costos_materiales.head(5).to_dict(),
+        "columnas": list(df_costos_materiales.columns),
+        "total": float(df_costos_materiales.get("Costo Total", pd.Series([0])).sum())
     }
 
     # =====================================================
@@ -163,7 +176,10 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     # =====================================================
     map_punto_est = _mapear_punto_a_estructuras(df_ep)
 
-    debug["map_size"] = len(map_punto_est)
+    debug["DEBUG_MAPEO"] = {
+        "total_puntos": len(map_punto_est),
+        "ejemplo": dict(list(map_punto_est.items())[:3])
+    }
 
     # =====================================================
     # 3. BOM
@@ -172,14 +188,19 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         df_mp, map_punto_est, debug
     )
 
-    debug["estructuras_con_materiales"] = list(df_materiales_por_estructura.keys())
-
-    if not df_materiales_por_estructura:
-        raise ValueError("No se pudo construir BOM")
-
     df_materiales_por_estructura = _consolidar_bom(
         df_materiales_por_estructura
     )
+
+    # 🔍 DEBUG BOM (CRÍTICO)
+    ejemplo_est = list(df_materiales_por_estructura.keys())[:1]
+
+    debug["DEBUG_BOM"] = {
+        "total_estructuras": len(df_materiales_por_estructura),
+        "ejemplo_estructura": ejemplo_est,
+        "ejemplo_materiales": df_materiales_por_estructura[ejemplo_est[0]].head(5).to_dict()
+        if ejemplo_est else {}
+    }
 
     # =====================================================
     # 4. VALIDACIÓN
@@ -195,7 +216,12 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         df_precios_materiales=entrada.fuente_precios
     )
 
-    debug["estructuras_costos"] = len(df_costos_estructuras)
+    # 🔍 DEBUG COSTOS ESTRUCTURAS
+    debug["DEBUG_COSTOS_ESTRUCTURAS"] = {
+        "columnas": list(df_costos_estructuras.columns),
+        "head": df_costos_estructuras.head(5).to_dict(),
+        "filas": len(df_costos_estructuras)
+    }
 
     # =====================================================
     # 6. COSTOS POR PUNTO
@@ -207,12 +233,16 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
     df_ep2 = df_ep2[["Punto", "codigodeestructura", "Cantidad"]]
 
+    # 🔍 DEBUG INPUT FINAL
+    debug["DEBUG_INPUT_COSTOS_PUNTO"] = {
+        "df_ep2_head": df_ep2.head(5).to_dict(),
+        "columnas": list(df_ep2.columns)
+    }
+
     df_detalle, df_resumen_costos, df_resumen_precios = calcular_costos_por_punto(
         df_ep2,
         df_costos_estructuras
     )
-
-    debug["puntos"] = len(df_detalle)
 
     return {
         "ok": True,
