@@ -9,7 +9,7 @@ from typing import Optional
 from interfaz.contratos import ResultadoProyecto, SalidaInterfaz
 
 # =========================================================
-# ORQUESTADORES DE CAPA
+# ORQUESTADORES
 # =========================================================
 from entradas.orquestador_entradas import ejecutar_entradas
 from materiales.modelos.entrada import EntradaMateriales
@@ -38,18 +38,18 @@ def _safe_list(x):
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL (ÚNICO CEREBRO)
+# ORQUESTADOR PRINCIPAL
 # =========================================================
 def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
     """
     Orquestador maestro del sistema.
 
-    Flujo:
-        1. Entradas
-        2. Materiales
-        3. Costos
-        4. Reportes
-        5. Consolidación
+    RESPONSABILIDAD:
+    ✔ Coordinar flujo
+    ✔ Validar salidas de cada etapa
+    ❌ NO hacer cálculos
+    ❌ NO transformar lógica
+    ❌ NO interpretar datos
     """
 
     # =====================================================
@@ -77,17 +77,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             )
 
         # =====================================================
-        # TENSIÓN (ROBUSTA)
+        # TENSIÓN (DEBE VENIR RESUELTA)
         # =====================================================
-        datos_proyecto = salida_entradas.datos_proyecto or {}
-
-        tension = (
-            datos_proyecto.get("tension")
-            or datos_proyecto.get("nivel_de_tension")
-        )
-
+        tension = salida_entradas.tension
         if tension is None:
-            return _fail("No se pudo determinar la tensión del proyecto")
+            return _fail("Tensión no definida en entradas")
 
         # =====================================================
         # 2. MATERIALES
@@ -96,11 +90,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             estructuras_df=salida_entradas.df_estructuras,
             tension=tension,
             base_datos=salida_entradas.base_datos,
-            datos_proyecto=datos_proyecto,
+            datos_proyecto=salida_entradas.datos_proyecto,
             df_cables=salida_entradas.df_cables,
             df_materiales_extra=salida_entradas.df_materiales_extra,
-            calibre_mt=getattr(salida_entradas, "calibre_mt", None),
-            tabla_conectores_mt=getattr(salida_entradas, "tabla_conectores_mt", None),
+            calibre_mt=salida_entradas.calibre_mt,
+            tabla_conectores_mt=salida_entradas.tabla_conectores_mt,
         )
 
         resultado_materiales = ejecutar_materiales(entrada_mat)
@@ -117,8 +111,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         data_costos = {
             "df_resumen": resultado_materiales.df_materiales,
             "df_estructuras_por_punto": resultado_materiales.df_estructuras_por_punto,
-            "df_costos_estructuras": getattr(salida_entradas, "df_costos_estructuras", None),
-            "df_precios_materiales": getattr(salida_entradas, "df_precios_materiales", None),
+            "df_costos_estructuras": salida_entradas.df_costos_estructuras,
+            "df_precios_materiales": salida_entradas.df_precios_materiales,
         }
 
         resultado_costos = ejecutar_costos(data_costos)
@@ -143,16 +137,13 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             return _fail("Error generando reportes")
 
         # =====================================================
-        # WARNINGS CONSOLIDADOS
+        # CONSOLIDACIÓN
         # =====================================================
         warnings = []
-        warnings += _safe_list(getattr(salida_entradas, "warnings", []))
-        warnings += _safe_list(getattr(resultado_materiales, "warnings", []))
+        warnings += _safe_list(salida_entradas.warnings)
+        warnings += _safe_list(resultado_materiales.warnings)
         warnings += _safe_list(getattr(resultado_costos, "warnings", []))
 
-        # =====================================================
-        # RESULTADO FINAL
-        # =====================================================
         return ResultadoProyecto(
             ok=True,
             errores=[],
