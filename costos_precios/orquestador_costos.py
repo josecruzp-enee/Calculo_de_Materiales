@@ -12,13 +12,13 @@ from costos_precios.costos_estructuras import calcular_costos_por_estructura
 
 
 # =====================================================
-# CONTRATO (ESTABLE)
+# CONTRATO (FINAL)
 # =====================================================
 @dataclass
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
-    df_materiales_por_punto: pd.DataFrame   # 🔥 ESTE ES EL REAL
+    df_materiales_por_punto: pd.DataFrame
     fuente_precios: Union[pd.DataFrame, str, Path]
 
 
@@ -90,18 +90,41 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
 
     # =====================================================
-    # 3. CONSTRUIR BOM REAL (FIX DEFINITIVO)
+    # 3. MAPEO CLAVE (Punto → Estructura)
     # =====================================================
+    map_punto_est = dict(zip(df_ep["Punto"], df_ep["Estructura"]))
+
     df_materiales_por_estructura = {}
 
-    for est in df_ep["Estructura"].unique():
+    for punto, df_p in df_mp.groupby("Punto"):
 
-        df_temp = df_mp[df_mp["Punto"] == est][
-            ["Materiales", "Unidad", "Cantidad"]
-        ].copy()
+        est = map_punto_est.get(punto)
 
-        if not df_temp.empty:
-            df_materiales_por_estructura[est] = df_temp
+        if est is None:
+            continue
+
+        df_temp = df_p[["Materiales", "Unidad", "Cantidad"]].copy()
+
+        df_materiales_por_estructura.setdefault(est, []).append(df_temp)
+
+    # =====================================================
+    # CONSOLIDAR BOM
+    # =====================================================
+    for est, lista in df_materiales_por_estructura.items():
+
+        df_concat = pd.concat(lista, ignore_index=True)
+
+        df_concat["Cantidad"] = pd.to_numeric(
+            df_concat["Cantidad"], errors="coerce"
+        ).fillna(0)
+
+        df_concat = (
+            df_concat
+            .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+            .sum()
+        )
+
+        df_materiales_por_estructura[est] = df_concat
 
     if not df_materiales_por_estructura:
         raise ValueError("No se pudo construir BOM por estructura")
