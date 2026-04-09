@@ -8,7 +8,7 @@ from pathlib import Path
 
 from costos_precios.costos_materiales import calcular_costos_desde_resumen
 from costos_precios.costos_por_punto import calcular_costos_por_punto
-from costos_precios.costos_estructura import calcular_costos_por_estructura
+from costos_precios.costos_estructuras import calcular_costos_por_estructura
 
 
 # =====================================================
