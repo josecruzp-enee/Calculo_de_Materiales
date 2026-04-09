@@ -20,19 +20,13 @@ def _norm_txt(s: object) -> str:
 
     t = str(s).upper()
 
-    # quitar tildes
     t = "".join(
         c for c in unicodedata.normalize("NFD", t)
         if unicodedata.category(c) != "Mn"
     )
 
-    palabras_eliminar = [
-        "DE", "DEL", "LA", "EL",
-        "ANSI", "TIPO", "CLASE",
-        "CARRETE", "ESPIGA", "SUSPENSION"
-    ]
-
-    for p in palabras_eliminar:
+    for p in ["DE", "DEL", "LA", "EL", "ANSI", "TIPO", "CLASE",
+              "CARRETE", "ESPIGA", "SUSPENSION"]:
         t = t.replace(p, "")
 
     t = t.replace("-", " ")
@@ -54,92 +48,9 @@ class EntradaCostos:
 
 
 # =========================================================
-# CATÁLOGO → COSTOS UNITARIOS
-# =========================================================
-def preparar_df_costos_unitarios(
-    df_catalogo: pd.DataFrame,
-    df_resumen: pd.DataFrame | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-
-    if df_catalogo is None or df_catalogo.empty:
-        raise ValueError("Catálogo vacío")
-
-    df = df_catalogo.copy()
-
-    df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
-    df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
-
-    df["Costo Unitario"] = pd.to_numeric(
-        df.get("Costo Unitario", df.get("Costo", 0)),
-        errors="coerce"
-    )
-
-    df = df[
-        ["Materiales_norm", "Unidad_norm", "Costo Unitario"]
-    ]
-
-    df = df.dropna(subset=["Costo Unitario"])
-    df = df[df["Costo Unitario"] > 0]
-
-    df = df.drop_duplicates(
-        subset=["Materiales_norm", "Unidad_norm"],
-        keep="first"
-    )
-
-    if df.empty:
-        raise ValueError("No hay costos válidos en catálogo")
-
-    debug_guardar("costos_unitarios", {
-        "rows": len(df),
-        "preview": df.head(5).to_dict()
-    })
-
-    # faltantes
-    df_faltantes = pd.DataFrame()
-
-    if df_resumen is not None and not df_resumen.empty:
-
-        base = df_resumen.copy()
-
-        if "Unidad" not in base.columns:
-            base["Unidad"] = ""
-
-        base["Materiales_norm"] = base["Materiales"].astype(str).map(_norm_txt)
-        base["Unidad_norm"] = base["Unidad"].astype(str).map(_norm_txt)
-
-        check = base.merge(
-            df,
-            on=["Materiales_norm", "Unidad_norm"],
-            how="left"
-        )
-
-        faltantes = check[
-            check["Costo Unitario"].isna()
-        ]
-
-        if not faltantes.empty:
-            df_faltantes = (
-                faltantes[
-                    ["Materiales", "Unidad", "Cantidad"]
-                ]
-                .drop_duplicates()
-                .reset_index(drop=True)
-            )
-
-            debug_guardar("costos_faltantes", {
-                "faltantes": df_faltantes.to_dict()
-            })
-
-    return df.reset_index(drop=True), df_faltantes
-
-
-# =========================================================
 # MOTOR DE COSTOS
 # =========================================================
-def calcular_costos_desde_resumen(
-    df_resumen: pd.DataFrame,
-    df_costos: pd.DataFrame,
-) -> pd.DataFrame:
+def calcular_costos_desde_resumen(df_resumen, df_costos):
 
     if df_resumen is None or df_resumen.empty:
         raise ValueError("df_resumen vacío")
@@ -155,62 +66,64 @@ def calcular_costos_desde_resumen(
     df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
 
-    debug_guardar("costos_input", {
-        "rows": len(df),
-        "preview": df.head(5).to_dict()
-    })
+    df = df.merge(df_costos, on=["Materiales_norm", "Unidad_norm"], how="left")
 
-    df = df.merge(
-        df_costos,
-        on=["Materiales_norm", "Unidad_norm"],
-        how="left"
-    )
-
-    faltantes = df[df["Costo Unitario"].isna()]
-    if not faltantes.empty:
-        debug_guardar("costos_error", {
-            "sin_costo": faltantes[["Materiales", "Unidad"]].to_dict()
-        })
+    if df["Costo Unitario"].isna().any():
         raise ValueError("Hay materiales sin costo")
 
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
     df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
 
-    debug_guardar("costos_total", {
-        "total": float(df["Costo Total"].sum())
-    })
-
-    return df[
-        ["Materiales", "Unidad", "Cantidad", "Costo Unitario", "Costo Total"]
-    ].reset_index(drop=True)
+    return df[[
+        "Materiales", "Unidad", "Cantidad",
+        "Costo Unitario", "Costo Total"
+    ]].reset_index(drop=True)
 
 
 # =========================================================
 # BUILDER CORREGIDO
 # =========================================================
-def construir_entrada_costos(
-    data,
-    df_resumen,
-    df_estructuras_por_punto,
-):
+def construir_entrada_costos(data, df_resumen, df_estructuras_por_punto):
 
     catalogo = obtener_catalogo_materiales(data)
 
-    debug_guardar("costos_catalogo", {
-        "rows": len(catalogo),
-        "preview": catalogo.head(5).to_dict()
-    })
-
-    df_costos, df_faltantes = preparar_df_costos_unitarios(
-        catalogo,
-        df_resumen
-    )
+    df_costos = preparar_df_costos_unitarios(catalogo)
 
     from costos_precios.orquestador_costos import EntradaCostos
 
     return EntradaCostos(
         df_resumen=df_resumen,
         df_estructuras_por_punto=df_estructuras_por_punto,
-        df_materiales_por_estructura=data.get("df_materiales_por_estructura", {}),
+        df_materiales_por_estructura=data.get(
+            "df_materiales_por_estructura", {}
+        ),
         fuente_precios=df_costos,
     )
+
+
+# =========================================================
+# COSTOS UNITARIOS (SIMPLIFICADO SIN ERROR)
+# =========================================================
+def preparar_df_costos_unitarios(df_catalogo):
+
+    if df_catalogo is None or df_catalogo.empty:
+        raise ValueError("Catálogo vacío")
+
+    df = df_catalogo.copy()
+
+    df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
+    df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
+
+    df["Costo Unitario"] = pd.to_numeric(
+        df.get("Costo Unitario", df.get("Costo", 0)),
+        errors="coerce"
+    )
+
+    df = df.dropna(subset=["Costo Unitario"])
+    df = df[df["Costo Unitario"] > 0]
+
+    df = df.drop_duplicates(
+        subset=["Materiales_norm", "Unidad_norm"]
+    )
+
+    return df[["Materiales_norm", "Unidad_norm", "Costo Unitario"]]
