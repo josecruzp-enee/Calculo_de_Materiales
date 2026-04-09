@@ -4,8 +4,9 @@ from __future__ import annotations
 from typing import Dict, Any
 import pandas as pd
 from pathlib import Path
+
 # =========================================================
-# CONTRATO (ÚNICO)
+# CONTRATO
 # =========================================================
 from aplicacion.modelos_proyecto import EntradaProyecto
 
@@ -15,44 +16,57 @@ from aplicacion.modelos_proyecto import EntradaProyecto
 from materiales.modelos.entrada import EntradaMateriales
 from materiales.orquestador_materiales import ejecutar_materiales
 
-from costos_precios.orquestador_costos import ejecutar_costos
-from costos_precios.costos_estructuras import calcular_costos_por_estructura
 from entradas.base_datos import cargar_base_datos
 
 
-
 # =========================================================
-# HELPERS
+# VALIDACIONES INTERNAS
 # =========================================================
-def _conteo_estructuras(df: pd.DataFrame) -> Dict[str, float]:
+def _validar_df_estructuras(df: pd.DataFrame):
     if df is None or df.empty:
-        return {}
+        raise ValueError("df_estructuras está vacío")
 
-    df = df.copy()
-    cols = {c.strip().lower(): c for c in df.columns}
+    cols = {c.strip().lower() for c in df.columns}
 
-    col_est = cols.get("estructura") or cols.get("codigodeestructura")
-    col_cant = cols.get("cantidad")
-
-    if not col_est or not col_cant:
+    if not {"estructura", "cantidad"} & cols:
         raise ValueError(
-            f"Columnas requeridas no encontradas en estructuras: {list(df.columns)}"
+            f"df_estructuras no tiene columnas válidas: {df.columns}"
         )
 
-    df[col_est] = df[col_est].astype(str).str.strip().str.upper()
-    df[col_cant] = pd.to_numeric(df[col_cant], errors="coerce").fillna(0)
 
-    return dict(zip(df[col_est], df[col_cant]))
+def _validar_base_datos(base_datos: Dict[str, Any]):
+    if not base_datos:
+        raise ValueError("base_datos vacío")
+
+    if not isinstance(base_datos, dict):
+        raise TypeError("base_datos debe ser dict")
+
+    if not any(isinstance(v, pd.DataFrame) for v in base_datos.values()):
+        raise ValueError("base_datos no contiene hojas válidas")
 
 
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
 def ejecutar_proyecto(entrada: EntradaProyecto) -> Dict[str, Any]:
+    """
+    Orquestador principal del proyecto.
 
-    # =========================================
+    Responsabilidad:
+        - Validar entrada
+        - Cargar base de datos
+        - Ejecutar cálculo de materiales
+        - Retornar resultados estructurados
+
+    NO hace:
+        - Costos
+        - Cálculos económicos
+        - Lógica cruzada
+    """
+
+    # =====================================================
     # VALIDACIÓN FUERTE
-    # =========================================
+    # =====================================================
     if not isinstance(entrada, EntradaProyecto):
         raise TypeError("entrada debe ser EntradaProyecto")
 
@@ -60,87 +74,86 @@ def ejecutar_proyecto(entrada: EntradaProyecto) -> Dict[str, Any]:
 
     if entrada.tension is None:
         raise ValueError("tension es requerida")
-    
 
-    base_datos = cargar_base_datos(Path(entrada.ruta_materiales))
-    # =========================================
-    # 1. MATERIALES
-    # =========================================
+    if not entrada.ruta_materiales:
+        raise ValueError("ruta_materiales es requerida")
+
+    _validar_df_estructuras(entrada.df_estructuras)
+
+    # =====================================================
+    # BASE DE DATOS
+    # =====================================================
+    ruta = Path(entrada.ruta_materiales)
+
+    if not ruta.exists():
+        raise FileNotFoundError(f"No existe archivo de materiales: {ruta}")
+
+    try:
+        base_datos = cargar_base_datos(ruta)
+    except Exception as e:
+        raise RuntimeError("Error cargando base de datos") from e
+
+    _validar_base_datos(base_datos)
+
+    # =====================================================
+    # MATERIALES
+    # =====================================================
     entrada_mat = EntradaMateriales(
         estructuras_df=entrada.df_estructuras,
         tension=entrada.tension,
         base_datos=base_datos,
         datos_proyecto=entrada.datos_proyecto,
-        df_cables=getattr(entrada, "df_cables", None),
-        df_materiales_extra=getattr(entrada, "df_materiales_extra", None),
+        df_cables=entrada.df_cables,
+        df_materiales_extra=entrada.df_materiales_extra,
         calibre_mt=entrada.calibre_mt,
         tabla_conectores_mt=entrada.tabla_conectores_mt,
     )
 
     salida_materiales = ejecutar_materiales(entrada_mat)
 
-    if (
-        salida_materiales is None
-        or salida_materiales.df_materiales is None
-        or salida_materiales.df_materiales.empty
-    ):
-        raise ValueError("Error en cálculo de materiales")
+    # =====================================================
+    # VALIDACIÓN RESULTADO
+    # =====================================================
+    if salida_materiales is None:
+        raise RuntimeError("salida_materiales es None")
 
-    # =========================================
-    # 2. COSTOS POR ESTRUCTURA
-    # =========================================
-    df_costos_estructuras = entrada.df_costos_estructuras
-
-    if df_costos_estructuras is None or df_costos_estructuras.empty:
-
-        conteo = _conteo_estructuras(entrada.df_estructuras)
-
-        hojas_base = base_datos
-
-        df_costos_estructuras = calcular_costos_por_estructura(
-            hojas_base=hojas_base,
-            conteo=conteo,
-            tension_ll=entrada.tension,
-            calibre_mt=entrada.calibre_mt,
-            tabla_conectores_mt=entrada.tabla_conectores_mt,
-            df_precios_materiales=entrada.df_precios_materiales,
+    if not salida_materiales.ok:
+        raise RuntimeError(
+            f"Error en materiales: {salida_materiales.errores}"
         )
 
-    # =========================================
-    # 3. COSTOS
-    # =========================================
-    salida_costos = ejecutar_costos({
-        "df_resumen": salida_materiales.df_materiales,
-        "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
-        "df_costos_estructuras": df_costos_estructuras,
-        "df_precios_materiales": entrada.df_precios_materiales,
-    })
+    if (
+        salida_materiales.df_materiales is None
+        or salida_materiales.df_materiales.empty
+    ):
+        raise ValueError("df_materiales vacío")
 
-    # =========================================
-    # 4. OUTPUT NORMALIZADO (CLAVE 🔥)
-    # =========================================
+    # =====================================================
+    # OUTPUT NORMALIZADO
+    # =====================================================
     resultado = {
         "ok": True,
 
         # 🔹 materiales
         "materiales": salida_materiales,
         "df_materiales": salida_materiales.df_materiales,
-        "df_por_punto": salida_materiales.df_materiales_por_punto,
+        "df_materiales_por_punto": salida_materiales.df_materiales_por_punto,
 
         # 🔹 estructuras
         "df_estructuras": salida_materiales.df_estructuras,
-
-        # 🔹 costos (formato esperado por reportes)
-        "costos": salida_costos,
-
-        # 🔹 resumen (alias para excel/reportes)
-        "df_resumen": salida_materiales.df_materiales,
+        "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
+        "descripcion_estructuras": getattr(
+            salida_materiales, "descripcion_estructuras", None
+        ),
 
         # 🔹 metadata
         "nombre_proyecto": (
             entrada.datos_proyecto.get("nombre")
             if entrada.datos_proyecto else "Proyecto"
         ),
+
+        # 🔹 debug
+        "debug": getattr(salida_materiales, "debug", {}),
     }
 
     return resultado
