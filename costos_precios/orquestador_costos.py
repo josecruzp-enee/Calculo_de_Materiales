@@ -8,6 +8,7 @@ from pathlib import Path
 
 from costos_precios.costos_materiales import calcular_costos_desde_resumen
 from costos_precios.costos_por_punto import calcular_costos_por_punto
+from costos_precios.costos_estructura import calcular_costos_por_estructura
 
 
 # =====================================================
@@ -17,7 +18,7 @@ from costos_precios.costos_por_punto import calcular_costos_por_punto
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
-    df_costos_estructuras: pd.DataFrame  # ← ya no obligatorio como input real
+    df_materiales_por_estructura: Dict[str, pd.DataFrame]  # 🔥 NUEVO
     fuente_precios: Union[pd.DataFrame, str, Path]
 
 
@@ -49,7 +50,7 @@ def _validar_fuente_precios(fuente):
 
 
 # =====================================================
-# ORQUESTADOR (LIMPIO)
+# ORQUESTADOR (CORRECTO)
 # =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
@@ -57,15 +58,18 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         raise TypeError("entrada debe ser EntradaCostos")
 
     # =====================================================
-    # VALIDAR SOLO LO QUE VIENE DE FUERA
+    # VALIDAR ENTRADAS
     # =====================================================
     _validar_df("df_resumen", entrada.df_resumen, ["materiales", "cantidad"])
     _validar_df("df_estructuras_por_punto", entrada.df_estructuras_por_punto)
 
+    if not isinstance(entrada.df_materiales_por_estructura, dict):
+        raise ValueError("df_materiales_por_estructura inválido")
+
     fuente_precios = _validar_fuente_precios(entrada.fuente_precios)
 
     # =====================================================
-    # 1. COSTOS DE MATERIALES (UNITARIOS DEL EXCEL)
+    # 1. COSTOS DE MATERIALES
     # =====================================================
     df_costos_materiales = calcular_costos_desde_resumen(
         entrada.df_resumen,
@@ -76,32 +80,32 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         raise ValueError("No hay match entre materiales y precios")
 
     # =====================================================
-    # 2. COSTOS POR ESTRUCTURA (SE CONSTRUYEN AQUÍ)
+    # 2. COSTOS POR ESTRUCTURA (REAL)
     # =====================================================
-    df_costos_estructuras = (
-        entrada.df_estructuras_por_punto[["Estructura"]]
-        .drop_duplicates()
-        .rename(columns={"Estructura": "estructura"})
-        .copy()
+    df_costos_estructuras = calcular_costos_por_estructura(
+        df_estructuras=entrada.df_estructuras_por_punto,
+        df_materiales_por_estructura=entrada.df_materiales_por_estructura,
+        df_precios_materiales=fuente_precios
     )
 
-    df_costos_estructuras["costo"] = 0.0
-    # 🔥 NORMALIZAR df_estructuras_por_punto PARA COSTOS
+    # =====================================================
+    # 3. NORMALIZAR df_estructuras_por_punto
+    # =====================================================
     df_ep = entrada.df_estructuras_por_punto.copy()
 
-    # asegurar columnas correctas
-    if "codigodeestructura" not in df_ep.columns and "Estructura" in df_ep.columns:
-        df_ep["codigodeestructura"] = df_ep["Estructura"]
+    if "codigodeestructura" not in df_ep.columns:
+        if "Estructura" in df_ep.columns:
+            df_ep["codigodeestructura"] = df_ep["Estructura"]
+        else:
+            raise ValueError("No existe columna codigodeestructura")
 
-    # dejar solo lo necesario (evita conflictos)
     df_ep = df_ep[["Punto", "codigodeestructura", "Cantidad"]]
 
-    entrada.df_estructuras_por_punto = df_ep
     # =====================================================
-    # 3. COSTOS POR PUNTO
+    # 4. COSTOS POR PUNTO
     # =====================================================
     df_detalle, df_resumen_costos, df_resumen_precios = calcular_costos_por_punto(
-        entrada.df_estructuras_por_punto,
+        df_ep,
         df_costos_estructuras
     )
 
