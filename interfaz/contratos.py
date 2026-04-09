@@ -75,29 +75,10 @@ class SalidaEntradas:
 # =========================================================
 # 🔷 CONTRATO MATERIALES → EXPORTADORES
 # =========================================================
-@dataclass
-class SalidaMateriales:
-
-    # CONTROL
-    ok: bool = False
-    errores: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-
-    # RESULTADOS EXISTENTES (NO TOCAR)
-    df_materiales: pd.DataFrame = field(default_factory=pd.DataFrame)
-    df_materiales_por_punto: pd.DataFrame = field(default_factory=pd.DataFrame)
-
-    # 🔥 NUEVO (SIN ROMPER)
-    df_estructuras: Optional[pd.DataFrame] = None
-    df_estructuras_por_punto: Optional[pd.DataFrame] = None
-    descripcion_estructuras: Optional[Dict[str, Any]] = None
-    base_datos: Dict[str, pd.DataFrame] = field(default_factory=dict)
-    # CONTEXTO
-    datos_proyecto: Dict[str, Any] = field(default_factory=dict)
-
-    # DEBUG
-    debug: Dict[str, Any] = field(default_factory=dict)
-
+# =========================================================
+# 🔷 PARCHE COMPATIBILIDAD (USAR SOLO UNA CLASE REAL)
+# =========================================================
+from materiales.modelos.salida import SalidaMateriales
 
 # =========================================================
 # 🔷 CONTRATO COSTOS → EXPORTADORES
