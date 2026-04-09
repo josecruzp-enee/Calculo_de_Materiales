@@ -1,243 +1,183 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import re
 import pandas as pd
-from ayuda.debug import debug_guardar
-
-
-# ==========================================================
-# DEBUG HELPERS
-# ==========================================================
-def _debug(nombre, valor):
-    debug_guardar(f"NORMALIZAR::{nombre}", valor)
-
-
-def _check(nombre, cond, detalle=None):
-    debug_guardar(f"CHECK::NORMALIZAR::{nombre}", {
-        "ok": bool(cond),
-        "detalle": str(detalle)[:200]
-    })
-
-
-# ==========================================================
-# HELPERS
-# ==========================================================
-def limpiar_codigo(codigo: str) -> str:
-    if codigo is None:
-        return ""
-
-    codigo = str(codigo).strip().upper()
-
-    if not codigo:
-        return ""
-
-    codigo = re.sub(r"\(.*?\)", "", codigo)
-    codigo = codigo.replace(" ", "")
-    codigo = re.sub(r"[^A-Z0-9\-\.\+]", "", codigo)
-
-    return codigo
-
-
-# ==========================================================
-# 🔥 RESOLUCIÓN DE CATÁLOGO
-# ==========================================================
-def resolver_codigo_catalogo(codigo: str) -> str:
-    codigo = codigo.strip().upper()
-
-    # =========================================
-    # LUMINARIAS
-    # =========================================
-    if codigo.startswith("LL-"):
-        if re.search(r"LL-\d+-\d+W", codigo):
-            return codigo
-        return f"{codigo}-50W"
-
-    return codigo
-
-
-# ==========================================================
-# EXPANSIÓN
-# ==========================================================
-def _expandir_multiplicador(token: str):
-
-    if not token:
-        return []
-
-    token = token.strip().upper()
-
-    match = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
-    if match:
-        return [match.group(2).strip()] * int(match.group(1))
-
-    return [token]
-
-
-# ==========================================================
-# 🔥 SPLIT CORRECTO PARA DXF
-# ==========================================================
-def _split_bloques(texto: str):
-
-    if texto is None:
-        return []
-
-    # 🔥 Unificar TODOS los separadores a salto de línea
-    texto = texto.replace("\\P", "\n")   # AutoCAD
-    texto = texto.replace(",", "\n")     # 🔥 CLAVE (tu caso actual)
-    texto = texto.replace(";", "\n")
-    texto = texto.replace("|", "\n")
-
-    # limpiar duplicados
-    texto = re.sub(r"\n+", "\n", texto)
-
-    partes = texto.split("\n")
-
-    return [p.strip() for p in partes if p.strip()]
-
-
-# ==========================================================
-# EXPANDIR LISTA
-# ==========================================================
-def expandir_lista_codigos(texto: str):
-
-    _debug("raw_texto", texto)
-
-    if texto is None:
-        return []
-
-    texto = str(texto).upper()
-
-    texto = re.sub(r"\{[^:]*:", "", texto)
-    texto = texto.replace("{", "").replace("}", "")
-    texto = texto.replace("\\P", "\n")
-
-    partes = _split_bloques(texto)
-
-    # 🔥 CLAVE: NO dividir por espacios
-    resultado = []
-
-    for p in partes:
-
-        tokens = _expandir_multiplicador(p)
-
-        for t in tokens:
-            codigo = limpiar_codigo(t)
-
-            if not codigo:
-                continue
-
-            # 🔥 FILTRO ANTI-BASURA (CS-32 fantasma)
-            if codigo.startswith("CS-") and codigo not in {"CS-1", "CS-2"}:
-                _debug("codigo_descartado", codigo)
-                continue
-
-            resultado.append(codigo)
-
-    _debug("codigos_expandidos", resultado)
-
-    return resultado
-
-
-# ==========================================================
-# CORE
-# ==========================================================
-def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
-
-    df = df.copy()
-    df.columns = df.columns.str.strip()
-
-    _debug("input_columnas", list(df.columns))
-    _debug("input_shape", df.shape)
-
-    registros = []
-
-    for idx, row in df.iterrows():
-
-        # ==================================================
-        # PUNTO ORIGINAL
-        # ==================================================
-        punto_original = row.get("Punto") or row.get("punto") or f"P-{idx+1}"
-        punto_original = str(punto_original).strip()
-
-        # ==================================================
-        # DETECTAR COLUMNA
-        # ==================================================
-        estructura_raw = None
-
-        for col in df.columns:
-            col_norm = col.lower().replace(" ", "")
-
-            if col_norm in ["estructura", "estructuras", "codigodeestructura"]:
-                estructura_raw = row.get(col)
-                break
-
-        if estructura_raw is None:
-            _debug(f"fila_{idx}_sin_estructura", dict(row))
-            continue
-
-        # ==================================================
-        # EXPANDIR
-        # ==================================================
-        lista_codigos = expandir_lista_codigos(estructura_raw)
-
-        _debug(f"fila_{idx}_codigos", lista_codigos)
-
-        # ==================================================
-        # CLASIFICAR
-        # ==================================================
-        estructuras = []
-        for cod in lista_codigos:
-            if re.match(r"^P-?\d+$", cod):
-                continue
-
-            estructuras.append(cod)
-        punto_final = punto_original
-
-        
-
-        # ==================================================
-        # RESOLUCIÓN FINAL
-        # ==================================================
-        for est in estructuras:
-
-            est_final = resolver_codigo_catalogo(est)
-
-            _debug("resolver_codigo", {
-                "original": est,
-                "final": est_final
-            })
-
-            registros.append({
-                "Punto": punto_final,
-                "codigodeestructura": est_final,
-                "Estructura": est_final,
-                "cantidad": 1
-            })
-
-    # ==================================================
-    # OUTPUT
-    # ==================================================
-    df_out = pd.DataFrame(registros)
-
-    _debug("output_columnas", list(df_out.columns))
-    _debug("output_shape", df_out.shape)
-
-    _check("output_no_vacio", not df_out.empty, len(df_out))
-
-    return df_out
-
-
-# ==========================================================
-# FUNCIÓN PÚBLICA
-# ==========================================================
-def normalizar_estructuras(df: pd.DataFrame):
-
+import re
+from typing import Any, List, Dict
+
+
+# =========================================================
+# FUNCIÓN PRINCIPAL
+# =========================================================
+def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
+    """
+    Lector DXF robusto alineado a contrato dominio entradas.
+
+    ✔ Devuelve DataFrame limpio
+    ✔ 1 fila = 1 estructura
+    ✔ Columnas estándar: Punto, Estructura
+    ✔ Filtra capa ESTRUCT*
+    ✔ Limpieza fuerte
+    ✔ Maneja múltiples estructuras en un MTEXT
+    ✔ Falla explícita si no hay datos válidos
+    """
+
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
+    if archivo_dxf is None:
+        raise ValueError("archivo_dxf es None")
+
+    # =====================================================
+    # LECTURA SEGURA
+    # =====================================================
     try:
-        df_norm = _convertir_a_largo(df)
-        return df_norm, [], []
+        if hasattr(archivo_dxf, "seek"):
+            archivo_dxf.seek(0)
+
+        raw = archivo_dxf.read()
+
+        if not raw:
+            raise ValueError("DXF vacío o ya fue consumido")
+
+        contenido = raw.decode("latin-1", errors="ignore")
 
     except Exception as e:
+        raise ValueError(f"No se pudo leer el DXF: {e}")
 
-        _debug("error", str(e))
+    # =====================================================
+    # TOKENIZACIÓN
+    # =====================================================
+    lineas = [l.strip() for l in contenido.splitlines() if l.strip()]
 
-        return pd.DataFrame(), [str(e)], []
+    resultados: List[Dict[str, str]] = []
+    punto = 1
+
+    capa_actual = None
+    dentro_mtext = False
+    buffer_texto: List[str] = []
+
+    it = iter(lineas)
+
+    try:
+        for codigo in it:
+            valor = next(it)
+
+            codigo = codigo.strip()
+            valor = valor.strip()
+
+            # -------------------------------------------------
+            # CAPA
+            # -------------------------------------------------
+            if codigo == "8":
+                capa_actual = valor.upper().strip()
+
+            # -------------------------------------------------
+            # INICIO MTEXT
+            # -------------------------------------------------
+            if codigo == "0" and valor == "MTEXT":
+                dentro_mtext = True
+                buffer_texto = []
+                continue
+
+            # -------------------------------------------------
+            # FIN MTEXT
+            # -------------------------------------------------
+            if dentro_mtext and codigo == "0":
+
+                if not capa_actual or "ESTRUCT" not in capa_actual:
+                    dentro_mtext = False
+                    buffer_texto = []
+                    continue
+
+                texto = ",".join(buffer_texto)
+                texto = _limpiar_texto(texto)
+
+                estructuras = _extraer_estructuras(texto)
+
+                for est in estructuras:
+                    resultados.append({
+                        "Punto": f"P-{punto:03d}",
+                        "Estructura": est
+                    })
+                    punto += 1
+
+                dentro_mtext = False
+                buffer_texto = []
+                continue
+
+            # -------------------------------------------------
+            # CONTENIDO MTEXT
+            # -------------------------------------------------
+            if dentro_mtext and codigo in ("1", "3"):
+                if valor:
+                    buffer_texto.append(valor)
+
+    except StopIteration:
+        pass
+
+    # =====================================================
+    # VALIDACIÓN FINAL (CONTRATO FUERTE)
+    # =====================================================
+    if not resultados:
+        raise ValueError(
+            "DXF válido pero no contiene estructuras detectables"
+        )
+
+    df = pd.DataFrame(resultados)
+
+    # Garantizar columnas exactas
+    df = df[["Punto", "Estructura"]]
+
+    return df
+
+
+# =========================================================
+# HELPERS
+# =========================================================
+def _limpiar_texto(texto: str) -> str:
+    """
+    Limpieza fuerte de MTEXT DXF
+    """
+
+    texto = texto.replace("\\P", ",")
+    texto = re.sub(r"\{[^};]*[;:]", "", texto)
+    texto = texto.replace("{", "").replace("}", "")
+    texto = re.sub(r"\([^)]*\)", "", texto)
+
+    texto = texto.replace(";", ",").replace("|", ",")
+    texto = re.sub(r",+", ",", texto)
+
+    texto = texto.upper()
+    texto = re.sub(r"\s+", " ", texto).strip(" ,")
+
+    return texto
+
+
+def _extraer_estructuras(texto: str) -> List[str]:
+    """
+    Extrae múltiples estructuras desde un texto.
+    """
+
+    posibles = re.split(r"[,\s]+", texto)
+
+    estructuras = []
+
+    for p in posibles:
+        p = p.strip().upper()
+
+        if _es_estructura(p):
+            estructuras.append(p)
+
+    return estructuras
+
+
+def _es_estructura(texto: str) -> bool:
+    """
+    Patrón más estricto de estructuras:
+    A-I-4, B-III-6, TS-50, CT-N, etc.
+    """
+
+    return bool(
+        re.fullmatch(r"[A-Z]{1,3}-[A-Z0-9]+(?:-[A-Z0-9]+)*", texto)
+    )
