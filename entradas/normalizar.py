@@ -40,11 +40,7 @@ def limpiar_codigo(codigo: str) -> str:
 # NORMALIZACIÓN AUXILIAR
 # ==========================================================
 def _resolver_catalogo(codigo: str) -> str:
-    """
-    Ajustes puntuales (ej: luminarias)
-    """
     if codigo.startswith("LL-"):
-        # si no tiene potencia, asumir 50W
         if re.search(r"LL-\d+-.*W", codigo):
             return codigo
         return f"{codigo}-50W"
@@ -59,11 +55,9 @@ def _es_codigo_valido(codigo: str) -> bool:
     if not codigo:
         return False
 
-    # debe tener al menos un número
     if not re.search(r"\d", codigo):
         return False
 
-    # longitud mínima razonable
     if len(codigo) < 3:
         return False
 
@@ -71,7 +65,7 @@ def _es_codigo_valido(codigo: str) -> bool:
 
 
 # ==========================================================
-# PARSER GENERAL (ROBUSTO)
+# 🔥 PARSER CORREGIDO
 # ==========================================================
 def _extraer_estructuras_general(texto: str) -> list[str]:
     if not texto:
@@ -79,7 +73,6 @@ def _extraer_estructuras_general(texto: str) -> list[str]:
 
     texto = texto.upper()
 
-    # normalizar separadores duros
     texto = (
         texto.replace(",", "")
         .replace(";", " ")
@@ -87,12 +80,15 @@ def _extraer_estructuras_general(texto: str) -> list[str]:
         .replace("|", " ")
     )
 
-    # patrón industrial
-    patron = r"\b[A-Z]{1,4}(?:[-\s]?\d+)+(?:[-\s]?[A-Z0-9]+)*\b"
+    # ✅ NUEVO PATRÓN (CLAVE)
+    # Captura correctamente:
+    # A-I-1
+    # B-III-4C
+    # TS-50KVA
+    # PC-40
+    patron = r"\b[A-Z]+(?:-[A-Z0-9]+)+\b"
 
-    encontrados = re.findall(patron, texto)
-
-    return encontrados
+    return re.findall(patron, texto)
 
 
 # ==========================================================
@@ -112,7 +108,6 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
         texto = texto.upper().replace("(P)", "")
 
-        # dividir en líneas lógicas
         lineas = re.split(r"\n|\\P|;", texto)
 
         punto_actual = None
@@ -162,18 +157,12 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
     if df_out.empty:
         return df_out
 
-    # -------------------------------------------------
-    # AGRUPAR
-    # -------------------------------------------------
     df_out = (
         df_out
         .groupby(["Punto", "codigodeestructura"], as_index=False)["Cantidad"]
         .sum()
     )
 
-    # -------------------------------------------------
-    # DEBUG
-    # -------------------------------------------------
     df_out.attrs["debug_parser"] = debug_detectados
 
     return df_out
