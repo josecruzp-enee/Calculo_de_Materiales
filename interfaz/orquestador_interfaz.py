@@ -248,5 +248,19 @@ def ejecutar_orquestador_interfaz(
         }
 
     st.session_state["debug_pipeline"] = debug_actual
-
+    debug = {
+        "input": {
+            "tipo_entrada": salida.tipo_entrada,
+            "tiene_data": salida.data_entrada is not None,
+            "datos_proyecto_keys": list(salida.datos_proyecto.keys()),
+        },
+        "output": {
+            "ok": salida.ok,
+            "errores": salida.errores,
+            "warnings": salida.warnings,
+        }
+    }
     return resultado
+
+
+
