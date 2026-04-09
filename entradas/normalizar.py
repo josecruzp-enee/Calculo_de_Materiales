@@ -24,69 +24,48 @@ def limpiar_codigo(codigo: str) -> str:
 
 
 # ==========================================================
-# INTERNOS
+# NORMALIZACIÓN AUXILIAR
 # ==========================================================
-def _norm_col(s: str) -> str:
-    return (
-        str(s).strip().lower()
-        .replace(" ", "")
-        .replace("á","a").replace("é","e")
-        .replace("í","i").replace("ó","o").replace("ú","u")
-    )
-
-
-def _split_bloques(texto: str):
-    if texto is None:
-        return []
-
-    texto = str(texto)
-    texto = texto.replace("\\P", "\n")
-    texto = texto.replace(",", "\n")
-    texto = texto.replace(";", "\n")
-    texto = texto.replace("|", "\n")
-
-    texto = re.sub(r"\n+", "\n", texto)
-
-    return [p.strip() for p in texto.split("\n") if p.strip()]
-
-
-def _expandir(token: str):
-    m = re.match(r"^\s*(\d+)\s*[xX]\s*(.+)$", token)
-    if m:
-        return [m.group(2)] * int(m.group(1))
-    return [token]
-
-
 def _resolver_catalogo(codigo: str) -> str:
-    # Ejemplo: luminarias LL-
+    """
+    Ajustes puntuales (ej: luminarias)
+    """
     if codigo.startswith("LL-"):
         if re.search(r"LL-\d+-\d+W", codigo):
             return codigo
         return f"{codigo}-50W"
+
     return codigo
 
+
 # ==========================================================
-# EXTRAER ESTRUCTURAS (CLAVE)
+# PARSER GENERAL (CLAVE)
 # ==========================================================
-def _extraer_estructuras(texto: str) -> list[str]:
+def _extraer_estructuras_general(texto: str) -> list[str]:
+    """
+    Parser flexible:
+    - Detecta candidatos
+    - NO valida (eso es otro módulo)
+    """
 
-    patrones = [
-        r"A[-\s]?[IVX]+[-\s]?\d+[A-Z]?",
-        r"B[-\s]?[IVX]+[-\s]?\d+[A-Z]?",
-        r"PC[-\s]?\d+[A-Z]?",
-        r"TS[-\s]?\d+(\.\d+)?\s?KVA",
-        r"CT[-\s]?N",
-        r"R[-\s]?\d+[A-Z]?",
-        r"LL[-\s]?\d+[-\s]?\d+W",
-        r"CA[-\s]?\d+",
-    ]
+    if not texto:
+        return []
 
-    encontrados = []
+    texto = texto.upper()
 
-    for patron in patrones:
-        encontrados.extend(re.findall(patron, texto, flags=re.IGNORECASE))
+    # Separadores comunes
+    texto = (
+        texto.replace(",", " ")
+        .replace(";", " ")
+        .replace("/", " ")
+        .replace("|", " ")
+    )
 
-    return encontrados
+    # Patrón general (soporta todos tus casos reales)
+    patron = r"\b[A-Z]{1,4}[-\s]?[A-Z0-9]+(?:[-\s]?[A-Z0-9]+)*\b"
+
+    return re.findall(patron, texto)
+
 
 # ==========================================================
 # CORE
@@ -103,6 +82,8 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         texto = texto.upper().replace("(P)", "")
+
+        # dividir en líneas lógicas
         lineas = re.split(r"\n|\\P|;", texto)
 
         punto_actual = None
@@ -113,9 +94,9 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
             if not linea:
                 continue
 
-            # -----------------------------
+            # -------------------------------------------------
             # DETECTAR POSTE (P-XX)
-            # -----------------------------
+            # -------------------------------------------------
             m_poste = re.match(r"P[-\s]?(\d+)", linea)
 
             if m_poste:
@@ -123,21 +104,22 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
                 punto_actual = f"P-{num}"
                 continue
 
-            # -----------------------------
-            # EXTRAER ESTRUCTURAS
-            # -----------------------------
-            encontrados = _extraer_estructuras(linea)
+            # -------------------------------------------------
+            # EXTRAER ESTRUCTURAS (FLEXIBLE)
+            # -------------------------------------------------
+            encontrados = _extraer_estructuras_general(linea)
 
             for e in encontrados:
 
                 est = limpiar_codigo(e)
+                est = _resolver_catalogo(est)
 
                 if not est:
                     continue
 
                 registros.append({
                     "Punto": punto_actual if punto_actual else f"P-{idx+1}",
-                    "codigodeestructura": est,   # 🔥 CLAVE
+                    "codigodeestructura": est,
                     "Cantidad": 1
                 })
 
@@ -146,9 +128,9 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
     if df_out.empty:
         return df_out
 
-    # -----------------------------
-    # AGRUPAR CORRECTAMENTE
-    # -----------------------------
+    # -------------------------------------------------
+    # AGRUPAR
+    # -------------------------------------------------
     df_out = (
         df_out
         .groupby(["Punto", "codigodeestructura"], as_index=False)["Cantidad"]
@@ -156,6 +138,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return df_out
+
 
 # ==========================================================
 # FUNCIÓN PÚBLICA
