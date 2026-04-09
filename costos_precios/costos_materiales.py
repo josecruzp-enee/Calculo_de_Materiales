@@ -1,20 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-core/costos_materiales.py
-
-Contrato oficial para costos de materiales.
-
-Responsabilidad:
-- Leer precios (Excel o DataFrame)
-- Enriquecer df_resumen con precios
-- Calcular costos (interno)
-- Generar precios de venta (cliente)
-
-NO hace:
-- Correcciones silenciosas
-- Suposiciones ocultas
-"""
-
 from __future__ import annotations
 
 import pandas as pd
@@ -35,135 +19,72 @@ def _norm_txt(s: object) -> str:
         if unicodedata.category(c) != "Mn"
     )
 
-    t = " ".join(t.split())
-
-    return t.upper()
+    return " ".join(t.split()).upper()
 
 
 # =========================================================
-# CARGAR PRECIOS
+# VALIDADOR PRECIOS (CONTRATO FUERTE)
 # =========================================================
-def cargar_precios(archivo_materiales: str) -> pd.DataFrame:
+def _validar_df_precios(df: pd.DataFrame) -> pd.DataFrame:
 
-    try:
-        xls = pd.ExcelFile(archivo_materiales)
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        raise ValueError("df_precios inválido o vacío")
 
-        if "precios" in xls.sheet_names:
-            hoja = "precios"
-        elif "Materiales" in xls.sheet_names:
-            hoja = "Materiales"
-        elif "materiales" in xls.sheet_names:
-            hoja = "materiales"
-        else:
-            hoja = xls.sheet_names[0]
+    required = {"Materiales_norm", "Unidad_norm", "Precio Unitario"}
 
-        df = pd.read_excel(archivo_materiales, sheet_name=hoja)
+    if not required.issubset(df.columns):
+        raise ValueError(
+            f"df_precios debe contener columnas {required}"
+        )
 
-    except Exception as e:
-        raise RuntimeError(f"Error cargando archivo de precios: {e}")
+    df = df.copy()
 
-    # -------------------------------
-    # LIMPIEZA COLUMNAS
-    # -------------------------------
-    df.columns = [str(c).replace("\u00A0", " ").strip() for c in df.columns]
-
-    # -------------------------------
-    # RENOMBRE FLEXIBLE
-    # -------------------------------
-    ren = {}
-
-    for c in df.columns:
-        cc = c.lower().strip()
-
-        if cc.startswith("material") or "descrip" in cc:
-            ren[c] = "Materiales"
-
-        elif cc.startswith("unidad"):
-            ren[c] = "Unidad"
-
-        elif "precio" in cc or "costo unitario" in cc or cc.startswith("costo"):
-            ren[c] = "Precio Unitario"
-
-        elif "moneda" in cc:
-            ren[c] = "Moneda"
-
-    df = df.rename(columns=ren)
-
-    # -------------------------------
-    # VALIDACIÓN
-    # -------------------------------
-    if "Materiales" not in df.columns:
-        raise ValueError("No se encontró columna de materiales")
-
-    if "Precio Unitario" not in df.columns:
-        raise ValueError("No se encontró columna de precio")
-
-    if "Unidad" not in df.columns:
-        df["Unidad"] = ""
-
-    if "Moneda" not in df.columns:
-        df["Moneda"] = "L"
-
-    # -------------------------------
-    # LIMPIEZA DATOS
-    # -------------------------------
-    df["Materiales"] = df["Materiales"].astype(str).str.strip()
-    df["Unidad"] = df["Unidad"].astype(str).str.strip()
-    df["Moneda"] = df["Moneda"].astype(str).str.strip()
-
-    df.loc[df["Moneda"].eq(""), "Moneda"] = "L"
+    # Limpieza fuerte
+    df["Materiales_norm"] = df["Materiales_norm"].astype(str).str.strip()
+    df["Unidad_norm"] = df["Unidad_norm"].astype(str).str.strip()
 
     df["Precio Unitario"] = pd.to_numeric(
         df["Precio Unitario"], errors="coerce"
     )
 
-    # -------------------------------
-    # NORMALIZACIÓN
-    # -------------------------------
-    df["Materiales_norm"] = df["Materiales"].map(_norm_txt)
-    df["Unidad_norm"] = df["Unidad"].map(_norm_txt)
+    # Eliminar inválidos
+    df = df[df["Precio Unitario"] > 0]
 
-    out = df[
-        ["Materiales_norm", "Unidad_norm", "Precio Unitario", "Moneda"]
-    ].copy()
-
-    out = out.drop_duplicates(
+    # Eliminar duplicados (CRÍTICO)
+    df = df.drop_duplicates(
         subset=["Materiales_norm", "Unidad_norm"],
         keep="first"
     )
 
-    return out
+    if df.empty:
+        raise ValueError("df_precios sin datos válidos")
+
+    return df
 
 
 # =========================================================
-# COSTO INTERNO
+# COSTO DESDE RESUMEN (CONTRATO LIMPIO)
 # =========================================================
 def calcular_costos_desde_resumen(
     df_resumen: pd.DataFrame,
-    precios_o_archivo
+    df_precios: pd.DataFrame,
 ) -> pd.DataFrame:
 
-    if df_resumen is None or df_resumen.empty:
-        raise ValueError("df_resumen vacío")
+    # =====================================================
+    # VALIDACIÓN INPUT
+    # =====================================================
+    if not isinstance(df_resumen, pd.DataFrame) or df_resumen.empty:
+        raise ValueError("df_resumen inválido o vacío")
 
     required = {"Materiales", "Cantidad"}
     if not required.issubset(df_resumen.columns):
-        raise ValueError(f"df_resumen inválido: {required}")
+        raise ValueError(f"df_resumen inválido: requiere {required}")
 
-    # -------------------------------
-    # CARGAR PRECIOS
-    # -------------------------------
-    if isinstance(precios_o_archivo, str):
-        df_precios = cargar_precios(precios_o_archivo)
-    else:
-        df_precios = precios_o_archivo
+    df_precios = _validar_df_precios(df_precios)
 
-    if df_precios is None or df_precios.empty:
-        raise ValueError("df_precios inválido")
-
-    # -------------------------------
+    # =====================================================
     # LIMPIEZA BASE
-    # -------------------------------
+    # =====================================================
     base = df_resumen.copy()
 
     base.columns = [str(c).strip() for c in base.columns]
@@ -178,30 +99,43 @@ def calcular_costos_desde_resumen(
         base["Cantidad"], errors="coerce"
     ).fillna(0.0)
 
-    # -------------------------------
+    # 🔥 eliminar basura
+    base = base[base["Cantidad"] > 0]
+
+    if base.empty:
+        raise ValueError("df_resumen sin cantidades válidas")
+
+    # =====================================================
     # NORMALIZACIÓN
-    # -------------------------------
+    # =====================================================
     base["Materiales_norm"] = base["Materiales"].map(_norm_txt)
     base["Unidad_norm"] = base["Unidad"].map(_norm_txt)
 
-    # -------------------------------
-    # MERGE
-    # -------------------------------
+    # =====================================================
+    # MERGE (CONTROLADO)
+    # =====================================================
     out = base.merge(
         df_precios,
         on=["Materiales_norm", "Unidad_norm"],
         how="left",
+        validate="many_to_one",  # 🔥 evita duplicación silenciosa
     )
 
+    # =====================================================
+    # POST-PROCESO
+    # =====================================================
     out["Precio Unitario"] = pd.to_numeric(
         out["Precio Unitario"], errors="coerce"
     )
 
-    out["Moneda"] = out["Moneda"].fillna("L")
+    if "Moneda" not in out.columns:
+        out["Moneda"] = "L"
+    else:
+        out["Moneda"] = out["Moneda"].fillna("L")
 
-    # -------------------------------
+    # =====================================================
     # COSTO
-    # -------------------------------
+    # =====================================================
     out["Tiene_Precio"] = (
         out["Precio Unitario"].notna()
         & (out["Precio Unitario"] > 0)
@@ -216,6 +150,9 @@ def calcular_costos_desde_resumen(
         * out.loc[mask, "Cantidad"]
     ).round(2)
 
+    # =====================================================
+    # OUTPUT CONTRATO
+    # =====================================================
     return out[
         [
             "Materiales",
@@ -230,15 +167,18 @@ def calcular_costos_desde_resumen(
 
 
 # =========================================================
-# PRECIO DE VENTA (CLIENTE)
+# PRECIO DE VENTA
 # =========================================================
 def generar_precios_venta(
     df_costos: pd.DataFrame,
     margen: float = 0.15
 ) -> pd.DataFrame:
 
-    if df_costos is None or df_costos.empty:
-        raise ValueError("df_costos vacío")
+    if not isinstance(df_costos, pd.DataFrame) or df_costos.empty:
+        raise ValueError("df_costos inválido")
+
+    if "Costo" not in df_costos.columns:
+        raise ValueError("df_costos no contiene 'Costo'")
 
     df = df_costos.copy()
 
