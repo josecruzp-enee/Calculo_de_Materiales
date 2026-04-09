@@ -208,7 +208,14 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             return _fail("df_estructuras_por_punto no disponible", debug=debug_global)
 
         if entrada_proyecto.df_costos_estructuras is None:
-            return _fail("df_costos_estructuras requerido", debug=debug_global)
+            import pandas as pd
+
+            debug_global["costos_estructuras_default"] = "Se creó vacío automáticamente"
+
+            entrada_proyecto.df_costos_estructuras = pd.DataFrame({
+            "estructura": [],
+            "costo": []
+        })
 
         # 🔥 CONSTRUIR PRECIOS DESDE BASE_DATOS
         entrada_costos = construir_entrada_costos(
