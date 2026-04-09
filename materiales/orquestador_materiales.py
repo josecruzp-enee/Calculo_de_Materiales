@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Optional, Dict, Any, List
 import pandas as pd
-from entradas.base_datos import cargar_base_datos
 
 # =========================================================
 # CONTRATO OFICIAL
@@ -98,7 +97,7 @@ def ejecutar_materiales(
     # 1. INPUT
     # =====================================================
     df_norm = entrada.estructuras_df
-    hojas_base = cargar_base_datos()
+    hojas_base = entrada.base_datos
     tension = entrada.tension
     df_materiales_extra = entrada.df_materiales_extra
     datos = entrada.datos_proyecto or {}
