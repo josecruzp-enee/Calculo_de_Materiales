@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import pandas as pd
 import unicodedata
+from dataclasses import dataclass, field
+from typing import Dict, Any, Union
+from pathlib import Path
 
 from entradas.base_datos import obtener_catalogo_materiales
 from ayuda.debug import debug_guardar
@@ -37,6 +40,17 @@ def _norm_txt(s: object) -> str:
     t = " ".join(t.split())
 
     return t
+
+
+# =========================================================
+# CONTRATO (CORREGIDO)
+# =========================================================
+@dataclass
+class EntradaCostos:
+    df_resumen: pd.DataFrame
+    df_estructuras_por_punto: pd.DataFrame
+    df_materiales_por_estructura: Dict[str, pd.DataFrame] = field(default_factory=dict)
+    fuente_precios: Union[pd.DataFrame, str, Path] = None
 
 
 # =========================================================
@@ -172,7 +186,7 @@ def calcular_costos_desde_resumen(
 
 
 # =========================================================
-# HELPER PRINCIPAL (FIX REAL)
+# BUILDER CORREGIDO
 # =========================================================
 def construir_entrada_costos(
     data,
@@ -197,5 +211,6 @@ def construir_entrada_costos(
     return EntradaCostos(
         df_resumen=df_resumen,
         df_estructuras_por_punto=df_estructuras_por_punto,
+        df_materiales_por_estructura=data.get("df_materiales_por_estructura", {}),
         fuente_precios=df_costos,
     )
