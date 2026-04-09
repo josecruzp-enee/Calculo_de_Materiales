@@ -46,7 +46,7 @@ PATRON = re.compile(
     (TD-\d+(?:\.\d+)?\s?KVA)|
     (TT-\d+(?:\.\d+)?\s?KVA)|
 
-    (CS-\d+)|
+    (CS-[12])|
     (CA-\d+)|
     (CT-[A-Z])|
 
