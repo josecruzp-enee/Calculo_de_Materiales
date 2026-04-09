@@ -18,24 +18,7 @@ from costos_precios.costos_estructuras import calcular_costos_por_estructura
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
-    # =====================================================
-# DEBUG REAL (CLAVE)
-# =====================================================
-debug["debug_costos"] = {
-    "df_resumen_cols": list(entrada.df_resumen.columns),
-    "df_resumen_head": entrada.df_resumen.head(3).to_dict(),
-
-    "df_ep_cols": list(df_ep.columns),
-    "df_ep_head": df_ep.head(3).to_dict(),
-
-    "tiene_materiales_por_estructura": hasattr(entrada, "df_materiales_por_estructura"),
-    "len_materiales_por_estructura": len(getattr(entrada, "df_materiales_por_estructura", {})),
-
-    "fuente_precios_cols": list(entrada.fuente_precios.columns) if isinstance(entrada.fuente_precios, pd.DataFrame) else "NO DF"
-}
-    # 🔥 ahora sí alineado con builder
     df_materiales_por_estructura: Dict[str, pd.DataFrame] = field(default_factory=dict)
-
     fuente_precios: Union[pd.DataFrame, str, Path] = None
 
 
@@ -69,6 +52,21 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         raise TypeError("df_materiales_por_estructura inválido")
 
     df_ep = entrada.df_estructuras_por_punto.copy()
+
+    # =====================================================
+    # DEBUG REAL
+    # =====================================================
+    debug["debug_costos"] = {
+        "df_resumen_cols": list(entrada.df_resumen.columns),
+        "df_resumen_head": entrada.df_resumen.head(3).to_dict(),
+
+        "df_ep_cols": list(df_ep.columns),
+        "df_ep_head": df_ep.head(3).to_dict(),
+
+        "len_materiales_por_estructura": len(entrada.df_materiales_por_estructura),
+
+        "fuente_precios_cols": list(entrada.fuente_precios.columns),
+    }
 
     debug["input"] = {
         "resumen_filas": len(entrada.df_resumen),
@@ -104,13 +102,11 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
 
     # =====================================================
-    # 3. USAR BOM DESDE MATERIALES (FIX CLAVE)
+    # 3. USAR BOM (SIN BLOQUEAR)
     # =====================================================
     df_materiales_por_estructura = entrada.df_materiales_por_estructura
 
-    if not df_materiales_por_estructura:
-        raise ValueError("df_materiales_por_estructura vacío")
-
+    # 🔥 NO bloquear aunque esté vacío
     debug["bom_total"] = len(df_materiales_por_estructura)
 
     # =====================================================
