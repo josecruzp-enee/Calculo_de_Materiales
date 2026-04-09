@@ -2,6 +2,13 @@
 from __future__ import annotations
 
 # =========================================================
+# IMPORTS
+# =========================================================
+import traceback
+import pandas as pd
+from typing import Any, Dict
+
+# =========================================================
 # CONTRATOS
 # =========================================================
 from interfaz.contratos import SalidaInterfaz, SalidaEntradas
@@ -21,31 +28,11 @@ from entradas.normalizar import normalizar_estructuras
 from entradas.validacion import validar_estructuras
 from entradas.base_datos import cargar_base_datos
 
-# =========================================================
-# DEBUG
-# =========================================================
-from ayuda.debug import debug_guardar
-import pandas as pd
-
-
-# =========================================================
-# DEBUG HELPERS
-# =========================================================
-def _debug(etapa: str, nombre: str, valor):
-    debug_guardar(f"{etapa}::{nombre}", valor)
-
-
-def _check(etapa: str, nombre: str, condicion: bool, detalle=None):
-    debug_guardar(f"CHECK::{etapa}::{nombre}", {
-        "ok": bool(condicion),
-        "detalle": str(detalle)[:200]
-    })
-
 
 # =========================================================
 # DISPATCH LECTURA
 # =========================================================
-def _leer(tipo: str, data):
+def _leer(tipo: str, data: Any) -> pd.DataFrame:
 
     if tipo == "excel":
         return leer_excel(data)
@@ -67,166 +54,174 @@ def _leer(tipo: str, data):
 
 
 # =========================================================
-# ORQUESTADOR (PIPELINE ENTRADAS)
+# HELPERS DEBUG
+# =========================================================
+def _safe_df_info(df: Any) -> Dict[str, Any]:
+    if isinstance(df, pd.DataFrame):
+        return {
+            "filas": len(df),
+            "columnas": list(df.columns),
+            "preview": df.head(3).to_dict()
+        }
+    return {
+        "tipo": str(type(df))
+    }
+
+
+# =========================================================
+# ORQUESTADOR ENTRADAS
 # =========================================================
 def ejecutar_entradas(
     entrada: SalidaInterfaz,
 ) -> SalidaEntradas:
 
     # =====================================================
-    # DEBUG INICIAL
+    # DEBUG BASE
     # =====================================================
-    _debug("INPUT", "tipo_entrada", entrada.tipo_entrada)
-    _debug("INPUT", "data_entrada", entrada.data_entrada)
-    _debug("INPUT", "datos_proyecto", entrada.datos_proyecto)
-    _debug("INPUT", "df_cables", entrada.df_cables)
-    _debug("INPUT", "df_materiales_extra", entrada.df_materiales_extra)
+    debug: Dict[str, Any] = {
+        "input": {
+            "tipo_entrada": entrada.tipo_entrada,
+            "tiene_data": entrada.data_entrada is not None,
+            "tipo_data": str(type(entrada.data_entrada)),
+            "datos_proyecto_keys": list(entrada.datos_proyecto.keys())
+        }
+    }
 
     # =====================================================
-    # 1. VALIDACIÓN INTERFAZ
+    # VALIDACIÓN INTERFAZ
     # =====================================================
-    _check("INTERFAZ", "entrada_ok", entrada.ok, entrada.errores)
-
     if not entrada.ok:
+        debug["estado"] = {
+            "ok": False,
+            "origen": "interfaz",
+            "errores": entrada.errores
+        }
+
         return SalidaEntradas(
             ok=False,
             errores=entrada.errores,
             warnings=entrada.warnings,
-            debug={"origen": "interfaz"}
+            debug=debug
         )
 
     try:
         # =====================================================
-        # 2. LECTURA
+        # 1. LECTURA
         # =====================================================
         df_raw = _leer(entrada.tipo_entrada, entrada.data_entrada)
 
-        _debug("LECTURA", "df_raw", df_raw)
-
-        _check(
-            "LECTURA",
-            "df_raw_valido",
-            isinstance(df_raw, pd.DataFrame) and not df_raw.empty,
-            getattr(df_raw, "shape", None)
-        )
+        debug["lectura"] = _safe_df_info(df_raw)
 
         if df_raw is None or getattr(df_raw, "empty", True):
+            debug["estado"] = {
+                "ok": False,
+                "fase": "lectura",
+                "error": "df_raw vacío o inválido"
+            }
+
             return SalidaEntradas(
                 ok=False,
                 errores=["No se pudo leer la entrada"],
                 warnings=[],
-                debug={"fase": "lectura"}
+                debug=debug
             )
 
         # =====================================================
-        # 3. NORMALIZACIÓN
+        # 2. NORMALIZACIÓN
         # =====================================================
         df_norm, errores_norm, warnings_norm = normalizar_estructuras(df_raw)
 
-        _debug("NORMALIZACION", "df_norm", df_norm)
-        _debug("NORMALIZACION", "errores_norm", errores_norm)
-        _debug("NORMALIZACION", "warnings_norm", warnings_norm)
-
-        _check(
-            "NORMALIZACION",
-            "df_norm_ok",
-            isinstance(df_norm, pd.DataFrame),
-            getattr(df_norm, "shape", None)
-        )
-
-        if isinstance(df_norm, pd.DataFrame):
-            _check(
-                "NORMALIZACION",
-                "tiene_columna_estructura",
-                "Estructura" in df_norm.columns,
-                list(df_norm.columns)
-            )
+        debug["normalizacion"] = {
+            "df": _safe_df_info(df_norm),
+            "errores": errores_norm,
+            "warnings": warnings_norm
+        }
 
         if errores_norm:
+            debug["estado"] = {
+                "ok": False,
+                "fase": "normalizacion"
+            }
+
             return SalidaEntradas(
                 ok=False,
                 errores=errores_norm,
                 warnings=warnings_norm,
-                debug={"fase": "normalizacion"}
+                debug=debug
             )
 
         # =====================================================
-        # 4. VALIDACIÓN
+        # 3. VALIDACIÓN
         # =====================================================
         errores_val = validar_estructuras(df_norm)
 
-        _debug("VALIDACION", "errores_val", errores_val)
-
-        _check(
-            "VALIDACION",
-            "sin_errores",
-            not bool(errores_val),
-            errores_val
-        )
+        debug["validacion"] = {
+            "errores": errores_val
+        }
 
         if errores_val:
+            debug["estado"] = {
+                "ok": False,
+                "fase": "validacion"
+            }
+
             return SalidaEntradas(
                 ok=False,
                 errores=errores_val,
                 warnings=warnings_norm,
                 df_estructuras=df_norm,
-                debug={"fase": "validacion"}
+                debug=debug
             )
 
         # =====================================================
-        # 5. MÉTRICAS
-        # =====================================================
-        estructuras_unicas = (
-            df_norm["Estructura"].dropna().unique().tolist()
-            if "Estructura" in df_norm.columns else []
-        )
-
-        _debug("OUTPUT", "filas", len(df_norm))
-        _debug("OUTPUT", "columnas", list(df_norm.columns))
-        _debug("OUTPUT", "estructuras_unicas", estructuras_unicas[:50])
-
-        # =====================================================
-        # 6. BASE DATOS
+        # 4. BASE DE DATOS
         # =====================================================
         base_datos = cargar_base_datos()
 
+        debug["base_datos"] = {
+            "hojas": list(base_datos.keys())
+        }
+
         # =====================================================
-        # 7. OUTPUT FINAL
+        # 5. OUTPUT FINAL
         # =====================================================
+        debug["output"] = _safe_df_info(df_norm)
+
+        debug["estado"] = {
+            "ok": True
+        }
+
         return SalidaEntradas(
             ok=True,
             errores=[],
             warnings=warnings_norm,
 
-            # 🔹 core
+            # CORE
             df_estructuras=df_norm,
             base_datos=base_datos,
 
-            # 🔹 contexto (se mantiene intacto)
+            # CONTEXTO
             datos_proyecto=entrada.datos_proyecto,
             df_cables=entrada.df_cables,
             df_materiales_extra=entrada.df_materiales_extra,
 
-            # 🔹 debug
-            debug={
-                "fase": "ok",
-                "filas": len(df_norm),
-                "columnas": list(df_norm.columns),
-                "tipo": entrada.tipo_entrada,
-                "estructuras": len(estructuras_unicas)
-            }
+            # DEBUG
+            debug=debug
         )
 
     except Exception as e:
 
-        _debug("EXCEPTION", "error", str(e))
+        debug["estado"] = {
+            "ok": False,
+            "fase": "exception",
+            "error": str(e)
+        }
+
+        debug["trace"] = traceback.format_exc()
 
         return SalidaEntradas(
             ok=False,
             errores=[str(e)],
             warnings=[],
-            debug={
-                "fase": "exception",
-                "tipo": entrada.tipo_entrada
-            }
+            debug=debug
         )
