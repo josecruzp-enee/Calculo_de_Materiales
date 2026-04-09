@@ -6,9 +6,30 @@ import pandas as pd
 
 
 # =========================================================
-# LIMPIEZA
+# LIMPIEZA DXF (CRÍTICO)
+# =========================================================
+def limpiar_texto_dxf(texto: str) -> str:
+
+    if not texto:
+        return ""
+
+    texto = str(texto)
+
+    # 🔥 eliminar formato DXF
+    texto = re.sub(r"\{.*?;", "", texto)
+
+    texto = texto.replace("{", "")
+    texto = texto.replace("}", "")
+    texto = texto.replace("\\P", " ")
+
+    return texto
+
+
+# =========================================================
+# LIMPIEZA CÓDIGO
 # =========================================================
 def limpiar_codigo(codigo: str) -> str:
+
     if not codigo:
         return ""
 
@@ -21,6 +42,8 @@ def limpiar_codigo(codigo: str) -> str:
     codigo = re.sub(r"[^A-Z0-9\.\-]", "", codigo)
     codigo = re.sub(r"-+", "-", codigo)
 
+    codigo = codigo.replace("-KVA", "KVA")
+
     return codigo.strip("-")
 
 
@@ -31,52 +54,14 @@ PATRON = re.compile(
     r"""
     (A-[IVX]+-\d+[A-Z]?)|
     (B-[IVX]+-\d+[A-Z]?)|
-    (DTN?-[IVX]+-\d+)|
-    (ER-[IVX]+-\d+[A-Z]?)|
-    (H-[IVX]+-\d+)|
-    (TH-[IVX]+-\d+)|
-    (TM-[IVX]+-\d+[A-Z]?)|
-    (G[B]?-[IVX]+-\d+[A-Z]?)|
-
-    (R-\d+[A-Z]?)|
-    (RH-\d+)|
-    (RTH-\d+)|
-
-    (TS-\d+(?:\.\d+)?\s?KVA)|
-    (TD-\d+(?:\.\d+)?\s?KVA)|
-    (TT-\d+(?:\.\d+)?\s?KVA)|
-
-    (CS-[12])|
-    (CA-\d+)|
-    (CT-[A-Z])|
-
-    (LL-\d+(?:-\d+[A-Z]+)+)|
-
     (PC[A-Z]?-\d+)|
-    (PM-\d+)|
-    (PT-\d+)
+    (TS-\d+(?:\.\d+)?KVA)|
+    (CT-[A-Z])|
+    (R-\d+[A-Z]?)|
+    (LL-\d+(?:-\d+[A-Z]+)+)
     """,
     re.VERBOSE
 )
-
-
-# =========================================================
-# EXTRAER
-# =========================================================
-def _extraer_estructuras(texto: str):
-
-    if not texto:
-        return []
-
-    texto = str(texto).upper()
-
-    texto = texto.replace("\\P", " ")
-    texto = texto.replace(";", " ")
-    texto = texto.replace("/", " ")
-
-    encontrados = PATRON.findall(texto)
-
-    return [item for grupo in encontrados for item in grupo if item]
 
 
 # =========================================================
@@ -89,52 +74,44 @@ def _convertir(df: pd.DataFrame):
     for idx, row in df.iterrows():
 
         texto = " ".join(str(v) for v in row.values if pd.notna(v))
+
+        texto = limpiar_texto_dxf(texto)
+
         if not texto:
             continue
 
-        texto = texto.replace("(P)", "")
+        # detectar punto
+        m = re.search(r"P[-\s]?(\d+)", texto)
+        punto = f"P-{m.group(1)}" if m else f"P-{idx+1}"
 
-        lineas = re.split(r"\n|\\P|;", texto)
+        estructuras = PATRON.findall(texto)
 
-        punto_actual = None
+        estructuras = [e for grupo in estructuras for e in grupo if e]
 
-        for linea in lineas:
+        for e in estructuras:
 
-            linea = linea.strip()
-            if not linea:
+            est = limpiar_codigo(e)
+
+            if not est:
                 continue
 
-            # detectar punto
-            m = re.match(r"P[-\s]?(\d+)", linea)
-            if m:
-                punto_actual = f"P-{m.group(1)}"
-                continue
-
-            estructuras = _extraer_estructuras(linea)
-
-            for e in estructuras:
-
-                est = limpiar_codigo(e)
-
-                if not est or not re.search(r"\d", est):
-                    continue
-
-                registros.append({
-                    "Punto": punto_actual or f"P-{idx+1}",
-
-                    # 🔥 ESTE ES EL CONTRATO REAL
-                    "codigodeestructura": est,
-
-                    # opcional (futuro)
-                    "Estructura": est,
-
-                    "Cantidad": 1
-                })
+            registros.append({
+                "Punto": punto,
+                "codigodeestructura": est,
+                "Estructura": est,
+                "Cantidad": 1
+            })
 
     df_out = pd.DataFrame(registros)
 
+    # 🔴 ESTO EVITA TU ERROR ACTUAL
     if df_out.empty:
-        return df_out
+        return pd.DataFrame(columns=[
+            "Punto",
+            "codigodeestructura",
+            "Estructura",
+            "Cantidad"
+        ])
 
     return (
         df_out
@@ -158,7 +135,7 @@ def normalizar_estructuras(df: pd.DataFrame):
         df_norm = _convertir(df)
 
         if df_norm.empty:
-            return pd.DataFrame(), ["No se detectaron estructuras"], []
+            return df_norm, ["No se detectaron estructuras"], []
 
         return df_norm, [], []
 
