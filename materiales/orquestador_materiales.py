@@ -8,7 +8,7 @@ import pandas as pd
 # =========================================================
 # CONTRATO OFICIAL
 # =========================================================
-from interfaz.contratos import SalidaMateriales
+from materiales.modelos.salida import SalidaMateriales
 
 # =========================================================
 # MODELOS
