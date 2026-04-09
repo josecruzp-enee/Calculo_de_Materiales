@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Any, Union
 import pandas as pd
 from pathlib import Path
@@ -12,14 +12,14 @@ from costos_precios.costos_estructuras import calcular_costos_por_estructura
 
 
 # =====================================================
-# CONTRATO (ALINEADO)
+# CONTRATO (ESTABLE)
 # =====================================================
 @dataclass
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
-    df_materiales_por_estructura: Dict[str, pd.DataFrame] = field(default_factory=dict)
-    fuente_precios: Union[pd.DataFrame, str, Path] = None
+    df_materiales_por_punto: pd.DataFrame   # 🔥 ESTE ES EL REAL
+    fuente_precios: Union[pd.DataFrame, str, Path]
 
 
 # =====================================================
@@ -45,35 +45,23 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     if not isinstance(entrada.df_estructuras_por_punto, pd.DataFrame):
         raise TypeError("df_estructuras_por_punto inválido")
 
+    if not isinstance(entrada.df_materiales_por_punto, pd.DataFrame):
+        raise TypeError("df_materiales_por_punto inválido")
+
     if not isinstance(entrada.fuente_precios, pd.DataFrame):
         raise TypeError("fuente_precios inválida")
 
-    if not isinstance(entrada.df_materiales_por_estructura, dict):
-        raise TypeError("df_materiales_por_estructura inválido")
-
     df_ep = entrada.df_estructuras_por_punto.copy()
+    df_mp = entrada.df_materiales_por_punto.copy()
 
     # =====================================================
     # DEBUG REAL
     # =====================================================
     debug["debug_costos"] = {
         "df_resumen_cols": list(entrada.df_resumen.columns),
-        "df_resumen_head": entrada.df_resumen.head(3).to_dict(),
-
         "df_ep_cols": list(df_ep.columns),
-        "df_ep_head": df_ep.head(3).to_dict(),
-
-        "len_materiales_por_estructura": len(entrada.df_materiales_por_estructura),
-
-        "fuente_precios_cols": list(entrada.fuente_precios.columns),
-    }
-
-    debug["input"] = {
-        "resumen_filas": len(entrada.df_resumen),
-        "estructuras_filas": len(df_ep),
-        "precios_filas": len(entrada.fuente_precios),
-        "bom_estructuras": len(entrada.df_materiales_por_estructura),
-        "columnas_estructuras": list(df_ep.columns),
+        "df_mp_cols": list(df_mp.columns),
+        "filas_materiales": len(df_mp),
     }
 
     # =====================================================
@@ -102,11 +90,22 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
 
     # =====================================================
-    # 3. USAR BOM (SIN BLOQUEAR)
+    # 3. CONSTRUIR BOM REAL (FIX DEFINITIVO)
     # =====================================================
-    df_materiales_por_estructura = entrada.df_materiales_por_estructura
+    df_materiales_por_estructura = {}
 
-    # 🔥 NO bloquear aunque esté vacío
+    for est in df_ep["Estructura"].unique():
+
+        df_temp = df_mp[df_mp["Punto"] == est][
+            ["Materiales", "Unidad", "Cantidad"]
+        ].copy()
+
+        if not df_temp.empty:
+            df_materiales_por_estructura[est] = df_temp
+
+    if not df_materiales_por_estructura:
+        raise ValueError("No se pudo construir BOM por estructura")
+
     debug["bom_total"] = len(df_materiales_por_estructura)
 
     # =====================================================
