@@ -4,6 +4,7 @@ from __future__ import annotations
 import pandas as pd
 import re
 from typing import Any, Tuple
+import streamlit as st  # 👈 CLAVE
 
 
 CAPA_OBJETIVO = "ESTRUCTURAS"
@@ -19,9 +20,6 @@ PATRONES = [
 ]
 
 
-# =========================================================
-# LIMPIAR TEXTO DXF
-# =========================================================
 def _limpiar_texto(texto: str) -> str:
     if not texto:
         return ""
@@ -34,9 +32,6 @@ def _limpiar_texto(texto: str) -> str:
     return texto.upper()
 
 
-# =========================================================
-# EXTRAER ESTRUCTURAS
-# =========================================================
 def _extraer_estructuras(texto: str) -> list[str]:
     encontrados = []
 
@@ -46,9 +41,6 @@ def _extraer_estructuras(texto: str) -> list[str]:
     return encontrados
 
 
-# =========================================================
-# NORMALIZAR
-# =========================================================
 def _normalizar(codigo: str) -> str:
     return (
         codigo.upper()
@@ -62,10 +54,6 @@ def _normalizar(codigo: str) -> str:
 # FUNCIÓN PRINCIPAL
 # =========================================================
 def leer_dxf(archivo_dxf: Any) -> Tuple[pd.DataFrame, dict]:
-    """
-    ✔ Devuelve: df + debug
-    ✔ No rompe contrato (puedes ignorar debug si no lo usas)
-    """
 
     debug = {
         "capas_detectadas": set(),
@@ -145,6 +133,11 @@ def leer_dxf(archivo_dxf: Any) -> Tuple[pd.DataFrame, dict]:
     # =====================================================
     if not estructuras:
         debug["error"] = "No se detectaron estructuras"
+
+        # 🔥 GUARDAR DEBUG ANTES DE FALLAR
+        st.session_state.setdefault("debug_pipeline", {})
+        st.session_state["debug_pipeline"]["DXF"] = debug
+
         raise ValueError(
             "DXF leído pero no se encontraron estructuras en capa Estructuras"
         )
@@ -161,10 +154,23 @@ def leer_dxf(archivo_dxf: Any) -> Tuple[pd.DataFrame, dict]:
 
     df = df.groupby("Estructura", as_index=False)["Cantidad"].sum()
 
+    # =====================================================
+    # VALIDACIÓN FINAL
+    # =====================================================
     if df.empty:
+        st.session_state.setdefault("debug_pipeline", {})
+        st.session_state["debug_pipeline"]["DXF"] = debug
         raise ValueError("DataFrame vacío tras procesar DXF")
 
     if not {"Estructura", "Cantidad"}.issubset(df.columns):
+        st.session_state.setdefault("debug_pipeline", {})
+        st.session_state["debug_pipeline"]["DXF"] = debug
         raise ValueError("Columnas inválidas en salida DXF")
+
+    # =====================================================
+    # 🔥 GUARDAR DEBUG SI TODO SALE BIEN
+    # =====================================================
+    st.session_state.setdefault("debug_pipeline", {})
+    st.session_state["debug_pipeline"]["DXF"] = debug
 
     return df, debug
