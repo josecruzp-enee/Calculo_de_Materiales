@@ -23,186 +23,133 @@ def _norm_txt(s: object) -> str:
 
 
 # =========================================================
-# VALIDADOR PRECIOS (CONTRATO FUERTE)
+# ADAPTADOR PRINCIPAL
 # =========================================================
-def _validar_df_precios(df: pd.DataFrame) -> pd.DataFrame:
+def preparar_df_precios_desde_catalogo(
+    df_catalogo: pd.DataFrame,
+    df_resumen: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Convierte catálogo → df_precios válido para el motor
 
-    if not isinstance(df, pd.DataFrame) or df.empty:
-        raise ValueError("df_precios inválido o vacío")
+    INPUT:
+        df_catalogo:
+            Materiales | Unidad | Costo (o Costo Unitario)
 
-    required = {"Materiales_norm", "Unidad_norm", "Precio Unitario"}
+        df_resumen (opcional):
+            Para detectar materiales sin precio
 
-    if not required.issubset(df.columns):
-        raise ValueError(
-            f"df_precios debe contener columnas {required}"
-        )
+    OUTPUT:
+        df_precios (para el motor)
+        df_faltantes (materiales sin precio)
+    """
 
-    df = df.copy()
+    if df_catalogo is None or df_catalogo.empty:
+        raise ValueError("Catálogo vacío")
 
-    # Limpieza fuerte
-    df["Materiales_norm"] = df["Materiales_norm"].astype(str).str.strip()
-    df["Unidad_norm"] = df["Unidad_norm"].astype(str).str.strip()
+    df = df_catalogo.copy()
 
+    # =====================================================
+    # NORMALIZACIÓN
+    # =====================================================
+    df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
+    df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
+
+    # 🔥 soporta ambas columnas
     df["Precio Unitario"] = pd.to_numeric(
-        df["Precio Unitario"], errors="coerce"
+        df.get("Costo Unitario", df.get("Costo", 0)),
+        errors="coerce"
     )
 
-    # Eliminar inválidos
+    # =====================================================
+    # LIMPIEZA
+    # =====================================================
+    df = df[
+        ["Materiales_norm", "Unidad_norm", "Precio Unitario"]
+    ]
+
+    df = df.dropna(subset=["Precio Unitario"])
     df = df[df["Precio Unitario"] > 0]
 
-    # Eliminar duplicados (CRÍTICO)
     df = df.drop_duplicates(
         subset=["Materiales_norm", "Unidad_norm"],
         keep="first"
     )
 
     if df.empty:
-        raise ValueError("df_precios sin datos válidos")
-
-    return df
-
-
-# =========================================================
-# COSTO DESDE RESUMEN (CONTRATO LIMPIO)
-# =========================================================
-def calcular_costos_desde_resumen(
-    df_resumen: pd.DataFrame,
-    df_precios: pd.DataFrame,
-) -> pd.DataFrame:
+        raise ValueError("No hay precios válidos en catálogo")
 
     # =====================================================
-    # VALIDACIÓN INPUT
+    # DETECCIÓN DE FALTANTES (🔥 PRO)
     # =====================================================
-    if not isinstance(df_resumen, pd.DataFrame) or df_resumen.empty:
-        raise ValueError("df_resumen inválido o vacío")
+    df_faltantes = pd.DataFrame()
 
-    required = {"Materiales", "Cantidad"}
-    if not required.issubset(df_resumen.columns):
-        raise ValueError(f"df_resumen inválido: requiere {required}")
+    if df_resumen is not None and not df_resumen.empty:
 
-    df_precios = _validar_df_precios(df_precios)
+        base = df_resumen.copy()
 
-    # =====================================================
-    # LIMPIEZA BASE
-    # =====================================================
-    base = df_resumen.copy()
+        if "Unidad" not in base.columns:
+            base["Unidad"] = ""
 
-    base.columns = [str(c).strip() for c in base.columns]
+        base["Materiales_norm"] = base["Materiales"].astype(str).map(_norm_txt)
+        base["Unidad_norm"] = base["Unidad"].astype(str).map(_norm_txt)
 
-    if "Unidad" not in base.columns:
-        base["Unidad"] = ""
+        check = base.merge(
+            df,
+            on=["Materiales_norm", "Unidad_norm"],
+            how="left"
+        )
 
-    base["Materiales"] = base["Materiales"].astype(str).str.strip()
-    base["Unidad"] = base["Unidad"].astype(str).str.strip()
-
-    base["Cantidad"] = pd.to_numeric(
-        base["Cantidad"], errors="coerce"
-    ).fillna(0.0)
-
-    # 🔥 eliminar basura
-    base = base[base["Cantidad"] > 0]
-
-    if base.empty:
-        raise ValueError("df_resumen sin cantidades válidas")
-
-    # =====================================================
-    # NORMALIZACIÓN
-    # =====================================================
-    base["Materiales_norm"] = base["Materiales"].map(_norm_txt)
-    base["Unidad_norm"] = base["Unidad"].map(_norm_txt)
-
-    # =====================================================
-    # MERGE (CONTROLADO)
-    # =====================================================
-    out = base.merge(
-        df_precios,
-        on=["Materiales_norm", "Unidad_norm"],
-        how="left",
-        validate="many_to_one",  # 🔥 evita duplicación silenciosa
-    )
-
-    # =====================================================
-    # POST-PROCESO
-    # =====================================================
-    out["Precio Unitario"] = pd.to_numeric(
-        out["Precio Unitario"], errors="coerce"
-    )
-
-    if "Moneda" not in out.columns:
-        out["Moneda"] = "L"
-    else:
-        out["Moneda"] = out["Moneda"].fillna("L")
-
-    # =====================================================
-    # COSTO
-    # =====================================================
-    out["Tiene_Precio"] = (
-        out["Precio Unitario"].notna()
-        & (out["Precio Unitario"] > 0)
-    )
-
-    out["Costo"] = pd.NA
-
-    mask = out["Tiene_Precio"]
-
-    out.loc[mask, "Costo"] = (
-        out.loc[mask, "Precio Unitario"]
-        * out.loc[mask, "Cantidad"]
-    ).round(2)
-
-    # =====================================================
-    # OUTPUT CONTRATO
-    # =====================================================
-    return out[
-        [
-            "Materiales",
-            "Unidad",
-            "Cantidad",
-            "Precio Unitario",
-            "Costo",
-            "Moneda",
-            "Tiene_Precio",
+        faltantes = check[
+            check["Precio Unitario"].isna()
         ]
-    ]
+
+        if not faltantes.empty:
+            df_faltantes = (
+                faltantes[
+                    ["Materiales", "Unidad", "Cantidad"]
+                ]
+                .drop_duplicates()
+                .sort_values("Materiales")
+                .reset_index(drop=True)
+            )
+
+    return df.reset_index(drop=True), df_faltantes
 
 
 # =========================================================
-# PRECIO DE VENTA
+# USO DIRECTO (EJEMPLO)
 # =========================================================
-def generar_precios_venta(
-    df_costos: pd.DataFrame,
-    margen: float = 0.15
-) -> pd.DataFrame:
+def construir_entrada_costos(
+    data,
+    df_resumen,
+    df_estructuras_por_punto,
+    df_costos_estructuras,
+):
+    """
+    Helper para preparar TODO antes del orquestador
+    """
 
-    if not isinstance(df_costos, pd.DataFrame) or df_costos.empty:
-        raise ValueError("df_costos inválido")
+    # 👇 catálogo desde tu sistema
+    catalogo = obtener_catalogo_materiales(data)
 
-    if "Costo" not in df_costos.columns:
-        raise ValueError("df_costos no contiene 'Costo'")
+    # 👇 adaptador + detección de faltantes
+    df_precios, df_faltantes = preparar_df_precios_desde_catalogo(
+        catalogo,
+        df_resumen
+    )
 
-    df = df_costos.copy()
+    # 🔥 aviso inteligente
+    if not df_faltantes.empty:
+        print("\n⚠️ MATERIALES SIN PRECIO:\n")
+        print(df_faltantes.to_string(index=False))
 
-    df["Precio Unitario Venta"] = pd.NA
-    df["Total Venta"] = pd.NA
+    # 👇 esto entra limpio al orquestador
+    entrada = EntradaCostos(
+        df_resumen=df_resumen,
+        df_estructuras_por_punto=df_estructuras_por_punto,
+        df_costos_estructuras=df_costos_estructuras,
+        fuente_precios=df_precios,
+    )
 
-    mask = df["Costo"].notna()
-
-    df.loc[mask, "Precio Unitario Venta"] = (
-        df.loc[mask, "Costo"].astype(float)
-        * (1 + margen)
-    ).round(2)
-
-    df.loc[mask, "Total Venta"] = (
-        df.loc[mask, "Precio Unitario Venta"].astype(float)
-        * df.loc[mask, "Cantidad"].astype(float)
-    ).round(2)
-
-    return df[
-        [
-            "Materiales",
-            "Unidad",
-            "Cantidad",
-            "Precio Unitario Venta",
-            "Total Venta",
-        ]
-    ]
+    return entrada
