@@ -4,10 +4,8 @@ from __future__ import annotations
 from typing import Dict, Any
 
 from aplicacion.modelos_proyecto import EntradaProyecto
-
 from materiales.modelos.entrada import EntradaMateriales
 from materiales.orquestador_materiales import ejecutar_materiales
-
 from costos_precios.orquestador_costos import ejecutar_costos
 
 
@@ -26,11 +24,15 @@ def ejecutar_proyecto(entrada: EntradaProyecto) -> Dict[str, Any]:
     # =========================================
     entrada_mat = EntradaMateriales(
         estructuras_df=entrada.df_estructuras,
-        ruta_base=entrada.ruta_materiales,
+        tension=entrada.tension or 0,
         datos_proyecto={
             "tension": entrada.tension,
             "calibre_mt": entrada.calibre_mt,
         },
+        df_cables=getattr(entrada, "df_cables", None),
+        df_materiales_extra=getattr(entrada, "df_materiales_extra", None),
+        calibre_mt=getattr(entrada, "calibre_mt", None),
+        tabla_conectores_mt=getattr(entrada, "tabla_conectores_mt", None),
     )
 
     salida_materiales = ejecutar_materiales(entrada_mat)
