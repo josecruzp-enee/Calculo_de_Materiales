@@ -9,20 +9,35 @@ from ayuda.debug import debug_guardar
 
 
 # =========================================================
-# NORMALIZACIÓN TEXTO
+# NORMALIZACIÓN TEXTO (FIX REAL)
 # =========================================================
 def _norm_txt(s: object) -> str:
     if s is None or (isinstance(s, float) and pd.isna(s)):
         return ""
 
-    t = str(s).strip()
+    t = str(s).upper()
 
+    # quitar tildes
     t = "".join(
         c for c in unicodedata.normalize("NFD", t)
         if unicodedata.category(c) != "Mn"
     )
 
-    return " ".join(t.split()).upper()
+    # 🔥 limpieza fuerte para lograr match
+    palabras_eliminar = [
+        "DE", "DEL", "LA", "EL",
+        "ANSI", "TIPO", "CLASE",
+        "CARRETE", "ESPIGA", "SUSPENSION"
+    ]
+
+    for p in palabras_eliminar:
+        t = t.replace(p, "")
+
+    t = t.replace("-", " ")
+    t = "".join(c if c.isalnum() else " " for c in t)
+    t = " ".join(t.split())
+
+    return t
 
 
 # =========================================================
@@ -61,7 +76,6 @@ def preparar_df_costos_unitarios(
     if df.empty:
         raise ValueError("No hay costos válidos en catálogo")
 
-    # 🔥 DEBUG COSTOS UNITARIOS
     debug_guardar("costos_unitarios", {
         "rows": len(df),
         "cols": list(df.columns),
@@ -133,7 +147,6 @@ def calcular_costos_desde_resumen(
     df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
 
-    # 🔥 DEBUG ENTRADA
     debug_guardar("costos_input_materiales", {
         "rows": len(df),
         "preview": df.head(5).to_dict()
@@ -158,7 +171,6 @@ def calcular_costos_desde_resumen(
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
     df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
 
-    # 🔥 DEBUG FINAL COSTOS
     debug_guardar("costos_calculados", {
         "rows": len(df),
         "total": float(df["Costo Total"].sum()),
@@ -180,7 +192,6 @@ def construir_entrada_costos(
     df_costos_estructuras,
 ):
 
-    # CATÁLOGO
     catalogo = obtener_catalogo_materiales(data)
 
     debug_guardar("costos_catalogo", {
@@ -189,7 +200,6 @@ def construir_entrada_costos(
         "preview": catalogo.head(5).to_dict()
     })
 
-    # COSTOS UNITARIOS
     df_costos, df_faltantes = preparar_df_costos_unitarios(
         catalogo,
         df_resumen
