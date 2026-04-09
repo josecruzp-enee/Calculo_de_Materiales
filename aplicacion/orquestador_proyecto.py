@@ -61,7 +61,46 @@ def _extraer_tension(datos: Dict[str, Any]) -> float:
 
     return t
 
+# =========================================================
+# ADAPTADOR DF ESTRUCTURAS (BORDE DE APLICACIÓN)
+# =========================================================
+def _adaptar_df_estructuras(df):
 
+    import pandas as pd
+
+    if df is None:
+        raise ValueError("df_estructuras es None")
+
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("df_estructuras no es DataFrame")
+
+    df = df.copy()
+
+    cols = set(df.columns)
+
+    # =====================================================
+    # CASO OK (contrato correcto)
+    # =====================================================
+    if {"Estructura", "Cantidad"}.issubset(cols):
+        return df
+
+    # =====================================================
+    # CASO DXF (tu caso actual)
+    # =====================================================
+    if {"codigodeestructura", "Cantidad"}.issubset(cols):
+
+        df = df.rename(columns={
+            "codigodeestructura": "Estructura"
+        })
+
+        return df
+
+    # =====================================================
+    # ERROR CONTROLADO
+    # =====================================================
+    raise ValueError(
+        f"df_estructuras inválido. Columnas: {list(cols)}"
+    )
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
