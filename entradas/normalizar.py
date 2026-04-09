@@ -174,4 +174,25 @@ def normalizar_estructuras(df: pd.DataFrame):
         return df_norm, [], []
 
     except Exception as e:
+
+    # =============================================
+    # DEBUG NORMALIZACIÓN (PIPELINE)
+    # =============================================
+    debug["normalizacion"] = {
+        "filas": int(len(df_norm)) if df_norm is not None else 0,
+        "columnas": df_norm.columns.tolist() if df_norm is not None else [],
+        "preview": (
+            df_norm.head(5).to_dict()
+            if isinstance(df_norm, pd.DataFrame) and not df_norm.empty
+            else {}
+        ),
+        "estructuras_unicas": (
+            sorted(df_norm["codigodeestructura"].astype(str).unique().tolist())
+            if isinstance(df_norm, pd.DataFrame)
+            and not df_norm.empty
+            and "codigodeestructura" in df_norm.columns
+            else []
+        ),
+    }
+     
         return pd.DataFrame(), [str(e)], []
