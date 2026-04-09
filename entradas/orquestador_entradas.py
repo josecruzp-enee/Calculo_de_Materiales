@@ -19,7 +19,7 @@ from entradas.leer_dxf import leer_dxf
 # =========================================================
 from entradas.normalizar import normalizar_estructuras
 from entradas.validacion import validar_estructuras
-
+from entradas.base_datos import cargar_base_datos
 # =========================================================
 # DEBUG
 # =========================================================
@@ -186,6 +186,7 @@ def ejecutar_entradas(
         # =====================================================
         # 6. OK
         # =====================================================
+        base_datos = cargar_base_datos()
         return SalidaEntradas(
             ok=True,
             errores=[],
@@ -194,6 +195,7 @@ def ejecutar_entradas(
             datos_proyecto=entrada.datos_proyecto,
             df_cables=entrada.df_cables,
             df_materiales_extra=entrada.df_materiales_extra,
+            base_datos=base_datos,
             debug={
                 "fase": "ok",
                 "filas": len(df_norm),
