@@ -65,6 +65,28 @@ def _resolver_catalogo(codigo: str) -> str:
         return f"{codigo}-50W"
     return codigo
 
+# ==========================================================
+# EXTRAER ESTRUCTURAS (CLAVE)
+# ==========================================================
+def _extraer_estructuras(texto: str) -> list[str]:
+
+    patrones = [
+        r"A[-\s]?[IVX]+[-\s]?\d+[A-Z]?",
+        r"B[-\s]?[IVX]+[-\s]?\d+[A-Z]?",
+        r"PC[-\s]?\d+[A-Z]?",
+        r"TS[-\s]?\d+(\.\d+)?\s?KVA",
+        r"CT[-\s]?N",
+        r"R[-\s]?\d+[A-Z]?",
+        r"LL[-\s]?\d+[-\s]?\d+W",
+        r"CA[-\s]?\d+",
+    ]
+
+    encontrados = []
+
+    for patron in patrones:
+        encontrados.extend(re.findall(patron, texto, flags=re.IGNORECASE))
+
+    return encontrados
 
 # ==========================================================
 # CORE
