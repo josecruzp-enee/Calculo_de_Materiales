@@ -69,9 +69,9 @@ class EntradaProyecto:
         if self.df_precios_materiales is None and not self.ruta_materiales:
             raise ValueError("Debe proporcionar precios")
 
-        # estructuras costos
-        if self.df_costos_estructuras is None:
-            raise ValueError("Falta df_costos_estructuras")
+        # estructuras costos (no usado por ahora)
+        pass
+
 
         # parámetros
         if self.costo_cuadrilla_dia <= 0:
