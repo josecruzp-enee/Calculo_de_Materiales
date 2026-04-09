@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Dict, Any
 import pandas as pd
-
+from pathlib import Path
 # =========================================================
 # CONTRATO (ÚNICO)
 # =========================================================
@@ -60,7 +60,9 @@ def ejecutar_proyecto(entrada: EntradaProyecto) -> Dict[str, Any]:
 
     if entrada.tension is None:
         raise ValueError("tension es requerida")
-    base_datos = cargar_base_datos(entrada.ruta_materiales)
+    
+
+    base_datos = cargar_base_datos(Path(entrada.ruta_materiales))
     # =========================================
     # 1. MATERIALES
     # =========================================
