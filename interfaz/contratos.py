@@ -120,21 +120,34 @@ class SalidaCostos:
 # =========================================================
 # 🔷 CONTRATO FINAL (PARA EXPORTACIÓN)
 # =========================================================
-@dataclass
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, List
+
+
+@dataclass(slots=True)
 class ResultadoProyecto:
     """
-    Resultado completo del sistema
+    Salida única del sistema (orquestador_proyecto)
+
+    ✔ Contrato fuerte
+    ✔ Usado por UI
+    ✔ No contiene lógica
     """
 
+    # CONTROL
     ok: bool = False
     errores: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
-    # BLOQUES
-    materiales: Optional[SalidaMateriales] = None
-    costos: Optional[SalidaCostos] = None
+    # RESULTADOS DE DOMINIO
+    materiales: Optional[Any] = None
+    costos: Optional[Any] = None
+    reportes: Optional[Dict[str, Any]] = None
 
-    # CONTEXTO
-    datos_proyecto: Dict[str, Any] = field(default_factory=dict)
+    # DEBUG
+    debug: Dict[str, Any] = field(default_factory=dict)
 
     debug: Dict[str, Any] = field(default_factory=dict)
