@@ -25,7 +25,7 @@ def limpiar_codigo(codigo: str) -> str:
 
 
 # =========================================================
-# PATRÓN ROBUSTO (TUYO)
+# PATRÓN
 # =========================================================
 PATRON = re.compile(
     r"""
@@ -76,7 +76,6 @@ def _extraer_estructuras(texto: str):
 
     encontrados = PATRON.findall(texto)
 
-    # flatten
     return [item for grupo in encontrados for item in grupo if item]
 
 
@@ -122,7 +121,13 @@ def _convertir(df: pd.DataFrame):
 
                 registros.append({
                     "Punto": punto_actual or f"P-{idx+1}",
+
+                    # 🔥 ESTE ES EL CONTRATO REAL
+                    "codigodeestructura": est,
+
+                    # opcional (futuro)
                     "Estructura": est,
+
                     "Cantidad": 1
                 })
 
@@ -131,10 +136,12 @@ def _convertir(df: pd.DataFrame):
     if df_out.empty:
         return df_out
 
-    # 🔥 AGRUPACIÓN FINAL (CLAVE)
     return (
         df_out
-        .groupby(["Punto", "Estructura"], as_index=False)["Cantidad"]
+        .groupby(
+            ["Punto", "codigodeestructura", "Estructura"],
+            as_index=False
+        )["Cantidad"]
         .sum()
     )
 
