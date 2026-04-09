@@ -160,10 +160,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 # ==========================================================
 # FUNCIÓN PÚBLICA
 # ==========================================================
-def normalizar_estructuras(df: pd.DataFrame, debug: dict | None = None):
-
-    if debug is None:
-        debug = {}
+def normalizar_estructuras(df: pd.DataFrame):
 
     if not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame(), ["df inválido o vacío"], []
@@ -174,18 +171,7 @@ def normalizar_estructuras(df: pd.DataFrame, debug: dict | None = None):
         if df_norm.empty:
             return pd.DataFrame(), ["No se detectaron estructuras válidas"], []
 
-        debug["normalizacion"] = {
-            "filas": len(df_norm),
-            "columnas": df_norm.columns.tolist(),
-            "estructuras_unicas": sorted(
-                df_norm["codigodeestructura"].astype(str).unique().tolist()
-            )
-        }
-
         return df_norm, [], []
 
     except Exception as e:
-        debug["normalizacion"] = {
-            "error": str(e)
-        }
         return pd.DataFrame(), [str(e)], []
