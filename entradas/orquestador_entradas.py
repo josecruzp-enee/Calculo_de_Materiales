@@ -134,7 +134,15 @@ def ejecutar_entradas(
         debug["normalizacion"] = {
             "df": _safe_df_info(df_norm),
             "errores": errores_norm,
-            "warnings": warnings_norm
+            "warnings": warnings_norm,
+            "estructuras": (
+                df_norm["codigodeestructura"]
+                .astype(str)
+                .unique()
+                .tolist()
+                if isinstance(df_norm, pd.DataFrame) and not df_norm.empty
+                else []
+            )
         }
 
         if errores_norm:
