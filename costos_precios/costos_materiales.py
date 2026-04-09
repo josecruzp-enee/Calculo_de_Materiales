@@ -4,8 +4,8 @@ from __future__ import annotations
 import pandas as pd
 import unicodedata
 
-# 🔥 FIX IMPORT (FALTABA)
 from entradas.base_datos import obtener_catalogo_materiales
+from ayuda.debug import debug_guardar
 
 
 # =========================================================
@@ -26,9 +26,9 @@ def _norm_txt(s: object) -> str:
 
 
 # =========================================================
-# ADAPTADOR PRINCIPAL (CATÁLOGO → PRECIOS)
+# CATÁLOGO → COSTOS UNITARIOS
 # =========================================================
-def preparar_df_precios_desde_catalogo(
+def preparar_df_costos_unitarios(
     df_catalogo: pd.DataFrame,
     df_resumen: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -38,26 +38,20 @@ def preparar_df_precios_desde_catalogo(
 
     df = df_catalogo.copy()
 
-    # =====================================================
-    # NORMALIZACIÓN
-    # =====================================================
     df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
 
-    df["Precio Unitario"] = pd.to_numeric(
+    df["Costo Unitario"] = pd.to_numeric(
         df.get("Costo Unitario", df.get("Costo", 0)),
         errors="coerce"
     )
 
-    # =====================================================
-    # LIMPIEZA
-    # =====================================================
     df = df[
-        ["Materiales_norm", "Unidad_norm", "Precio Unitario"]
+        ["Materiales_norm", "Unidad_norm", "Costo Unitario"]
     ]
 
-    df = df.dropna(subset=["Precio Unitario"])
-    df = df[df["Precio Unitario"] > 0]
+    df = df.dropna(subset=["Costo Unitario"])
+    df = df[df["Costo Unitario"] > 0]
 
     df = df.drop_duplicates(
         subset=["Materiales_norm", "Unidad_norm"],
@@ -65,17 +59,17 @@ def preparar_df_precios_desde_catalogo(
     )
 
     if df.empty:
-        raise ValueError("No hay precios válidos en catálogo")
+        raise ValueError("No hay costos válidos en catálogo")
+
+    # 🔥 DEBUG COSTOS UNITARIOS
+    debug_guardar("costos_unitarios", {
+        "rows": len(df),
+        "cols": list(df.columns),
+        "preview": df.head(5).to_dict()
+    })
 
     # =====================================================
-    # DEBUG PRECIOS
-    # =====================================================
-    print("\n[DEBUG] precios limpios:")
-    print("filas:", len(df))
-    print(df.head(3))
-
-    # =====================================================
-    # DETECCIÓN DE FALTANTES
+    # DETECCIÓN FALTANTES
     # =====================================================
     df_faltantes = pd.DataFrame()
 
@@ -96,7 +90,7 @@ def preparar_df_precios_desde_catalogo(
         )
 
         faltantes = check[
-            check["Precio Unitario"].isna()
+            check["Costo Unitario"].isna()
         ]
 
         if not faltantes.empty:
@@ -105,9 +99,12 @@ def preparar_df_precios_desde_catalogo(
                     ["Materiales", "Unidad", "Cantidad"]
                 ]
                 .drop_duplicates()
-                .sort_values("Materiales")
                 .reset_index(drop=True)
             )
+
+            debug_guardar("costos_faltantes", {
+                "faltantes": df_faltantes.to_dict()
+            })
 
     return df.reset_index(drop=True), df_faltantes
 
@@ -117,7 +114,7 @@ def preparar_df_precios_desde_catalogo(
 # =========================================================
 def calcular_costos_desde_resumen(
     df_resumen: pd.DataFrame,
-    df_precios: pd.DataFrame,
+    df_costos: pd.DataFrame,
     df_estructuras_por_punto=None,
     df_costos_estructuras=None,
 ) -> pd.DataFrame:
@@ -125,45 +122,51 @@ def calcular_costos_desde_resumen(
     if df_resumen is None or df_resumen.empty:
         raise ValueError("df_resumen vacío")
 
-    if df_precios is None or df_precios.empty:
-        raise ValueError("df_precios vacío")
+    if df_costos is None or df_costos.empty:
+        raise ValueError("df_costos vacío")
 
     df = df_resumen.copy()
 
-    # NORMALIZACIÓN
     if "Unidad" not in df.columns:
         df["Unidad"] = ""
 
     df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
 
-    # DEBUG INPUT
-    print("\n[DEBUG] resumen materiales:")
-    print(df.head(3))
+    # 🔥 DEBUG ENTRADA
+    debug_guardar("costos_input_materiales", {
+        "rows": len(df),
+        "preview": df.head(5).to_dict()
+    })
 
     # MERGE
     df = df.merge(
-        df_precios,
+        df_costos,
         on=["Materiales_norm", "Unidad_norm"],
         how="left"
     )
 
     # VALIDACIÓN
-    faltantes = df[df["Precio Unitario"].isna()]
+    faltantes = df[df["Costo Unitario"].isna()]
     if not faltantes.empty:
-        print("\n🔥 MATERIALES SIN PRECIO:\n")
-        print(faltantes[["Materiales", "Unidad"]].drop_duplicates())
-        raise ValueError("Hay materiales sin precio")
+        debug_guardar("costos_error", {
+            "sin_costo": faltantes[["Materiales", "Unidad"]].to_dict()
+        })
+        raise ValueError("Hay materiales sin costo")
 
     # CÁLCULO
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
-    df["Costo Total"] = df["Cantidad"] * df["Precio Unitario"]
+    df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
 
-    print("\n[DEBUG] costos calculados:")
-    print(df.head(3))
+    # 🔥 DEBUG FINAL COSTOS
+    debug_guardar("costos_calculados", {
+        "rows": len(df),
+        "total": float(df["Costo Total"].sum()),
+        "preview": df.head(5).to_dict()
+    })
 
     return df[
-        ["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo Total"]
+        ["Materiales", "Unidad", "Cantidad", "Costo Unitario", "Costo Total"]
     ].reset_index(drop=True)
 
 
@@ -177,29 +180,25 @@ def construir_entrada_costos(
     df_costos_estructuras,
 ):
 
-    print("\n========== DEBUG COSTOS ==========")
-
     # CATÁLOGO
     catalogo = obtener_catalogo_materiales(data)
 
-    print("\n[DEBUG] catálogo:")
-    print("filas:", len(catalogo))
-    print(catalogo.head(3))
+    debug_guardar("costos_catalogo", {
+        "rows": len(catalogo),
+        "cols": list(catalogo.columns),
+        "preview": catalogo.head(5).to_dict()
+    })
 
-    # PRECIOS
-    df_precios, df_faltantes = preparar_df_precios_desde_catalogo(
+    # COSTOS UNITARIOS
+    df_costos, df_faltantes = preparar_df_costos_unitarios(
         catalogo,
         df_resumen
     )
 
-    print("\n[DEBUG] precios finales:")
-    print("filas:", len(df_precios))
-    print(df_precios.head(3))
-
-    # FALTANTES
-    if not df_faltantes.empty:
-        print("\n⚠️ MATERIALES SIN PRECIO:\n")
-        print(df_faltantes.to_string(index=False))
+    debug_guardar("costos_fuente", {
+        "rows": len(df_costos),
+        "preview": df_costos.head(5).to_dict()
+    })
 
     from costos_precios.orquestador_costos import EntradaCostos
 
@@ -207,5 +206,5 @@ def construir_entrada_costos(
         df_resumen=df_resumen,
         df_estructuras_por_punto=df_estructuras_por_punto,
         df_costos_estructuras=df_costos_estructuras,
-        fuente_precios=df_precios,
+        fuente_precios=df_costos,
     )
