@@ -55,12 +55,46 @@ def _extraer_estructuras(texto: str):
         return []
 
     texto = texto.upper()
-    texto = texto.replace(",", "").replace(";", " ").replace("/", " ")
 
-    patron = r"\b[A-Z]{1,4}(?:[-\s]?\d+)+(?:[-\s]?[A-Z0-9]+)*\b"
+    # limpieza mínima (no destructiva)
+    texto = texto.replace(";", " ").replace("/", " ")
+    texto = texto.replace("\\P", " ")
 
-    return re.findall(patron, texto)
+    # 🔥 PATRONES CONTROLADOS (NO GENÉRICOS)
+    PATRONES = [
+        r"A-[IVX]+-\d+[A-Z]?",
+        r"B-[IVX]+-\d+[A-Z]?",
+        r"DTN?-[IVX]+-\d+",
+        r"ER-[IVX]+-\d+[A-Z]?",
+        r"H-[IVX]+-\d+",
+        r"TH-[IVX]+-\d+",
+        r"TM-[IVX]+-\d+[A-Z]?",
+        r"G[B]?-[IVX]+-\d+[A-Z]?",
 
+        r"R-\d+[A-Z]?",
+        r"RH-\d+",
+        r"RTH-\d+",
+
+        r"TS-\d+(?:\.\d+)?\s?KVA",
+        r"TD-\d+(?:\.\d+)?\s?KVA",
+        r"TT-\d+(?:\.\d+)?\s?KVA",
+
+        r"CS-\d+",
+        r"CA-\d+",
+        r"CT-[A-Z]",
+
+        r"LL-\d+(?:-\d+[A-Z]+)+",
+
+        r"PC[A-Z]?-\d+",
+        r"PM-\d+",
+        r"PT-\d+",
+    ]
+
+    patron_global = re.compile("|".join(PATRONES))
+
+    encontrados = patron_global.findall(texto)
+
+    return [e.strip() for e in encontrados]
 
 # =========================================================
 # CORE
