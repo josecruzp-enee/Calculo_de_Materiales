@@ -68,6 +68,51 @@ def _validar_df_salida(df: pd.DataFrame):
 
 
 # =========================================================
+# NORMALIZACIÓN
+# =========================================================
+def _normalizar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
+
+    df = df.copy()
+
+    df["Estructura"] = (
+        df["Estructura"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    return df
+
+
+def _normalizar_df_materiales(df: pd.DataFrame) -> pd.DataFrame:
+
+    df = df.copy()
+
+    df["Materiales"] = df["Materiales"].astype(str).str.strip()
+    df["Unidad"] = df["Unidad"].astype(str).str.strip()
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
+
+    return df
+
+
+# =========================================================
+# VALIDAR MATCH CONTRA BASE
+# =========================================================
+def _validar_match_estructuras(df_estructuras, hojas_base):
+
+    estructuras = df_estructuras["Estructura"].unique()
+
+    debug_guardar("CALCULO::estructuras_unicas", list(estructuras)[:50])
+
+    faltantes = [e for e in estructuras if e not in hojas_base]
+
+    if faltantes:
+        raise ValueError(
+            f"Estructuras no encontradas ({len(faltantes)}): {faltantes[:10]}"
+        )
+
+
+# =========================================================
 # CONSOLIDACIÓN GLOBAL
 # =========================================================
 def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
@@ -76,13 +121,16 @@ def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
         df
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
+        .sort_values(["Materiales", "Unidad"])
+        .reset_index(drop=True)
     )
 
 
 # =========================================================
-# FUNCIÓN PRINCIPAL (SOLO GLOBAL)
+# FUNCIÓN PRINCIPAL
 # =========================================================
 def calcular_materiales_proyecto(
+    *,
     hojas_base,
     df_estructuras,
     tension,
@@ -91,7 +139,7 @@ def calcular_materiales_proyecto(
 ) -> dict:
 
     # -----------------------------
-    # DEBUG
+    # DEBUG INPUT
     # -----------------------------
     debug_guardar("CALCULO::input", {
         "filas_estructuras": None if df_estructuras is None else len(df_estructuras),
@@ -99,7 +147,7 @@ def calcular_materiales_proyecto(
     })
 
     # -----------------------------
-    # VALIDACIONES
+    # VALIDACIONES BASE
     # -----------------------------
     _validar_df_estructuras(df_estructuras)
     _validar_hojas_base(hojas_base)
@@ -108,27 +156,58 @@ def calcular_materiales_proyecto(
         raise ValueError("tension no válida")
 
     # -----------------------------
+    # NORMALIZAR INPUT 🔥
+    # -----------------------------
+    df_estructuras = _normalizar_estructuras(df_estructuras)
+
+    # -----------------------------
+    # VALIDAR MATCH 🔥
+    # -----------------------------
+    _validar_match_estructuras(df_estructuras, hojas_base)
+
+    # -----------------------------
     # CÁLCULO DETALLE
     # -----------------------------
-    df_detalle = calcular_materiales_por_punto(
-        hojas_base=hojas_base,
-        df_estructuras=df_estructuras,
-        tension=tension,
-        calibre_mt=calibre_mt,
-        tabla_conectores_mt=tabla_conectores_mt
-    )
+    try:
+        df_detalle = calcular_materiales_por_punto(
+            hojas_base=hojas_base,
+            df_estructuras=df_estructuras,
+            tension=tension,
+            calibre_mt=calibre_mt,
+            tabla_conectores_mt=tabla_conectores_mt
+        )
+    except Exception as e:
+        raise RuntimeError(f"Error en materiales_por_punto: {e}")
 
+    # -----------------------------
+    # VALIDAR RESULTADO BRUTO 🔥
+    # -----------------------------
+    if not isinstance(df_detalle, pd.DataFrame):
+        raise TypeError("calcular_materiales_por_punto no devolvió DataFrame")
+
+    # -----------------------------
+    # NORMALIZAR + VALIDAR
+    # -----------------------------
+    df_detalle = _normalizar_df_materiales(df_detalle)
     _validar_df_salida(df_detalle)
 
     # -----------------------------
     # CONSOLIDADO GLOBAL
     # -----------------------------
     df_global = _consolidar(df_detalle)
-
+    df_global = _normalizar_df_materiales(df_global)
     _validar_df_salida(df_global)
 
     # -----------------------------
-    # SALIDA FINAL
+    # DEBUG OUTPUT
+    # -----------------------------
+    debug_guardar("CALCULO::output", {
+        "materiales_total": len(df_global),
+        "detalle_total": len(df_detalle)
+    })
+
+    # -----------------------------
+    # OUTPUT FINAL
     # -----------------------------
     return {
         "ok": True,
