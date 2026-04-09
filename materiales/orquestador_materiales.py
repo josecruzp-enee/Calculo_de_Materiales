@@ -23,9 +23,6 @@ from materiales.calculos.calculo_materiales import (
     calcular_materiales_proyecto,
 )
 
-from materiales.validaciones.materiales_validacion import (
-    validar_datos_proyecto,
-)
 
 from materiales.calculos.calculo_estructuras import (
     calcular_estructuras_proyecto
