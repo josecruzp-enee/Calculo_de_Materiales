@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 import unicodedata
-from dataclasses import dataclass, field
-from typing import Dict, Any, Union
+from typing import Dict, Any
 from pathlib import Path
 
 from entradas.base_datos import obtener_catalogo_materiales
@@ -37,18 +36,7 @@ def _norm_txt(s: object) -> str:
 
 
 # =========================================================
-# CONTRATO (CORREGIDO)
-# =========================================================
-@dataclass
-class EntradaCostos:
-    df_resumen: pd.DataFrame
-    df_estructuras_por_punto: pd.DataFrame
-    df_materiales_por_estructura: Dict[str, pd.DataFrame] = field(default_factory=dict)
-    fuente_precios: Union[pd.DataFrame, str, Path] = None
-
-
-# =========================================================
-# MOTOR DE COSTOS
+# MOTOR DE COSTOS (OK)
 # =========================================================
 def calcular_costos_desde_resumen(df_resumen, df_costos):
 
@@ -68,7 +56,10 @@ def calcular_costos_desde_resumen(df_resumen, df_costos):
 
     df = df.merge(df_costos, on=["Materiales_norm", "Unidad_norm"], how="left")
 
-    if df["Costo Unitario"].isna().any():
+    # DEBUG útil
+    faltantes = df[df["Costo Unitario"].isna()]
+    if not faltantes.empty:
+        debug_guardar("costos_sin_match", faltantes.head(10).to_dict())
         raise ValueError("Hay materiales sin costo")
 
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
@@ -81,28 +72,41 @@ def calcular_costos_desde_resumen(df_resumen, df_costos):
 
 
 # =========================================================
-# BUILDER CORREGIDO
+# BUILDER CORRECTO (ALINEADO)
 # =========================================================
-def construir_entrada_costos(data, df_resumen, df_estructuras_por_punto):
+def construir_entrada_costos(
+    data: Dict[str, Any],
+    df_resumen: pd.DataFrame,
+    df_estructuras_por_punto: pd.DataFrame,
+    df_materiales_por_punto: pd.DataFrame
+):
+
+    if df_materiales_por_punto is None:
+        raise ValueError("df_materiales_por_punto es requerido")
 
     catalogo = obtener_catalogo_materiales(data)
 
     df_costos = preparar_df_costos_unitarios(catalogo)
+
+    # DEBUG
+    debug_guardar("builder_costos", {
+        "catalogo_filas": len(catalogo),
+        "costos_filas": len(df_costos),
+        "materiales_por_punto_filas": len(df_materiales_por_punto),
+    })
 
     from costos_precios.orquestador_costos import EntradaCostos
 
     return EntradaCostos(
         df_resumen=df_resumen,
         df_estructuras_por_punto=df_estructuras_por_punto,
-        df_materiales_por_estructura=data.get(
-            "df_materiales_por_estructura", {}
-        ),
+        df_materiales_por_punto=df_materiales_por_punto,
         fuente_precios=df_costos,
     )
 
 
 # =========================================================
-# COSTOS UNITARIOS (SIMPLIFICADO SIN ERROR)
+# COSTOS UNITARIOS
 # =========================================================
 def preparar_df_costos_unitarios(df_catalogo):
 
@@ -125,5 +129,10 @@ def preparar_df_costos_unitarios(df_catalogo):
     df = df.drop_duplicates(
         subset=["Materiales_norm", "Unidad_norm"]
     )
+
+    # DEBUG
+    debug_guardar("catalogo_procesado", {
+        "filas_finales": len(df)
+    })
 
     return df[["Materiales_norm", "Unidad_norm", "Costo Unitario"]]
