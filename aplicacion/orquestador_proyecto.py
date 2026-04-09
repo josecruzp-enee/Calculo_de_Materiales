@@ -64,7 +64,44 @@ def ejecutar_proyecto(entrada: EntradaProyecto):
             "error": "Error en materiales",
             "detalle": salida_materiales.errores,
         }
+# =====================================================
+# 2. COSTOS
+# =====================================================
+salida_costos = None
 
+if entrada.calcular_costos:
+
+    from pathlib import Path
+    from entradas.base_datos import cargar_base_datos
+    from costos_precios.costos_estructuras import calcular_costos_por_estructura
+
+    # 🔹 ruta
+    ruta = Path(entrada.ruta_materiales)
+
+    # 🔹 base
+    hojas_base = cargar_base_datos(ruta)
+
+    # 🔹 conteo (GLOBAL)
+    conteo = _conteo_estructuras(salida_materiales.df_estructuras)
+
+    # 🔹 costos por estructura
+    df_costos_estructuras = calcular_costos_por_estructura(
+        hojas_base=hojas_base,
+        conteo=conteo,
+        tension_ll=entrada.tension,
+        calibre_mt=entrada.calibre_mt,
+        tabla_conectores_mt=entrada.tabla_conectores_mt,
+        df_precios_materiales=entrada.df_precios_materiales,
+    )
+
+    # 🔹 costos finales
+    salida_costos = ejecutar_costos({
+        "df_resumen": salida_materiales.df_materiales,
+        "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
+        "df_costos_estructuras": df_costos_estructuras,
+        "df_precios_materiales": entrada.df_precios_materiales,
+        "archivo_precios_materiales": str(ruta),
+    })
     # =====================================================
     # 2. COSTOS
     # =====================================================
