@@ -1,4 +1,6 @@
 import pandas as pd
+
+
 def calcular_costos_por_punto(
     df_estructuras_por_punto: pd.DataFrame,
     df_costos_estructuras: pd.DataFrame,
@@ -10,9 +12,9 @@ def calcular_costos_por_punto(
     - df_resumen_precios
     """
 
-    # -----------------------------
+    # =====================================================
     # VALIDACIÓN
-    # -----------------------------
+    # =====================================================
     if df_estructuras_por_punto is None or df_estructuras_por_punto.empty:
         raise ValueError("df_estructuras_por_punto vacío")
 
@@ -23,40 +25,42 @@ def calcular_costos_por_punto(
     if not required_cols.issubset(df_costos_estructuras.columns):
         raise ValueError(f"df_costos_estructuras debe tener {required_cols}")
 
-    # -----------------------------
+    # =====================================================
+    # NORMALIZACIÓN
+    # =====================================================
+    df_ep = df_estructuras_por_punto.copy()
+    df_ce = df_costos_estructuras.copy()
+
+    df_ep["codigodeestructura"] = df_ep["codigodeestructura"].astype(str).str.strip().str.upper()
+    df_ce["codigodeestructura"] = df_ce["codigodeestructura"].astype(str).str.strip().str.upper()
+
+    df_ep["Punto"] = df_ep["Punto"].astype(str).str.strip()
+
+    df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
+
+    # =====================================================
     # MAPAS
-    # -----------------------------
-    df_costos_estructuras["codigodeestructura"] = (
-        df_costos_estructuras["codigodeestructura"].astype(str).str.strip()
-    )
+    # =====================================================
+    dict_costo = dict(zip(df_ce["codigodeestructura"], df_ce["Costo Unitario"]))
+    dict_precio = dict(zip(df_ce["codigodeestructura"], df_ce["Precio Unitario"]))
 
-    dict_costo = dict(
-        zip(
-            df_costos_estructuras["codigodeestructura"],
-            df_costos_estructuras["Costo Unitario"]
-        )
-    )
-
-    dict_precio = dict(
-        zip(
-            df_costos_estructuras["codigodeestructura"],
-            df_costos_estructuras["Precio Unitario"]
-        )
-    )
-
-    # -----------------------------
+    # =====================================================
     # DETALLE
-    # -----------------------------
+    # =====================================================
     resultados = []
 
-    for _, row in df_estructuras_por_punto.iterrows():
+    for _, row in df_ep.iterrows():
 
-        punto = row.get("Punto")
-        estructura = str(row.get("codigodeestructura", "")).strip()
-        cantidad = float(row.get("Cantidad", 0) or 0)
+        punto = row["Punto"]
+        estructura = row["codigodeestructura"]
+        cantidad = float(row["Cantidad"])
 
-        costo_unit = float(dict_costo.get(estructura, 0))
-        precio_unit = float(dict_precio.get(estructura, 0))
+        # 🔥 VALIDACIÓN CRÍTICA
+        if estructura not in dict_costo:
+            raise ValueError(f"Estructura sin costo definida: {estructura}")
+
+        costo_unit = float(dict_costo[estructura])
+        precio_unit = float(dict_precio[estructura])
 
         subtotal_costo = cantidad * costo_unit
         subtotal_precio = cantidad * precio_unit
@@ -73,9 +77,9 @@ def calcular_costos_por_punto(
 
     df_detalle = pd.DataFrame(resultados)
 
-    # -----------------------------
+    # =====================================================
     # RESUMEN COSTOS
-    # -----------------------------
+    # =====================================================
     df_resumen_costos = (
         df_detalle.groupby("Punto")["Subtotal Costo"]
         .sum()
@@ -83,9 +87,9 @@ def calcular_costos_por_punto(
         .rename(columns={"Subtotal Costo": "TOTAL_COSTO_PUNTO"})
     )
 
-    # -----------------------------
+    # =====================================================
     # RESUMEN PRECIOS
-    # -----------------------------
+    # =====================================================
     df_resumen_precios = (
         df_detalle.groupby("Punto")["Subtotal Precio"]
         .sum()
