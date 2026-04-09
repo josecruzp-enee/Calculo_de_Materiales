@@ -97,6 +97,7 @@ def ejecutar_proyecto(entrada: EntradaProyecto):
             calibre_mt=entrada.calibre_mt,
             tabla_conectores_mt=entrada.tabla_conectores_mt,
             df_precios_materiales=entrada.df_precios_materiales,
+            conteo = _conteo_estructuras(salida_materiales.df_estructuras)
         )
 
         # -------------------------
