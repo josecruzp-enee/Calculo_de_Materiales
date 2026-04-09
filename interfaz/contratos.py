@@ -4,6 +4,8 @@
 from dataclasses import dataclass, field
 import pandas as pd
 from typing import Optional, Literal, Dict, Any, List
+from dataclasses import dataclass, field
+
 
 
 # =========================================================
@@ -120,12 +122,6 @@ class SalidaCostos:
 # =========================================================
 # 🔷 CONTRATO FINAL (PARA EXPORTACIÓN)
 # =========================================================
-# -*- coding: utf-8 -*-
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List
-
 
 @dataclass(slots=True)
 class ResultadoProyecto:
