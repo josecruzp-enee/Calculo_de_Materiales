@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Any, Union
 import pandas as pd
 from pathlib import Path
@@ -12,34 +12,36 @@ from costos_precios.costos_estructuras import calcular_costos_por_estructura
 
 
 # =====================================================
-# CONTRATO
+# CONTRATO (ALINEADO)
 # =====================================================
-# =====================================================
-# CONTRATO (CORREGIDO Y ALINEADO)
-# =====================================================
-from dataclasses import dataclass, field
-from typing import Dict, Union
-import pandas as pd
-from pathlib import Path
-
 @dataclass
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
-    
-    # 🔥 ALINEADO CON BUILDER
+
+    # 🔥 ahora sí alineado con builder
     df_materiales_por_estructura: Dict[str, pd.DataFrame] = field(default_factory=dict)
-    
+
     fuente_precios: Union[pd.DataFrame, str, Path] = None
 
+
+# =====================================================
+# HELPERS
+# =====================================================
 def norm(x):
     return str(x).strip().upper()
 
 
+# =====================================================
+# ORQUESTADOR COSTOS
+# =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
     debug = {}
 
+    # =====================================================
+    # VALIDACIONES
+    # =====================================================
     if not isinstance(entrada.df_resumen, pd.DataFrame):
         raise TypeError("df_resumen inválido")
 
@@ -49,15 +51,22 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     if not isinstance(entrada.fuente_precios, pd.DataFrame):
         raise TypeError("fuente_precios inválida")
 
+    if not isinstance(entrada.df_materiales_por_estructura, dict):
+        raise TypeError("df_materiales_por_estructura inválido")
+
     df_ep = entrada.df_estructuras_por_punto.copy()
 
     debug["input"] = {
         "resumen_filas": len(entrada.df_resumen),
         "estructuras_filas": len(df_ep),
         "precios_filas": len(entrada.fuente_precios),
+        "bom_estructuras": len(entrada.df_materiales_por_estructura),
         "columnas_estructuras": list(df_ep.columns),
     }
 
+    # =====================================================
+    # 1. COSTOS MATERIALES
+    # =====================================================
     df_costos_materiales = calcular_costos_desde_resumen(
         entrada.df_resumen,
         entrada.fuente_precios
@@ -71,36 +80,41 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         "total": float(df_costos_materiales["Costo Total"].sum())
     }
 
+    # =====================================================
+    # 2. NORMALIZAR ESTRUCTURAS
+    # =====================================================
     if "Estructura" not in df_ep.columns:
         raise ValueError("df_estructuras_por_punto no tiene columna Estructura")
 
     df_ep["Estructura"] = df_ep["Estructura"].apply(norm)
-    df_ep["Materiales"] = df_ep["Materiales"].astype(str).str.strip()
-    df_ep["Unidad"] = df_ep["Unidad"].astype(str).str.strip()
     df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
 
-    df_materiales_por_estructura = {}
+    # =====================================================
+    # 3. USAR BOM DESDE MATERIALES (FIX CLAVE)
+    # =====================================================
+    df_materiales_por_estructura = entrada.df_materiales_por_estructura
 
-    for est in df_ep["Estructura"].unique():
-
-        df_temp = df_ep[df_ep["Estructura"] == est][
-            ["Materiales", "Unidad", "Cantidad"]
-        ].copy()
-
-        df_materiales_por_estructura[norm(est)] = df_temp
-
-        debug.setdefault("bom", {})[est] = {"filas": len(df_temp)}
+    if not df_materiales_por_estructura:
+        raise ValueError("df_materiales_por_estructura vacío")
 
     debug["bom_total"] = len(df_materiales_por_estructura)
 
+    # =====================================================
+    # 4. COSTOS POR ESTRUCTURA
+    # =====================================================
     df_costos_estructuras = calcular_costos_por_estructura(
         df_estructuras=df_ep,
         df_materiales_por_estructura=df_materiales_por_estructura,
         df_precios_materiales=entrada.fuente_precios
     )
 
-    debug["estructuras"] = {"filas": len(df_costos_estructuras)}
+    debug["estructuras"] = {
+        "filas": len(df_costos_estructuras)
+    }
 
+    # =====================================================
+    # 5. COSTOS POR PUNTO
+    # =====================================================
     df_ep2 = df_ep.copy()
 
     if "codigodeestructura" not in df_ep2.columns:
@@ -113,8 +127,13 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         df_costos_estructuras
     )
 
-    debug["puntos"] = {"filas": len(df_detalle)}
+    debug["puntos"] = {
+        "filas": len(df_detalle)
+    }
 
+    # =====================================================
+    # OUTPUT
+    # =====================================================
     return {
         "ok": True,
         "df_costos_materiales": df_costos_materiales,
