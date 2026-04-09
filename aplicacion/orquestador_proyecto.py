@@ -136,8 +136,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         resultado_materiales = ejecutar_materiales(entrada_mat)
-        debug["df_materiales_preview"] = resultado_materiales.df_materiales.head().to_dict()
-        debug["columnas_materiales"] = resultado_materiales.df_materiales.columns.tolist()
+        
         if not resultado_materiales or not resultado_materiales.ok:
             return _fail(
                 "Error en materiales",
