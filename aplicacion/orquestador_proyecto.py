@@ -93,7 +93,7 @@ def ejecutar_proyecto(entrada: EntradaProyecto) -> Dict[str, Any]:
 
         conteo = _conteo_estructuras(entrada.df_estructuras)
 
-        hojas_base = getattr(entrada, "hojas_base", {})
+        hojas_base = base_datos
 
         df_costos_estructuras = calcular_costos_por_estructura(
             hojas_base=hojas_base,
