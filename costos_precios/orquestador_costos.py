@@ -86,7 +86,17 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     )
 
     df_costos_estructuras["costo"] = 0.0
+    # 🔥 NORMALIZAR df_estructuras_por_punto PARA COSTOS
+    df_ep = entrada.df_estructuras_por_punto.copy()
 
+    # asegurar columnas correctas
+    if "codigodeestructura" not in df_ep.columns and "Estructura" in df_ep.columns:
+        df_ep["codigodeestructura"] = df_ep["Estructura"]
+
+    # dejar solo lo necesario (evita conflictos)
+    df_ep = df_ep[["Punto", "codigodeestructura", "Cantidad"]]
+
+    entrada.df_estructuras_por_punto = df_ep
     # =====================================================
     # 3. COSTOS POR PUNTO
     # =====================================================
