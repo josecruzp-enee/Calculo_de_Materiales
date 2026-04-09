@@ -3,15 +3,11 @@ from __future__ import annotations
 
 import pandas as pd
 import unicodedata
-from typing import Dict, Any
-from pathlib import Path
-
-from entradas.base_datos import obtener_catalogo_materiales
 from ayuda.debug import debug_guardar
 
 
 # =========================================================
-# NORMALIZACIÓN TEXTO
+# NORMALIZACIÓN
 # =========================================================
 def _norm_txt(s: object) -> str:
     if s is None or (isinstance(s, float) and pd.isna(s)):
@@ -36,115 +32,12 @@ def _norm_txt(s: object) -> str:
 
 
 # =========================================================
-# MOTOR DE COSTOS (OK)
+# PREPARAR CATÁLOGO
 # =========================================================
-# =========================================================
-# MOTOR DE COSTOS (OK)
-# =========================================================
-def calcular_costos_desde_resumen(df_resumen, df_costos):
-
-    if df_resumen is None or df_resumen.empty:
-        raise ValueError("df_resumen vacío")
-
-    if df_costos is None or df_costos.empty:
-        raise ValueError("df_costos vacío")
-
-    df = df_resumen.copy()
-
-    if "Unidad" not in df.columns:
-        df["Unidad"] = ""
-
-    df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
-    df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
-
-    # 🔍 DEBUG ANTES DEL MERGE
-    debug_guardar("DEBUG_PRECIOS_INPUT", {
-        "df_resumen_head": df.head(5).to_dict(),
-        "df_costos_head": df_costos.head(5).to_dict(),
-        "resumen_filas": len(df),
-        "costos_filas": len(df_costos)
-    })
-
-    df = df.merge(df_costos, on=["Materiales_norm", "Unidad_norm"], how="left")
-
-    # 🔍 DEBUG DESPUÉS DEL MERGE (CRÍTICO)
-    debug_guardar("DEBUG_PRECIOS_MERGE", {
-        "columnas": list(df.columns),
-        "head": df.head(10).to_dict()
-    })
-
-    # 🔍 VER FALTANTES
-    faltantes = df[df["Costo Unitario"].isna()]
-    debug_guardar("DEBUG_PRECIOS_FALTANTES", {
-        "cantidad_faltantes": len(faltantes),
-        "muestra": faltantes.head(10).to_dict()
-    })
-
-    if not faltantes.empty:
-        raise ValueError("Hay materiales sin costo")
-
-    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
-    df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
-
-    # 🔥 DEBUG FINAL (TABLA REAL DE COSTOS)
-    debug_guardar("DEBUG_COSTOS_MATERIALES_FINAL", {
-        "columnas": list(df.columns),
-        "preview": df[[
-            "Materiales",
-            "Unidad",
-            "Cantidad",
-            "Costo Unitario",
-            "Costo Total"
-        ]].head(20).to_dict(),
-        "total_costos": float(df["Costo Total"].sum())
-    })
-
-    return df[[
-        "Materiales", "Unidad", "Cantidad",
-        "Costo Unitario", "Costo Total"
-    ]].reset_index(drop=True)
-
-# =========================================================
-# BUILDER CORRECTO (ALINEADO)
-# =========================================================
-def construir_entrada_costos(
-    data: Dict[str, Any],
-    df_resumen: pd.DataFrame,
-    df_estructuras_por_punto: pd.DataFrame,
-    df_materiales_por_punto: pd.DataFrame
-):
-
-    if df_materiales_por_punto is None:
-        raise ValueError("df_materiales_por_punto es requerido")
-
-    catalogo = obtener_catalogo_materiales(data)
-
-    df_costos = preparar_df_costos_unitarios(catalogo)
-
-    # DEBUG
-    debug_guardar("builder_costos", {
-        "catalogo_filas": len(catalogo),
-        "costos_filas": len(df_costos),
-        "materiales_por_punto_filas": len(df_materiales_por_punto),
-    })
-
-    from costos_precios.orquestador_costos import EntradaCostos
-
-    return EntradaCostos(
-        df_resumen=df_resumen,
-        df_estructuras_por_punto=df_estructuras_por_punto,
-        df_materiales_por_punto=df_materiales_por_punto,
-        fuente_precios=df_costos,
-    )
-
-
-# =========================================================
-# COSTOS UNITARIOS
-# =========================================================
-def preparar_df_costos_unitarios(df_catalogo):
+def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
 
     if df_catalogo is None or df_catalogo.empty:
-        raise ValueError("Catálogo vacío")
+        raise ValueError("Catálogo de costos vacío")
 
     df = df_catalogo.copy()
 
@@ -163,9 +56,76 @@ def preparar_df_costos_unitarios(df_catalogo):
         subset=["Materiales_norm", "Unidad_norm"]
     )
 
-    # DEBUG
-    debug_guardar("catalogo_procesado", {
-        "filas_finales": len(df)
+    debug_guardar("catalogo_costos_procesado", {
+        "filas": len(df)
     })
 
     return df[["Materiales_norm", "Unidad_norm", "Costo Unitario"]]
+
+
+# =========================================================
+# MOTOR PRINCIPAL
+# =========================================================
+def calcular_lista_materiales_con_costos(
+    df_materiales: pd.DataFrame,
+    df_catalogo_costos: pd.DataFrame
+) -> pd.DataFrame:
+
+    if df_materiales is None or df_materiales.empty:
+        raise ValueError("df_materiales vacío")
+
+    if df_catalogo_costos is None or df_catalogo_costos.empty:
+        raise ValueError("df_catalogo_costos vacío")
+
+    df = df_materiales.copy()
+
+    # VALIDACIÓN
+    cols = {"Materiales", "Unidad", "Cantidad"}
+    if not cols.issubset(df.columns):
+        raise ValueError(f"df_materiales debe tener columnas {cols}")
+
+    # CONSOLIDAR LISTA GLOBAL
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
+
+    df = (
+        df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+        .sum()
+    )
+
+    # NORMALIZAR
+    df["Materiales_norm"] = df["Materiales"].map(_norm_txt)
+    df["Unidad_norm"] = df["Unidad"].map(_norm_txt)
+
+    # MERGE COSTOS
+    df = df.merge(
+        df_catalogo_costos,
+        on=["Materiales_norm", "Unidad_norm"],
+        how="left"
+    )
+
+    # DEBUG FALLAS
+    faltantes = df[df["Costo Unitario"].isna()]
+
+    debug_guardar("materiales_sin_precio", {
+        "total": len(faltantes),
+        "ejemplo": faltantes.head(10).to_dict()
+    })
+
+    if not faltantes.empty:
+        raise ValueError("Hay materiales sin precio")
+
+    # COSTOS
+    df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
+
+    debug_guardar("resultado_costos_materiales", {
+        "total_materiales": len(df),
+        "costo_total": float(df["Costo Total"].sum())
+    })
+
+    return df[[
+        "Materiales",
+        "Unidad",
+        "Cantidad",
+        "Costo Unitario",
+        "Costo Total"
+    ]].reset_index(drop=True)
