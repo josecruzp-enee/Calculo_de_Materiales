@@ -18,7 +18,21 @@ from costos_precios.costos_estructuras import calcular_costos_por_estructura
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
+    # =====================================================
+# DEBUG REAL (CLAVE)
+# =====================================================
+debug["debug_costos"] = {
+    "df_resumen_cols": list(entrada.df_resumen.columns),
+    "df_resumen_head": entrada.df_resumen.head(3).to_dict(),
 
+    "df_ep_cols": list(df_ep.columns),
+    "df_ep_head": df_ep.head(3).to_dict(),
+
+    "tiene_materiales_por_estructura": hasattr(entrada, "df_materiales_por_estructura"),
+    "len_materiales_por_estructura": len(getattr(entrada, "df_materiales_por_estructura", {})),
+
+    "fuente_precios_cols": list(entrada.fuente_precios.columns) if isinstance(entrada.fuente_precios, pd.DataFrame) else "NO DF"
+}
     # 🔥 ahora sí alineado con builder
     df_materiales_por_estructura: Dict[str, pd.DataFrame] = field(default_factory=dict)
 
