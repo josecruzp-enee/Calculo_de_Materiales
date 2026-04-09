@@ -6,6 +6,7 @@ from __future__ import annotations
 # =====================================================
 from materiales.orquestador_materiales import ejecutar_materiales
 from costos_precios.orquestador_costos import ejecutar_costos
+from costos_precios.costos_estructuras import calcular_costos_por_estructura
 
 # =====================================================
 # CONTRATOS
@@ -17,7 +18,7 @@ from aplicacion.modelos_proyecto import EntradaProyecto
 def ejecutar_proyecto(entrada: EntradaProyecto):
 
     # =====================================================
-    # VALIDACIÓN
+    # VALIDACIÓN (SOLO INPUT REAL)
     # =====================================================
     if not isinstance(entrada, EntradaProyecto):
         raise TypeError("entrada debe ser EntradaProyecto")
@@ -50,20 +51,24 @@ def ejecutar_proyecto(entrada: EntradaProyecto):
     salida_costos = None
 
     if entrada.calcular_costos:
+
+        # 🔥 AQUÍ ESTÁ EL FIX REAL
+        df_costos_estructuras = calcular_costos_por_estructura(
+            hojas_base=salida_materiales.hojas_base,
+            conteo=salida_materiales.conteo_estructuras,
+            tension_ll=entrada.tension,
+            calibre_mt=entrada.calibre_mt,
+            tabla_conectores_mt=entrada.tabla_conectores_mt,
+            df_precios_materiales=entrada.df_precios_materiales,
+        )
+
         salida_costos = ejecutar_costos({
             "df_resumen": salida_materiales.df_materiales,
             "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
-            "df_costos_estructuras": entrada.df_costos_estructuras,
+            "df_costos_estructuras": df_costos_estructuras,
             "df_precios_materiales": entrada.df_precios_materiales,
             "archivo_precios_materiales": entrada.ruta_materiales,
             "datos_proyecto": entrada.datos_proyecto,
-
-            # parámetros de costos
-            "costo_cuadrilla_dia": entrada.costo_cuadrilla_dia,
-            "fraccion_jornada": entrada.fraccion_jornada,
-            "costo_equipos": entrada.costo_equipos,
-            "costo_logistica": entrada.costo_logistica,
-            "margen_utilidad": entrada.margen_utilidad,
         })
 
     # =====================================================
