@@ -85,14 +85,3 @@ class ResultadoProyecto:
     debug: Dict[str, Any] = field(default_factory=dict)
 
 
-# =========================================================
-# 🔷 CONTRATO MATERIALES (IMPORTANTE: NIVEL MÓDULO)
-# =========================================================
-@dataclass
-class SalidaMateriales:
-    ok: bool = False
-    errores: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-
-    df_materiales: Optional[pd.DataFrame] = None
-    df_resumen: Optional[pd.DataFrame] = None
