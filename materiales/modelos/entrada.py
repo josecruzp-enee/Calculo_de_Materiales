@@ -8,6 +8,7 @@ import pandas as pd
 class EntradaMateriales:
     estructuras_df: pd.DataFrame
     tension: float
+    base_datos: Dict[str, pd.DataFrame] 
 
     # 👇 NUEVO (CLAVE)
     datos_proyecto: Optional[Dict[str, Any]] = None
