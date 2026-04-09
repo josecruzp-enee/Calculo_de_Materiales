@@ -115,19 +115,13 @@ def preparar_df_precios_desde_catalogo(
 def calcular_costos_desde_resumen(
     df_resumen: pd.DataFrame,
     df_precios: pd.DataFrame,
-    df_estructuras_por_punto: pd.DataFrame,
-    df_costos_estructuras: pd.DataFrame,
-) -> dict:
+    df_estructuras_por_punto=None,
+    df_costos_estructuras=None,
+) -> pd.DataFrame:
     """
-    Motor de costos alineado al sistema
-
-    OUTPUT:
-        {
-            ok,
-            df_costos_materiales,
-            df_costos_estructuras,
-            df_costos_por_punto
-        }
+    ✔ NO recalcula materiales
+    ✔ SOLO valoriza
+    ✔ Compatible con orquestador
     """
 
     if df_resumen is None or df_resumen.empty:
@@ -136,69 +130,47 @@ def calcular_costos_desde_resumen(
     if df_precios is None or df_precios.empty:
         raise ValueError("df_precios vacío")
 
-    # =====================================================
-    # 1. COSTOS DE MATERIALES
-    # =====================================================
     df = df_resumen.copy()
 
+    # ----------------------------------------
+    # NORMALIZACIÓN
+    # ----------------------------------------
     if "Unidad" not in df.columns:
         df["Unidad"] = ""
 
     df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
 
+    # ----------------------------------------
+    # MERGE CON PRECIOS
+    # ----------------------------------------
     df = df.merge(
         df_precios,
         on=["Materiales_norm", "Unidad_norm"],
         how="left"
     )
 
-    if df["Precio Unitario"].isna().any():
-        faltantes = df[df["Precio Unitario"].isna()]
+    # ----------------------------------------
+    # VALIDACIÓN (CRÍTICA)
+    # ----------------------------------------
+    faltantes = df[df["Precio Unitario"].isna()]
+    if not faltantes.empty:
+        print("\n🔥 MATERIALES SIN PRECIO:\n")
+        print(faltantes[["Materiales", "Unidad"]].drop_duplicates())
+        raise ValueError("Hay materiales sin precio")
 
-        raise ValueError(
-            "Materiales sin precio:\n" +
-            faltantes[["Materiales", "Unidad"]].to_string(index=False)
-        )
-
+    # ----------------------------------------
+    # SOLO MULTIPLICAR (NO recalcular)
+    # ----------------------------------------
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
-
     df["Costo Total"] = df["Cantidad"] * df["Precio Unitario"]
 
-    df_costos_materiales = df[
+    # ----------------------------------------
+    # OUTPUT QUE ESPERA EL ORQUESTADOR
+    # ----------------------------------------
+    return df[
         ["Materiales", "Unidad", "Cantidad", "Precio Unitario", "Costo Total"]
     ].reset_index(drop=True)
-
-    # =====================================================
-    # 2. COSTOS DE ESTRUCTURAS
-    # =====================================================
-    df_costos_est = None
-
-    if isinstance(df_costos_estructuras, pd.DataFrame) and not df_costos_estructuras.empty:
-        df_costos_est = df_costos_estructuras.copy()
-
-    # =====================================================
-    # 3. COSTOS POR PUNTO (BASE SIMPLE)
-    # =====================================================
-    df_costos_punto = None
-
-    if isinstance(df_estructuras_por_punto, pd.DataFrame):
-
-        try:
-            df_costos_punto = df_costos_materiales.copy()
-            df_costos_punto["Punto"] = "GLOBAL"
-        except Exception:
-            df_costos_punto = None
-
-    # =====================================================
-    # OUTPUT FINAL
-    # =====================================================
-    return {
-        "ok": True,
-        "df_costos_materiales": df_costos_materiales,
-        "df_costos_estructuras": df_costos_est,
-        "df_costos_por_punto": df_costos_punto,
-    }
 
 
 # =========================================================
