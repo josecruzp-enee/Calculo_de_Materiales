@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import pandas as pd
-from typing import Dict, Optional
+from typing import Dict
 
 from materiales.calculos.materiales_puntos import calcular_materiales_estructura
 from costos_precios.costos_materiales import calcular_costos_desde_resumen
-from costos_precios.costos_operativos import calcular_costos_operativos
 
 
 def calcular_costos_por_estructura(
@@ -17,10 +16,11 @@ def calcular_costos_por_estructura(
     calibre_mt: str,
     tabla_conectores_mt: pd.DataFrame,
 
-    costo_cuadrilla_dia: float = 1250,
-    fraccion_jornada: float = 1/16,
-    costo_equipos: float = 0.0,
-    costo_logistica: float = 0.0,
+    # 🔥 NUEVO: fuente correcta de precios
+    df_precios_materiales: pd.DataFrame,
+
+    # 🔧 parámetros
+    porcentaje_operativo: float = 0.25,
     margen_utilidad: float = 0.15,
 ) -> pd.DataFrame:
 
@@ -48,22 +48,15 @@ def calcular_costos_por_estructura(
 
         df_val = calcular_costos_desde_resumen(
             df_mat[["Materiales", "Unidad", "Cantidad"]],
-            hojas_base
+            df_precios_materiales   # ✅ CORREGIDO
         )
 
         costo_material = float(df_val["Costo"].sum())
 
         # -------------------------------------------------
-        # 2) COSTOS OPERATIVOS
+        # 2) COSTOS OPERATIVOS (PROPORCIONAL)
         # -------------------------------------------------
-        costos_op = calcular_costos_operativos(
-            costo_cuadrilla_dia=costo_cuadrilla_dia,
-            fraccion_jornada=fraccion_jornada,
-            costo_equipos=costo_equipos,
-            costo_logistica=costo_logistica,
-        )
-
-        costo_operativo = costos_op["operativo_total"]
+        costo_operativo = costo_material * porcentaje_operativo
 
         # -------------------------------------------------
         # 3) COSTO TOTAL
@@ -71,7 +64,7 @@ def calcular_costos_por_estructura(
         costo_total = costo_material + costo_operativo
 
         # -------------------------------------------------
-        # 4) PRECIO (SIN DEPENDENCIA EXTERNA)
+        # 4) PRECIO
         # -------------------------------------------------
         precio_unitario = costo_total * (1 + margen_utilidad)
 
