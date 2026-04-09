@@ -189,7 +189,7 @@ def construir_entrada_costos(
     data,
     df_resumen,
     df_estructuras_por_punto,
-    df_costos_estructuras,
+    df_materiales_por_estructura,   # 🔥 ESTE ES EL CORRECTO
 ):
 
     catalogo = obtener_catalogo_materiales(data)
@@ -215,6 +215,6 @@ def construir_entrada_costos(
     return EntradaCostos(
         df_resumen=df_resumen,
         df_estructuras_por_punto=df_estructuras_por_punto,
-        df_costos_estructuras=df_costos_estructuras,
+        df_materiales_por_estructura=df_materiales_por_estructura,  # ✅ clave
         fuente_precios=df_costos,
     )
