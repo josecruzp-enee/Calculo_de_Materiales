@@ -14,13 +14,23 @@ from costos_precios.costos_estructuras import calcular_costos_por_estructura
 # =====================================================
 # CONTRATO
 # =====================================================
+# =====================================================
+# CONTRATO (CORREGIDO Y ALINEADO)
+# =====================================================
+from dataclasses import dataclass, field
+from typing import Dict, Union
+import pandas as pd
+from pathlib import Path
+
 @dataclass
 class EntradaCostos:
     df_resumen: pd.DataFrame
     df_estructuras_por_punto: pd.DataFrame
-    df_materiales_por_estructura: Dict[str, pd.DataFrame]
-    fuente_precios: Union[pd.DataFrame, str, Path]
-
+    
+    # 🔥 ALINEADO CON BUILDER
+    df_materiales_por_estructura: Dict[str, pd.DataFrame] = field(default_factory=dict)
+    
+    fuente_precios: Union[pd.DataFrame, str, Path] = None
 
 def norm(x):
     return str(x).strip().upper()
