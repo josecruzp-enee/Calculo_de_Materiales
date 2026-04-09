@@ -72,17 +72,8 @@ def _validar_fuente_precios(fuente: Union[pd.DataFrame, str, Path]):
 # ORQUESTADOR COSTOS (PRO)
 # =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
-    """
-    Orquestador de dominio de costos.
 
-    ✔ Valida inputs
-    ✔ Calcula costos de materiales
-    ✔ Calcula costos por punto
-    ✔ Consolida resultados
-
-    ❌ No calcula materiales
-    ❌ No transforma estructuras
-    """
+    debug = {}
 
     # =====================================================
     # VALIDACIÓN DE CONTRATO
@@ -90,8 +81,21 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     if not isinstance(entrada, EntradaCostos):
         raise TypeError("entrada debe ser EntradaCostos")
 
+    debug["input"] = {
+        "df_resumen_rows": len(entrada.df_resumen) if isinstance(entrada.df_resumen, pd.DataFrame) else 0,
+        "df_resumen_cols": list(entrada.df_resumen.columns) if isinstance(entrada.df_resumen, pd.DataFrame) else [],
+
+        "df_estructuras_rows": len(entrada.df_estructuras_por_punto) if isinstance(entrada.df_estructuras_por_punto, pd.DataFrame) else 0,
+        "df_estructuras_cols": list(entrada.df_estructuras_por_punto.columns) if isinstance(entrada.df_estructuras_por_punto, pd.DataFrame) else [],
+
+        "df_costos_estructuras_rows": len(entrada.df_costos_estructuras) if isinstance(entrada.df_costos_estructuras, pd.DataFrame) else 0,
+        "df_costos_estructuras_cols": list(entrada.df_costos_estructuras.columns) if isinstance(entrada.df_costos_estructuras, pd.DataFrame) else [],
+
+        "fuente_precios_tipo": str(type(entrada.fuente_precios))
+    }
+
     # =====================================================
-    # VALIDACIÓN DATAFRAMES
+    # VALIDACIONES
     # =====================================================
     _validar_df(
         "df_resumen",
@@ -102,11 +106,10 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     _validar_df("df_estructuras_por_punto", entrada.df_estructuras_por_punto)
     cols_ep = _cols_norm(entrada.df_estructuras_por_punto)
 
+    debug["check_estructuras_cols"] = list(cols_ep)
+
     if not ({"estructura", "codigodeestructura", "punto"} & cols_ep):
-        raise ValueError(
-            "df_estructuras_por_punto debe contener alguna de: "
-            "estructura / codigodeestructura / punto"
-        )
+        raise ValueError("df_estructuras_por_punto inválido")
 
     _validar_df(
         "df_costos_estructuras",
@@ -116,6 +119,11 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
     fuente_precios = _validar_fuente_precios(entrada.fuente_precios)
 
+    debug["fuente_precios"] = {
+        "tipo": str(type(fuente_precios)),
+        "preview": fuente_precios.head(3).to_dict() if isinstance(fuente_precios, pd.DataFrame) else str(fuente_precios)
+    }
+
     # =====================================================
     # 1. COSTOS DE MATERIALES
     # =====================================================
@@ -123,6 +131,12 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         entrada.df_resumen,
         fuente_precios
     )
+
+    debug["costos_materiales"] = {
+        "rows": len(df_costos_materiales) if isinstance(df_costos_materiales, pd.DataFrame) else 0,
+        "cols": list(df_costos_materiales.columns) if isinstance(df_costos_materiales, pd.DataFrame) else [],
+        "preview": df_costos_materiales.head(3).to_dict() if isinstance(df_costos_materiales, pd.DataFrame) else {}
+    }
 
     if df_costos_materiales is None or not isinstance(df_costos_materiales, pd.DataFrame):
         raise RuntimeError("calcular_costos_desde_resumen retornó inválido")
@@ -138,35 +152,37 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         entrada.df_costos_estructuras
     )
 
+    debug["costos_por_punto_raw"] = {
+        "tipo": str(type(out)),
+        "len": len(out) if isinstance(out, (list, tuple)) else "no_iterable"
+    }
+
     if not isinstance(out, (tuple, list)) or len(out) != 3:
-        raise RuntimeError(
-            "calcular_costos_por_punto debe retornar (detalle, resumen_costos, resumen_precios)"
-        )
+        raise RuntimeError("calcular_costos_por_punto mal retorno")
 
     df_detalle, df_resumen_costos, df_resumen_precios = out
 
-    # Validación fuerte de outputs
-    for nombre, df_ in {
-        "df_costos_por_punto": df_detalle,
-        "df_resumen_costos_punto": df_resumen_costos,
-        "df_resumen_precios_punto": df_resumen_precios,
-    }.items():
-        if df_ is None or not isinstance(df_, pd.DataFrame):
-            raise RuntimeError(f"{nombre} inválido")
+    debug["costos_por_punto"] = {
+        "detalle_rows": len(df_detalle) if isinstance(df_detalle, pd.DataFrame) else 0,
+        "resumen_rows": len(df_resumen_costos) if isinstance(df_resumen_costos, pd.DataFrame) else 0,
+        "precios_rows": len(df_resumen_precios) if isinstance(df_resumen_precios, pd.DataFrame) else 0,
+
+        "detalle_cols": list(df_detalle.columns) if isinstance(df_detalle, pd.DataFrame) else [],
+        "resumen_cols": list(df_resumen_costos.columns) if isinstance(df_resumen_costos, pd.DataFrame) else [],
+        "precios_cols": list(df_resumen_precios.columns) if isinstance(df_resumen_precios, pd.DataFrame) else [],
+
+        "detalle_preview": df_detalle.head(3).to_dict() if isinstance(df_detalle, pd.DataFrame) else {}
+    }
 
     # =====================================================
-    # OUTPUT NORMALIZADO
+    # OUTPUT
     # =====================================================
     return {
         "ok": True,
+        "debug": debug,
 
-        # 🔹 materiales
         "df_costos_materiales": df_costos_materiales,
-
-        # 🔹 estructuras
         "df_costos_estructuras": entrada.df_costos_estructuras,
-
-        # 🔹 detalle
         "df_costos_por_punto": df_detalle,
         "df_resumen_costos_punto": df_resumen_costos,
         "df_resumen_precios_punto": df_resumen_precios,
