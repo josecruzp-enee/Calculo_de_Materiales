@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+
 from dataclasses import dataclass, field
 import pandas as pd
 from typing import List, Optional, Dict, Any
+
 
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
@@ -12,7 +14,7 @@ class SalidaMateriales:
     # ======================================================
     # CONTROL
     # ======================================================
-    ok: bool
+    ok: bool = True  # ✔ FIX: default seguro
 
     errores: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -24,7 +26,7 @@ class SalidaMateriales:
     df_materiales_por_punto: Optional[pd.DataFrame] = None
 
     # ======================================================
-    # RESULTADOS ESTRUCTURAS (parte del dominio)
+    # RESULTADOS ESTRUCTURAS
     # ======================================================
     df_estructuras: Optional[pd.DataFrame] = None
     df_estructuras_por_punto: Optional[pd.DataFrame] = None
@@ -83,7 +85,7 @@ class SalidaMateriales:
             raise ValueError("Cantidad negativa")
 
         # --------------------------
-        # VALIDAR ESTRUCTURAS (SUAVE)
+        # VALIDAR ESTRUCTURAS
         # --------------------------
         if self.df_estructuras is not None:
             if not isinstance(self.df_estructuras, pd.DataFrame):
@@ -96,7 +98,9 @@ class SalidaMateriales:
             if not isinstance(self.df_estructuras_por_punto, pd.DataFrame):
                 raise TypeError("df_estructuras_por_punto debe ser DataFrame")
 
-            if not {"Punto", "Estructura", "Cantidad"}.issubset(self.df_estructuras_por_punto.columns):
+            if not {"Punto", "Estructura", "Cantidad"}.issubset(
+                self.df_estructuras_por_punto.columns
+            ):
                 raise ValueError("df_estructuras_por_punto formato inválido")
 
         if self.descripcion_estructuras is not None:
