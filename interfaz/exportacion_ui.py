@@ -109,7 +109,6 @@ def seccion_finalizar_calculo():
 
             entrada_proyecto = EntradaProyecto(
                 df_estructuras=salida_entradas.df_estructuras,
-                df_cables=salida_entradas.df_cables,
                 df_materiales_extra=salida_entradas.df_materiales_extra,
                 ruta_materiales=st.session_state.get("ruta_datos_materiales"),
                 tension=float(tension),
