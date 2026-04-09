@@ -69,6 +69,12 @@ def _convertir(df: pd.DataFrame):
 
     registros = []
 
+    VALIDOS_BASE = (
+        "A-", "B-", "PC", "TS", "R", "CT", "CS", "PM", "CA", "LL",
+        "PT", "TT", "TD", "DT", "DTN", "ER", "H", "TH", "TM",
+        "GB", "G", "AC", "EM", "SC", "SP", "RH", "RTH", "PCA"
+    )
+
     for idx, row in df.iterrows():
 
         texto = " ".join(str(v) for v in row.values if pd.notna(v))
@@ -76,7 +82,6 @@ def _convertir(df: pd.DataFrame):
             continue
 
         texto = texto.replace("(P)", "")
-
         lineas = re.split(r"\n|\\P|;", texto)
 
         punto_actual = None
@@ -87,7 +92,6 @@ def _convertir(df: pd.DataFrame):
             if not linea:
                 continue
 
-            # detectar punto
             m = re.match(r"P[-\s]?(\d+)", linea)
             if m:
                 punto_actual = f"P-{m.group(1)}"
@@ -100,7 +104,11 @@ def _convertir(df: pd.DataFrame):
                 est = limpiar_codigo(e)
                 est = _normalizar_prefijo(est)
 
-                if not est or not re.search(r"\d", est):
+                # ✔ SOLO estructuras válidas reales
+                if not est.startswith(VALIDOS_BASE):
+                    continue
+
+                if not re.search(r"\d", est):
                     continue
 
                 registros.append({
@@ -114,15 +122,11 @@ def _convertir(df: pd.DataFrame):
     if df_out.empty:
         return df_out
 
-    df_out = (
+    return (
         df_out
         .groupby(["Punto", "codigodeestructura"], as_index=False)["Cantidad"]
         .sum()
     )
-
-    return df_out
-
-
 # =========================================================
 # API
 # =========================================================
