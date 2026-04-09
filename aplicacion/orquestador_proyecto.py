@@ -99,7 +99,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             datos_proyecto=salida_entradas.datos_proyecto,
 
             calibre_mt=salida_entradas.calibre_mt or "",
-            tabla_conectores_mt=salida_entradas.tabla_conectores_mt or {}
+            tabla_conectores_mt=salida_entradas.tabla_conectores_mt or {},
             
 
             df_cables=salida_entradas.df_cables,
