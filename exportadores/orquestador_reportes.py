@@ -1,12 +1,28 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Dict, Any
+from dataclasses import dataclass
+from typing import Dict, Any, Optional
+import pandas as pd
 import traceback
 
 
 # =========================================================
-# 📄 PDFs
+# 📦 CONTRATO FUERTE
+# =========================================================
+@dataclass(slots=True)
+class EntradaReportes:
+    df_estructuras: pd.DataFrame
+    df_materiales: pd.DataFrame
+    df_materiales_por_punto: pd.DataFrame
+
+    costos: Dict[str, Any]
+
+    nombre_proyecto: str = "Proyecto"
+
+
+# =========================================================
+# 📄 IMPORTS
 # =========================================================
 from exportadores.pdf_reportes_simples import (
     generar_pdf_estructuras_global,
@@ -17,22 +33,26 @@ from exportadores.pdf_reportes_simples import (
 
 from exportadores.pdf_completo import generar_pdf_completo
 
-# 🔥 NUEVOS ANEXOS
 from exportadores.pdf_anexos_costos import (
     tabla_costos_materiales_pdf,
     tabla_costos_estructuras_pdf,
     tabla_costos_por_punto_pdf,
 )
 
-# =========================================================
-# 📊 EXCEL
-# =========================================================
 from exportadores.excel_utils import exportar_excel
 
 
 # =========================================================
 # 🧩 HELPERS
 # =========================================================
+def _fail(msg: str, debug: Optional[dict] = None):
+    return {
+        "archivos": {},
+        "errores": [msg],
+        "debug": debug or {},
+    }
+
+
 def _safe_exec(nombre, fn):
     try:
         return fn(), None
@@ -47,152 +67,130 @@ def _add_file(archivos, errores, nombre, contenido):
         errores.append(f"{nombre} inválido")
 
 
-def _validar_df(df, nombre, columnas):
-    if df is None:
-        raise ValueError(f"{nombre} es None")
+def _validar_df(df, nombre, columnas=None):
+    if df is None or not isinstance(df, pd.DataFrame):
+        raise ValueError(f"{nombre} inválido")
 
-    faltantes = [c for c in columnas if c not in df.columns]
-    if faltantes:
-        raise ValueError(f"{nombre} no tiene columnas requeridas: {faltantes}")
+    if df.empty:
+        raise ValueError(f"{nombre} vacío")
 
-
-# =========================================================
-# 📄 GENERADORES BASE
-# =========================================================
-def _gen_estructuras_global(df, nombre):
-    _validar_df(df, "df_estructuras", ["Punto"])
-    return generar_pdf_estructuras_global(df, nombre)
-
-
-def _gen_estructuras_por_punto(df, nombre):
-    _validar_df(df, "df_estructuras", ["Punto"])
-    return generar_pdf_estructuras_por_punto(df, nombre)
-
-
-def _gen_materiales(df, nombre):
-    _validar_df(df, "df_materiales", ["Materiales"])
-    return generar_pdf_materiales(df, nombre)
-
-
-def _gen_materiales_por_punto(df, nombre):
-    _validar_df(df, "df_por_punto", ["Punto"])
-    return generar_pdf_materiales_por_punto(df, nombre)
-
-
-def _gen_pdf_completo(df_e, df_m, df_p, nombre):
-    return generar_pdf_completo(
-        df_mat=df_m,
-        df_estructuras=df_e,
-        df_estructuras_por_punto=df_e,
-        df_mat_por_punto=df_p,
-        datos_proyecto={"nombre": nombre},
-    )
-
-
-def _gen_excel(df_r, df_e, df_p, nombre):
-    ruta = f"{nombre}_reporte.xlsx"
-
-    return exportar_excel(
-        df_resumen=df_r,
-        df_estructuras_resumen=df_e,
-        df_resumen_por_punto=df_p,
-        df_adicionales=None,
-        ruta_excel=ruta,
-    )
+    if columnas:
+        faltantes = [c for c in columnas if c not in df.columns]
+        if faltantes:
+            raise ValueError(f"{nombre} sin columnas: {faltantes}")
 
 
 # =========================================================
-# 🔥 NUEVOS GENERADORES COSTOS
+# 🚀 ORQUESTADOR
 # =========================================================
-def _gen_anexo_costos_materiales(df_costos):
-    return tabla_costos_materiales_pdf(df_costos)
+def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
+    if not isinstance(entrada, EntradaReportes):
+        return _fail("entrada debe ser EntradaReportes")
 
-def _gen_anexo_costos_estructuras(df_costos_estructuras):
-    return tabla_costos_estructuras_pdf(df_costos_estructuras)
+    try:
+        # =====================================================
+        # VALIDACIÓN BASE
+        # =====================================================
+        _validar_df(entrada.df_estructuras, "df_estructuras", ["Punto"])
+        _validar_df(entrada.df_materiales, "df_materiales", ["Materiales"])
+        _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto", ["Punto"])
 
+        costos = entrada.costos
 
-def _gen_anexo_costos_por_punto(df_costos_por_punto):
-    return tabla_costos_por_punto_pdf(df_costos_por_punto)
+        if not isinstance(costos, dict) or not costos.get("ok"):
+            return _fail("costos inválido o no ejecutado")
 
+        # =====================================================
+        # COSTOS
+        # =====================================================
+        df_costos_materiales = costos.get("df_costos_materiales")
+        df_costos_estructuras = costos.get("df_costos_estructuras")
+        df_costos_por_punto = costos.get("df_costos_por_punto")
 
-# =========================================================
-# 🚀 ORQUESTADOR PRINCIPAL
-# =========================================================
-def generar_reportes(data: Dict[str, Any]) -> Dict[str, Any]:
+        # Validación ligera (no bloqueante)
+        if isinstance(df_costos_materiales, pd.DataFrame) and df_costos_materiales.empty:
+            df_costos_materiales = None
 
-    archivos: Dict[str, bytes] = {}
-    errores: list[str] = []
-    debug: dict = {}
+        if isinstance(df_costos_estructuras, pd.DataFrame) and df_costos_estructuras.empty:
+            df_costos_estructuras = None
 
-    # -----------------------------------------------------
-    # INPUT BASE
-    # -----------------------------------------------------
-    df_e = data.get("df_estructuras")
-    df_m = data.get("df_materiales")
-    df_r = data.get("df_resumen")
-    df_p = data.get("df_por_punto")
+        if isinstance(df_costos_por_punto, pd.DataFrame) and df_costos_por_punto.empty:
+            df_costos_por_punto = None
 
-    nombre = data.get("nombre_proyecto", "Proyecto")
+        archivos = {}
+        errores = []
+        debug = {}
 
-    # 🔥 NUEVO BLOQUE COSTOS
-    costos = data.get("costos", {})
+        nombre = entrada.nombre_proyecto
 
-    df_costos_materiales = costos.get("df_costos_materiales")
-    df_costos_estructuras = costos.get("df_costos_estructuras")
-    df_costos_por_punto = costos.get("df_costos_por_punto")
+        # =====================================================
+        # 📄 BASE
+        # =====================================================
+        tasks = [
+            ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(entrada.df_estructuras, nombre)),
+            ("estructuras_por_punto.pdf", lambda: generar_pdf_estructuras_por_punto(entrada.df_estructuras, nombre)),
+            ("materiales.pdf", lambda: generar_pdf_materiales(entrada.df_materiales, nombre)),
+            ("materiales_por_punto.pdf", lambda: generar_pdf_materiales_por_punto(entrada.df_materiales_por_punto, nombre)),
 
-    debug["input"] = {
-        "df_estructuras": type(df_e).__name__,
-        "df_materiales": type(df_m).__name__,
-        "df_costos": list(costos.keys()) if costos else None,
-    }
+            ("reporte_completo.pdf", lambda: generar_pdf_completo(
+                df_mat=entrada.df_materiales,
+                df_estructuras=entrada.df_estructuras,
+                df_estructuras_por_punto=entrada.df_estructuras,  # ✔ consistente con tu pipeline actual
+                df_mat_por_punto=entrada.df_materiales_por_punto,
+                datos_proyecto={"nombre": nombre},
+            )),
+        ]
 
-    # =====================================================
-    # 📄 TAREAS
-    # =====================================================
-    tasks = [
-        # 🔹 BASE
-        ("estructuras_global.pdf", lambda: _gen_estructuras_global(df_e, nombre)),
-        ("estructuras_por_punto.pdf", lambda: _gen_estructuras_por_punto(df_e, nombre)),
-        ("materiales.pdf", lambda: _gen_materiales(df_m, nombre)),
-        ("materiales_por_punto.pdf", lambda: _gen_materiales_por_punto(df_p, nombre)),
+        # =====================================================
+        # 💰 COSTOS (OPCIONAL)
+        # =====================================================
+        if df_costos_materiales is not None:
+            tasks.append(("anexo_costos_materiales.pdf", lambda: tabla_costos_materiales_pdf(df_costos_materiales)))
 
-        # 🔹 COMPLETO
-        ("reporte_completo.pdf", lambda: _gen_pdf_completo(df_e, df_m, df_p, nombre)),
+        if df_costos_estructuras is not None:
+            tasks.append(("anexo_costos_estructuras.pdf", lambda: tabla_costos_estructuras_pdf(df_costos_estructuras)))
 
-        # 🔹 COSTOS (🔥 NUEVO)
-        ("anexo_costos_materiales.pdf", lambda: _gen_anexo_costos_materiales(df_costos_materiales)),
-        ("anexo_costos_estructuras.pdf", lambda: _gen_anexo_costos_estructuras(df_costos_estructuras)),
-        ("anexo_costos_por_punto.pdf", lambda: _gen_anexo_costos_por_punto(df_costos_por_punto)),
+        if df_costos_por_punto is not None:
+            tasks.append(("anexo_costos_por_punto.pdf", lambda: tabla_costos_por_punto_pdf(df_costos_por_punto)))
 
-        # 🔹 EXCEL
-        ("reporte.xlsx", lambda: _gen_excel(df_r, df_e, df_p, nombre)),
-    ]
+        # =====================================================
+        # 📊 EXCEL (alineado)
+        # =====================================================
+        tasks.append((
+            "reporte.xlsx",
+            lambda: exportar_excel(
+                df_resumen=entrada.df_materiales,                 # ✔ resumen real de materiales
+                df_estructuras_resumen=entrada.df_estructuras,    # ✔ estructuras global
+                df_resumen_por_punto=entrada.df_materiales_por_punto,
+                df_adicionales=df_costos_por_punto,               # ✔ ahora sí tiene sentido
+                ruta_excel=f"{nombre}_reporte.xlsx",
+            )
+        ))
 
-    # =====================================================
-    # ⚙️ EJECUCIÓN
-    # =====================================================
-    for nombre_archivo, fn in tasks:
+        # =====================================================
+        # ⚙️ EJECUCIÓN
+        # =====================================================
+        for nombre_archivo, fn in tasks:
 
-        contenido, err = _safe_exec(nombre_archivo, fn)
+            contenido, err = _safe_exec(nombre_archivo, fn)
 
-        if err:
-            errores.append(err)
-            debug[nombre_archivo] = "ERROR"
-            continue
+            if err:
+                errores.append(err)
+                debug[nombre_archivo] = "ERROR"
+                continue
 
-        if contenido:
-            _add_file(archivos, errores, nombre_archivo, contenido)
-            debug[nombre_archivo] = "OK"
-        else:
-            debug[nombre_archivo] = "EMPTY"
+            if contenido:
+                _add_file(archivos, errores, nombre_archivo, contenido)
+                debug[nombre_archivo] = "OK"
+            else:
+                debug[nombre_archivo] = "EMPTY"
 
-    # =====================================================
-    # OUTPUT
-    # =====================================================
-    return {
-        "archivos": archivos,
-        "errores": errores,
-        "debug": debug,
-    }
+        return {
+            "archivos": archivos,
+            "errores": errores,
+            "debug": debug,
+        }
+
+    except Exception as e:
+        return _fail(str(e), {"traceback": traceback.format_exc()})
