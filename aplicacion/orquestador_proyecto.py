@@ -9,6 +9,11 @@ from costos_precios.orquestador_costos import ejecutar_costos
 from costos_precios.costos_estructuras import calcular_costos_por_estructura
 
 # =====================================================
+# INFRAESTRUCTURA
+# =====================================================
+from entradas.base_datos import cargar_base_datos
+
+# =====================================================
 # CONTRATOS
 # =====================================================
 from materiales.modelos.entrada import EntradaMateriales
@@ -52,9 +57,12 @@ def ejecutar_proyecto(entrada: EntradaProyecto):
 
     if entrada.calcular_costos:
 
-        # 🔥 AQUÍ ESTÁ EL FIX REAL
+        # 🔥 CARGAR BASE DE DATOS (EXCEL)
+        hojas_base = cargar_base_datos(entrada.ruta_materiales)
+
+        # 🔥 CALCULAR COSTOS POR ESTRUCTURA
         df_costos_estructuras = calcular_costos_por_estructura(
-            hojas_base=salida_materiales.hojas_base,
+            hojas_base=hojas_base,
             conteo=salida_materiales.conteo_estructuras,
             tension_ll=entrada.tension,
             calibre_mt=entrada.calibre_mt,
@@ -62,6 +70,7 @@ def ejecutar_proyecto(entrada: EntradaProyecto):
             df_precios_materiales=entrada.df_precios_materiales,
         )
 
+        # 🔥 EJECUTAR COSTOS GENERALES
         salida_costos = ejecutar_costos({
             "df_resumen": salida_materiales.df_materiales,
             "df_estructuras_por_punto": salida_materiales.df_estructuras_por_punto,
