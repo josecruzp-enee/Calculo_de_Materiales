@@ -124,3 +124,17 @@ class ResultadoProyecto:
 
     # DEBUG
     debug: Dict[str, Any] = field(default_factory=dict)
+
+    from dataclasses import dataclass, field
+    from typing import List, Optional
+    import pandas as pd
+
+
+    @dataclass
+    class SalidaMateriales:
+        ok: bool = False
+        errores: List[str] = field(default_factory=list)
+        warnings: List[str] = field(default_factory=list)
+
+        df_materiales: Optional[pd.DataFrame] = None
+        df_resumen: Optional[pd.DataFrame] = None
