@@ -3,6 +3,22 @@ import streamlit as st
 import pandas as pd
 
 
+# =========================================================
+# DEBUG BACKEND (OBLIGATORIO)
+# =========================================================
+def debug_guardar(clave: str, valor):
+    try:
+        if "debug_pipeline" not in st.session_state:
+            st.session_state["debug_pipeline"] = {}
+
+        st.session_state["debug_pipeline"][clave] = valor
+    except Exception:
+        pass
+
+
+# =========================================================
+# DEBUG UI
+# =========================================================
 def seccion_debug():
 
     st.subheader("🧠 Debug del sistema")
@@ -18,43 +34,27 @@ def seccion_debug():
         st.markdown(f"### 🔍 {etapa}")
 
         try:
-            # =====================================================
-            # DICT
-            # =====================================================
             if isinstance(data, dict):
                 limpio = {str(k): str(v)[:200] for k, v in data.items()}
                 st.json(limpio)
 
-            # =====================================================
-            # DATAFRAME
-            # =====================================================
             elif isinstance(data, pd.DataFrame):
-                if data is None or data.empty:
+                if data.empty:
                     st.warning("DataFrame vacío")
                 else:
                     st.caption(f"Filas: {len(data)}")
                     st.dataframe(data.head(10), use_container_width=True)
 
-            # =====================================================
-            # LISTAS / ITERABLES
-            # =====================================================
             elif isinstance(data, (list, tuple, set)):
                 limpio = [str(x) for x in list(data)[:20]]
                 st.write(limpio)
 
-            # =====================================================
-            # OBJETOS
-            # =====================================================
             elif hasattr(data, "__dict__"):
                 limpio = {str(k): str(v)[:200] for k, v in vars(data).items()}
                 st.json(limpio)
 
-            # =====================================================
-            # OTROS
-            # =====================================================
             else:
                 st.write(str(data))
 
         except Exception as e:
             st.error(f"Error mostrando debug: {e}")
-            st.write(str(data))
