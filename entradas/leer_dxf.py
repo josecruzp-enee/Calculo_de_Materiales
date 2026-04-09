@@ -86,7 +86,7 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
             if dentro_mtext and codigo == "0":
 
                 # 🔥 FILTRO POR CAPA (ROBUSTO)
-                if not capa_actual or "ESTRUCT" not in capa_actual:
+                if not capa_actual or "Estructura" not in capa_actual:
                     dentro_mtext = False
                     buffer_texto = []
                     continue
