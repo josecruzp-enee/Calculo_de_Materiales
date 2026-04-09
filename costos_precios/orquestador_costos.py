@@ -31,9 +31,6 @@ def _cols_norm(df: pd.DataFrame) -> set:
     return {str(c).strip().lower() for c in df.columns}
 
 
-# =====================================================
-# VALIDACIONES
-# =====================================================
 def _validar_df(nombre: str, df: pd.DataFrame, cols_minimas=None):
     if df is None or not isinstance(df, pd.DataFrame):
         raise TypeError(f"{nombre} debe ser DataFrame")
@@ -52,6 +49,9 @@ def _validar_df(nombre: str, df: pd.DataFrame, cols_minimas=None):
 
 
 def _validar_fuente_precios(fuente: Union[pd.DataFrame, str, Path]):
+    if fuente is None:
+        raise ValueError("fuente_precios es requerido")
+
     # DataFrame
     if isinstance(fuente, pd.DataFrame):
         if fuente.empty:
@@ -75,43 +75,45 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     """
     Orquestador de dominio de costos.
 
-    Responsabilidad:
-        - Validar inputs
-        - Calcular costos de materiales
-        - Calcular costos por punto
-        - Consolidar resultados
+    ✔ Valida inputs
+    ✔ Calcula costos de materiales
+    ✔ Calcula costos por punto
+    ✔ Consolida resultados
 
-    No hace:
-        - Materiales
-        - Estructuras
+    ❌ No calcula materiales
+    ❌ No transforma estructuras
     """
 
     # =====================================================
-    # VALIDACIÓN FUERTE
+    # VALIDACIÓN DE CONTRATO
     # =====================================================
     if not isinstance(entrada, EntradaCostos):
         raise TypeError("entrada debe ser EntradaCostos")
 
-    # df_resumen: requiere al menos materiales + cantidad
+    # =====================================================
+    # VALIDACIÓN DATAFRAMES
+    # =====================================================
     _validar_df(
         "df_resumen",
         entrada.df_resumen,
         cols_minimas=["materiales", "cantidad"]
     )
 
-    # df_estructuras_por_punto: al menos una columna clave
     _validar_df("df_estructuras_por_punto", entrada.df_estructuras_por_punto)
     cols_ep = _cols_norm(entrada.df_estructuras_por_punto)
+
     if not ({"estructura", "codigodeestructura", "punto"} & cols_ep):
         raise ValueError(
             "df_estructuras_por_punto debe contener alguna de: "
             "estructura / codigodeestructura / punto"
         )
 
-    # df_costos_estructuras: básico
-    _validar_df("df_costos_estructuras", entrada.df_costos_estructuras)
+    _validar_df(
+        "df_costos_estructuras",
+        entrada.df_costos_estructuras,
+        cols_minimas=["estructura"]
+    )
 
-    # fuente de precios
     fuente_precios = _validar_fuente_precios(entrada.fuente_precios)
 
     # =====================================================
@@ -123,10 +125,10 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     )
 
     if df_costos_materiales is None or not isinstance(df_costos_materiales, pd.DataFrame):
-        raise RuntimeError("calcular_costos_desde_resumen retornó None o tipo inválido")
+        raise RuntimeError("calcular_costos_desde_resumen retornó inválido")
 
     if df_costos_materiales.empty:
-        raise ValueError("df_costos_materiales vacío (sin precios o sin match)")
+        raise ValueError("df_costos_materiales vacío (sin match de precios)")
 
     # =====================================================
     # 2. COSTOS POR PUNTO
@@ -143,11 +145,17 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
     df_detalle, df_resumen_costos, df_resumen_precios = out
 
-    if df_detalle is None or not isinstance(df_detalle, pd.DataFrame):
-        raise RuntimeError("df_costos_por_punto inválido")
+    # Validación fuerte de outputs
+    for nombre, df_ in {
+        "df_costos_por_punto": df_detalle,
+        "df_resumen_costos_punto": df_resumen_costos,
+        "df_resumen_precios_punto": df_resumen_precios,
+    }.items():
+        if df_ is None or not isinstance(df_, pd.DataFrame):
+            raise RuntimeError(f"{nombre} inválido")
 
     # =====================================================
-    # 3. OUTPUT NORMALIZADO
+    # OUTPUT NORMALIZADO
     # =====================================================
     return {
         "ok": True,
