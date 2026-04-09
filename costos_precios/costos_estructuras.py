@@ -35,33 +35,51 @@ def calcular_precio_unitario_estructura(
     if df_mat["Cantidad"].sum() <= 0:
         raise ValueError("Cantidad total de materiales es 0")
 
+    # =====================================================
+    # VALORIZACIÓN
+    # =====================================================
     df_val = calcular_costos_desde_resumen(
         df_mat[["Materiales", "Unidad", "Cantidad"]],
         df_precios_materiales
     )
 
-    # =====================================================
-    # 🔥 FIX VALORIZACIÓN (CLAVE)
-    # =====================================================
     if not isinstance(df_val, pd.DataFrame) or df_val.empty:
         raise ValueError("Error en valorización (df vacío)")
 
-    if "Costo" not in df_val.columns:
-        raise ValueError(f"df_val columnas inválidas: {list(df_val.columns)}")
+    # =====================================================
+    # 🔥 FIX REAL: SOPORTAR TU OUTPUT ACTUAL
+    # =====================================================
+    cols = {c.lower(): c for c in df_val.columns}
 
-    # si no viene Tiene_Precio → lo asumimos válido
-    if "Tiene_Precio" not in df_val.columns:
-        df_val["Tiene_Precio"] = True
+    if "costo" in cols:
+        col_costo = cols["costo"]
 
-    # debug útil
-    # print("DEBUG_VAL:", df_val.head())
-    # print("COLS:", df_val.columns.tolist())
+    elif "costo total" in cols:
+        col_costo = cols["costo total"]
 
-    if not df_val["Tiene_Precio"].all():
-        faltantes = df_val.loc[~df_val["Tiene_Precio"], "Materiales"].unique()
-        raise ValueError(f"Materiales sin precio: {list(faltantes)}")
+    elif "costo unitario" in cols:
+        col_costo = cols["costo unitario"]
 
-    costo_material = float(pd.to_numeric(df_val["Costo"], errors="coerce").fillna(0).sum())
+    else:
+        raise ValueError(f"No se encontró columna de costo válida: {list(df_val.columns)}")
+
+    # Tiene_Precio opcional
+    if "tiene_precio" in cols:
+        if not df_val[cols["tiene_precio"]].all():
+            faltantes = df_val.loc[
+                ~df_val[cols["tiene_precio"]],
+                cols.get("materiales", "Materiales")
+            ].unique()
+            raise ValueError(f"Materiales sin precio: {list(faltantes)}")
+
+    # =====================================================
+    # COSTO FINAL
+    # =====================================================
+    costo_material = float(
+        pd.to_numeric(df_val[col_costo], errors="coerce")
+        .fillna(0)
+        .sum()
+    )
 
     if costo_material <= 0:
         raise ValueError("Costo material inválido")
@@ -107,7 +125,7 @@ def calcular_costos_por_estructura(
     df["Estructura"] = df["Estructura"].astype(str).str.strip().str.upper()
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
-    # 🔥 FIX: AGRUPACIÓN CORRECTA
+    # 🔥 AGRUPACIÓN CORRECTA
     df_group = df.groupby("Estructura", as_index=False)["Cantidad"].sum()
 
     filas = []
