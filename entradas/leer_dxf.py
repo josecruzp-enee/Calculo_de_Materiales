@@ -3,16 +3,17 @@ from __future__ import annotations
 
 import pandas as pd
 import re
+from typing import Any
 
-from ayuda.debug import debug_guardar
 
-
-def leer_dxf(archivo_dxf) -> pd.DataFrame:
+def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
     """
-    Lee un archivo DXF (MTEXT) y extrae estructuras.
+    Lector DXF robusto para estructuras.
 
-    INPUT:
-        archivo_dxf: UploadedFile | file-like
+    ✔ Devuelve DataFrame válido
+    ✔ Lanza error si no hay estructuras
+    ✔ No depende estrictamente de capa
+    ✔ Limpio para pipeline
 
     OUTPUT:
         DataFrame columnas:
@@ -20,11 +21,14 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
             - Estructura
     """
 
+    # =========================================================
+    # VALIDACIÓN
+    # =========================================================
     if archivo_dxf is None:
         raise ValueError("archivo_dxf es None")
 
     # =========================================================
-    # 🔥 LECTURA SEGURA
+    # LECTURA
     # =========================================================
     try:
         if hasattr(archivo_dxf, "seek"):
@@ -41,120 +45,102 @@ def leer_dxf(archivo_dxf) -> pd.DataFrame:
         raise ValueError(f"No se pudo leer el DXF: {e}")
 
     # =========================================================
-    # PROCESAMIENTO BASE
+    # TOKENIZACIÓN SEGURA (PARES)
     # =========================================================
-    lineas = [l.strip() for l in contenido.splitlines()]
+    lineas = [l.strip() for l in contenido.splitlines() if l.strip()]
 
     resultados = []
     punto = 1
 
-    i = 0
-    while i < len(lineas) - 1:
+    it = iter(lineas)
 
-        if lineas[i] == "0" and lineas[i + 1] == "MTEXT":
+    capa_actual = None
+    dentro_mtext = False
+    buffer_texto = []
 
-            i += 2
-            capa = None
+    try:
+        for codigo in it:
+            valor = next(it)
 
-            # 🔥 NUEVO: acumulador correcto de líneas MTEXT
-            lineas_mtext = []
+            codigo = codigo.strip()
+            valor = valor.strip()
 
-            # =================================================
-            # LECTURA MTEXT (MULTILÍNEA REAL)
-            # =================================================
-            while i < len(lineas) - 1 and lineas[i] != "0":
+            # -------------------------------------------------
+            # CAPA
+            # -------------------------------------------------
+            if codigo == "8":
+                capa_actual = valor.upper()
 
-                codigo = lineas[i]
-                valor = lineas[i + 1]
-
-                if codigo == "8":
-                    capa = valor.upper()
-
-                # 🔥 FIX CRÍTICO
-                if codigo in ("1", "3"):
-                    limpio = valor.strip()
-                    if limpio:
-                        lineas_mtext.append(limpio)
-
-                i += 2
-
-            # 🔥 reconstrucción final del texto
-            texto = ",".join(lineas_mtext)
-
-            # =================================================
-            # FILTRO DE CAPA (ROBUSTO)
-            # =================================================
-            if not capa or "ESTRUCT" not in capa:
+            # -------------------------------------------------
+            # INICIO MTEXT
+            # -------------------------------------------------
+            if codigo == "0" and valor == "MTEXT":
+                dentro_mtext = True
+                buffer_texto = []
                 continue
 
-            if not texto.strip():
+            # -------------------------------------------------
+            # FIN MTEXT
+            # -------------------------------------------------
+            if dentro_mtext and codigo == "0":
+                if not capa_actual or "Estructuras" not in capa_actual:
+                    dentro_mtext = False
+                    buffer_texto = []
+                    continue
+                texto = ",".join(buffer_texto)
+
+                texto = _limpiar_texto(texto)
+
+                if texto and _es_estructura(texto):
+                    resultados.append({
+                        "Punto": f"P-{punto}",
+                        "Estructura": texto
+                    })
+                    punto += 1
+
+                dentro_mtext = False
+                buffer_texto = []
                 continue
 
-            # =================================================
-            # LIMPIEZA
-            # =================================================
+            # -------------------------------------------------
+            # CONTENIDO MTEXT
+            # -------------------------------------------------
+            if dentro_mtext and codigo in ("1", "3"):
+                limpio = valor.strip()
+                if limpio:
+                    buffer_texto.append(limpio)
 
-            texto = texto.replace("\\P", ",")
-
-            texto = re.sub(r"\{[^};]*[;:]", "", texto)
-
-            texto = texto.replace("{", "").replace("}", "")
-
-            # eliminar (P), (E), etc
-            texto = re.sub(r"\([^)]*\)", "", texto)
-
-            texto = texto.replace(";", ",")
-            texto = texto.replace("|", ",")
-
-            texto = re.sub(r",+", ",", texto)
-
-            # ⚠️ NO romper TS-37.5 KVA
-            # texto = re.sub(r"\s+(?=[A-Z]{1,3}-\d)", ",", texto)
-
-            texto = re.sub(r"\s+", " ", texto).strip(" ,")
-
-            if not texto:
-                continue
-
-            # =================================================
-            # OUTPUT
-            # =================================================
-            resultados.append({
-                "Punto": f"P-{punto}",
-                "Estructura": texto
-            })
-
-            punto += 1
-
-        else:
-            i += 1
+    except StopIteration:
+        pass
 
     # =========================================================
-    # OUTPUT FINAL
+    # VALIDACIÓN FINAL (CRÍTICA)
     # =========================================================
     if not resultados:
-        df = pd.DataFrame(columns=["Punto", "Estructura"])
-    else:
-        df = pd.DataFrame(resultados)
+        raise ValueError(
+            "DXF leído correctamente pero no se encontraron estructuras válidas"
+        )
 
-    # =========================================================
-    # DEBUG
-    # =========================================================
-    print("\n=== DEBUG DXF ===")
-    print("registros encontrados:", len(df))
+    return pd.DataFrame(resultados)
 
-    debug_guardar("DXF_DF_FINAL", df)
 
-    debug_guardar("DXF_TODAS", resultados)
+# =========================================================
+# HELPERS
+# =========================================================
+def _limpiar_texto(texto: str) -> str:
+    texto = texto.replace("\\P", ",")
+    texto = re.sub(r"\{[^};]*[;:]", "", texto)
+    texto = texto.replace("{", "").replace("}", "")
+    texto = re.sub(r"\([^)]*\)", "", texto)
+    texto = texto.replace(";", ",").replace("|", ",")
+    texto = re.sub(r",+", ",", texto)
+    texto = re.sub(r"\s+", " ", texto).strip(" ,")
+    return texto
 
-    debug_guardar(
-        "DXF_UNICAS",
-        sorted({r["Estructura"] for r in resultados})
-    )
 
-    debug_guardar(
-        "DXF_SOLO_CS",
-        sorted({r["Estructura"] for r in resultados if "CS" in str(r["Estructura"])})
-    )
-
-    return df
+def _es_estructura(texto: str) -> bool:
+    """
+    Detecta estructuras tipo:
+    A-III-1, B-I-4, TS-50, etc.
+    """
+    return bool(re.search(r"[A-Z]+-[A-Z0-9\-]+", texto))
