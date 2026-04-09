@@ -203,7 +203,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # 6. COSTOS (AUTO DESDE CATÁLOGO)
         # =====================================================
         df_ep = resultado_materiales.df_estructuras_por_punto
-
+        
         if df_ep is None:
             return _fail("df_estructuras_por_punto no disponible", debug=debug_global)
 
@@ -230,6 +230,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             data=entrada_proyecto.base_datos,
             df_resumen=resultado_materiales.df_materiales,
             df_estructuras_por_punto=df_ep,
+            df_materiales_por_punto=df_mp
            
         )
 
