@@ -9,7 +9,7 @@ import streamlit as st
 from interfaz.contratos import SalidaInterfaz
 
 # =========================================================
-# ORQUESTADOR ÚNICO
+# ORQUESTADOR APP
 # =========================================================
 from aplicacion.orquestador_proyecto import ejecutar_proyecto
 
@@ -46,7 +46,7 @@ def _init_state():
 
 
 # =========================================================
-# SECCIONES UI
+# UI SECCIONES
 # =========================================================
 def renderizar_datos_proyecto():
     datos = seccion_datos_proyecto()
@@ -71,14 +71,10 @@ def renderizar_estructuras():
         st.warning("⚠️ Primero selecciona modo de carga.")
         return
 
-    # 🔥 sincronización contrato
     st.session_state["tipo_entrada"] = modo
 
     data = None
 
-    # =====================================================
-    # MANUAL
-    # =====================================================
     if modo == "manual":
         df, _ = seccion_entrada_estructuras()
 
@@ -86,14 +82,11 @@ def renderizar_estructuras():
             return
 
         st.session_state["data_entrada"] = df
-        st.session_state["resultado_calculo"] = None  # 🔥 limpiar resultado
+        st.session_state["resultado_calculo"] = None
 
         st.success("✅ Datos ingresados correctamente")
         st.info("➡️ Ahora puedes ir a 'Finalizar'")
 
-    # =====================================================
-    # ARCHIVOS
-    # =====================================================
     elif modo == "excel":
         data = st.file_uploader("Subir Excel", type=["xlsx"])
 
@@ -106,12 +99,9 @@ def renderizar_estructuras():
     elif modo == "dxf":
         data = st.file_uploader("Subir DXF", type=["dxf"])
 
-    # =====================================================
-    # MANEJO GENERAL
-    # =====================================================
     if data is not None and modo != "manual":
         st.session_state["data_entrada"] = data
-        st.session_state["resultado_calculo"] = None  # 🔥 limpiar resultado
+        st.session_state["resultado_calculo"] = None
 
         if hasattr(data, "name"):
             st.success(f"✅ Archivo cargado: {data.name}")
@@ -132,16 +122,10 @@ def renderizar_final():
             st.error(f"• {e}")
         return
 
-    # =====================================================
-    # BOTÓN DE EJECUCIÓN
-    # =====================================================
     if st.button("🚀 Ejecutar proyecto"):
         st.session_state["ejecutar_proyecto_flag"] = True
         st.rerun()
 
-    # =====================================================
-    # EJECUCIÓN CONTROLADA
-    # =====================================================
     if st.session_state.get("ejecutar_proyecto_flag"):
 
         with st.spinner("Ejecutando proyecto completo..."):
@@ -167,7 +151,7 @@ def renderizar_exportacion():
 
 
 # =========================================================
-# CONSTRUCCIÓN DE CONTRATO
+# CONTRATO INTERFAZ
 # =========================================================
 def _construir_salida_interfaz() -> SalidaInterfaz:
 
@@ -176,6 +160,7 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
 
     tipo = st.session_state.get("tipo_entrada")
     data = st.session_state.get("data_entrada")
+    datos = st.session_state.get("datos_proyecto") or {}
 
     if not tipo:
         errores.append("Modo de entrada no seleccionado")
@@ -183,24 +168,37 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
     if data is None:
         errores.append("No se proporcionó entrada")
 
-    return SalidaInterfaz(
+    salida = SalidaInterfaz(
         ok=len(errores) == 0,
         errores=errores,
         warnings=warnings,
         tipo_entrada=tipo or "manual",
         data_entrada=data,
-        datos_proyecto=st.session_state.get("datos_proyecto") or {},
+        datos_proyecto=datos,
         df_cables=st.session_state.get("cables_proyecto_df"),
         df_materiales_extra=st.session_state.get("df_materiales_extra"),
-        debug={
-            "tipo": tipo,
-            "tiene_data": data is not None,
-        }
     )
+
+    # 🔥 DEBUG INTERFAZ
+    salida.debug = {
+        "input": {
+            "tipo_entrada": salida.tipo_entrada,
+            "tiene_data": salida.data_entrada is not None,
+            "tipo_data": str(type(salida.data_entrada)),
+            "datos_proyecto_keys": list(datos.keys()),
+        },
+        "output": {
+            "ok": salida.ok,
+            "errores": salida.errores,
+            "warnings": salida.warnings,
+        }
+    }
+
+    return salida
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL UI
+# ORQUESTADOR UI
 # =========================================================
 def ejecutar_orquestador_interfaz(
     _nav_estado_actual,
@@ -225,42 +223,24 @@ def ejecutar_orquestador_interfaz(
     if sec in acciones:
         acciones[sec]()
 
-    # =====================================================
-    # DEBUG PIPELINE
-    # =====================================================
     salida_interfaz = _construir_salida_interfaz()
     resultado = st.session_state.get("resultado_calculo")
 
+    # 🔥 DEBUG COMPLETO PIPELINE
     debug_actual = {
-        "INTERFAZ": {
-            "ok": salida_interfaz.ok,
-            "errores": salida_interfaz.errores,
-            "tipo_entrada": salida_interfaz.tipo_entrada,
-            "tiene_data": salida_interfaz.data_entrada is not None,
-        }
+        "INTERFAZ": salida_interfaz.debug
     }
 
     if resultado:
-        debug_actual["RESULTADO_PROYECTO"] = {
+        debug_actual["PROYECTO"] = {
             "ok": resultado.ok,
             "errores": resultado.errores,
             "warnings": resultado.warnings,
         }
 
+        if hasattr(resultado, "debug") and isinstance(resultado.debug, dict):
+            debug_actual.update(resultado.debug)
+
     st.session_state["debug_pipeline"] = debug_actual
-    debug = {
-        "input": {
-            "tipo_entrada": salida.tipo_entrada,
-            "tiene_data": salida.data_entrada is not None,
-            "datos_proyecto_keys": list(salida.datos_proyecto.keys()),
-        },
-        "output": {
-            "ok": salida.ok,
-            "errores": salida.errores,
-            "warnings": salida.warnings,
-        }
-    }
+
     return resultado
-
-
-
