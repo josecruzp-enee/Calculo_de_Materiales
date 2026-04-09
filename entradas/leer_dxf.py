@@ -6,6 +6,9 @@ import re
 from typing import Any
 
 
+# =========================================================
+# CONFIG
+# =========================================================
 CAPA_OBJETIVO = "ESTRUCTURAS"
 
 
@@ -20,31 +23,35 @@ PATRONES = [
 
 
 # =========================================================
-# LIMPIEZA MTEXT
+# LIMPIAR TEXTO DXF (MTEXT/TEXT)
 # =========================================================
-def _limpiar_mtext(texto: str) -> str:
-
+def _limpiar_texto(texto: str) -> str:
     if not texto:
         return ""
 
+    # quitar formato tipo {\C7; ... }
     texto = re.sub(r"\{.*?;", "", texto)
+
+    # quitar llaves
     texto = texto.replace("{", "").replace("}", "")
+
+    # saltos de línea DXF
     texto = texto.replace("\\P", " ")
 
+    # limpiar espacios
     texto = " ".join(texto.split())
 
     return texto.upper()
 
 
 # =========================================================
-# EXTRAER
+# EXTRAER ESTRUCTURAS
 # =========================================================
-def _extraer(texto: str) -> list[str]:
-
+def _extraer_estructuras(texto: str) -> list[str]:
     encontrados = []
 
-    for p in PATRONES:
-        encontrados += re.findall(p, texto, flags=re.IGNORECASE)
+    for patron in PATRONES:
+        encontrados.extend(re.findall(patron, texto, flags=re.IGNORECASE))
 
     return encontrados
 
@@ -52,9 +59,9 @@ def _extraer(texto: str) -> list[str]:
 # =========================================================
 # NORMALIZAR
 # =========================================================
-def _norm(s: str) -> str:
+def _normalizar(codigo: str) -> str:
     return (
-        s.upper()
+        codigo.upper()
         .replace(" ", "-")
         .replace("--", "-")
         .strip("-")
@@ -66,9 +73,12 @@ def _norm(s: str) -> str:
 # =========================================================
 def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
     """
-    ✔ Devuelve DataFrame válido para dominio
+    Lector DXF robusto para estructuras.
+
+    ✔ Filtra por capa "Estructuras"
+    ✔ Soporta TEXT y MTEXT
+    ✔ Devuelve DataFrame válido
     ✔ Columnas: Estructura, Cantidad
-    ✔ Nunca devuelve None
     ✔ Lanza excepción si falla
     """
 
@@ -83,6 +93,7 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
             archivo_dxf.seek(0)
 
         raw = archivo_dxf.read()
+
         if not raw:
             raise ValueError("DXF vacío")
 
@@ -92,11 +103,11 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
         raise ValueError(f"No se pudo leer DXF: {e}")
 
     # =====================================================
-    # PARSE DXF
+    # PARSEO DXF
     # =====================================================
     lineas = contenido.splitlines()
 
-    layer_actual = None
+    layer_actual = ""
     buffer_texto = ""
 
     estructuras = []
@@ -106,78 +117,64 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
         codigo = lineas[i].strip()
         valor = lineas[i + 1].strip()
 
-        # capa
+        # capa (group code 8)
         if codigo == "8":
             layer_actual = valor.upper()
 
-        # texto MTEXT / TEXT
+        # texto (TEXT / MTEXT)
         if codigo in ("1", "3"):
 
-            if layer_actual and CAPA_OBJETIVO in layer_actual:
-
+            if CAPA_OBJETIVO in layer_actual:
                 buffer_texto += " " + valor
 
-        # corte de entidad
+        # fin de entidad
         if codigo == "0" and buffer_texto:
 
-            limpio = _limpiar_mtext(buffer_texto)
+            limpio = _limpiar_texto(buffer_texto)
 
-            encontrados = _extraer(limpio)
+            encontrados = _extraer_estructuras(limpio)
 
             if encontrados:
                 estructuras.extend(encontrados)
 
             buffer_texto = ""
 
-    # último bloque
+    # procesar último bloque
     if buffer_texto:
-        limpio = _limpiar_mtext(buffer_texto)
-        estructuras.extend(_extraer(limpio))
+        limpio = _limpiar_texto(buffer_texto)
+        estructuras.extend(_extraer_estructuras(limpio))
 
     # =====================================================
-    # VALIDACIÓN FUERTE (CONTRATO)
+    # VALIDACIÓN
     # =====================================================
     if not estructuras:
         raise ValueError(
-            "DXF válido pero no contiene estructuras reconocibles"
+            "DXF leído pero no se encontraron estructuras en capa Estructuras"
         )
 
     # =====================================================
     # NORMALIZACIÓN FINAL
     # =====================================================
-    estructuras = [_norm(e) for e in estructuras if e]
+    estructuras = [_normalizar(e) for e in estructuras if e]
 
     df = pd.DataFrame({
-        "Estructura": estructuras
+        "Estructura": estructuras,
+        "Cantidad": 1
     })
 
-    # ✔ GARANTÍA DE COLUMNA
-    if "Estructura" not in df.columns:
-        raise ValueError("Error interno: columna Estructura no creada")
-
-    # =====================================================
-    # AGRUPACIÓN
-    # =====================================================
-    df["Cantidad"] = 1
-
+    # agrupar
     df = (
         df.groupby("Estructura", as_index=False)["Cantidad"]
         .sum()
     )
 
     # =====================================================
-    # VALIDACIÓN FINAL DEL CONTRATO
+    # VALIDACIÓN DE CONTRATO
     # =====================================================
-    columnas = set(df.columns)
-
-    required = {"Estructura", "Cantidad"}
-
-    if not required.issubset(columnas):
-        raise ValueError(
-            f"Salida inválida leer_dxf: columnas {columnas}"
-        )
-
     if df.empty:
-        raise ValueError("leer_dxf generó DataFrame vacío")
+        raise ValueError("DataFrame vacío tras procesar DXF")
+
+    if not {"Estructura", "Cantidad"}.issubset(df.columns):
+        raise ValueError("Columnas inválidas en salida DXF")
 
     return df
