@@ -1,22 +1,60 @@
 # -*- coding: utf-8 -*-
 """
-costo_precio/presupuesto.py
+exportadores/presupuesto.py
 
 Sección de presupuesto basada en resultados del dominio de costos.
-NO accede a fuentes externas.
+✔ Solo renderiza
+❌ No calcula
+❌ No transforma lógica de negocio
 """
 
 from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib import colors
+import pandas as pd
 
 
 # ==========================================================
-# SECCIÓN PRESUPUESTO
+# VALIDADOR CONTRATO
 # ==========================================================
+def _validar_df_presupuesto(df: pd.DataFrame) -> pd.DataFrame:
+
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        raise ValueError("df_presupuesto inválido o vacío")
+
+    columnas_req = {
+        "Categoria",
+        "Descripción",
+        "Unidad",
+        "Cantidad",
+        "Precio Unitario",
+        "Total",
+    }
+
+    if not columnas_req.issubset(df.columns):
+        raise ValueError(f"df_presupuesto debe contener {columnas_req}")
+
+    df = df.copy()
+
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # tipos
+    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
+    df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce").fillna(0)
+    df["Total"] = pd.to_numeric(df["Total"], errors="coerce").fillna(0)
+
+    # limpiar basura
+    df = df[df["Cantidad"] > 0]
+
+    if df.empty:
+        raise ValueError("df_presupuesto sin datos válidos")
+
+    return df
+
+
 # ==========================================================
-# SECCIÓN PRESUPUESTO (ROBUSTA)
+# SECCIÓN PRESUPUESTO (CONTRATO LIMPIO)
 # ==========================================================
-def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
+def generar_seccion_presupuesto_costos(doc, styles, df_presupuesto: pd.DataFrame):
 
     elems = [PageBreak()]
 
@@ -24,88 +62,61 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
     elems.append(Spacer(1, 12))
 
     # =====================================================
-    # 🔹 DATA DESDE DOMINIO
+    # VALIDACIÓN CONTRATO
     # =====================================================
-    df = resultados_costos.get("df_presupuesto")
-
-    if df is None or df.empty:
+    try:
+        df = _validar_df_presupuesto(df_presupuesto)
+    except Exception:
         elems.append(Paragraph("No hay datos de presupuesto.", styles["BodyText"]))
         return elems
 
-    df = df.copy()
-
     # =====================================================
-    # 🔹 NORMALIZACIÓN DE COLUMNAS
+    # ORDEN
     # =====================================================
-    df.columns = [str(c).strip() for c in df.columns]
-
-    columnas_req = [
-        "Categoria", "Descripción", "Unidad",
-        "Cantidad", "Precio Unitario", "Total"
-    ]
-
-    for col in columnas_req:
-        if col not in df.columns:
-            raise ValueError(f"Falta columna en presupuesto: {col}")
-
-    # =====================================================
-    # 🔹 LIMPIEZA TIPOS
-    # =====================================================
-    df["Cantidad"] = df["Cantidad"].fillna(0).astype(float)
-    df["Precio Unitario"] = df["Precio Unitario"].fillna(0).astype(float)
-    df["Total"] = df["Total"].fillna(0).astype(float)
-
-    # =====================================================
-    # 🔹 ORDEN
-    # =====================================================
-    df = df.sort_values(by=["Categoria", "Descripción"])
+    df = df.sort_values(by=["Categoria", "Descripción"]).reset_index(drop=True)
 
     categorias = df["Categoria"].dropna().unique()
+
+    if len(categorias) == 0:
+        elems.append(Paragraph("No hay categorías válidas.", styles["BodyText"]))
+        return elems
 
     item_cat = 1
     total_general = 0.0
 
     # =====================================================
-    # 🔹 LOOP PRINCIPAL
+    # LOOP
     # =====================================================
     for cat in categorias:
+
+        df_cat = df[df["Categoria"] == cat]
+
+        if df_cat.empty:
+            continue
 
         elems.append(Paragraph(f"<b>{item_cat}.00 {cat}</b>", styles["Heading3"]))
         elems.append(Spacer(1, 6))
 
-        df_cat = df[df["Categoria"] == cat]
-
         data = [["ITEM", "DESCRIPCIÓN", "UND", "CANT", "P.U.", "TOTAL"]]
 
-        item_sub = 1
         total_cat = 0.0
 
-        for _, r in df_cat.iterrows():
+        for i, r in enumerate(df_cat.itertuples(index=False), start=1):
 
-            item = f"{item_cat}.{item_sub:02d}"
+            item = f"{item_cat}.{i:02d}"
 
-            descripcion = str(r["Descripción"])
-            unidad = str(r["Unidad"])
-            cant = float(r["Cantidad"])
-            pu = float(r["Precio Unitario"])
-            total = float(r["Total"])
-
-            total_cat += total
+            total_cat += float(r.Total)
 
             data.append([
                 item,
-                descripcion,
-                unidad,
-                f"{cant:,.2f}",
-                f"L {pu:,.2f}",
-                f"L {total:,.2f}",
+                str(r.Descripción),
+                str(r.Unidad),
+                f"{float(r.Cantidad):,.2f}",
+                f"L {float(r._asdict()['Precio Unitario']):,.2f}",
+                f"L {float(r.Total):,.2f}",
             ])
 
-            item_sub += 1
-
-        # =================================================
-        # 🔹 SUBTOTAL
-        # =================================================
+        # subtotal
         data.append([
             "",
             f"SUBTOTAL {cat}",
@@ -117,9 +128,7 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
 
         total_general += total_cat
 
-        # =================================================
-        # 🔹 TABLA
-        # =================================================
+        # tabla
         tabla = Table(
             data,
             colWidths=[
@@ -152,7 +161,7 @@ def generar_seccion_presupuesto_costos(doc, styles, resultados_costos):
         item_cat += 1
 
     # =====================================================
-    # 🔹 TOTAL GENERAL
+    # TOTAL GENERAL
     # =====================================================
     elems.append(
         Paragraph(
