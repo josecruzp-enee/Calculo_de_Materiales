@@ -8,7 +8,7 @@ import traceback
 # CONTRATOS
 # =========================================================
 from interfaz.contratos import ResultadoProyecto, SalidaInterfaz
-from aplicacion.contratos import EntradaProyecto
+from aplicacion.modelos_proyecto import EntradaProyecto
 
 # =========================================================
 # ORQUESTADORES
