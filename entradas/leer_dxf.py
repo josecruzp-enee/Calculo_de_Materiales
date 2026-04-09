@@ -8,12 +8,13 @@ from typing import Any
 
 def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
     """
-    Lector DXF robusto para estructuras.
+    Lector DXF para estructuras.
 
-    ✔ Devuelve DataFrame válido
-    ✔ Lanza error si no hay estructuras
-    ✔ No depende estrictamente de capa
-    ✔ Limpio para pipeline
+    ✔ Devuelve DataFrame
+    ✔ Lanza excepción si falla
+    ✔ Filtra por capa (ESTRUCT*)
+    ✔ Detecta estructuras por patrón
+    ✔ Robusto a DXF reales
 
     OUTPUT:
         DataFrame columnas:
@@ -45,7 +46,7 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
         raise ValueError(f"No se pudo leer el DXF: {e}")
 
     # =========================================================
-    # TOKENIZACIÓN SEGURA (PARES)
+    # TOKENIZACIÓN SEGURA
     # =========================================================
     lineas = [l.strip() for l in contenido.splitlines() if l.strip()]
 
@@ -69,7 +70,7 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
             # CAPA
             # -------------------------------------------------
             if codigo == "8":
-                capa_actual = valor.upper()
+                capa_actual = str(valor).strip().upper()
 
             # -------------------------------------------------
             # INICIO MTEXT
@@ -83,14 +84,17 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
             # FIN MTEXT
             # -------------------------------------------------
             if dentro_mtext and codigo == "0":
-                if not capa_actual or "Estructuras" not in capa_actual:
+
+                # 🔥 FILTRO POR CAPA (ROBUSTO)
+                if not capa_actual or "ESTRUCT" not in capa_actual:
                     dentro_mtext = False
                     buffer_texto = []
                     continue
-                texto = ",".join(buffer_texto)
 
+                texto = ",".join(buffer_texto)
                 texto = _limpiar_texto(texto)
 
+                # 🔍 VALIDACIÓN POR CONTENIDO
                 if texto and _es_estructura(texto):
                     resultados.append({
                         "Punto": f"P-{punto}",
@@ -114,11 +118,11 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
         pass
 
     # =========================================================
-    # VALIDACIÓN FINAL (CRÍTICA)
+    # VALIDACIÓN FINAL
     # =========================================================
     if not resultados:
         raise ValueError(
-            "DXF leído correctamente pero no se encontraron estructuras válidas"
+            "DXF leído pero no se encontraron estructuras válidas"
         )
 
     return pd.DataFrame(resultados)
@@ -128,6 +132,9 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
 # HELPERS
 # =========================================================
 def _limpiar_texto(texto: str) -> str:
+    """
+    Limpieza de texto MTEXT DXF
+    """
     texto = texto.replace("\\P", ",")
     texto = re.sub(r"\{[^};]*[;:]", "", texto)
     texto = texto.replace("{", "").replace("}", "")
@@ -141,6 +148,6 @@ def _limpiar_texto(texto: str) -> str:
 def _es_estructura(texto: str) -> bool:
     """
     Detecta estructuras tipo:
-    A-III-1, B-I-4, TS-50, etc.
+    A-III-1, B-I-4, TS-50, CT-N, etc.
     """
     return bool(re.search(r"[A-Z]+-[A-Z0-9\-]+", texto))
