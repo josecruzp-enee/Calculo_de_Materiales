@@ -1,65 +1,121 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import pandas as pd
 
 
 # =========================================================
-# CONFIG
+# HELPERS
 # =========================================================
-ARCH_COSTOS = "costos_estructuras.xlsx"
-ARCH_PUNTOS = "estructura_lista.xlsx"
+def _norm(s):
+    return str(s or "").strip().upper()
+
+
+def _validar_df(df: pd.DataFrame, nombre: str):
+    if df is None or not isinstance(df, pd.DataFrame):
+        raise TypeError(f"{nombre} debe ser DataFrame")
+
+    if df.empty:
+        raise ValueError(f"{nombre} está vacío")
+
+
+def _validar_columnas(df: pd.DataFrame, nombre: str, columnas: list[str]):
+    faltantes = [c for c in columnas if c not in df.columns]
+    if faltantes:
+        raise ValueError(f"{nombre} no tiene columnas requeridas: {faltantes}")
 
 
 # =========================================================
-# CARGAR COSTOS (AHORA PRECIO UNITARIO)
+# MOTOR DE COSTOS POR PUNTO (ALINEADO A CONTRATO)
 # =========================================================
-def cargar_costos():
+def calcular_costos_por_punto(
+    df_estructuras_por_punto: pd.DataFrame,
+    df_costos_estructuras: pd.DataFrame,
+):
+    """
+    ✔ Dominio puro
+    ✔ Contrato consistente con orquestador_costos
+    ✔ Validación fuerte
 
-    df = pd.read_excel(ARCH_COSTOS)
-    df.columns = [str(c).strip() for c in df.columns]
+    OUTPUT:
+        df_costos_por_punto
+        df_resumen_costos_punto
+        df_resumen_precios_punto
+    """
 
-    # 🔥 VALIDACIÓN NUEVA
-    if "codigodeestructura" not in df.columns:
-        raise ValueError("Falta 'codigodeestructura' en costos")
+    # =====================================================
+    # VALIDACIÓN BASE
+    # =====================================================
+    _validar_df(df_estructuras_por_punto, "df_estructuras_por_punto")
+    _validar_df(df_costos_estructuras, "df_costos_estructuras")
 
-    if "Precio Unitario" not in df.columns:
-        raise ValueError("Falta 'Precio Unitario' en costos")
-
-    dict_precios = dict(
-        zip(
-            df["codigodeestructura"].astype(str).str.strip(),
-            df["Precio Unitario"]
-        )
+    _validar_columnas(
+        df_estructuras_por_punto,
+        "df_estructuras_por_punto",
+        ["Punto", "Cantidad"]
     )
 
-    return dict_precios
+    if not ({"Estructura", "CodigoDeEstructura"} & set(df_estructuras_por_punto.columns)):
+        raise ValueError("df_estructuras_por_punto debe tener 'Estructura' o 'CodigoDeEstructura'")
 
+    _validar_columnas(
+        df_costos_estructuras,
+        "df_costos_estructuras",
+        ["codigodeestructura", "Precio Unitario"]
+    )
 
-# =========================================================
-# PROCESAR PUNTOS
-# =========================================================
-def procesar_puntos():
+    # =====================================================
+    # NORMALIZAR COSTOS
+    # =====================================================
+    df_cost = df_costos_estructuras.copy()
 
-    dict_precios = cargar_costos()
+    df_cost["codigodeestructura"] = df_cost["codigodeestructura"].astype(str).map(_norm)
+    df_cost["Precio Unitario"] = pd.to_numeric(df_cost["Precio Unitario"], errors="coerce")
 
-    df = pd.read_excel(ARCH_PUNTOS)
-    df.columns = [str(c).strip() for c in df.columns]
+    if df_cost["Precio Unitario"].isna().any():
+        raise ValueError("Hay precios unitarios inválidos en df_costos_estructuras")
 
-    resultados = []
+    dict_precios = dict(
+        zip(df_cost["codigodeestructura"], df_cost["Precio Unitario"])
+    )
 
-    for _, row in df.iterrows():
+    # =====================================================
+    # NORMALIZAR ESTRUCTURAS
+    # =====================================================
+    df_ep = df_estructuras_por_punto.copy()
 
-        punto = row.get("Punto")
-        estructura = str(row.get("Estructura", "")).strip()
-        cantidad = float(row.get("Cantidad", 0) or 0)
+    col_est = "Estructura" if "Estructura" in df_ep.columns else "CodigoDeEstructura"
 
-        # 🔥 VALIDACIÓN FUERTE
+    df_ep[col_est] = df_ep[col_est].astype(str).map(_norm)
+    df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce")
+
+    if df_ep["Cantidad"].isna().any():
+        raise ValueError("Hay cantidades inválidas en df_estructuras_por_punto")
+
+    if (df_ep["Cantidad"] < 0).any():
+        raise ValueError("Hay cantidades negativas en df_estructuras_por_punto")
+
+    # =====================================================
+    # CÁLCULO DETALLE (df_costos_por_punto)
+    # =====================================================
+    filas = []
+
+    for _, row in df_ep.iterrows():
+
+        punto = row["Punto"]
+        estructura = row[col_est]
+        cantidad = float(row["Cantidad"])
+
+        if not punto:
+            raise ValueError("Punto vacío detectado")
+
         if estructura not in dict_precios:
             raise ValueError(f"Estructura sin precio: {estructura}")
 
-        precio_unit = float(dict_precios[estructura])
+        precio_unit = dict_precios[estructura]
         subtotal = cantidad * precio_unit
 
-        resultados.append({
+        filas.append({
             "Punto": punto,
             "Estructura": estructura,
             "Cantidad": cantidad,
@@ -67,37 +123,30 @@ def procesar_puntos():
             "Subtotal Precio": round(subtotal, 2),
         })
 
-    df_detalle = pd.DataFrame(resultados)
+    df_costos_por_punto = pd.DataFrame(filas)
+
+    if df_costos_por_punto.empty:
+        raise ValueError("No se generaron costos por punto")
 
     # =====================================================
-    # RESUMEN POR PUNTO (PRECIO)
+    # RESUMEN COSTOS
     # =====================================================
-    df_resumen = (
-        df_detalle.groupby("Punto")["Subtotal Precio"]
+    df_resumen_costos_punto = (
+        df_costos_por_punto.groupby("Punto")["Subtotal Precio"]
         .sum()
         .reset_index()
-        .rename(columns={"Subtotal Precio": "TOTAL_PRECIO_PUNTO"})
+        .rename(columns={"Subtotal Precio": "TOTAL_COSTO_PUNTO"})
     )
 
     # =====================================================
-    # TOTAL PROYECTO
+    # RESUMEN PRECIOS (alias)
     # =====================================================
-    total_proyecto = df_resumen["TOTAL_PRECIO_PUNTO"].sum()
+    df_resumen_precios_punto = df_resumen_costos_punto.rename(
+        columns={"TOTAL_COSTO_PUNTO": "TOTAL_PRECIO_PUNTO"}
+    )
 
-    # =====================================================
-    # EXPORTAR
-    # =====================================================
-    with pd.ExcelWriter("precios_por_punto.xlsx") as writer:
-        df_detalle.to_excel(writer, sheet_name="Detalle", index=False)
-        df_resumen.to_excel(writer, sheet_name="Resumen", index=False)
-
-    print("\n✅ Precios por punto generados:\n")
-    print(df_resumen)
-    print(f"\n💰 TOTAL PROYECTO: L {total_proyecto:,.2f}")
-
-
-# =========================================================
-# MAIN
-# =========================================================
-if __name__ == "__main__":
-    procesar_puntos()
+    return (
+        df_costos_por_punto,
+        df_resumen_costos_punto,
+        df_resumen_precios_punto,
+    )
