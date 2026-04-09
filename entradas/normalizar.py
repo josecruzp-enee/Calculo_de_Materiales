@@ -25,7 +25,7 @@ def limpiar_codigo(codigo: str) -> str:
 
 
 # =========================================================
-# PARSER SIMPLE Y ROBUSTO
+# PATRÓN ROBUSTO (TUYO)
 # =========================================================
 PATRON = re.compile(
     r"""
@@ -60,6 +60,9 @@ PATRON = re.compile(
 )
 
 
+# =========================================================
+# EXTRAER
+# =========================================================
 def _extraer_estructuras(texto: str):
 
     if not texto:
@@ -73,10 +76,8 @@ def _extraer_estructuras(texto: str):
 
     encontrados = PATRON.findall(texto)
 
-    # flatten (porque findall con grupos)
-    planos = [item for grupo in encontrados for item in grupo if item]
-
-    return planos
+    # flatten
+    return [item for grupo in encontrados for item in grupo if item]
 
 
 # =========================================================
@@ -104,13 +105,15 @@ def _convertir(df: pd.DataFrame):
             if not linea:
                 continue
 
-            # punto tipo P-1 (si existe)
+            # detectar punto
             m = re.match(r"P[-\s]?(\d+)", linea)
             if m:
                 punto_actual = f"P-{m.group(1)}"
                 continue
 
-            for e in _extraer_estructuras(linea):
+            estructuras = _extraer_estructuras(linea)
+
+            for e in estructuras:
 
                 est = limpiar_codigo(e)
 
@@ -119,7 +122,7 @@ def _convertir(df: pd.DataFrame):
 
                 registros.append({
                     "Punto": punto_actual or f"P-{idx+1}",
-                    "codigodeestructura": est,
+                    "Estructura": est,
                     "Cantidad": 1
                 })
 
@@ -128,9 +131,10 @@ def _convertir(df: pd.DataFrame):
     if df_out.empty:
         return df_out
 
+    # 🔥 AGRUPACIÓN FINAL (CLAVE)
     return (
         df_out
-        .groupby(["Punto", "codigodeestructura"], as_index=False)["Cantidad"]
+        .groupby(["Punto", "Estructura"], as_index=False)["Cantidad"]
         .sum()
     )
 
