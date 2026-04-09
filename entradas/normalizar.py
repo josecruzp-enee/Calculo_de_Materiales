@@ -137,7 +137,7 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
                 registros.append({
                     "Punto": punto_actual if punto_actual else f"P-{idx+1}",
-                    "Estructura": est,
+                    "codigodeestructura": est,   # 🔥 CLAVE
                     "Cantidad": 1
                 })
 
@@ -146,10 +146,12 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
     if df_out.empty:
         return df_out
 
-    # agrupar correctamente
+    # -----------------------------
+    # AGRUPAR CORRECTAMENTE
+    # -----------------------------
     df_out = (
         df_out
-        .groupby(["Punto", "Estructura"], as_index=False)["Cantidad"]
+        .groupby(["Punto", "codigodeestructura"], as_index=False)["Cantidad"]
         .sum()
     )
 
