@@ -12,13 +12,26 @@ def limpiar_codigo(codigo: str) -> str:
     if codigo is None:
         return ""
 
-    codigo = str(codigo).strip().upper()
+    codigo = str(codigo).upper().strip()
+
     if not codigo:
         return ""
 
-    codigo = re.sub(r"\(.*?\)", "", codigo)     # quitar paréntesis
-    codigo = codigo.replace(" ", "")
-    codigo = re.sub(r"[^A-Z0-9\-\.\+]", "", codigo)
+    # quitar paréntesis
+    codigo = re.sub(r"\(.*?\)", "", codigo)
+
+    # normalizar separadores
+    codigo = codigo.replace(",", "")        # 2,000 → 2000
+    codigo = codigo.replace(" ", "-")       # espacios → guión
+
+    # eliminar basura pero conservar estructura
+    codigo = re.sub(r"[^A-Z0-9\-]", "", codigo)
+
+    # limpiar múltiples guiones
+    codigo = re.sub(r"-+", "-", codigo)
+
+    # quitar guiones extremos
+    codigo = codigo.strip("-")
 
     return codigo
 
@@ -31,7 +44,8 @@ def _resolver_catalogo(codigo: str) -> str:
     Ajustes puntuales (ej: luminarias)
     """
     if codigo.startswith("LL-"):
-        if re.search(r"LL-\d+-\d+W", codigo):
+        # si no tiene potencia, asumir 50W
+        if re.search(r"LL-\d+-.*W", codigo):
             return codigo
         return f"{codigo}-50W"
 
@@ -39,32 +53,46 @@ def _resolver_catalogo(codigo: str) -> str:
 
 
 # ==========================================================
-# PARSER GENERAL (CLAVE)
+# VALIDACIÓN DE CÓDIGOS
+# ==========================================================
+def _es_codigo_valido(codigo: str) -> bool:
+    if not codigo:
+        return False
+
+    # debe tener al menos un número
+    if not re.search(r"\d", codigo):
+        return False
+
+    # longitud mínima razonable
+    if len(codigo) < 3:
+        return False
+
+    return True
+
+
+# ==========================================================
+# PARSER GENERAL (ROBUSTO)
 # ==========================================================
 def _extraer_estructuras_general(texto: str) -> list[str]:
-    """
-    Parser flexible:
-    - Detecta candidatos
-    - NO valida (eso es otro módulo)
-    """
-
     if not texto:
         return []
 
     texto = texto.upper()
 
-    # Separadores comunes
+    # normalizar separadores duros
     texto = (
-        texto.replace(",", " ")
+        texto.replace(",", "")
         .replace(";", " ")
         .replace("/", " ")
         .replace("|", " ")
     )
 
-    # Patrón general (soporta todos tus casos reales)
-    patron = r"\b[A-Z]{1,4}[-\s]?[A-Z0-9]+(?:[-\s]?[A-Z0-9]+)*\b"
+    # patrón industrial
+    patron = r"\b[A-Z]{1,4}(?:[-\s]?\d+)+(?:[-\s]?[A-Z0-9]+)*\b"
 
-    return re.findall(patron, texto)
+    encontrados = re.findall(patron, texto)
+
+    return encontrados
 
 
 # ==========================================================
@@ -73,6 +101,7 @@ def _extraer_estructuras_general(texto: str) -> list[str]:
 def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
 
     registros = []
+    debug_detectados = []
 
     for idx, row in df.iterrows():
 
@@ -105,16 +134,21 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
                 continue
 
             # -------------------------------------------------
-            # EXTRAER ESTRUCTURAS (FLEXIBLE)
+            # EXTRAER ESTRUCTURAS
             # -------------------------------------------------
             encontrados = _extraer_estructuras_general(linea)
+
+            debug_detectados.append({
+                "linea": linea,
+                "detectados": encontrados
+            })
 
             for e in encontrados:
 
                 est = limpiar_codigo(e)
                 est = _resolver_catalogo(est)
 
-                if not est:
+                if not _es_codigo_valido(est):
                     continue
 
                 registros.append({
@@ -136,6 +170,11 @@ def _convertir_a_largo(df: pd.DataFrame) -> pd.DataFrame:
         .groupby(["Punto", "codigodeestructura"], as_index=False)["Cantidad"]
         .sum()
     )
+
+    # -------------------------------------------------
+    # DEBUG
+    # -------------------------------------------------
+    df_out.attrs["debug_parser"] = debug_detectados
 
     return df_out
 
