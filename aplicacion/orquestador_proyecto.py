@@ -10,7 +10,12 @@ import pandas as pd
 # =========================================================
 from interfaz.contratos import ResultadoProyecto, SalidaInterfaz
 from aplicacion.modelos_proyecto import EntradaProyecto
-
+entrada_costos = construir_entrada_costos(
+    data=entrada_proyecto.base_datos,
+    df_resumen=resultado_materiales.df_materiales,
+    df_estructuras_por_punto=df_ep,
+    df_materiales_por_punto=df_mp
+)
 # =========================================================
 # ORQUESTADORES DOMINIO
 # =========================================================
