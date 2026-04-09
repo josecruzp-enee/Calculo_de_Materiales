@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import pandas as pd
 
 
@@ -13,17 +16,21 @@ def calcular_costos_por_punto(
     """
 
     # =====================================================
-    # VALIDACIÓN
+    # VALIDACIÓN INPUT
     # =====================================================
-    if df_estructuras_por_punto is None or df_estructuras_por_punto.empty:
-        raise ValueError("df_estructuras_por_punto vacío")
+    if not isinstance(df_estructuras_por_punto, pd.DataFrame) or df_estructuras_por_punto.empty:
+        raise ValueError("df_estructuras_por_punto inválido o vacío")
 
-    if df_costos_estructuras is None or df_costos_estructuras.empty:
-        raise ValueError("df_costos_estructuras vacío")
+    if not isinstance(df_costos_estructuras, pd.DataFrame) or df_costos_estructuras.empty:
+        raise ValueError("df_costos_estructuras inválido o vacío")
 
-    required_cols = {"codigodeestructura", "Costo Unitario", "Precio Unitario"}
-    if not required_cols.issubset(df_costos_estructuras.columns):
-        raise ValueError(f"df_costos_estructuras debe tener {required_cols}")
+    required_ep = {"Punto", "codigodeestructura", "Cantidad"}
+    if not required_ep.issubset(df_estructuras_por_punto.columns):
+        raise ValueError(f"df_estructuras_por_punto debe tener {required_ep}")
+
+    required_ce = {"codigodeestructura", "Costo Unitario", "Precio Unitario"}
+    if not required_ce.issubset(df_costos_estructuras.columns):
+        raise ValueError(f"df_costos_estructuras debe tener {required_ce}")
 
     # =====================================================
     # NORMALIZACIÓN
@@ -38,63 +45,93 @@ def calcular_costos_por_punto(
 
     df_ep["Cantidad"] = pd.to_numeric(df_ep["Cantidad"], errors="coerce").fillna(0)
 
+    df_ce["Costo Unitario"] = pd.to_numeric(df_ce["Costo Unitario"], errors="coerce")
+    df_ce["Precio Unitario"] = pd.to_numeric(df_ce["Precio Unitario"], errors="coerce")
+
     # =====================================================
-    # MAPAS
+    # LIMPIEZA
     # =====================================================
-    dict_costo = dict(zip(df_ce["codigodeestructura"], df_ce["Costo Unitario"]))
-    dict_precio = dict(zip(df_ce["codigodeestructura"], df_ce["Precio Unitario"]))
+    df_ep = df_ep[df_ep["Cantidad"] > 0]
+
+    if df_ep.empty:
+        raise ValueError("df_estructuras_por_punto sin cantidades válidas")
+
+    # 🔥 VALIDACIÓN FUERTE (NO SILENCIOSA)
+    if df_ce["codigodeestructura"].duplicated().any():
+        dup = df_ce[df_ce["codigodeestructura"].duplicated()]["codigodeestructura"].unique()
+        raise ValueError(f"Estructuras duplicadas en costos: {list(dup)}")
+
+    # validar valores
+    if (df_ce["Costo Unitario"] <= 0).any():
+        raise ValueError("Hay costos unitarios <= 0")
+
+    if (df_ce["Precio Unitario"] <= 0).any():
+        raise ValueError("Hay precios unitarios <= 0")
+
+    # =====================================================
+    # MERGE CONTROLADO
+    # =====================================================
+    df = df_ep.merge(
+        df_ce,
+        on="codigodeestructura",
+        how="left",
+        validate="many_to_one",
+    )
+
+    # =====================================================
+    # VALIDACIÓN CRÍTICA
+    # =====================================================
+    if df["Costo Unitario"].isna().any():
+        faltantes = df.loc[df["Costo Unitario"].isna(), "codigodeestructura"].unique()
+        raise ValueError(f"Estructuras sin costo definido: {list(faltantes)}")
+
+    if df["Precio Unitario"].isna().any():
+        faltantes = df.loc[df["Precio Unitario"].isna(), "codigodeestructura"].unique()
+        raise ValueError(f"Estructuras sin precio definido: {list(faltantes)}")
+
+    # =====================================================
+    # CÁLCULOS
+    # =====================================================
+    df["Subtotal Costo"] = (df["Cantidad"] * df["Costo Unitario"]).round(2)
+    df["Subtotal Precio"] = (df["Cantidad"] * df["Precio Unitario"]).round(2)
 
     # =====================================================
     # DETALLE
     # =====================================================
-    resultados = []
+    df_detalle = df[
+        [
+            "Punto",
+            "codigodeestructura",
+            "Cantidad",
+            "Costo Unitario",
+            "Precio Unitario",
+            "Subtotal Costo",
+            "Subtotal Precio",
+        ]
+    ].copy()
 
-    for _, row in df_ep.iterrows():
-
-        punto = row["Punto"]
-        estructura = row["codigodeestructura"]
-        cantidad = float(row["Cantidad"])
-
-        # 🔥 VALIDACIÓN CRÍTICA
-        if estructura not in dict_costo:
-            raise ValueError(f"Estructura sin costo definida: {estructura}")
-
-        costo_unit = float(dict_costo[estructura])
-        precio_unit = float(dict_precio[estructura])
-
-        subtotal_costo = cantidad * costo_unit
-        subtotal_precio = cantidad * precio_unit
-
-        resultados.append({
-            "Punto": punto,
-            "codigodeestructura": estructura,
-            "Cantidad": cantidad,
-            "Costo Unitario": round(costo_unit, 2),
-            "Precio Unitario": round(precio_unit, 2),
-            "Subtotal Costo": round(subtotal_costo, 2),
-            "Subtotal Precio": round(subtotal_precio, 2),
-        })
-
-    df_detalle = pd.DataFrame(resultados)
+    df_detalle = df_detalle.sort_values(["Punto", "codigodeestructura"]).reset_index(drop=True)
 
     # =====================================================
     # RESUMEN COSTOS
     # =====================================================
     df_resumen_costos = (
-        df_detalle.groupby("Punto")["Subtotal Costo"]
+        df_detalle.groupby("Punto", as_index=False)["Subtotal Costo"]
         .sum()
-        .reset_index()
         .rename(columns={"Subtotal Costo": "TOTAL_COSTO_PUNTO"})
+        .sort_values("Punto")
+        .reset_index(drop=True)
     )
 
     # =====================================================
     # RESUMEN PRECIOS
     # =====================================================
     df_resumen_precios = (
-        df_detalle.groupby("Punto")["Subtotal Precio"]
+        df_detalle.groupby("Punto", as_index=False)["Subtotal Precio"]
         .sum()
-        .reset_index()
         .rename(columns={"Subtotal Precio": "TOTAL_PRECIO_PUNTO"})
+        .sort_values("Punto")
+        .reset_index(drop=True)
     )
 
     return df_detalle, df_resumen_costos, df_resumen_precios
