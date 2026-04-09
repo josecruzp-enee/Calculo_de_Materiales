@@ -52,7 +52,7 @@ def _debug_final(tension, data):
 def seccion_finalizar_calculo():
 
     from interfaz.contratos import SalidaInterfaz
-    from entradas.orquestador_entradas import ejecutar_entradas
+    
 
     st.subheader("⚙️ Finalizar cálculo")
 
@@ -94,10 +94,7 @@ def seccion_finalizar_calculo():
                 ),
             )
 
-            salida_entradas = ejecutar_entradas(
-                salida_ui,
-                tension=float(tension)
-            )
+            
 
             if not salida_entradas.ok:
                 st.error("❌ Error en entradas:")
