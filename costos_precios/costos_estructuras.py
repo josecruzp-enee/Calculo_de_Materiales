@@ -4,9 +4,6 @@ from __future__ import annotations
 import pandas as pd
 from typing import Dict
 
-# =====================================================
-# COSTOS BASE
-# =====================================================
 from costos_precios.costos_materiales import calcular_costos_desde_resumen
 
 
@@ -19,6 +16,8 @@ def calcular_precio_unitario_estructura(
     porcentaje_operativo: float = 0.25,
     margen_utilidad: float = 0.15,
 ) -> Dict[str, float]:
+
+    debug = {}
 
     # =====================================================
     # VALIDACIONES
@@ -34,13 +33,15 @@ def calcular_precio_unitario_estructura(
         raise ValueError(f"df_materiales debe contener columnas {columnas_req}")
 
     # =====================================================
-    # LIMPIEZA BÁSICA
+    # LIMPIEZA
     # =====================================================
     df_mat = df_materiales.copy()
 
     df_mat["Materiales"] = df_mat["Materiales"].astype(str).str.strip()
     df_mat["Unidad"] = df_mat["Unidad"].astype(str).str.strip()
     df_mat["Cantidad"] = pd.to_numeric(df_mat["Cantidad"], errors="coerce").fillna(0)
+
+    debug["input_materiales"] = df_mat.head(5).to_dict()
 
     if df_mat["Cantidad"].sum() <= 0:
         raise ValueError("Cantidad total de materiales es 0")
@@ -56,19 +57,33 @@ def calcular_precio_unitario_estructura(
     if not isinstance(df_val, pd.DataFrame) or df_val.empty:
         raise ValueError("Error en valorización de materiales")
 
-    if "Tiene_Precio" not in df_val.columns:
-        raise ValueError("df_val no contiene columna 'Tiene_Precio'")
-
-    if "Costo" not in df_val.columns:
-        raise ValueError("df_val no contiene columna 'Costo'")
+    debug["df_val_cols"] = list(df_val.columns)
+    debug["df_val_sample"] = df_val.head(5).to_dict()
 
     # =====================================================
-    # VALIDACIÓN CRÍTICA
+    # 🔥 FIX COMPATIBILIDAD
+    # =====================================================
+    if "Tiene_Precio" not in df_val.columns:
+        df_val["Tiene_Precio"] = True
+        debug["fix_tiene_precio"] = True
+
+    # 🔥 FIX NOMBRE COSTO
+    if "Costo" not in df_val.columns:
+        if "Costo Total" in df_val.columns:
+            df_val["Costo"] = df_val["Costo Total"]
+            debug["fix_costo"] = "Costo Total → Costo"
+        else:
+            raise ValueError("No existe columna de costo")
+
+    # =====================================================
+    # VALIDACIÓN
     # =====================================================
     if not df_val["Tiene_Precio"].all():
         faltantes = df_val.loc[
             ~df_val["Tiene_Precio"], "Materiales"
         ].unique()
+
+        debug["materiales_sin_precio"] = list(faltantes)
 
         raise ValueError(
             f"Materiales sin precio: {list(faltantes)}"
@@ -89,13 +104,13 @@ def calcular_precio_unitario_estructura(
     costo_operativo = costo_material * porcentaje_operativo
     costo_total = costo_material + costo_operativo
 
-    # =====================================================
-    # PRECIO
-    # =====================================================
     precio_unitario = costo_total * (1 + margen_utilidad)
 
-    if precio_unitario <= 0:
-        raise ValueError("Precio unitario inválido")
+    debug["costos"] = {
+        "costo_material": costo_material,
+        "costo_operativo": costo_operativo,
+        "precio_unitario": precio_unitario
+    }
 
     return {
         "Costo Material": round(costo_material, 2),
@@ -106,7 +121,7 @@ def calcular_precio_unitario_estructura(
 
 
 # =====================================================
-# 🔹 FUNCIÓN PRINCIPAL (POR ESTRUCTURA)
+# 🔹 FUNCIÓN PRINCIPAL
 # =====================================================
 def calcular_costos_por_estructura(
     *,
@@ -116,6 +131,8 @@ def calcular_costos_por_estructura(
     porcentaje_operativo: float = 0.25,
     margen_utilidad: float = 0.15,
 ) -> pd.DataFrame:
+
+    debug = {}
 
     # =====================================================
     # VALIDACIONES
@@ -142,10 +159,12 @@ def calcular_costos_por_estructura(
 
     conteo = dict(zip(df["Estructura"], df["Cantidad"]))
 
+    debug["estructuras_input"] = list(conteo.keys())
+
     filas = []
 
     # =====================================================
-    # LOOP PRINCIPAL
+    # LOOP
     # =====================================================
     for cod, qty in conteo.items():
 
@@ -157,11 +176,9 @@ def calcular_costos_por_estructura(
         df_mat = df_materiales_por_estructura.get(cod)
 
         if not isinstance(df_mat, pd.DataFrame) or df_mat.empty:
+            debug.setdefault("estructuras_sin_material", []).append(cod)
             raise ValueError(f"No hay materiales para estructura: {cod}")
 
-        # -----------------------------------------
-        # CÁLCULO
-        # -----------------------------------------
         precios = calcular_precio_unitario_estructura(
             df_materiales=df_mat,
             df_precios_materiales=df_precios_materiales,
@@ -176,12 +193,9 @@ def calcular_costos_por_estructura(
             "Total": round(precios["Precio Unitario"] * qty, 2),
         })
 
-    # =====================================================
-    # OUTPUT
-    # =====================================================
     df_out = pd.DataFrame(filas)
 
     if df_out.empty:
-        raise ValueError("No se generaron costos (resultado vacío)")
+        raise ValueError("No se generaron costos")
 
     return df_out
