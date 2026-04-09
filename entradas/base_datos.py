@@ -111,7 +111,7 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
 
     df = data.get("MATERIALES")
 
-    if df is None or df.empty:
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame(
             columns=["Materiales", "Unidad", "Codigo", "Referencia", "Costo"]
         )
@@ -120,14 +120,29 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
 
     out = pd.DataFrame()
 
+    # ✔ SIEMPRE EXISTE
     out["Materiales"] = df["MATERIALES"].astype(str).str.strip()
-    out["Unidad"] = df.get("UNIDAD", "").astype(str).str.strip()
-    out["Codigo"] = df.get("CODIGO", "").astype(str).str.strip()
-    out["Referencia"] = df.get("REFERENCIA", "").astype(str).str.strip()
 
-    out["Costo"] = pd.to_numeric(
-        df.get("Costo Unitario", 0),
-        errors="coerce"
-    ).fillna(0)
+    # 🔥 FIX: usar Series vacía en vez de ""
+    def safe_col(nombre):
+        if nombre in df.columns:
+            return df[nombre]
+        return pd.Series([""] * len(df))
+
+    out["Unidad"] = safe_col("UNIDAD").astype(str).str.strip()
+    out["Codigo"] = safe_col("CODIGO").astype(str).str.strip()
+    out["Referencia"] = safe_col("REFERENCIA").astype(str).str.strip()
+
+    # 🔥 FIX CRÍTICO
+    costo_col = None
+    for c in df.columns:
+        if "COSTO" in c:
+            costo_col = c
+            break
+
+    if costo_col:
+        out["Costo"] = pd.to_numeric(df[costo_col], errors="coerce").fillna(0)
+    else:
+        out["Costo"] = 0
 
     return out.reset_index(drop=True)
