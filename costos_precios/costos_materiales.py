@@ -44,8 +44,11 @@ def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
     df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
 
+    if "Costo Unitario" not in df.columns:
+        raise ValueError("Catálogo sin columna 'Costo Unitario'")
+
     df["Costo Unitario"] = pd.to_numeric(
-        df.get("Costo Unitario", df.get("Costo", 0)),
+        df["Costo Unitario"],
         errors="coerce"
     )
 
