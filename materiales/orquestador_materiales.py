@@ -251,7 +251,7 @@ def ejecutar_materiales(
         df_estructuras_por_punto=df_estructuras_por_punto,
 
         # 🔥 AQUÍ ESTÁ LA CLAVE
-        descripcion_estructuras=materiales_por_estructura,
+        df_materiales_por_estructura=materiales_por_estructura,
 
         datos_proyecto=entrada.datos_proyecto,
         debug=debug
