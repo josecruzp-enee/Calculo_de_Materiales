@@ -175,7 +175,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                 df_precios_materiales=df_catalogo
             )
             debug_global["costos_estructura_total"] = float(
-            df_costos_estructura["Costo Total"].sum()
+                df_costos_estructura["Costo Total"].sum()
             ) if df_costos_estructura is not None else 0
 
             
