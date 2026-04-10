@@ -103,7 +103,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         salida_entradas = ejecutar_entradas(salida_interfaz)
 
-        # 🔴 CORTE DURO SI FALLA ENTRADAS
         if not salida_entradas.ok:
             debug_global["entradas_error"] = {
                 "errores": salida_entradas.errores,
@@ -115,7 +114,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             salida_entradas.df_estructuras
         )
 
-        # 🔍 DEBUG ESTRUCTURAS
         debug_global["estructuras"] = {
             "is_none": df_estructuras is None,
             "shape": df_estructuras.shape if df_estructuras is not None else None,
@@ -156,7 +154,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_materiales = ejecutar_materiales(entrada_mat)
         df_materiales = resultado_materiales.df_materiales
 
-        # 🔍 DEBUG MATERIALES
         debug_global["materiales"] = {
             "df_materiales_rows": len(df_materiales),
             "keys_por_estructura": list(
@@ -213,67 +210,64 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             }
 
         except Exception as e:
-
             debug_global["costos_estructura"] = {
                 "ok": False,
                 "error": str(e)
             }
 
         # =====================================================
-# 6.1 PRECIO POR ESTRUCTURA 🔥
-# =====================================================
-df_precios_estructura = None
+        # 6.1 PRECIO POR ESTRUCTURA 🔥
+        # =====================================================
+        df_precios_estructura = None
 
-try:
-    if df_costos_estructura is not None and not df_costos_estructura.empty:
+        try:
+            if df_costos_estructura is not None and not df_costos_estructura.empty:
 
-        filas_precio = []
+                filas_precio = []
 
-        for _, row in df_costos_estructura.iterrows():
+                for _, row in df_costos_estructura.iterrows():
 
-            estructura = row["codigodeestructura"]
-            cantidad = row["Cantidad"]
-            costo_materiales = float(row["Costo Unitario"])
+                    estructura = row["codigodeestructura"]
+                    cantidad = row["Cantidad"]
+                    costo_materiales = float(row["Costo Unitario"])
 
-            # 🔧 COSTO OPERATIVO UNITARIO
-            res_op = calcular_costos_operativos(
-                costo_cuadrilla_dia=8000,
-                fraccion_jornada=1/16,
-                costo_equipos=50,
-                costo_logistica=30,
-            )
+                    res_op = calcular_costos_operativos(
+                        costo_cuadrilla_dia=8000,
+                        fraccion_jornada=1/16,
+                        costo_equipos=50,
+                        costo_logistica=30,
+                    )
 
-            # 🔧 PRECIO UNITARIO
-            res_precio = calcular_precio_estructura(
-                estructura=estructura,
-                costo_materiales=costo_materiales,
-                costo_operativo=res_op.operativo_total,
-                porcentaje_utilidad=0.25,
-            )
+                    res_precio = calcular_precio_estructura(
+                        estructura=estructura,
+                        costo_materiales=costo_materiales,
+                        costo_operativo=res_op.operativo_total,
+                        porcentaje_utilidad=0.25,
+                    )
 
-            filas_precio.append({
-                "Estructura": estructura,
-                "Cantidad": cantidad,
-                "Costo Unitario": costo_materiales,
-                "Costo Operativo": res_op.operativo_total,
-                "Precio Unitario": res_precio.precio_unitario,
-                "Precio Total": res_precio.precio_unitario * cantidad,
-            })
+                    filas_precio.append({
+                        "Estructura": estructura,
+                        "Cantidad": cantidad,
+                        "Costo Unitario": costo_materiales,
+                        "Costo Operativo": res_op.operativo_total,
+                        "Precio Unitario": res_precio.precio_unitario,
+                        "Precio Total": res_precio.precio_unitario * cantidad,
+                    })
 
-        df_precios_estructura = pd.DataFrame(filas_precio)
+                df_precios_estructura = pd.DataFrame(filas_precio)
 
-        debug_global["precios_estructura"] = {
-            "ok": True,
-            "filas": len(df_precios_estructura),
-            "total": float(df_precios_estructura["Precio Total"].sum())
-        }
+                debug_global["precios_estructura"] = {
+                    "ok": True,
+                    "filas": len(df_precios_estructura),
+                    "total": float(df_precios_estructura["Precio Total"].sum())
+                }
 
-except Exception as e:
-    debug_global["precios_estructura"] = {
-        "ok": False,
-        "error": str(e)
-    }
-        
+        except Exception as e:
+            debug_global["precios_estructura"] = {
+                "ok": False,
+                "error": str(e)
+            }
+
         # =====================================================
         # 7. REPORTES
         # =====================================================
@@ -287,13 +281,13 @@ except Exception as e:
                 **resultado_costos,
                 "df_costos_estructura": df_costos_estructura,
                 "df_precios_estructura": df_precios_estructura,
-                
             },
             nombre_proyecto="Proyecto"
         )
 
         resultado_reportes = generar_reportes(entrada_reportes)
         debug_global["reportes"] = resultado_reportes.get("debug")
+
         # =====================================================
         # 8. SALIDA
         # =====================================================
@@ -304,7 +298,7 @@ except Exception as e:
             materiales=resultado_materiales,
             costos=resultado_costos,
             df_costos_estructura=df_costos_estructura,
-            precios_estructura=df_precios_estructura, 
+            precios_estructura=df_precios_estructura,
             reportes=resultado_reportes,
             debug=debug_global
         )
