@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import pandas as pd
 import traceback
+import streamlit as st  # 🔥 CLAVE
 
 
 # =========================================================
@@ -98,14 +99,10 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
         costos = entrada.costos or {}
 
-        # =====================================================
-        # EXTRAER COSTOS (SIN BLOQUEAR)
-        # =====================================================
         df_costos_materiales = costos.get("df_materiales_costos")
         df_costos_estructuras = costos.get("df_costos_estructura")
         df_costos_por_punto = costos.get("df_costos_por_punto")
 
-        # limpieza suave
         if isinstance(df_costos_materiales, pd.DataFrame) and df_costos_materiales.empty:
             df_costos_materiales = None
 
@@ -122,6 +119,24 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         nombre = entrada.nombre_proyecto
 
         # =====================================================
+        # 🔥 ESTA ES LA LÍNEA QUE ARREGLA TODO
+        # =====================================================
+        datos_proyecto = st.session_state.get("datos_proyecto", {})
+
+        # fallback por si no hay datos
+        if not datos_proyecto:
+            datos_proyecto = {
+                "nombre_proyecto": nombre,
+                "empresa": "N/A",
+                "nivel_de_tension": "",
+                "fecha_informe": "",
+                "responsable": "",
+            }
+
+        # DEBUG opcional
+        st.write("🔥 DATOS PROYECTO FINAL:", datos_proyecto)
+
+        # =====================================================
         # 📄 BASE
         # =====================================================
         tasks = [
@@ -134,32 +149,23 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 df_materiales=entrada.df_materiales,
                 df_estructuras=entrada.df_estructuras,
                 df_mat_por_punto=entrada.df_materiales_por_punto,
-                df_costos_por_punto=costos.get("df_costos_por_punto"),
-                df_costos_estructura=costos.get("df_costos_estructura"),
-                datos_proyecto={"nombre": nombre},
+                df_costos_por_punto=df_costos_por_punto,
+                df_costos_estructura=df_costos_estructuras,
+                datos_proyecto=datos_proyecto,
             )),
         ]
 
         # =====================================================
-        # 💰 COSTOS (OPCIONAL Y ROBUSTO)
+        # 💰 COSTOS
         # =====================================================
         if df_costos_materiales is not None:
-            tasks.append((
-                "anexo_costos_materiales.pdf",
-                lambda: tabla_costos_materiales_pdf(df_costos_materiales)
-            ))
+            tasks.append(("anexo_costos_materiales.pdf", lambda: tabla_costos_materiales_pdf(df_costos_materiales)))
 
         if df_costos_estructuras is not None:
-            tasks.append((
-                "anexo_costos_estructuras.pdf",
-                lambda: tabla_costos_estructuras_pdf(df_costos_estructuras)
-            ))
+            tasks.append(("anexo_costos_estructuras.pdf", lambda: tabla_costos_estructuras_pdf(df_costos_estructuras)))
 
         if df_costos_por_punto is not None:
-            tasks.append((
-                "anexo_costos_por_punto.pdf",
-                lambda: tabla_costos_por_punto_pdf(df_costos_por_punto)
-            ))
+            tasks.append(("anexo_costos_por_punto.pdf", lambda: tabla_costos_por_punto_pdf(df_costos_por_punto)))
 
         # =====================================================
         # 📊 EXCEL
