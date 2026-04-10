@@ -31,6 +31,7 @@ class SalidaMateriales:
     df_estructuras: Optional[pd.DataFrame] = None
     df_estructuras_por_punto: Optional[pd.DataFrame] = None
     descripcion_estructuras: Optional[Dict[str, str]] = None
+    df_materiales_por_estructura: Optional[Dict[str, pd.DataFrame]] = None
 
     # ======================================================
     # CONTEXTO
