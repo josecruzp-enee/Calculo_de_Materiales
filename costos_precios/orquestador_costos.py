@@ -23,42 +23,100 @@ class EntradaCostos:
 
 
 # =====================================================
+# HELPERS DEBUG
+# =====================================================
+def _preview_df(df: pd.DataFrame, n=5):
+    if df is None:
+        return None
+    return {
+        "shape": df.shape,
+        "columns": list(df.columns),
+        "head": df.head(n).to_dict(orient="records")
+    }
+
+
+# =====================================================
 # ORQUESTADOR
 # =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
-    debug = {}
+    debug: Dict[str, Any] = {}
 
-    # VALIDACIÓN
-    if not isinstance(entrada.df_materiales, pd.DataFrame):
-        raise TypeError("df_materiales inválido")
+    try:
+        # =====================================================
+        # 1. VALIDACIÓN
+        # =====================================================
+        if not isinstance(entrada.df_materiales, pd.DataFrame):
+            raise TypeError("df_materiales inválido")
 
-    if not isinstance(entrada.df_catalogo, pd.DataFrame):
-        raise TypeError("df_catalogo inválido")
+        if not isinstance(entrada.df_catalogo, pd.DataFrame):
+            raise TypeError("df_catalogo inválido")
 
-    debug["input"] = {
-        "materiales_filas": len(entrada.df_materiales),
-        "catalogo_filas": len(entrada.df_catalogo)
-    }
+        debug["input"] = {
+            "materiales": _preview_df(entrada.df_materiales),
+            "catalogo": _preview_df(entrada.df_catalogo)
+        }
 
-    # PREPARAR CATÁLOGO
-    df_costos = preparar_catalogo_costos(entrada.df_catalogo)
+        # =====================================================
+        # 2. PREPARAR CATÁLOGO
+        # =====================================================
+        df_costos = preparar_catalogo_costos(entrada.df_catalogo)
 
-    # CALCULAR COSTOS
-    df_resultado = calcular_lista_materiales_con_costos(
-        df_materiales=entrada.df_materiales,
-        df_catalogo_costos=df_costos
-    )
+        debug["catalogo_procesado"] = _preview_df(df_costos)
 
-    debug["resultado"] = {
-        "filas": len(df_resultado),
-        "costo_total": float(df_resultado["Costo Total"].sum())
-    }
+        if df_costos is None or df_costos.empty:
+            raise ValueError("df_costos vacío después de preparar")
 
-    debug_guardar("ORQUESTADOR_COSTOS", debug)
+        # =====================================================
+        # 3. CALCULAR COSTOS
+        # =====================================================
+        df_resultado = calcular_lista_materiales_con_costos(
+            df_materiales=entrada.df_materiales,
+            df_catalogo_costos=df_costos
+        )
 
-    return {
-        "ok": True,
-        "df_materiales_costos": df_resultado,
-        "debug": debug
-    }
+        debug["resultado_df"] = _preview_df(df_resultado)
+
+        if df_resultado is None or df_resultado.empty:
+            debug["warning"] = "Resultado vacío"
+
+        # =====================================================
+        # 4. MÉTRICAS
+        # =====================================================
+        costo_total = 0.0
+
+        if "Costo Total" in df_resultado.columns:
+            costo_total = float(df_resultado["Costo Total"].fillna(0).sum())
+        else:
+            debug["error_columna"] = "No existe 'Costo Total'"
+
+        debug["metricas"] = {
+            "filas": len(df_resultado),
+            "costo_total": costo_total
+        }
+
+        # =====================================================
+        # 5. DEBUG GLOBAL
+        # =====================================================
+        debug_guardar("ORQUESTADOR_COSTOS", debug)
+
+        return {
+            "ok": True,
+            "df_materiales_costos": df_resultado,
+            "debug": debug
+        }
+
+    except Exception as e:
+
+        debug["exception"] = {
+            "error": str(e)
+        }
+
+        debug_guardar("ORQUESTADOR_COSTOS_ERROR", debug)
+
+        return {
+            "ok": False,
+            "errores": [str(e)],
+            "df_materiales_costos": None,
+            "debug": debug
+        }
