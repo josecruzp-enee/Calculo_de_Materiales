@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import streamlit as st
+import pandas as pd  # 🔥 necesario para tablas
 
 # =========================================================
 # CONTRATOS
@@ -179,7 +180,7 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
         df_materiales_extra=st.session_state.get("df_materiales_extra"),
     )
 
-    # 🔥 DEBUG INTERFAZ
+    # DEBUG INTERFAZ (se mantiene igual)
     salida.debug = {
         "input": {
             "tipo_entrada": salida.tipo_entrada,
@@ -226,7 +227,9 @@ def ejecutar_orquestador_interfaz(
     salida_interfaz = _construir_salida_interfaz()
     resultado = st.session_state.get("resultado_calculo")
 
-    # 🔥 DEBUG COMPLETO PIPELINE
+    # =========================================================
+    # DEBUG PIPELINE
+    # =========================================================
     debug_actual = {
         "INTERFAZ": salida_interfaz.debug
     }
@@ -242,5 +245,51 @@ def ejecutar_orquestador_interfaz(
             debug_actual.update(resultado.debug)
 
     st.session_state["debug_pipeline"] = debug_actual
+
+    # =========================================================
+    # 🔥 DEBUG VISUAL EN TABLAS
+    # =========================================================
+    st.markdown("## 🧠 Debug del sistema")
+
+    for bloque, contenido in debug_actual.items():
+
+        st.markdown(f"### 🔹 {bloque}")
+
+        if isinstance(contenido, dict):
+
+            for k, v in contenido.items():
+
+                st.markdown(f"#### {k}")
+
+                if isinstance(v, pd.DataFrame):
+                    st.dataframe(v)
+
+                elif isinstance(v, dict):
+                    try:
+                        df = pd.DataFrame(v)
+                        st.dataframe(df)
+                    except:
+                        st.write(v)
+
+                else:
+                    st.write(v)
+
+        elif isinstance(contenido, pd.DataFrame):
+            st.dataframe(contenido)
+
+        else:
+            st.write(contenido)
+
+    # =========================================================
+    # 🔍 AUDITORÍA CLAVE
+    # =========================================================
+    st.markdown("## 🔍 Auditoría de estructuras")
+
+    try:
+        df_test = resultado.materiales.df_estructuras
+    except:
+        df_test = None
+
+    st.write("df_estructuras =", df_test)
 
     return resultado
