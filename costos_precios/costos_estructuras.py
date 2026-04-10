@@ -6,6 +6,7 @@ from typing import Dict, Any
 
 from costos_precios.costos_materiales import calcular_lista_materiales_con_costos
 from ayuda.debug import debug_guardar
+from entradas.normalizar import limpiar_codigo  # 🔥 CLAVE
 
 
 # =========================================================
@@ -42,35 +43,44 @@ def calcular_costos_por_estructura(
 
     debug: Dict[str, Any] = {}
 
+    # =====================================================
+    # VALIDACIONES
+    # =====================================================
     if df_estructuras is None or df_estructuras.empty:
         raise ValueError("df_estructuras vacío")
 
     if df_precios_materiales is None or df_precios_materiales.empty:
         raise ValueError("df_precios_materiales vacío")
 
+    if not isinstance(df_materiales_por_estructura, dict):
+        raise TypeError("df_materiales_por_estructura debe ser dict")
+
     # =====================================================
-    # NORMALIZAR CLAVES DE MATERIALES
+    # NORMALIZAR CLAVES 🔥 (UNIFICADO)
     # =====================================================
     df_materiales_por_estructura = {
-        str(k).strip().upper(): v
+        limpiar_codigo(str(k)): v
         for k, v in df_materiales_por_estructura.items()
     }
 
+    debug["materiales_keys_sample"] = list(df_materiales_por_estructura.keys())[:20]
+
     # =====================================================
-    # NORMALIZAR DATAFRAME DE ESTRUCTURAS
+    # NORMALIZAR DATAFRAME DE ESTRUCTURAS 🔥
     # =====================================================
     df = df_estructuras.copy()
 
     if "Estructura" not in df.columns or "Cantidad" not in df.columns:
         raise ValueError("df_estructuras debe tener columnas 'Estructura' y 'Cantidad'")
 
-    df["codigodeestructura"] = df["Estructura"].astype(str).str.strip().str.upper()
+    df["codigodeestructura"] = df["Estructura"].map(limpiar_codigo)
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
     # AGRUPAR
     df_group = df.groupby("codigodeestructura", as_index=False)["Cantidad"].sum()
 
     debug["estructuras_detectadas"] = len(df_group)
+    debug["estructuras_sample"] = df_group.head(10).to_dict()
 
     filas = []
     errores = []
@@ -117,6 +127,8 @@ def calcular_costos_por_estructura(
     if df_out.empty:
         debug_guardar("COSTOS_ESTRUCTURA_ERROR", {
             "errores": errores,
+            "materiales_keys": list(df_materiales_por_estructura.keys())[:20],
+            "estructuras": df_group.head(20).to_dict(),
             "warning": "No se generaron costos"
         })
         raise ValueError("No se generaron costos por estructura")
