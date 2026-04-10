@@ -16,7 +16,7 @@ class EntradaReportes:
     df_materiales: pd.DataFrame
     df_materiales_por_punto: pd.DataFrame
 
-    costos: Dict[str, Any]
+    costos: Optional[Dict[str, Any]] = None
 
     nombre_proyecto: str = "Proyecto"
 
@@ -96,19 +96,16 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         _validar_df(entrada.df_materiales, "df_materiales", ["Materiales"])
         _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto", ["Punto"])
 
-        costos = entrada.costos
-
-        if not isinstance(costos, dict) or not costos.get("ok"):
-            return _fail("costos inválido o no ejecutado")
+        costos = entrada.costos or {}
 
         # =====================================================
-        # COSTOS
+        # EXTRAER COSTOS (SIN BLOQUEAR)
         # =====================================================
-        df_costos_materiales = costos.get("df_costos_materiales")
-        df_costos_estructuras = costos.get("df_costos_estructuras")
+        df_costos_materiales = costos.get("df_materiales_costos")
+        df_costos_estructuras = costos.get("df_costos_estructura")
         df_costos_por_punto = costos.get("df_costos_por_punto")
 
-        # Validación ligera (no bloqueante)
+        # limpieza suave
         if isinstance(df_costos_materiales, pd.DataFrame) and df_costos_materiales.empty:
             df_costos_materiales = None
 
@@ -136,34 +133,43 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
             ("reporte_completo.pdf", lambda: generar_pdf_completo(
                 df_mat=entrada.df_materiales,
                 df_estructuras=entrada.df_estructuras,
-                df_estructuras_por_punto=entrada.df_estructuras,  # ✔ consistente con tu pipeline actual
+                df_estructuras_por_punto=entrada.df_estructuras,
                 df_mat_por_punto=entrada.df_materiales_por_punto,
                 datos_proyecto={"nombre": nombre},
             )),
         ]
 
         # =====================================================
-        # 💰 COSTOS (OPCIONAL)
+        # 💰 COSTOS (OPCIONAL Y ROBUSTO)
         # =====================================================
         if df_costos_materiales is not None:
-            tasks.append(("anexo_costos_materiales.pdf", lambda: tabla_costos_materiales_pdf(df_costos_materiales)))
+            tasks.append((
+                "anexo_costos_materiales.pdf",
+                lambda: tabla_costos_materiales_pdf(df_costos_materiales)
+            ))
 
         if df_costos_estructuras is not None:
-            tasks.append(("anexo_costos_estructuras.pdf", lambda: tabla_costos_estructuras_pdf(df_costos_estructuras)))
+            tasks.append((
+                "anexo_costos_estructuras.pdf",
+                lambda: tabla_costos_estructuras_pdf(df_costos_estructuras)
+            ))
 
         if df_costos_por_punto is not None:
-            tasks.append(("anexo_costos_por_punto.pdf", lambda: tabla_costos_por_punto_pdf(df_costos_por_punto)))
+            tasks.append((
+                "anexo_costos_por_punto.pdf",
+                lambda: tabla_costos_por_punto_pdf(df_costos_por_punto)
+            ))
 
         # =====================================================
-        # 📊 EXCEL (alineado)
+        # 📊 EXCEL
         # =====================================================
         tasks.append((
             "reporte.xlsx",
             lambda: exportar_excel(
-                df_resumen=entrada.df_materiales,                 # ✔ resumen real de materiales
-                df_estructuras_resumen=entrada.df_estructuras,    # ✔ estructuras global
+                df_resumen=entrada.df_materiales,
+                df_estructuras_resumen=entrada.df_estructuras,
                 df_resumen_por_punto=entrada.df_materiales_por_punto,
-                df_adicionales=df_costos_por_punto,               # ✔ ahora sí tiene sentido
+                df_adicionales=df_costos_por_punto,
                 ruta_excel=f"{nombre}_reporte.xlsx",
             )
         ))
