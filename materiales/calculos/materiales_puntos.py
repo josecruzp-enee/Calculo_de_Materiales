@@ -192,3 +192,66 @@ def calcular_materiales_por_punto(
     )
 
     return df_final[["Punto", "Materiales", "Unidad", "Cantidad"]]
+
+# ==========================================================
+# 🔥 NUEVO: MATERIALES POR ESTRUCTURA
+# ==========================================================
+def calcular_materiales_por_estructura(
+    hojas_base,
+    df_estructuras,
+    tension,
+    calibre_mt=None,
+    tabla_conectores_mt=None,
+):
+
+    if df_estructuras is None or df_estructuras.empty:
+        return {}
+
+    resultado = {}
+
+    for row in df_estructuras.to_dict("records"):
+
+        estructura = (
+            row.get("codigodeestructura")
+            or row.get("Estructura")
+            or ""
+        )
+
+        try:
+            cantidad = float(row.get("cantidad", row.get("Cantidad", 1)))
+        except Exception:
+            cantidad = 1.0
+
+        if cantidad <= 0 or not estructura:
+            continue
+
+        try:
+            df_mat = calcular_materiales_estructura(
+                hojas_base=hojas_base,
+                estructura=estructura,
+                cantidad=cantidad,
+                tension=tension,
+                calibre_mt=calibre_mt,
+                tabla_conectores_mt=tabla_conectores_mt,
+            )
+
+            cod = _normalizar_codigo(estructura)
+
+            if cod in resultado:
+                resultado[cod] = pd.concat([resultado[cod], df_mat])
+            else:
+                resultado[cod] = df_mat
+
+        except Exception:
+            continue
+
+    # consolidar cada estructura
+    for cod in resultado:
+        df = resultado[cod]
+
+        resultado[cod] = (
+            df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+            .sum()
+        )
+
+    return resultado
