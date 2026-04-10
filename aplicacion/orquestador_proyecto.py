@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 import traceback
 import pandas as pd
 from ayuda.debug import debug_guardar
+
 # =========================================================
 # CONTRATOS
 # =========================================================
@@ -101,13 +102,26 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         salida_entradas = ejecutar_entradas(salida_interfaz)
 
+        # 🔴 CORTE DURO SI FALLA ENTRADAS
+        if not salida_entradas.ok:
+            debug_global["entradas_error"] = {
+                "errores": salida_entradas.errores,
+                "warnings": salida_entradas.warnings
+            }
+            return _fail("Error en Entradas", debug_global)
+
         df_estructuras = _adaptar_df_estructuras(
             salida_entradas.df_estructuras
         )
-        debug_guardar("DEBUG_ENTRADAS_REAL", {
-            "tipo_df_estructuras": str(type(salida_entradas.df_estructuras)),
-            "es_dataframe": isinstance(salida_entradas.df_estructuras, pd.DataFrame),
-        })
+
+        # 🔍 DEBUG ESTRUCTURAS
+        debug_global["estructuras"] = {
+            "is_none": df_estructuras is None,
+            "shape": df_estructuras.shape if df_estructuras is not None else None,
+            "columns": list(df_estructuras.columns) if df_estructuras is not None else None,
+            "sample": df_estructuras.head(10).to_dict() if df_estructuras is not None else None
+        }
+
         # =====================================================
         # 2. PROYECTO
         # =====================================================
@@ -141,6 +155,14 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_materiales = ejecutar_materiales(entrada_mat)
         df_materiales = resultado_materiales.df_materiales
 
+        # 🔍 DEBUG MATERIALES
+        debug_global["materiales"] = {
+            "df_materiales_rows": len(df_materiales),
+            "keys_por_estructura": list(
+                resultado_materiales.df_materiales_por_estructura.keys()
+            )[:20]
+        }
+
         # =====================================================
         # 4. CATÁLOGO
         # =====================================================
@@ -149,13 +171,17 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         # =====================================================
-        # 5. COSTOS GLOBALES
+        # 5. PRE COSTOS
         # =====================================================
-        debug_guardar("CHECK_MATERIALES_ESTRUCTURA", {
-            "es_dict": isinstance(resultado_materiales.df_materiales_por_estructura, dict),
-            "keys": list(resultado_materiales.df_materiales_por_estructura.keys()) 
-            if isinstance(resultado_materiales.df_materiales_por_estructura, dict) else "NO",
-        })
+        debug_global["pre_costos"] = {
+            "df_materiales_rows": len(df_materiales),
+            "df_catalogo_rows": len(df_catalogo),
+            "estructuras_rows": len(df_estructuras),
+            "materiales_keys": list(
+                resultado_materiales.df_materiales_por_estructura.keys()
+            )[:20]
+        }
+
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
             df_catalogo=df_catalogo,
@@ -166,9 +192,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_costos = ejecutar_costos(entrada_costos)
 
         # =====================================================
-        # 🔥 6. COSTOS POR ESTRUCTURA (FIX SEGURO)
+        # 6. COSTOS POR ESTRUCTURA
         # =====================================================
-
         df_costos_estructura = None
 
         try:
@@ -177,22 +202,13 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                 df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
                 df_precios_materiales=df_catalogo
             )
-            
 
-            total = 0.0
-
-            if (
-                df_costos_estructura is not None
-                and "Costo Total" in df_costos_estructura.columns
-            ):
-                total = float(df_costos_estructura["Costo Total"].sum())
-
-            debug_global["costos_estructura_total"] = total
+            total = float(df_costos_estructura["Costo Total"].sum())
 
             debug_global["costos_estructura"] = {
                 "ok": True,
-                "shape": list(df_costos_estructura.shape)
-                if df_costos_estructura is not None else None
+                "filas": len(df_costos_estructura),
+                "total": total
             }
 
         except Exception as e:
@@ -201,8 +217,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                 "ok": False,
                 "error": str(e)
             }
-
-            debug_global["costos_estructura_total"] = 0
 
         # =====================================================
         # 7. REPORTES
