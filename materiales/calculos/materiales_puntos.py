@@ -155,7 +155,7 @@ def calcular_materiales_por_punto(
             df_mat = calcular_materiales_estructura(
                 hojas_base=hojas_base,
                 estructura=estructura,
-                cantidad=cantidad,
+                cantidad=1,
                 tension=tension,
                 calibre_mt=calibre_mt,
                 tabla_conectores_mt=tabla_conectores_mt,
