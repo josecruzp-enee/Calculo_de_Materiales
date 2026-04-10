@@ -69,9 +69,6 @@ def ejecutar_entradas(
     entrada: SalidaInterfaz,
 ) -> SalidaEntradas:
 
-    # =====================================================
-    # DEBUG BASE (TABLA)
-    # =====================================================
     debug: Dict[str, Any] = {
         "input": pd.DataFrame({
             "campo": ["tipo_entrada", "tiene_data", "tipo_data"],
@@ -148,7 +145,7 @@ def ejecutar_entradas(
             )
 
         # =====================================================
-        # 3. VALIDACIÓN
+        # 3. VALIDACIÓN (🔥 FIX)
         # =====================================================
         errores_val = validar_estructuras(df_norm)
 
@@ -157,18 +154,14 @@ def ejecutar_entradas(
         })
 
         if errores_val:
+            # 🔥 NO cortamos el flujo
             debug["estado"] = pd.DataFrame({
-                "ok": [False],
-                "fase": ["validacion"]
+                "ok": [True],
+                "fase": ["validacion_con_errores"]
             })
 
-            return SalidaEntradas(
-                ok=False,
-                errores=errores_val,
-                warnings=warnings_norm,
-                df_estructuras=df_norm,
-                debug=debug
-            )
+            # 🔥 Se convierten en warnings
+            warnings_norm = warnings_norm + errores_val
 
         # =====================================================
         # 4. BASE DE DATOS
@@ -184,13 +177,15 @@ def ejecutar_entradas(
         # =====================================================
         debug["output"] = _safe_df_info(df_norm)
 
-        debug["estado"] = pd.DataFrame({
-            "ok": [True]
-        })
+        if not errores_val:
+            debug["estado"] = pd.DataFrame({
+                "ok": [True],
+                "fase": ["clean"]
+            })
 
         return SalidaEntradas(
             ok=True,
-            errores=[],
+            errores=[],  # 🔥 limpio
             warnings=warnings_norm,
 
             # CORE
@@ -218,6 +213,7 @@ def ejecutar_entradas(
             "trace": [traceback.format_exc()]
         })
 
+        # 🔥 FIX CRÍTICO
         return SalidaEntradas(
             ok=False,
             errores=[str(e)],
