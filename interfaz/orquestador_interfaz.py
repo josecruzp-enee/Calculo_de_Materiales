@@ -34,7 +34,7 @@ def _init_state():
         "tipo_entrada": None,
         "data_entrada": None,
         "datos_proyecto": {},
-        "cables_proyecto_df": None,
+        "cables_proyecto_df": pd.DataFrame(),
         "df_materiales_extra": None,
         "resultado_calculo": None,
         "ejecutar_proyecto_flag": False,
