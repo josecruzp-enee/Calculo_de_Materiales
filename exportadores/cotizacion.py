@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib import colors
-import pandas as pd
 
 
 # =========================================================
@@ -11,117 +12,90 @@ def _fmt(valor: float) -> str:
     return f"L {valor:,.2f}"
 
 
-def _validar_costos(costos: dict) -> pd.DataFrame:
-
-    if not isinstance(costos, dict):
-        raise ValueError("costos inválido")
-
-    if not costos.get("ok"):
-        raise ValueError("costos no ejecutado correctamente")
-
-    df = costos.get("df_costos_por_punto")
-
-    if df is None or not isinstance(df, pd.DataFrame):
-        raise ValueError("df_costos_por_punto inválido")
-
-    if df.empty:
-        raise ValueError("df_costos_por_punto vacío")
-
-    # 🔥 VALIDACIÓN DE CONTRATO
-    required_cols = [
-        "Punto",
-        "Estructura",
-        "Cantidad",
-        "Precio Unitario",
-        "Subtotal Precio",
-    ]
-
-    faltantes = [c for c in required_cols if c not in df.columns]
-    if faltantes:
-        raise ValueError(f"df_costos_por_punto no cumple contrato: {faltantes}")
-
-    return df.copy()
-
-
 # =========================================================
-# RENDER PRESUPUESTO
+# COTIZACIÓN FINAL (FORMATO COMERCIAL)
 # =========================================================
-def generar_seccion_presupuesto(doc, styles, costos):
+def generar_seccion_cotizacion_final(
+    doc,
+    styles,
+    df_precios,
+    df_estructuras,
+    porcentaje_gestion: float = 0.02,
+    porcentaje_imprevistos: float = 0.01,
+    porcentaje_isv: float = 0.15,
+):
 
     elems = [PageBreak()]
 
     # =====================================================
-    # VALIDACIÓN DOMINIO
+    # VALIDACIONES
     # =====================================================
-    df = _validar_costos(costos)
+    if df_precios is None or df_precios.empty:
+        raise ValueError("df_precios vacío")
+
+    if df_estructuras is None or df_estructuras.empty:
+        raise ValueError("df_estructuras vacío")
+
+    # =====================================================
+    # AGRUPAR CANTIDADES
+    # =====================================================
+    cantidades = (
+        df_estructuras.groupby("Estructura")["Cantidad"]
+        .sum()
+        .to_dict()
+    )
+
+    # =====================================================
+    # TOTAL BASE DEL PROYECTO
+    # =====================================================
+    total_base = 0.0
+
+    for _, r in df_precios.iterrows():
+        estructura = str(r["Estructura"]).strip()
+        pu = float(r["Precio Unitario"])
+        cant = cantidades.get(estructura, 1)
+
+        total_base += pu * cant
+
+    # =====================================================
+    # CARGOS
+    # =====================================================
+    gestion = total_base * porcentaje_gestion
+    imprevistos = total_base * porcentaje_imprevistos
+
+    subtotal = total_base + gestion + imprevistos
+
+    isv = subtotal * porcentaje_isv
+
+    total_final = subtotal + isv
 
     # =====================================================
     # TÍTULO
     # =====================================================
-    elems.append(Paragraph("<b>9. PRESUPUESTO DETALLADO</b>", styles["Heading1"]))
-    elems.append(Spacer(1, 10))
-
-    elems.append(Paragraph(
-        "A continuación se presenta el presupuesto correspondiente al suministro e instalación "
-        "de las estructuras del proyecto.",
-        styles["BodyText"]
-    ))
+    elems.append(Paragraph("<b>COTIZACIÓN DEL PROYECTO</b>", styles["Heading1"]))
     elems.append(Spacer(1, 12))
 
     # =====================================================
-    # NORMALIZACIÓN SEGURA
+    # TABLA RESUMEN (NO DETALLADA)
     # =====================================================
-    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce")
-    df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce")
-    df["Subtotal Precio"] = pd.to_numeric(df["Subtotal Precio"], errors="coerce")
+    data = [
+        ["Concepto", "Monto (L)"],
 
-    if df[["Cantidad", "Precio Unitario", "Subtotal Precio"]].isna().any().any():
-        raise ValueError("Datos numéricos inválidos en df_costos_por_punto")
+        ["Suministro e instalación del proyecto eléctrico", _fmt(total_base)],
 
-    df = df.sort_values(by=["Punto", "Estructura"]).reset_index(drop=True)
+        ["Gestión y aprobación ENEE (2%)", _fmt(gestion)],
+        ["Imprevistos (1%)", _fmt(imprevistos)],
 
-    # =====================================================
-    # TABLA
-    # =====================================================
-    data = [["ITEM", "DESCRIPCIÓN", "CANT", "P.U.", "TOTAL"]]
+        ["SUBTOTAL", _fmt(subtotal)],
 
-    total_general = float(df["Subtotal Precio"].sum())
-    item = 1
+        ["ISV (15%)", _fmt(isv)],
 
-    for _, r in df.iterrows():
+        ["TOTAL OFERTA", _fmt(total_final)],
+    ]
 
-        estructura = r["Estructura"]
-        cant = int(r["Cantidad"])
-        pu = float(r["Precio Unitario"])
-        total = float(r["Subtotal Precio"])
-
-        descripcion = f"Suministro e instalación de estructura tipo {estructura}"
-
-        data.append([
-            f"9.{item:02d}",
-            descripcion,
-            f"{cant}",
-            _fmt(pu),
-            _fmt(total),
-        ])
-
-        item += 1
-
-    # TOTAL
-    data.append(["", "TOTAL GENERAL", "", "", _fmt(total_general)])
-
-    # =====================================================
-    # TABLA
-    # =====================================================
     tabla = Table(
         data,
-        colWidths=[
-            doc.width * 0.10,
-            doc.width * 0.45,
-            doc.width * 0.10,
-            doc.width * 0.15,
-            doc.width * 0.20,
-        ]
+        colWidths=[doc.width * 0.7, doc.width * 0.3]
     )
 
     tabla.setStyle(TableStyle([
@@ -129,13 +103,16 @@ def generar_seccion_presupuesto(doc, styles, costos):
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
 
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
 
-        ("ALIGN", (2, 1), (2, -2), "CENTER"),
-        ("ALIGN", (3, 1), (4, -2), "RIGHT"),
-
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFEFEF")),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.darkblue),
+        ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+
+        ("BACKGROUND", (0, -3), (-1, -3), colors.HexColor("#EFEFEF")),
+        ("FONTNAME", (0, -3), (-1, -3), "Helvetica-Bold"),
+
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
     ]))
 
     elems.append(tabla)
@@ -147,7 +124,8 @@ def generar_seccion_presupuesto(doc, styles, costos):
     elems.append(
         Paragraph(
             "<font size=8><i>"
-            "Nota: Este presupuesto incluye suministro de materiales, costos operativos y utilidad."
+            "Esta oferta incluye suministro de materiales, instalación, gestión ante ENEE "
+            "y costos asociados para la ejecución del proyecto."
             "</i></font>",
             styles["Normal"]
         )
