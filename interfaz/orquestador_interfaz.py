@@ -166,7 +166,9 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
     tipo = st.session_state.get("tipo_entrada")
     data = st.session_state.get("data_entrada")
     datos = st.session_state.get("datos_proyecto") or {}
-
+    df_tmp = st.session_state.get("cables_proyecto_df")
+    df_cables = df_tmp if isinstance(df_tmp, pd.DataFrame) else None
+    
     if not tipo:
         errores.append("Modo de entrada no seleccionado")
 
@@ -180,7 +182,7 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
         tipo_entrada=tipo or "manual",
         data_entrada=data,
         datos_proyecto=datos,
-        df_cables=st.session_state.get("cables_proyecto_df"),
+        df_cables=df_cables,
         df_materiales_extra=st.session_state.get("df_materiales_extra"),
     )
 
