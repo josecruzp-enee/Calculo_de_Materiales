@@ -112,6 +112,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "df_estructuras_shape": getattr(salida_entradas.df_estructuras, "shape", None),
         }
 
+        # 🔥 DEBUG REAL
+        if isinstance(salida_entradas.df_estructuras, pd.DataFrame):
+            debug_global["entrada_df_raw"] = salida_entradas.df_estructuras.head(20)
+
         if not salida_entradas or not salida_entradas.ok:
             return _fail("Error en entradas", debug_global)
 
@@ -123,6 +127,9 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "shape": df_estructuras.shape,
             "columns": list(df_estructuras.columns)
         }
+
+        # 🔥 DEBUG REAL
+        debug_global["estructuras_df"] = df_estructuras.head(20)
 
         # =====================================================
         # 2. PROYECTO
@@ -171,6 +178,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "df_materiales_shape": getattr(resultado_materiales.df_materiales, "shape", None),
         }
 
+        # 🔥 DEBUG REAL
+        if isinstance(resultado_materiales.df_materiales, pd.DataFrame):
+            debug_global["materiales_df"] = resultado_materiales.df_materiales.head(20)
+
         if not resultado_materiales or not resultado_materiales.ok:
             return _fail("Error en materiales", debug_global)
 
@@ -187,6 +198,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "shape": getattr(df_catalogo, "shape", None),
             "empty": df_catalogo.empty if df_catalogo is not None else True
         }
+
+        # 🔥 DEBUG REAL
+        if isinstance(df_catalogo, pd.DataFrame):
+            debug_global["catalogo_df"] = df_catalogo.head(20)
 
         if df_catalogo is None or df_catalogo.empty:
             raise ValueError("Catálogo vacío")
