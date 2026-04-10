@@ -6,7 +6,7 @@ from exportadores.pdf_reportes_simples import (
     generar_pdf_materiales,
     generar_pdf_materiales_por_punto,
 )
-
+from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, PageBreak, Table
 from exportadores.precios_estructura import generar_tabla_costos_estructura
 from io import BytesIO
 # =====================================================
