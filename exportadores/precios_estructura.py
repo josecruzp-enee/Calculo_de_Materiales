@@ -29,28 +29,54 @@ def generar_tabla_costos_estructura(
 ):
 
     # =====================================================
-    # VALIDACIÓN
+    # VALIDACIÓN SUAVE (NO ROMPER PDF)
     # =====================================================
-    _validar_df(df_costos_estructura, "df_costos_estructura")
+    if df_costos_estructura is None or not isinstance(df_costos_estructura, pd.DataFrame) or df_costos_estructura.empty:
+        return [
+            Paragraph("No hay datos de costos de estructuras", styles["Normal"])
+        ]
 
     df = df_costos_estructura.copy()
 
     # =====================================================
-    # NORMALIZAR NOMBRE
+    # NORMALIZAR COLUMNAS (CRÍTICO)
+    # =====================================================
+    df.columns = [c.strip() for c in df.columns]
+
+    rename_map = {
+        "COSTO UNITARIO": "Costo Unitario",
+        "COSTO_UNITARIO": "Costo Unitario",
+        "COSTO": "Costo Unitario",
+        "TOTAL": "Costo Total",
+        "COSTO TOTAL": "Costo Total",
+        "CANTIDAD": "Cantidad",
+        "ESTRUCTURA": "Estructura",
+        "CODIGODEESTRUCTURA": "Estructura",
+    }
+
+    df.rename(columns=lambda c: rename_map.get(c.upper(), c), inplace=True)
+
+    # =====================================================
+    # ASEGURAR COLUMNA ESTRUCTURA
     # =====================================================
     if "Estructura" not in df.columns:
-        if "codigodeestructura" in df.columns:
-            df["Estructura"] = df["codigodeestructura"]
-        else:
-            raise ValueError("No existe columna 'Estructura'")
-
-    required = ["Estructura", "Cantidad", "Costo Unitario", "Costo Total"]
-    faltantes = [c for c in required if c not in df.columns]
-    if faltantes:
-        raise ValueError(f"Faltan columnas: {faltantes}")
+        return [
+            Paragraph("No existe columna 'Estructura'", styles["Normal"])
+        ]
 
     # =====================================================
-    # NORMALIZACIÓN
+    # VALIDAR COLUMNAS REQUERIDAS (SIN ROMPER)
+    # =====================================================
+    required = ["Estructura", "Cantidad", "Costo Unitario", "Costo Total"]
+    faltantes = [c for c in required if c not in df.columns]
+
+    if faltantes:
+        return [
+            Paragraph(f"Faltan columnas en costos: {faltantes}", styles["Normal"])
+        ]
+
+    # =====================================================
+    # NORMALIZACIÓN NUMÉRICA
     # =====================================================
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
     df["Costo Unitario"] = pd.to_numeric(df["Costo Unitario"], errors="coerce").fillna(0)
@@ -112,6 +138,9 @@ def generar_tabla_costos_estructura(
         ("FONTNAME", (0,-1), (-1,-1), "Helvetica-Bold"),
     ]))
 
+    # =====================================================
+    # SALIDA
+    # =====================================================
     elems = []
     elems.append(Paragraph("<b>2. PRESUPUESTO DE ESTRUCTURAS</b>", styles["Heading2"]))
     elems.append(Spacer(1, 8))
