@@ -4,17 +4,21 @@ from __future__ import annotations
 import pandas as pd
 from typing import Dict, Any
 
+from costos_precios.costos_materiales import calcular_lista_materiales_con_costos
 from ayuda.debug import debug_guardar
 
 
 # =========================================================
-# COSTO UNITARIO
+# COSTO UNITARIO DE UNA ESTRUCTURA
 # =========================================================
-def _costo_unitario_estructura(df_materiales, df_precios) -> float:
+def _costo_unitario_estructura(
+    df_materiales: pd.DataFrame,
+    df_precios: pd.DataFrame
+) -> float:
 
-    df_val = calcular_costos_desde_resumen(
-        df_materiales[["Materiales", "Unidad", "Cantidad"]],
-        df_precios
+    df_val = calcular_lista_materiales_con_costos(
+        df_materiales=df_materiales,
+        df_catalogo_costos=df_precios
     )
 
     if df_val is None or df_val.empty:
@@ -36,19 +40,34 @@ def calcular_costos_por_estructura(
     df_precios_materiales: pd.DataFrame,
 ) -> pd.DataFrame:
 
-    debug = {}
+    debug: Dict[str, Any] = {}
 
     if df_estructuras is None or df_estructuras.empty:
         raise ValueError("df_estructuras vacío")
 
-    df = df_estructuras.copy()
+    if df_precios_materiales is None or df_precios_materiales.empty:
+        raise ValueError("df_precios_materiales vacío")
 
     # =====================================================
-    # NORMALIZAR
+    # NORMALIZAR CLAVES DE MATERIALES
     # =====================================================
+    df_materiales_por_estructura = {
+        str(k).strip().upper(): v
+        for k, v in df_materiales_por_estructura.items()
+    }
+
+    # =====================================================
+    # NORMALIZAR DATAFRAME DE ESTRUCTURAS
+    # =====================================================
+    df = df_estructuras.copy()
+
+    if "Estructura" not in df.columns or "Cantidad" not in df.columns:
+        raise ValueError("df_estructuras debe tener columnas 'Estructura' y 'Cantidad'")
+
     df["codigodeestructura"] = df["Estructura"].astype(str).str.strip().str.upper()
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
+    # AGRUPAR
     df_group = df.groupby("codigodeestructura", as_index=False)["Cantidad"].sum()
 
     debug["estructuras_detectadas"] = len(df_group)
@@ -75,14 +94,14 @@ def calcular_costos_por_estructura(
 
         if df_mat is None or df_mat.empty:
             errores.append(f"Sin materiales para {cod}")
-            continue   # 🔥 NO rompe el sistema
+            continue
 
         try:
             costo_unit = _costo_unitario_estructura(df_mat, df_precios_materiales)
 
             filas.append({
                 "codigodeestructura": cod,
-                "Costo Unitario": costo_unit,
+                "Costo Unitario": round(costo_unit, 2),
                 "Cantidad": qty,
                 "Costo Total": round(costo_unit * qty, 2),
             })
