@@ -127,7 +127,9 @@ def calcular_lista_materiales_con_costos(
     # DETECTAR FALTANTES
     # =====================================================
     faltantes = df[df["Costo Unitario"].isna()]
-
+    total = len(df)
+    sin_costo = len(faltantes)
+    
     debug_guardar("materiales_sin_precio", {
         "total": len(faltantes),
         "ejemplo": faltantes.head(20).to_dict(orient="records")
