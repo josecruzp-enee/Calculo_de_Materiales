@@ -5,7 +5,6 @@ import pandas as pd
 from typing import Dict, Any
 
 from ayuda.debug import debug_guardar
-from costos_precios.costos_materiales import calcular_costos_desde_resumen
 
 
 # =========================================================
