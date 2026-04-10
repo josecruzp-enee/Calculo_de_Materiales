@@ -10,7 +10,7 @@ from dataclasses import dataclass
 @dataclass(slots=True)
 class ResultadoCostosOperativos:
     """
-    Todos los valores en moneda local (L)
+    Costos operativos UNITARIOS (por estructura)
     """
     mano_obra: float
     equipos: float
@@ -24,21 +24,19 @@ class ResultadoCostosOperativos:
 def calcular_costos_operativos(
     *,
     costo_cuadrilla_dia: float,
-    fraccion_jornada: float = 1/16,
+    fraccion_jornada: float = 1/16,  # 👈 tiempo por estructura
     costo_equipos: float = 0.0,
     costo_logistica: float = 0.0,
 ) -> ResultadoCostosOperativos:
     """
-    Calcula costos operativos:
+    Calcula costos operativos UNITARIOS por estructura.
 
-    ✔ Mano de obra
-    ✔ Equipos/herramientas
-    ✔ Logística
+    ✔ Mano de obra proporcional (por estructura)
+    ✔ Equipos/herramientas por estructura
+    ✔ Logística por estructura
 
-    Dominio puro:
-    - Sin efectos secundarios
-    - Contrato fuerte
-    - Determinista
+    Ejemplo:
+    - Si una cuadrilla instala 16 estructuras/día → fracción = 1/16
     """
 
     # =====================================================
@@ -72,13 +70,14 @@ def calcular_costos_operativos(
     # CÁLCULOS
     # =====================================================
     mano_obra = float(costo_cuadrilla_dia) * float(fraccion_jornada)
+
     equipos = float(costo_equipos)
     logistica = float(costo_logistica)
 
     operativo_total = mano_obra + equipos + logistica
 
     # =====================================================
-    # OUTPUT (REDONDEO CONTROLADO)
+    # OUTPUT
     # =====================================================
     return ResultadoCostosOperativos(
         mano_obra=round(mano_obra, 2),
