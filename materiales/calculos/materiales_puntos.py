@@ -25,7 +25,7 @@ def _normalizar_codigo(estructura: str) -> str:
 
 
 # ==========================================================
-# MATERIAL POR ESTRUCTURA
+# MATERIAL POR ESTRUCTURA (BASE)
 # ==========================================================
 def calcular_materiales_estructura(
     hojas_base,
@@ -36,17 +36,11 @@ def calcular_materiales_estructura(
     tabla_conectores_mt=None,
 ):
 
-    # -------------------------
-    # NORMALIZAR
-    # -------------------------
     estructura = _normalizar_codigo(estructura)
 
     if not estructura:
         raise ValueError("Estructura vacía")
 
-    # -------------------------
-    # VALIDAR CANTIDAD
-    # -------------------------
     try:
         cantidad = float(cantidad)
     except Exception:
@@ -55,17 +49,11 @@ def calcular_materiales_estructura(
     if cantidad <= 0:
         raise ValueError(f"Cantidad inválida para {estructura}: {cantidad}")
 
-    # -------------------------
-    # VALIDAR HOJA
-    # -------------------------
     df_hoja = hojas_base.get(estructura)
 
     if df_hoja is None or not isinstance(df_hoja, pd.DataFrame):
         raise ValueError(f"Estructura no encontrada o inválida: {estructura}")
 
-    # -------------------------
-    # LEER HOJA
-    # -------------------------
     try:
         df_filtrado = leer_hoja_materiales(df_hoja, tension)
     except Exception as e:
@@ -75,34 +63,25 @@ def calcular_materiales_estructura(
         raise ValueError(f"Sin materiales para {estructura} @ {tension}")
 
     df_filtrado = df_filtrado.copy()
-
-    # -------------------------
-    # NORMALIZAR COLUMNAS
-    # -------------------------
     df_filtrado.columns = [str(c).strip() for c in df_filtrado.columns]
 
-    # -------------------------
-    # VALIDAR COLUMNAS
-    # -------------------------
     if not set(COLUMNAS_STD).issubset(df_filtrado.columns):
         raise ValueError(
             f"Formato inválido en hoja {estructura}: {list(df_filtrado.columns)}"
         )
 
-    # -------------------------
-    # NORMALIZAR CANTIDADES
-    # -------------------------
     df_filtrado["Cantidad"] = pd.to_numeric(
         df_filtrado["Cantidad"], errors="coerce"
     ).fillna(0.0)
 
+    # 🔥 MULTIPLICACIÓN CONTROLADA
     df_filtrado["Cantidad"] *= cantidad
 
     return df_filtrado[COLUMNAS_STD]
 
 
 # ==========================================================
-# FUNCIÓN PRINCIPAL: POR PUNTO
+# MATERIALES POR PUNTO (✔️ AQUÍ SÍ MULTIPLICA)
 # ==========================================================
 def calcular_materiales_por_punto(
     hojas_base,
@@ -112,18 +91,12 @@ def calcular_materiales_por_punto(
     tabla_conectores_mt=None,
 ):
 
-    # -------------------------
-    # VALIDACIÓN INPUT
-    # -------------------------
     if df_estructuras is None or df_estructuras.empty:
         return pd.DataFrame(columns=["Punto", "Materiales", "Unidad", "Cantidad"])
 
     resultados = []
     errores = []
 
-    # -------------------------
-    # LOOP PRINCIPAL
-    # -------------------------
     for row in df_estructuras.to_dict("records"):
 
         punto = str(row.get("Punto") or row.get("punto") or "").strip() or "General"
@@ -134,28 +107,20 @@ def calcular_materiales_por_punto(
             or ""
         )
 
-        # -------------------------
-        # VALIDAR CANTIDAD
-        # -------------------------
         try:
-            cantidad = float(row.get("cantidad", 1))
+            cantidad = float(row.get("cantidad", row.get("Cantidad", 1)))
         except Exception:
             cantidad = 1.0
 
-        if cantidad <= 0:
+        if cantidad <= 0 or not estructura:
             continue
 
-        if not estructura:
-            continue
-
-        # -------------------------
-        # CALCULAR
-        # -------------------------
         try:
+            # ✔️ CORRECTO: aquí sí multiplicamos
             df_mat = calcular_materiales_estructura(
                 hojas_base=hojas_base,
                 estructura=estructura,
-                cantidad=1,
+                cantidad=cantidad,
                 tension=tension,
                 calibre_mt=calibre_mt,
                 tabla_conectores_mt=tabla_conectores_mt,
@@ -169,18 +134,12 @@ def calcular_materiales_por_punto(
         except Exception as e:
             errores.append(f"{estructura}: {e}")
 
-    # -------------------------
-    # VALIDACIÓN FINAL
-    # -------------------------
     if not resultados:
         raise ValueError(
             f"No se pudo calcular ningún material. "
             f"Errores: {errores[:5]}"
         )
 
-    # -------------------------
-    # CONSOLIDACIÓN
-    # -------------------------
     df_final = pd.concat(resultados, ignore_index=True)
 
     df_final = (
@@ -193,8 +152,9 @@ def calcular_materiales_por_punto(
 
     return df_final[["Punto", "Materiales", "Unidad", "Cantidad"]]
 
+
 # ==========================================================
-# 🔥 NUEVO: MATERIALES POR ESTRUCTURA
+# MATERIALES POR ESTRUCTURA (🔥 BASE UNITARIA)
 # ==========================================================
 def calcular_materiales_por_estructura(
     hojas_base,
@@ -217,19 +177,15 @@ def calcular_materiales_por_estructura(
             or ""
         )
 
-        try:
-            cantidad = float(row.get("cantidad", row.get("Cantidad", 1)))
-        except Exception:
-            cantidad = 1.0
-
-        if cantidad <= 0 or not estructura:
+        if not estructura:
             continue
 
         try:
+            # 🔥 CRÍTICO: SIEMPRE 1 (estructura base)
             df_mat = calcular_materiales_estructura(
                 hojas_base=hojas_base,
                 estructura=estructura,
-                cantidad=cantidad,
+                cantidad=1,
                 tension=tension,
                 calibre_mt=calibre_mt,
                 tabla_conectores_mt=tabla_conectores_mt,
