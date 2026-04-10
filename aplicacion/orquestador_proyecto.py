@@ -25,6 +25,9 @@ from costos_precios.orquestador_costos import (
     EntradaCostos,
 )
 
+# 🔥 NUEVO IMPORT
+from costos_precios.costos_estructuras import calcular_costos_por_estructura
+
 from exportadores.orquestador_reportes import generar_reportes
 
 
@@ -86,17 +89,15 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
     debug_global: Dict[str, Any] = {}
 
     try:
+
         # =====================================================
-        # 0. VALIDACIÓN INTERFAZ
+        # 0. INTERFAZ
         # =====================================================
         debug_global["interfaz"] = {
             "ok": getattr(salida_interfaz, "ok", None),
             "tipo_entrada": getattr(salida_interfaz, "tipo_entrada", None),
             "datos_proyecto_keys": list((salida_interfaz.datos_proyecto or {}).keys())
         }
-
-        if not isinstance(salida_interfaz, SalidaInterfaz):
-            return _fail("salida_interfaz inválida", debug_global)
 
         if not salida_interfaz.ok:
             return _fail("SalidaInterfaz no válida", debug_global)
@@ -106,28 +107,9 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         salida_entradas = ejecutar_entradas(salida_interfaz)
 
-        debug_global["entradas"] = {
-            "ok": getattr(salida_entradas, "ok", None),
-            "errores": _safe_list(getattr(salida_entradas, "errores", [])),
-            "df_estructuras_shape": getattr(salida_entradas.df_estructuras, "shape", None),
-        }
-
-        if isinstance(salida_entradas.df_estructuras, pd.DataFrame):
-            debug_global["entrada_df_raw"] = salida_entradas.df_estructuras.head(20)
-
-        if not salida_entradas or not salida_entradas.ok:
-            return _fail("Error en entradas", debug_global)
-
         df_estructuras = _adaptar_df_estructuras(
             salida_entradas.df_estructuras
         )
-
-        debug_global["estructuras"] = {
-            "shape": df_estructuras.shape,
-            "columns": list(df_estructuras.columns)
-        }
-
-        debug_global["estructuras_df"] = df_estructuras.head(20)
 
         # =====================================================
         # 2. PROYECTO
@@ -136,10 +118,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             base_datos=salida_entradas.base_datos,
             df_estructuras=df_estructuras,
             datos_proyecto=salida_entradas.datos_proyecto,
-
             calibre_mt=(salida_entradas.datos_proyecto or {}).get("calibre_mt", ""),
             tabla_conectores_mt=(salida_entradas.datos_proyecto or {}).get("tabla_conectores_mt", {}),
-
             df_cables=salida_entradas.df_cables,
             df_materiales_extra=salida_entradas.df_materiales_extra,
         )
@@ -148,17 +128,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         tension = _extraer_tension(entrada_proyecto.datos_proyecto)
 
-        debug_global["proyecto"] = {
-            "tension": tension,
-            "calibre_mt": entrada_proyecto.calibre_mt,
-            "tiene_base_datos": entrada_proyecto.base_datos is not None,
-        }
-
         # =====================================================
         # 3. MATERIALES
         # =====================================================
         entrada_mat = EntradaMateriales(
-            estructuras_df=entrada_proyecto.df_estructuras,
+            estructuras_df=df_estructuras,
             tension=tension,
             base_datos=entrada_proyecto.base_datos,
             datos_proyecto=entrada_proyecto.datos_proyecto,
@@ -170,38 +144,18 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         resultado_materiales = ejecutar_materiales(entrada_mat)
 
-        debug_global["materiales"] = {
-            "ok": getattr(resultado_materiales, "ok", None),
-            "errores": _safe_list(getattr(resultado_materiales, "errores", [])),
-            "df_materiales_shape": getattr(resultado_materiales.df_materiales, "shape", None),
-        }
-
-        if isinstance(resultado_materiales.df_materiales, pd.DataFrame):
-            debug_global["materiales_df"] = resultado_materiales.df_materiales.head(20)
-
-        if not resultado_materiales or not resultado_materiales.ok:
-            return _fail("Error en materiales", debug_global)
-
-        # =====================================================
-        # 4. COSTOS
-        # =====================================================
         df_materiales = resultado_materiales.df_materiales
 
+        # =====================================================
+        # 4. CATÁLOGO
+        # =====================================================
         df_catalogo = obtener_catalogo_materiales(
             entrada_proyecto.base_datos
         )
 
-        debug_global["catalogo"] = {
-            "shape": getattr(df_catalogo, "shape", None),
-            "empty": df_catalogo.empty if df_catalogo is not None else True
-        }
-
-        if isinstance(df_catalogo, pd.DataFrame):
-            debug_global["catalogo_df"] = df_catalogo.head(20)
-
-        if df_catalogo is None or df_catalogo.empty:
-            raise ValueError("Catálogo vacío")
-
+        # =====================================================
+        # 5. COSTOS GLOBALES
+        # =====================================================
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
             df_catalogo=df_catalogo
@@ -209,37 +163,42 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         resultado_costos = ejecutar_costos(entrada_costos)
 
-        # 🔥 FIX REAL
-        debug_global["costos"] = {
-            "ok": resultado_costos.get("ok"),
-            "filas": getattr(
-                resultado_costos.get("df_materiales_costos"),
-                "shape",
-                None
+        # =====================================================
+        # 🔥 6. COSTOS POR ESTRUCTURA (NUEVO)
+        # =====================================================
+        df_costos_estructura = None
+
+        try:
+            df_costos_estructura = calcular_costos_por_estructura(
+                df_estructuras=df_estructuras,
+                df_materiales_por_estructura=resultado_materiales.descripcion_estructuras,
+                df_precios_materiales=df_catalogo
             )
-        }
 
-        if resultado_costos.get("ok"):
-            df_costos = resultado_costos.get("df_materiales_costos")
+            debug_global["costos_estructura"] = {
+                "ok": True,
+                "shape": df_costos_estructura.shape
+            }
 
-            if isinstance(df_costos, pd.DataFrame):
-                debug_global["costos_df"] = df_costos.head(20)
+        except Exception as e:
+
+            debug_global["costos_estructura"] = {
+                "ok": False,
+                "error": str(e)
+            }
 
         # =====================================================
-        # 5. REPORTES
+        # 7. REPORTES
         # =====================================================
         resultado_reportes = generar_reportes({
-            "df_estructuras": entrada_proyecto.df_estructuras,
-            "df_materiales": resultado_materiales.df_materiales,
+            "df_estructuras": df_estructuras,
+            "df_materiales": df_materiales,
             "costos": resultado_costos,
+            "costos_estructura": df_costos_estructura,
         })
 
-        debug_global["reportes"] = {
-            "generado": resultado_reportes is not None
-        }
-
         # =====================================================
-        # 6. SALIDA
+        # 8. SALIDA
         # =====================================================
         return ResultadoProyecto(
             ok=True,
@@ -247,6 +206,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             warnings=[],
             materiales=resultado_materiales,
             costos=resultado_costos,
+            costos_estructura=df_costos_estructura,
             reportes=resultado_reportes,
             debug=debug_global
         )
@@ -258,12 +218,4 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "trace": traceback.format_exc()
         }
 
-        return ResultadoProyecto(
-            ok=False,
-            errores=[str(e)],
-            warnings=[],
-            materiales=None,
-            costos=None,
-            reportes=None,
-            debug=debug_global,
-        )
+        return _fail(str(e), debug_global)
