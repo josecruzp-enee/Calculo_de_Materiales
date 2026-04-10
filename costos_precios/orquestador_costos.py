@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import pandas as pd
 
 from costos_precios.costos_materiales import (
     calcular_lista_materiales_con_costos,
     preparar_catalogo_costos
+)
+
+from costos_precios.costos_estructuras import (
+    calcular_costos_por_estructura
 )
 
 from ayuda.debug import debug_guardar
@@ -20,6 +24,10 @@ from ayuda.debug import debug_guardar
 class EntradaCostos:
     df_materiales: pd.DataFrame
     df_catalogo: pd.DataFrame
+
+    # 🔥 NUEVO
+    df_estructuras: Optional[pd.DataFrame] = None
+    df_materiales_por_estructura: Optional[Dict[str, pd.DataFrame]] = None
 
 
 # =====================================================
@@ -54,7 +62,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
         debug["input"] = {
             "materiales": _preview_df(entrada.df_materiales),
-            "catalogo": _preview_df(entrada.df_catalogo)
+            "catalogo": _preview_df(entrada.df_catalogo),
         }
 
         # =====================================================
@@ -68,41 +76,64 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             raise ValueError("df_costos vacío después de preparar")
 
         # =====================================================
-        # 3. CALCULAR COSTOS
+        # 3. COSTOS DE MATERIALES
         # =====================================================
-        df_resultado = calcular_lista_materiales_con_costos(
+        df_materiales_costos = calcular_lista_materiales_con_costos(
             df_materiales=entrada.df_materiales,
             df_catalogo_costos=df_costos
         )
 
-        debug["resultado_df"] = _preview_df(df_resultado)
-
-        if df_resultado is None or df_resultado.empty:
-            debug["warning"] = "Resultado vacío"
+        debug["tabla_materiales_costos"] = _preview_df(df_materiales_costos)
 
         # =====================================================
-        # 4. MÉTRICAS
+        # 4. COSTOS DE ESTRUCTURA (SI EXISTE INFO)
         # =====================================================
-        costo_total = 0.0
+        df_costos_estructura = None
 
-        if "Costo Total" in df_resultado.columns:
-            costo_total = float(df_resultado["Costo Total"].fillna(0).sum())
+        if (
+            entrada.df_estructuras is not None
+            and entrada.df_materiales_por_estructura is not None
+        ):
+
+            try:
+                df_costos_estructura = calcular_costos_por_estructura(
+                    df_estructuras=entrada.df_estructuras,
+                    df_materiales_por_estructura=entrada.df_materiales_por_estructura,
+                    df_precios_materiales=df_costos
+                )
+
+                debug["tabla_costos_estructura"] = _preview_df(df_costos_estructura)
+
+            except Exception as e:
+                debug["costos_estructura_error"] = str(e)
+
         else:
-            debug["error_columna"] = "No existe 'Costo Total'"
+            debug["costos_estructura_warning"] = "No se proporcionaron datos de estructuras"
+
+        # =====================================================
+        # 5. MÉTRICAS
+        # =====================================================
+        total_materiales = float(df_materiales_costos["Costo Total"].sum())
+
+        total_estructura = 0.0
+        if df_costos_estructura is not None:
+            total_estructura = float(df_costos_estructura["Costo Total"].sum())
 
         debug["metricas"] = {
-            "filas": len(df_resultado),
-            "costo_total": costo_total
+            "total_materiales": total_materiales,
+            "total_estructura": total_estructura,
+            "total_global": total_materiales + total_estructura
         }
 
         # =====================================================
-        # 5. DEBUG GLOBAL
+        # 6. DEBUG GLOBAL
         # =====================================================
         debug_guardar("ORQUESTADOR_COSTOS", debug)
 
         return {
             "ok": True,
-            "df_materiales_costos": df_resultado,
+            "df_materiales_costos": df_materiales_costos,
+            "df_costos_estructura": df_costos_estructura,
             "debug": debug
         }
 
@@ -118,5 +149,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             "ok": False,
             "errores": [str(e)],
             "df_materiales_costos": None,
+            "df_costos_estructura": None,
             "debug": debug
         }
