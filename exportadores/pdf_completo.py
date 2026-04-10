@@ -11,6 +11,7 @@ from exportadores.precios_estructura import generar_tabla_costos_estructura
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from exportadores.pdf_base import styles, fondo_pagina
+from exportadores.hoja_info import hoja_info_proyecto
 # =====================================================
 # PDF COMPLETO
 # =====================================================
@@ -49,7 +50,20 @@ def generar_pdf_completo(
     # =====================================================
     # 1. PORTADA
     # =====================================================
-    elems.append(Paragraph("<b>REPORTE DE PROYECTO</b>", styles["Heading1"]))
+    from exportadores.hoja_info import hoja_info_proyecto
+
+    elems.extend(
+        hoja_info_proyecto(
+            datos_proyecto=datos_proyecto,
+            df_estructuras=df_estructuras,
+            df_mat=df_materiales,
+            styleN=styles["Normal"],
+            styleH=styles["Heading2"],
+            _calibres_por_tipo=None
+        )
+    )
+
+    elems.append(PageBreak())
     elems.append(Spacer(1, 12))
 
     if datos_proyecto:
