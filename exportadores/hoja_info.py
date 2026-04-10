@@ -4,15 +4,15 @@ from __future__ import annotations
 from datetime import datetime
 from math import sqrt, floor
 from typing import List
-
 import pandas as pd
+
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
 
 # ==========================================================
-# 🔷 NORMALIZADOR (CLAVE)
+# NORMALIZADOR
 # ==========================================================
 def _normalizar_datos(d: dict) -> dict:
     return {
@@ -27,135 +27,92 @@ def _normalizar_datos(d: dict) -> dict:
 
 
 # ==========================================================
-# HELPERS
+# FORMATO TENSIÓN
 # ==========================================================
-def _float_safe(x, d=0.0):
-    try:
-        return float(x)
-    except:
-        return d
-
-
 def _formato_tension(vll):
     try:
         vll = float(vll)
         vln = vll / sqrt(3)
         vln = floor(vln * 10) / 10
-        return f"{vln:.1f} LN / {vll:.1f} LL KV"
+        return f"{vln:.1f} / {vll:.1f} kV"
     except:
-        return ""
-
-
-def _tipo_norm(c):
-    t = str(c.get("Tipo", "")).upper().strip()
-
-    if t in ["MT", "PRIMARIO"]:
-        return "MT"
-    if t in ["BT", "SECUNDARIO"]:
-        return "BT"
-    if t in ["N", "NEUTRO"]:
-        return "N"
-    if t in ["HP", "PILOTO"]:
-        return "HP"
-
-    return t
+        return str(vll)
 
 
 # ==========================================================
-# EXTRACTORES
+# CALIBRES AUTOMÁTICOS (SIMPLIFICADO PERO ÚTIL)
 # ==========================================================
-def extraer_postes(df):
-    if df is None or df.empty or "codigodeestructura" not in df.columns:
-        return None, 0
-
-    s = df["codigodeestructura"].astype(str)
-    postes = df[s.str.contains(r"^(PC|PM|PT)-", case=False, na=False)]
-
-    resumen = {}
-    for _, r in postes.iterrows():
-        cod = str(r["codigodeestructura"])
-        cant = int(_float_safe(r.get("Cantidad", 0)))
-        resumen[cod] = resumen.get(cod, 0) + cant
-
-    return resumen, sum(resumen.values())
-
-
-def extraer_transformadores(df):
-    if df is None or df.empty:
-        return 0
-
-    s = df["codigodeestructura"].astype(str).str.upper()
-    mask = s.str.contains(r"TS|TD|TT", na=False)
-
-    return int(df[mask]["Cantidad"].sum()) if "Cantidad" in df.columns else 0
-
-
-def extraer_luminarias(df):
-    if df is None or df.empty:
-        return 0
-
-    s = df["codigodeestructura"].astype(str).str.upper()
-    mask = s.str.contains("LL", na=False)
-
-    return int(df[mask]["Cantidad"].sum()) if "Cantidad" in df.columns else 0
+def _extraer_calibres(cables, tipo):
+    for c in cables:
+        if str(c.get("Tipo", "")).upper() == tipo:
+            return c.get("Materiales") or c.get("Calibre") or ""
+    return ""
 
 
 # ==========================================================
-# TABLA
+# TABLA PRINCIPAL
 # ==========================================================
 def build_tabla(datos, cables, tension_fmt, styleN):
+
+    calibre_primario = _extraer_calibres(cables, "MT")
+    calibre_secundario = _extraer_calibres(cables, "BT")
+    calibre_neutro = _extraer_calibres(cables, "N")
+    calibre_piloto = _extraer_calibres(cables, "HP")
 
     data = [
         ["Nombre del Proyecto:", datos["nombre_proyecto"]],
         ["Código / Expediente:", datos["codigo_proyecto"]],
-        ["Nivel de Tensión:", tension_fmt],
+        ["Nivel de Tensión (kV):", tension_fmt],
+        ["Calibre Primario:", calibre_primario],
+        ["Calibre Secundario:", calibre_secundario],
+        ["Calibre Neutro:", calibre_neutro],
+        ["Calibre Piloto:", calibre_piloto],
         ["Fecha de Informe:", datos["fecha_informe"]],
         ["Responsable:", datos["responsable"]],
         ["Empresa:", datos["empresa"]],
     ]
 
-    t = Table(data, colWidths=[180, 300])
-    t.setStyle(TableStyle([
+    tabla = Table(data, colWidths=[200, 340])
+
+    tabla.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#D9D9D9")),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
 
-    return [t, Spacer(1, 18)]
+    return [tabla, Spacer(1, 15)]
 
 
 # ==========================================================
-# DESCRIPCIÓN
+# DESCRIPCIÓN INTELIGENTE
 # ==========================================================
-def build_descripcion(datos, df_estructuras, cables, styleN):
+def build_descripcion(df_estructuras, styleN):
 
     lineas = []
 
-    resumen_postes, total_postes = extraer_postes(df_estructuras)
-    if resumen_postes:
-        partes = [f"{v} {k}" for k, v in resumen_postes.items()]
-        lineas.append(f"Hincado de {', '.join(partes)} (Total: {total_postes} postes).")
+    if df_estructuras is not None and not df_estructuras.empty:
 
-    total_t = extraer_transformadores(df_estructuras)
-    if total_t > 0:
-        lineas.append(f"Instalación de {total_t} transformador(es).")
+        # POSTES
+        postes = df_estructuras[df_estructuras["codigodeestructura"].str.contains("PC", na=False)]
+        if not postes.empty:
+            total = int(postes["Cantidad"].sum())
+            lineas.append(f"Hincado de {total} postes.")
 
-    total_l = extraer_luminarias(df_estructuras)
-    if total_l > 0:
-        lineas.append(f"Instalación de {total_l} luminarias.")
+        # TRANSFORMADORES
+        trafos = df_estructuras[df_estructuras["codigodeestructura"].str.contains("TS", na=False)]
+        if not trafos.empty:
+            total = int(trafos["Cantidad"].sum())
+            lineas.append(f"Instalación de {total} transformador(es).")
 
-    primarios = [c for c in cables if _tipo_norm(c) == "MT"]
-    secundarios = [c for c in cables if _tipo_norm(c) == "BT"]
-
-    if primarios:
-        total = sum(_float_safe(c.get("Longitud", 0)) for c in primarios)
-        lineas.append(f"Construcción de {total:.0f} m de línea primaria.")
-
-    if secundarios:
-        total = sum(_float_safe(c.get("Longitud", 0)) for c in secundarios)
-        lineas.append(f"Construcción de {total:.0f} m de línea secundaria.")
+        # LUMINARIAS
+        lum = df_estructuras[df_estructuras["codigodeestructura"].str.contains("LL", na=False)]
+        if not lum.empty:
+            total = int(lum["Cantidad"].sum())
+            lineas.append(f"Instalación de {total} luminarias.")
 
     if not lineas:
-        lineas.append("No se cuenta con información suficiente para describir el proyecto.")
+        lineas.append("No se cuenta con información suficiente.")
 
     texto = "<br/>".join([f"{i+1}. {l}" for i, l in enumerate(lineas)])
 
@@ -163,7 +120,7 @@ def build_descripcion(datos, df_estructuras, cables, styleN):
         Paragraph("<b>Descripción general del Proyecto:</b>", styleN),
         Spacer(1, 6),
         Paragraph(texto, styleN),
-        Spacer(1, 18),
+        Spacer(1, 12),
     ]
 
 
@@ -174,38 +131,34 @@ def hoja_info_proyecto(
     datos_proyecto,
     df_estructuras=None,
     df_mat=None,
-    *,
-    styleN=None,
-    styleH=None,
 ):
 
     styles = getSampleStyleSheet()
-    styleN = styleN or styles["Normal"]
-    styleH = styleH or styles["Heading1"]
+    styleN = styles["Normal"]
+    styleH = styles["Heading1"]
 
-    # 🔥 NORMALIZAR
-    datos_proyecto = _normalizar_datos(datos_proyecto)
+    datos = _normalizar_datos(datos_proyecto)
 
-    # 🔥 INYECTAR CABLES DESDE MATERIALES
+    # 🔥 INYECTAR CABLES
     if df_mat is not None and not df_mat.empty:
-        datos_proyecto["cables_proyecto"] = df_mat.to_dict(orient="records")
+        datos["cables_proyecto"] = df_mat.to_dict(orient="records")
 
-    tension_fmt = _formato_tension(datos_proyecto["tension"])
-    cables = datos_proyecto["cables_proyecto"]
+    tension_fmt = _formato_tension(datos["tension"])
+    cables = datos["cables_proyecto"]
 
     elems = []
 
-    elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
+    elems.append(Paragraph("Hoja de Información del Proyecto", styleH))
     elems.append(Spacer(1, 12))
 
-    elems.extend(build_tabla(datos_proyecto, cables, tension_fmt, styleN))
-    elems.extend(build_descripcion(datos_proyecto, df_estructuras, cables, styleN))
+    elems.extend(build_tabla(datos, cables, tension_fmt, styleN))
+    elems.extend(build_descripcion(df_estructuras, styleN))
 
     return elems
 
 
 # ==========================================================
-# WRAPPER LIMPIO
+# WRAPPER
 # ==========================================================
 def seccion_hoja_info(
     datos_proyecto,
@@ -213,7 +166,7 @@ def seccion_hoja_info(
     df_mat=None,
 ):
     return hoja_info_proyecto(
-        datos_proyecto=datos_proyecto,
-        df_estructuras=df_estructuras,
-        df_mat=df_mat,
+        datos_proyecto,
+        df_estructuras,
+        df_mat,
     )
