@@ -61,7 +61,7 @@ def generar_pdf_completo(
     # =====================================================
     # 🔥 PRESUPUESTO (LO MÁS IMPORTANTE)
     # =====================================================
-    from exportadores.pdf_costos_estructura import generar_tabla_costos_estructura
+    from exportadores.precios_estructura import generar_tabla_costos_estructura
 
     if df_costos_estructura is not None:
         try:
