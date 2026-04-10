@@ -28,7 +28,7 @@ def calcular_costos_por_punto(
     if not required_ep.issubset(df_estructuras_por_punto.columns):
         raise ValueError(f"df_estructuras_por_punto debe tener {required_ep}")
 
-    required_ce = {"codigodeestructura", "Costo Unitario", "Precio Unitario"}
+    required_ce = {"codigodeestructura", "Costo Unitario"}
     if not required_ce.issubset(df_costos_estructuras.columns):
         raise ValueError(f"df_costos_estructuras debe tener {required_ce}")
 
