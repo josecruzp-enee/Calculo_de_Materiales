@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-hoja_info.py (VERSIÓN PRO COMPLETA)
+hoja_info.py (VERSIÓN PRO COMPLETA - FIX COLUMNAS)
 """
 
 from __future__ import annotations
@@ -49,24 +49,6 @@ def normalizar_df(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
 
 
 # ==========================================================
-# VALIDACIÓN
-# ==========================================================
-
-def _validar_df(df, nombre, columnas):
-    if df is None:
-        raise ValueError(f"{nombre} es None")
-
-    faltantes = [c for c in columnas if c not in df.columns]
-    if faltantes:
-        raise ValueError(f"{nombre} no tiene columnas: {faltantes}")
-
-
-def _validar_dependencias(styleH, styleN, calibres_fn):
-    if styleH is None or styleN is None:
-        raise ValueError("Faltan estilos")
-
-
-# ==========================================================
 # HELPERS
 # ==========================================================
 
@@ -86,6 +68,16 @@ def _formato_tension(vll):
         return str(vll)
 
 
+def _get_col_estructura(df):
+    """🔥 CLAVE: detecta automáticamente la columna correcta"""
+    if "CodigoEstructura" in df.columns:
+        return "CodigoEstructura"
+    elif "Estructura" in df.columns:
+        return "Estructura"
+    else:
+        return None
+
+
 # ==========================================================
 # EXTRACTORES
 # ==========================================================
@@ -96,11 +88,13 @@ def extraer_postes(df_estructuras):
     if df_estructuras is None or df_estructuras.empty:
         return None, 0
 
-    _validar_df(df_estructuras, "df_estructuras", ["CodigoEstructura", "Cantidad"])
+    col = _get_col_estructura(df_estructuras)
+    if col is None:
+        return None, 0
 
-    s = df_estructuras["CodigoEstructura"].astype(str)
+    s = df_estructuras[col].astype(str)
 
-    postes = df_estructuras[s.str.contains(r"^(PC|PM|PT)-", case=False, na=False)]
+    postes = df_estructuras[s.str.contains(r"^(PC|PM|PT)", case=False, na=False)]
 
     if postes.empty:
         return None, 0
@@ -116,12 +110,14 @@ def extraer_transformadores(df_estructuras, df_mat):
     if df_estructuras is None or df_estructuras.empty:
         return 0, "", []
 
-    if "CodigoEstructura" not in df_estructuras.columns:
+    col = _get_col_estructura(df_estructuras)
+    if col is None:
         return 0, "", []
 
-    s = df_estructuras["CodigoEstructura"].astype(str).str.upper()
+    s = df_estructuras[col].astype(str).str.upper()
 
-    ext = s.str.extract(r"(TS|TD|TT)[-\s]?(\d+(?:\.\d+)?)\s*KVA", expand=True)
+    # 🔥 MÁS FLEXIBLE
+    ext = s.str.extract(r"(TS|TD|TT).*?(\d+)", expand=True)
 
     mask = ext[0].notna()
     if not mask.any():
@@ -133,7 +129,6 @@ def extraer_transformadores(df_estructuras, df_mat):
     ).fillna(0)
 
     bancos = {}
-    mult = {"TS": 1, "TD": 2, "TT": 3}
 
     for p, k, q in zip(ext[0], ext[1], qty):
         key = f"{p}-{k} kVA"
@@ -141,10 +136,7 @@ def extraer_transformadores(df_estructuras, df_mat):
 
     resumen = ", ".join([f"{v} x {k}" for k, v in bancos.items()])
 
-    total = sum(
-        v * mult.get(k.split("-")[0], 0)
-        for k, v in bancos.items()
-    )
+    total = sum(bancos.values())
 
     return total, resumen, list(bancos.keys())
 
@@ -155,12 +147,13 @@ def extraer_luminarias(df_estructuras, df_mat):
     if df_estructuras is None or df_estructuras.empty:
         return 0, {}
 
-    if "CodigoEstructura" not in df_estructuras.columns:
+    col = _get_col_estructura(df_estructuras)
+    if col is None:
         return 0, {}
 
-    s = df_estructuras["CodigoEstructura"].astype(str)
+    s = df_estructuras[col].astype(str)
 
-    mask = s.str.contains(r"^LL-\d+-", case=False, na=False)
+    mask = s.str.contains(r"LL", case=False, na=False)
 
     if not mask.any():
         return 0, {}
@@ -183,16 +176,16 @@ def extraer_cables(df_cables):
     if df_cables is None or df_cables.empty:
         return 0, {}
 
-    if "Total Cable (m)" not in df_cables.columns:
+    if "Cantidad" not in df_cables.columns:
         return 0, {}
 
-    total = float(df_cables["Total Cable (m)"].sum())
+    total = float(df_cables["Cantidad"].sum())
 
     det = {}
     for _, r in df_cables.iterrows():
-        calibre = str(r.get("Calibre", "")).strip()
-        longitud = float(r.get("Total Cable (m)", 0))
-        det[calibre] = det.get(calibre, 0) + longitud
+        mat = str(r.get("Materiales", ""))
+        qty = float(r.get("Cantidad", 0))
+        det[mat] = det.get(mat, 0) + qty
 
     return total, det
 
@@ -254,8 +247,8 @@ def build_descripcion(df_estructuras, df_mat, styleN, df_cables=None):
 
     total_c, det_c = extraer_cables(df_cables)
     if total_c:
-        detalle_c = ", ".join([f"{round(v,1)} m de {k}" for k, v in det_c.items()])
-        partes.append(f"{detalle_c} de conductor")
+        detalle_c = ", ".join([f"{round(v,1)} de {k}" for k, v in det_c.items()])
+        partes.append(f"{detalle_c} en conductores")
 
     if partes:
         texto = "Proyecto que contempla la instalación de " + ", ".join(partes) + "."
@@ -284,8 +277,6 @@ def hoja_info_proyecto(
     styleH=None,
     _calibres_por_tipo=None,
 ):
-
-    _validar_dependencias(styleH, styleN, _calibres_por_tipo)
 
     elems = []
 
