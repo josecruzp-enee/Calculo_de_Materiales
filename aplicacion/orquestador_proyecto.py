@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 import traceback
 import pandas as pd
-import streamlit as st  # 🔥 agregado
 
 # =========================================================
 # CONTRATOS
@@ -33,7 +32,7 @@ from exportadores.orquestador_reportes import generar_reportes
 # =========================================================
 # HELPERS
 # =========================================================
-def _fail(msg: str) -> ResultadoProyecto:
+def _fail(msg: str, debug: Optional[dict] = None) -> ResultadoProyecto:
     return ResultadoProyecto(
         ok=False,
         errores=[msg],
@@ -41,7 +40,7 @@ def _fail(msg: str) -> ResultadoProyecto:
         materiales=None,
         costos=None,
         reportes=None,
-        debug={}
+        debug=debug or {},
     )
 
 
@@ -81,27 +80,30 @@ def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
+    debug_global: Dict[str, Any] = {}
+
     try:
+
+        # =====================================================
+        # 0. INTERFAZ
+        # =====================================================
+        debug_global["interfaz"] = {
+            "ok": getattr(salida_interfaz, "ok", None),
+            "tipo_entrada": getattr(salida_interfaz, "tipo_entrada", None),
+            "datos_proyecto_keys": list((salida_interfaz.datos_proyecto or {}).keys())
+        }
+
+        if not salida_interfaz.ok:
+            return _fail("SalidaInterfaz no válida", debug_global)
 
         # =====================================================
         # 1. ENTRADAS
         # =====================================================
         salida_entradas = ejecutar_entradas(salida_interfaz)
 
-        if not salida_entradas.ok:
-            st.write("❌ Error en entradas:", salida_entradas.errores)
-            return _fail("Error en entradas")
-
-        st.write("✔ Entradas OK")
-
-        st.write("👉 Tipo df_estructuras:",
-                 type(salida_entradas.df_estructuras))
-
         df_estructuras = _adaptar_df_estructuras(
             salida_entradas.df_estructuras
         )
-
-        st.write("👉 Shape estructuras:", df_estructuras.shape)
 
         # =====================================================
         # 2. PROYECTO
@@ -134,17 +136,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         resultado_materiales = ejecutar_materiales(entrada_mat)
-
-        if not resultado_materiales.ok:
-            st.write("❌ Error en materiales:", resultado_materiales.errores)
-            return _fail("Error en materiales")
-
         df_materiales = resultado_materiales.df_materiales
-
-        st.write("👉 Shape materiales:", df_materiales.shape)
-
-        st.write("👉 Materiales por estructura:",
-                 len(resultado_materiales.descripcion_estructuras))
 
         # =====================================================
         # 4. CATÁLOGO
@@ -154,7 +146,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         # =====================================================
-        # 5. COSTOS
+        # 5. COSTOS GLOBALES
         # =====================================================
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
@@ -166,19 +158,42 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_costos = ejecutar_costos(entrada_costos)
 
         # =====================================================
-        # 6. COSTOS POR ESTRUCTURA
+        # 🔥 6. COSTOS POR ESTRUCTURA (FIX SEGURO)
         # =====================================================
-        df_costos_estructura = calcular_costos_por_estructura(
-            df_estructuras=df_estructuras,
-            df_materiales_por_estructura=resultado_materiales.descripcion_estructuras,
-            df_precios_materiales=df_catalogo
-        )
 
-        if df_costos_estructura is None or df_costos_estructura.empty:
-            st.write("❌ No se generaron costos por estructura")
-        else:
-            st.write("✔ Costos por estructura OK")
-            st.write("👉 Shape costos:", df_costos_estructura.shape)
+        df_costos_estructura = None
+
+        try:
+            df_costos_estructura = calcular_costos_por_estructura(
+                df_estructuras=df_estructuras,
+                df_materiales_por_estructura=resultado_materiales.descripcion_estructuras,
+                df_precios_materiales=df_catalogo
+            )
+
+            total = 0.0
+
+            if (
+                df_costos_estructura is not None
+                and "Costo Total" in df_costos_estructura.columns
+            ):
+                total = float(df_costos_estructura["Costo Total"].sum())
+
+            debug_global["costos_estructura_total"] = total
+
+            debug_global["costos_estructura"] = {
+                "ok": True,
+                "shape": list(df_costos_estructura.shape)
+                if df_costos_estructura is not None else None
+            }
+
+        except Exception as e:
+
+            debug_global["costos_estructura"] = {
+                "ok": False,
+                "error": str(e)
+            }
+
+            debug_global["costos_estructura_total"] = 0
 
         # =====================================================
         # 7. REPORTES
@@ -201,12 +216,14 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             costos=resultado_costos,
             df_costos_estructura=df_costos_estructura,
             reportes=resultado_reportes,
-            debug={}
+            debug=debug_global
         )
 
     except Exception as e:
 
-        st.write("❌ ERROR GLOBAL:", str(e))
-        st.write(traceback.format_exc())
+        debug_global["exception"] = {
+            "error": str(e),
+            "trace": traceback.format_exc()
+        }
 
-        return _fail(str(e))
+        return _fail(str(e), debug_global)
