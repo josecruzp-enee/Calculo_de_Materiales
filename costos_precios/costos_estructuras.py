@@ -17,20 +17,59 @@ def _costo_unitario_estructura(
     df_precios: pd.DataFrame
 ) -> float:
 
+    import streamlit as st
+
+    # ============================
+    # DEBUG ENTRADA
+    # ============================
+    st.write("🧩 DEBUG → _costo_unitario_estructura")
+
+    st.write("Materiales (head):", df_materiales.head(10))
+    st.write("Precios (head):", df_precios.head(10))
+
+    st.write("Cols materiales:", list(df_materiales.columns))
+    st.write("Cols precios:", list(df_precios.columns))
+
+    if "Descripcion" in df_materiales.columns and "Descripcion" in df_precios.columns:
+        st.write("MATERIALES DESC:", df_materiales["Descripcion"].drop_duplicates().head(10))
+        st.write("CATALOGO DESC:", df_precios["Descripcion"].drop_duplicates().head(10))
+
+    # ============================
+    # CÁLCULO
+    # ============================
     df_val = calcular_lista_materiales_con_costos(
         df_materiales=df_materiales,
         df_catalogo_costos=df_precios
     )
 
-    if df_val is None or df_val.empty:
-        raise ValueError("df_val vacío en costo unitario")
+    # ============================
+    # DEBUG RESULTADO
+    # ============================
+    st.write("Resultado df_val:", df_val)
+
+    if df_val is not None:
+        st.write("df_val columnas:", list(df_val.columns))
+        st.write("df_val head:", df_val.head(10))
+        st.write("filas df_val:", len(df_val))
+
+    # ============================
+    # VALIDACIONES DURAS
+    # ============================
+    if df_val is None:
+        raise ValueError("df_val es None")
+
+    if df_val.empty:
+        raise ValueError("df_val vacío → NO HUBO MATCH DE COSTOS")
 
     if "Costo Total" not in df_val.columns:
-        raise ValueError(f"Columnas inválidas: {list(df_val.columns)}")
+        raise ValueError(f"Columnas inválidas en df_val: {list(df_val.columns)}")
 
-    return float(df_val["Costo Total"].sum())
+    total = df_val["Costo Total"].sum()
 
+    if pd.isna(total) or total == 0:
+        raise ValueError("Costo total = 0 → fallo en precios o match")
 
+    return float(total)
 # =========================================================
 # COSTOS POR ESTRUCTURA
 # =========================================================
