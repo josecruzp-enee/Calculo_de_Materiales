@@ -12,9 +12,10 @@ from interfaz.contratos import ResultadoProyecto, SalidaInterfaz
 from aplicacion.modelos_proyecto import EntradaProyecto
 
 # =========================================================
-# DOMINIOS
+# DOMINIO
 # =========================================================
 from entradas.orquestador_entradas import ejecutar_entradas
+from entradas.base_datos import obtener_catalogo_materiales
 
 from materiales.modelos.entrada import EntradaMateriales
 from materiales.orquestador_materiales import ejecutar_materiales
@@ -50,15 +51,12 @@ def _extraer_tension(datos: Dict[str, Any]) -> float:
     t = datos.get("tension") or datos.get("nivel_de_tension")
 
     if t is None:
-        raise ValueError("Tensión no definida en datos_proyecto")
+        raise ValueError("Tensión no definida")
 
-    try:
-        t = float(t)
-    except Exception:
-        raise ValueError(f"Tensión inválida: {t}")
+    t = float(t)
 
     if t <= 0:
-        raise ValueError("Tensión debe ser mayor a 0")
+        raise ValueError("Tensión inválida")
 
     return t
 
@@ -66,10 +64,7 @@ def _extraer_tension(datos: Dict[str, Any]) -> float:
 def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
     if df is None:
-        raise ValueError("df_estructuras es None desde Entradas")
-
-    if not isinstance(df, pd.DataFrame):
-        raise TypeError("df_estructuras no es DataFrame")
+        raise ValueError("df_estructuras es None")
 
     df = df.copy()
     cols = set(df.columns)
@@ -84,7 +79,7 @@ def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL
+# ORQUESTADOR
 # =========================================================
 def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
@@ -148,13 +143,16 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             return _fail("Error en materiales")
 
         # =====================================================
-        # 4. COSTOS (🔥 SIMPLE Y LIMPIO)
+        # 4. COSTOS (ARREGLADO)
         # =====================================================
         df_materiales = resultado_materiales.df_materiales
-        df_catalogo = entrada_proyecto.base_datos.get("df_catalogo_materiales")
 
-        if df_catalogo is None:
-            raise ValueError("No existe df_catalogo_materiales en base_datos")
+        df_catalogo = obtener_catalogo_materiales(
+            entrada_proyecto.base_datos
+        )
+
+        if df_catalogo is None or df_catalogo.empty:
+            raise ValueError("Catálogo vacío")
 
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
@@ -175,15 +173,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 6. SALIDA
         # =====================================================
-        warnings = (
-            _safe_list(salida_entradas.warnings) +
-            _safe_list(resultado_materiales.warnings)
-        )
-
         return ResultadoProyecto(
             ok=True,
             errores=[],
-            warnings=warnings,
+            warnings=[],
             materiales=resultado_materiales,
             costos=resultado_costos,
             reportes=resultado_reportes,
