@@ -12,7 +12,9 @@ from reportlab.platypus import (
     Paragraph, Spacer, PageBreak, Table
 )
 
-from exportadores.precios_estructura import generar_tabla_costos_estructura
+# 🔥 CAMBIO: ahora usamos PRECIOS
+from exportadores.precios_estructura import generar_tabla_precios_estructura
+
 from exportadores.hoja_info import seccion_hoja_info
 
 from io import BytesIO
@@ -74,26 +76,21 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. INFO BÁSICA
-    # =====================================================
-    if datos_proyecto:
-        nombre = datos_proyecto.get("nombre", "Proyecto")
-        elems.append(Paragraph(f"Proyecto: {nombre}", styles["Normal"]))
-        elems.append(Spacer(1, 12))
-
-    elems.append(PageBreak())
-
-    # =====================================================
-    # 3. COSTOS DE ESTRUCTURA
+    # 2. PRECIOS UNITARIOS DE ESTRUCTURA (🔥 NUEVO)
     # =====================================================
     if df_costos_estructura is not None and not df_costos_estructura.empty:
+
+        elems.append(Paragraph("PRECIOS UNITARIOS DE ESTRUCTURA", styles["Heading1"]))
+        elems.append(Spacer(1, 10))
+
         elems.extend(
-            generar_tabla_costos_estructura(doc, styles, df_costos_estructura)
+            generar_tabla_precios_estructura(df_costos_estructura)
         )
+
         elems.append(PageBreak())
 
     # =====================================================
-    # 4. ESTRUCTURAS
+    # 3. ESTRUCTURAS
     # =====================================================
     if df_estructuras is not None and not df_estructuras.empty:
 
@@ -115,7 +112,7 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     # =====================================================
-    # 5. MATERIALES
+    # 4. MATERIALES
     # =====================================================
     if df_materiales is not None and not df_materiales.empty:
 
@@ -136,7 +133,7 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     # =====================================================
-    # 6. MATERIALES POR PUNTO
+    # 5. MATERIALES POR PUNTO
     # =====================================================
     if df_mat_por_punto is not None and not df_mat_por_punto.empty:
 
