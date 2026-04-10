@@ -298,7 +298,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             materiales=resultado_materiales,
             costos=resultado_costos,
             df_costos_estructura=df_costos_estructura,
-            precios_estructura=df_precios_estructura,
+            df_precios_estructura=df_precios_estructura,
             reportes=resultado_reportes,
             debug=debug_global
         )
