@@ -10,20 +10,15 @@ import pandas as pd
 # =========================================================
 from interfaz.contratos import ResultadoProyecto, SalidaInterfaz
 from aplicacion.modelos_proyecto import EntradaProyecto
-entrada_costos = construir_entrada_costos(
-    data=entrada_proyecto.base_datos,
-    df_resumen=resultado_materiales.df_materiales,
-    df_estructuras_por_punto=df_ep,
-    df_materiales_por_punto=df_mp
-)
+
 # =========================================================
-# ORQUESTADORES DOMINIO
+# DOMINIOS
 # =========================================================
 from entradas.orquestador_entradas import ejecutar_entradas
 
 from materiales.modelos.entrada import EntradaMateriales
 from materiales.orquestador_materiales import ejecutar_materiales
-from costos_precios.costos_materiales import construir_entrada_costos
+
 from costos_precios.orquestador_costos import (
     ejecutar_costos,
     EntradaCostos,
@@ -68,9 +63,6 @@ def _extraer_tension(datos: Dict[str, Any]) -> float:
     return t
 
 
-# =========================================================
-# ADAPTADOR DF ESTRUCTURAS
-# =========================================================
 def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
     if df is None:
@@ -82,20 +74,13 @@ def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     cols = set(df.columns)
 
-    # ✔ Caso correcto
     if {"Estructura", "Cantidad"}.issubset(cols):
         return df
 
-    # ✔ Caso DXF (tu caso actual)
     if {"codigodeestructura", "Cantidad"}.issubset(cols):
-        df = df.rename(columns={
-            "codigodeestructura": "Estructura"
-        })
-        return df
+        return df.rename(columns={"codigodeestructura": "Estructura"})
 
-    raise ValueError(
-        f"df_estructuras inválido. Columnas recibidas: {list(cols)}"
-    )
+    raise ValueError(f"df_estructuras inválido: {list(cols)}")
 
 
 # =========================================================
@@ -105,16 +90,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
     debug_global: Dict[str, Any] = {}
 
-    # =====================================================
-    # VALIDACIÓN INICIAL
-    # =====================================================
     if not isinstance(salida_interfaz, SalidaInterfaz):
-        return _fail("salida_interfaz debe ser SalidaInterfaz")
-
-    debug_global["interfaz"] = getattr(salida_interfaz, "debug", {})
+        return _fail("salida_interfaz inválida")
 
     if not salida_interfaz.ok:
-        return _fail("SalidaInterfaz no válida", debug=debug_global)
+        return _fail("SalidaInterfaz no válida")
 
     try:
         # =====================================================
@@ -122,37 +102,15 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         salida_entradas = ejecutar_entradas(salida_interfaz)
 
-        debug_global["entradas"] = getattr(salida_entradas, "debug", {})
-
         if not salida_entradas or not salida_entradas.ok:
-            return _fail("Error en entradas", debug=debug_global)
+            return _fail("Error en entradas")
 
-        # 🔴 VALIDACIÓN CRÍTICA
-        if salida_entradas.df_estructuras is None:
-            raise ValueError("Entradas no generó df_estructuras")
-
-        if not isinstance(salida_entradas.df_estructuras, pd.DataFrame):
-            raise TypeError("df_estructuras no es DataFrame desde Entradas")
-
-        debug_global["entradas_df"] = {
-            "columnas": list(salida_entradas.df_estructuras.columns),
-            "filas": len(salida_entradas.df_estructuras)
-        }
-
-        # =====================================================
-        # 2. ADAPTACIÓN CONTRATO
-        # =====================================================
         df_estructuras = _adaptar_df_estructuras(
             salida_entradas.df_estructuras
         )
 
-        debug_global["df_estructuras_adaptado"] = {
-            "columnas": list(df_estructuras.columns),
-            "filas": len(df_estructuras)
-        }
-
         # =====================================================
-        # 3. CONTRATO PROYECTO
+        # 2. PROYECTO
         # =====================================================
         entrada_proyecto = EntradaProyecto(
             base_datos=salida_entradas.base_datos,
@@ -164,24 +122,14 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
             df_cables=salida_entradas.df_cables,
             df_materiales_extra=salida_entradas.df_materiales_extra,
-
-            df_precios_materiales=(salida_entradas.datos_proyecto or {}).get("df_precios_materiales"),
-            df_costos_estructuras=(salida_entradas.datos_proyecto or {}).get("df_costos_estructuras"),
         )
 
         entrada_proyecto.validar()
 
-        # =====================================================
-        # 4. CONTEXTO
-        # =====================================================
         tension = _extraer_tension(entrada_proyecto.datos_proyecto)
 
-        debug_global["contexto"] = {
-            "tension": tension
-        }
-
         # =====================================================
-        # 5. MATERIALES
+        # 3. MATERIALES
         # =====================================================
         entrada_mat = EntradaMateriales(
             estructuras_df=entrada_proyecto.df_estructuras,
@@ -196,77 +144,40 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         resultado_materiales = ejecutar_materiales(entrada_mat)
 
-        debug_global["materiales"] = getattr(resultado_materiales, "debug", {})
-
         if not resultado_materiales or not resultado_materiales.ok:
-            return _fail("Error en materiales", debug=debug_global)
+            return _fail("Error en materiales")
 
         # =====================================================
-        # 6. COSTOS
+        # 4. COSTOS (🔥 SIMPLE Y LIMPIO)
         # =====================================================
-        # =====================================================
-        # 6. COSTOS (AUTO DESDE CATÁLOGO)
-        # =====================================================
-        df_ep = resultado_materiales.df_estructuras_por_punto
-        df_mp = resultado_materiales.df_materiales_por_punto 
-        
-        if df_ep is None:
-            return _fail("df_estructuras_por_punto no disponible", debug=debug_global)
+        df_materiales = resultado_materiales.df_materiales
+        df_catalogo = entrada_proyecto.base_datos.get("df_catalogo_materiales")
 
-        if entrada_proyecto.df_costos_estructuras is None:
+        if df_catalogo is None:
+            raise ValueError("No existe df_catalogo_materiales en base_datos")
 
-            df_ep = resultado_materiales.df_estructuras_por_punto
-
-            df_auto = (
-                df_ep[["Estructura"]]
-                .drop_duplicates()
-                .copy()
-            )
-
-            df_auto["costo"] = 0  # placeholder
-
-            entrada_proyecto.df_costos_estructuras = df_auto
-
-            debug_global["costos_estructuras_auto"] = {
-            "filas": len(df_auto)
-        }
-
-        # 🔥 CONSTRUIR PRECIOS DESDE BASE_DATOS
-        entrada_costos = construir_entrada_costos(
-            data=entrada_proyecto.base_datos,
-            df_resumen=resultado_materiales.df_materiales,
-            df_estructuras_por_punto=df_ep,
-            df_materiales_por_punto=df_mp
-           
+        entrada_costos = EntradaCostos(
+            df_materiales=df_materiales,
+            df_catalogo=df_catalogo
         )
 
         resultado_costos = ejecutar_costos(entrada_costos)
 
         # =====================================================
-        # 7. REPORTES
+        # 5. REPORTES
         # =====================================================
         resultado_reportes = generar_reportes({
             "df_estructuras": entrada_proyecto.df_estructuras,
             "df_materiales": resultado_materiales.df_materiales,
-            "df_resumen": resultado_materiales.df_materiales,
-            "df_por_punto": resultado_materiales.df_materiales_por_punto,
             "costos": resultado_costos,
         })
 
-        if not isinstance(resultado_reportes, dict):
-            return _fail("Salida de reportes inválida", debug=debug_global)
-
-        debug_global["reportes"] = {
-            "archivos": list(resultado_reportes.keys())
-        }
-
         # =====================================================
-        # 8. CONSOLIDACIÓN
+        # 6. SALIDA
         # =====================================================
         warnings = (
             _safe_list(salida_entradas.warnings) +
-            _safe_list(resultado_materiales.warnings) +
-            _safe_list(resultado_costos.warnings)
+            _safe_list(resultado_materiales.warnings)
         )
 
         return ResultadoProyecto(
