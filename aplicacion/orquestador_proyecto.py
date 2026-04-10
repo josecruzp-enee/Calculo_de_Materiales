@@ -221,13 +221,21 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 7. REPORTES
         # =====================================================
-        resultado_reportes = generar_reportes({
-            "df_estructuras": df_estructuras,
-            "df_materiales": df_materiales,
-            "costos": resultado_costos,
-            "costos_estructura": df_costos_estructura,
-        })
+        from exportadores.orquestador_reportes import EntradaReportes
 
+        entrada_reportes = EntradaReportes(
+            df_estructuras=df_estructuras,
+            df_materiales=df_materiales,
+            df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
+            costos={
+                **resultado_costos,
+                "df_costos_estructura": df_costos_estructura,
+            },
+            nombre_proyecto="Proyecto"
+        )
+
+        resultado_reportes = generar_reportes(entrada_reportes)
+        debug_global["reportes"] = resultado_reportes.get("debug")
         # =====================================================
         # 8. SALIDA
         # =====================================================
