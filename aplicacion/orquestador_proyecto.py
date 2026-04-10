@@ -148,6 +148,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 5. COSTOS GLOBALES
         # =====================================================
+        debug_guardar("CHECK_MATERIALES_ESTRUCTURA", {
+        "es_dict": isinstance(salida_materiales.df_materiales_por_estructura, dict),
+        "keys": list(salida_materiales.df_materiales_por_estructura.keys()) if isinstance(salida_materiales.df_materiales_por_estructura, dict) else "NO",
+        })
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
             df_catalogo=df_catalogo,
