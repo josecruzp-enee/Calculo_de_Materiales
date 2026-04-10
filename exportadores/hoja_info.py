@@ -9,14 +9,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
-
-
-# ==========================================================
-# VALIDACIÓN
-# ==========================================================
-def _validar_dependencias(styleH, styleN, calibres_fn) -> None:
-    if styleH is None or styleN is None or calibres_fn is None:
-        raise ValueError("Faltan estilos o función de calibres")
+from reportlab.lib.styles import getSampleStyleSheet
 
 
 # ==========================================================
@@ -47,7 +40,7 @@ def _col_cantidad(df):
 
 
 # ==========================================================
-# 🔥 FIX CABLES (CLAVE)
+# 🔥 FIX CABLES
 # ==========================================================
 def _tipo_norm(c):
     t = str(c.get("Tipo", "")).upper().strip()
@@ -152,23 +145,19 @@ def build_descripcion(datos, df_estructuras, cables, styleN):
 
     lineas = []
 
-    # Postes
     resumen_postes, total_postes = extraer_postes(df_estructuras)
     if resumen_postes:
         partes = [f"{v} {k}" for k, v in resumen_postes.items()]
         lineas.append(f"Hincado de {', '.join(partes)} (Total: {total_postes} postes).")
 
-    # Transformadores
     total_t = extraer_transformadores(df_estructuras)
     if total_t > 0:
         lineas.append(f"Instalación de {total_t} transformador(es).")
 
-    # Luminarias
     total_l = extraer_luminarias(df_estructuras)
     if total_l > 0:
         lineas.append(f"Instalación de {total_l} luminarias.")
 
-    # 🔥 CABLES
     primarios = [c for c in cables if _tipo_norm(c) == "MT"]
     bt = [c for c in cables if _tipo_norm(c) == "BT"]
 
@@ -191,7 +180,7 @@ def build_descripcion(datos, df_estructuras, cables, styleN):
 
 
 # ==========================================================
-# FUNCIÓN PRINCIPAL
+# FUNCIÓN PRINCIPAL (YA AUTÓNOMA)
 # ==========================================================
 def hoja_info_proyecto(
     datos_proyecto,
@@ -203,7 +192,15 @@ def hoja_info_proyecto(
     _calibres_por_tipo=None,
 ):
 
-    _validar_dependencias(styleH, styleN, _calibres_por_tipo)
+    # 🔥 AUTOCONFIGURACIÓN
+    if styleN is None or styleH is None:
+        styles = getSampleStyleSheet()
+        styleN = styles["Normal"]
+        styleH = styles["Heading1"]
+
+    if _calibres_por_tipo is None:
+        def _calibres_por_tipo(cables, tipo):
+            return ""
 
     tension = datos_proyecto.get("tension") or datos_proyecto.get("nivel_de_tension")
     tension_fmt = _formato_tension(tension)
@@ -219,3 +216,21 @@ def hoja_info_proyecto(
     elems.extend(build_descripcion(datos_proyecto, df_estructuras, cables, styleN))
 
     return elems
+
+
+# ==========================================================
+# 🔷 WRAPPER LIMPIO
+# ==========================================================
+def seccion_hoja_info(
+    datos_proyecto,
+    df_estructuras=None,
+    df_mat=None,
+):
+    return hoja_info_proyecto(
+        datos_proyecto=datos_proyecto,
+        df_estructuras=df_estructuras,
+        df_mat=df_mat,
+        styleN=None,
+        styleH=None,
+        _calibres_por_tipo=None,
+    )
