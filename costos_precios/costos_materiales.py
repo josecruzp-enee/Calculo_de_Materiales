@@ -71,6 +71,9 @@ def calcular_lista_materiales_con_costos(
     df_catalogo_costos: pd.DataFrame
 ) -> pd.DataFrame:
 
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
     if df_materiales is None or df_materiales.empty:
         raise ValueError("df_materiales vacío")
 
@@ -79,12 +82,13 @@ def calcular_lista_materiales_con_costos(
 
     df = df_materiales.copy()
 
-    # VALIDACIÓN
     cols = {"Materiales", "Unidad", "Cantidad"}
     if not cols.issubset(df.columns):
         raise ValueError(f"df_materiales debe tener columnas {cols}")
 
-    # CONSOLIDAR LISTA GLOBAL
+    # =====================================================
+    # CONSOLIDAR
+    # =====================================================
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
     df = (
@@ -92,29 +96,60 @@ def calcular_lista_materiales_con_costos(
         .sum()
     )
 
+    # =====================================================
     # NORMALIZAR
+    # =====================================================
     df["Materiales_norm"] = df["Materiales"].map(_norm_txt)
     df["Unidad_norm"] = df["Unidad"].map(_norm_txt)
 
+    # =====================================================
     # MERGE COSTOS
+    # =====================================================
     df = df.merge(
         df_catalogo_costos,
         on=["Materiales_norm", "Unidad_norm"],
         how="left"
     )
 
-    # DEBUG FALLAS
+    # =====================================================
+    # DEBUG COMPLETO 🔥
+    # =====================================================
+    debug_guardar("tabla_costos_debug", {
+        "filas": len(df),
+        "columnas": list(df.columns),
+        "preview": df.head(50).to_dict(orient="records")
+    })
+
+    # =====================================================
+    # DETECTAR FALTANTES
+    # =====================================================
     faltantes = df[df["Costo Unitario"].isna()]
 
     debug_guardar("materiales_sin_precio", {
         "total": len(faltantes),
-        "ejemplo": faltantes.head(10).to_dict()
+        "ejemplo": faltantes.head(20).to_dict(orient="records")
     })
 
+    # =====================================================
+    # ⚠️ NO ROMPER → FILTRAR
+    # =====================================================
     if not faltantes.empty:
-        raise ValueError("Hay materiales sin precio")
+        debug_guardar("WARNING_MATERIALES_SIN_COSTO", {
+            "mensaje": "Hay materiales sin precio, se excluirán",
+            "cantidad": len(faltantes)
+        })
 
+        df = df.dropna(subset=["Costo Unitario"])
+
+    # =====================================================
+    # VALIDAR RESULTADO
+    # =====================================================
+    if df.empty:
+        raise ValueError("Todos los materiales quedaron sin costo")
+
+    # =====================================================
     # COSTOS
+    # =====================================================
     df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
 
     debug_guardar("resultado_costos_materiales", {
@@ -122,6 +157,9 @@ def calcular_lista_materiales_con_costos(
         "costo_total": float(df["Costo Total"].sum())
     })
 
+    # =====================================================
+    # OUTPUT
+    # =====================================================
     return df[[
         "Materiales",
         "Unidad",
