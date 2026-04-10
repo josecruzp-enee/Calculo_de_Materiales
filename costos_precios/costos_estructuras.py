@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+#costos_estructuras.py
 from __future__ import annotations
 
 import pandas as pd
