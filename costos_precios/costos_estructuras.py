@@ -6,7 +6,6 @@ from typing import Dict, Any
 
 from costos_precios.costos_materiales import calcular_lista_materiales_con_costos
 from ayuda.debug import debug_guardar
-from entradas.normalizar import limpiar_codigo  # 🔥 CLAVE
 
 
 # =========================================================
@@ -17,59 +16,28 @@ def _costo_unitario_estructura(
     df_precios: pd.DataFrame
 ) -> float:
 
-    import streamlit as st
-
-    # ============================
-    # DEBUG ENTRADA
-    # ============================
-    st.write("🧩 DEBUG → _costo_unitario_estructura")
-
-    st.write("Materiales (head):", df_materiales.head(10))
-    st.write("Precios (head):", df_precios.head(10))
-
-    st.write("Cols materiales:", list(df_materiales.columns))
-    st.write("Cols precios:", list(df_precios.columns))
-
-    if "Descripcion" in df_materiales.columns and "Descripcion" in df_precios.columns:
-        st.write("MATERIALES DESC:", df_materiales["Descripcion"].drop_duplicates().head(10))
-        st.write("CATALOGO DESC:", df_precios["Descripcion"].drop_duplicates().head(10))
-
-    # ============================
-    # CÁLCULO
-    # ============================
     df_val = calcular_lista_materiales_con_costos(
         df_materiales=df_materiales,
         df_catalogo_costos=df_precios
     )
 
-    # ============================
-    # DEBUG RESULTADO
-    # ============================
-    st.write("Resultado df_val:", df_val)
-
-    if df_val is not None:
-        st.write("df_val columnas:", list(df_val.columns))
-        st.write("df_val head:", df_val.head(10))
-        st.write("filas df_val:", len(df_val))
-
-    # ============================
-    # VALIDACIONES DURAS
-    # ============================
     if df_val is None:
         raise ValueError("df_val es None")
 
     if df_val.empty:
-        raise ValueError("df_val vacío → NO HUBO MATCH DE COSTOS")
+        raise ValueError("df_val vacío → sin costos")
 
     if "Costo Total" not in df_val.columns:
-        raise ValueError(f"Columnas inválidas en df_val: {list(df_val.columns)}")
+        raise ValueError(f"Columnas inválidas: {list(df_val.columns)}")
 
     total = df_val["Costo Total"].sum()
 
-    if pd.isna(total) or total == 0:
-        raise ValueError("Costo total = 0 → fallo en precios o match")
+    if pd.isna(total) or total <= 0:
+        raise ValueError("Costo total inválido")
 
     return float(total)
+
+
 # =========================================================
 # COSTOS POR ESTRUCTURA
 # =========================================================
@@ -95,27 +63,20 @@ def calcular_costos_por_estructura(
         raise TypeError("df_materiales_por_estructura debe ser dict")
 
     # =====================================================
-    # NORMALIZAR CLAVES 🔥 (UNIFICADO)
-    # =====================================================
-    df_materiales_por_estructura = {
-        limpiar_codigo(str(k)): v
-        for k, v in df_materiales_por_estructura.items()
-    }
-
-    debug["materiales_keys_sample"] = list(df_materiales_por_estructura.keys())[:20]
-
-    # =====================================================
-    # NORMALIZAR DATAFRAME DE ESTRUCTURAS 🔥
+    # DATAFRAME BASE
     # =====================================================
     df = df_estructuras.copy()
 
     if "Estructura" not in df.columns or "Cantidad" not in df.columns:
         raise ValueError("df_estructuras debe tener columnas 'Estructura' y 'Cantidad'")
 
-    df["codigodeestructura"] = df["Estructura"].map(limpiar_codigo)
+    # ⚠️ NO normalizar aquí
+    df["codigodeestructura"] = df["Estructura"].astype(str).str.strip()
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
+    # =====================================================
     # AGRUPAR
+    # =====================================================
     df_group = df.groupby("codigodeestructura", as_index=False)["Cantidad"].sum()
 
     debug["estructuras_detectadas"] = len(df_group)
@@ -129,20 +90,21 @@ def calcular_costos_por_estructura(
     # =====================================================
     for _, row in df_group.iterrows():
 
-        cod = row["codigodeestructura"]
+        cod = str(row["codigodeestructura"]).strip()
         qty = float(row["Cantidad"])
-
-        debug[f"estructura::{cod}"] = {
-            "cantidad": qty
-        }
 
         if qty <= 0:
             continue
 
         df_mat = df_materiales_por_estructura.get(cod)
 
-        if df_mat is None or df_mat.empty:
-            errores.append(f"Sin materiales para {cod}")
+        # DEBUG CLAVE
+        if df_mat is None:
+            errores.append(f"{cod}: NO EXISTE EN dict")
+            continue
+
+        if df_mat.empty:
+            errores.append(f"{cod}: SIN MATERIALES")
             continue
 
         try:
@@ -168,7 +130,6 @@ def calcular_costos_por_estructura(
             "errores": errores,
             "materiales_keys": list(df_materiales_por_estructura.keys())[:20],
             "estructuras": df_group.head(20).to_dict(),
-            "warning": "No se generaron costos"
         })
         raise ValueError("No se generaron costos por estructura")
 
