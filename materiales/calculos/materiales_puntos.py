@@ -169,19 +169,17 @@ def calcular_materiales_por_estructura(
 
     resultado = {}
 
-    for row in df_estructuras.to_dict("records"):
+    estructuras_unicas = (
+        df_estructuras["Estructura"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .unique()
+    )
 
-        estructura = (
-            row.get("codigodeestructura")
-            or row.get("Estructura")
-            or ""
-        )
-
-        if not estructura:
-            continue
+    for estructura in estructuras_unicas:
 
         try:
-            # 🔥 CRÍTICO: SIEMPRE 1 (estructura base)
             df_mat = calcular_materiales_estructura(
                 hojas_base=hojas_base,
                 estructura=estructura,
@@ -192,22 +190,9 @@ def calcular_materiales_por_estructura(
             )
 
             cod = _normalizar_codigo(estructura)
-
-            if cod in resultado:
-                resultado[cod] = pd.concat([resultado[cod], df_mat])
-            else:
-                resultado[cod] = df_mat
+            resultado[cod] = df_mat
 
         except Exception:
             continue
-
-    # consolidar cada estructura
-    for cod in resultado:
-        df = resultado[cod]
-
-        resultado[cod] = (
-            df.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
-            .sum()
-        )
 
     return resultado
