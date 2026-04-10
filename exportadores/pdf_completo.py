@@ -12,10 +12,12 @@ from reportlab.platypus import (
     Paragraph, Spacer, PageBreak, Table
 )
 
-from exportadores.precios_estructura import generar_tabla_precios_estructura
+# 🔥 IMPORT CORRECTO
+from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
+
 from exportadores.hoja_info import seccion_hoja_info
 
-# 🔥 NUEVO: cálculo de precios
+# 🔥 CÁLCULO (DOMINIO)
 from costos_precios.precios_por_estructura import calcular_precios_por_estructura
 
 from io import BytesIO
@@ -64,46 +66,56 @@ def generar_pdf_completo(
     elems = []
 
     # =====================================================
-    # 1. PORTADA (HOJA INFO)
+    # 1. PORTADA
     # =====================================================
-    elems.extend(
-        seccion_hoja_info(
-            datos_proyecto=datos_proyecto,
-            df_estructuras=df_estructuras,
-            df_mat=df_materiales
+    try:
+        elems.extend(
+            seccion_hoja_info(
+                datos_proyecto=datos_proyecto,
+                df_estructuras=df_estructuras,
+                df_mat=df_materiales
+            )
         )
-    )
+    except Exception as e:
+        elems.append(Paragraph(f"Error Hoja Info: {str(e)}", styles["Normal"]))
 
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. GENERAR PRECIOS (🔥 CORE DEL SISTEMA)
+    # 2. PRECIOS (CORE)
     # =====================================================
     df_precios_estructura = None
 
-    if df_costos_estructura is not None and not df_costos_estructura.empty:
+    try:
+        if df_costos_estructura is not None and not df_costos_estructura.empty:
 
-        df_precios_estructura = calcular_precios_por_estructura(
-            df_costos_estructura,
-            porcentaje_utilidad=0.15,
-            costo_cuadrilla_dia=10000,
-            fraccion_jornada=1/16,
-        )
+            df_precios_estructura = calcular_precios_por_estructura(
+                df_costos_estructura,
+                porcentaje_utilidad=0.15,
+                costo_cuadrilla_dia=10000,
+                fraccion_jornada=1/16,
+            )
+
+    except Exception as e:
+        elems.append(Paragraph(f"Error cálculo precios: {str(e)}", styles["Normal"]))
 
     # =====================================================
-    # 3. PRESUPUESTO DE ESTRUCTURAS (FORMATO PROFESIONAL)
+    # 3. PRESUPUESTO
     # =====================================================
     if df_precios_estructura is not None and not df_precios_estructura.empty:
 
         elems.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Heading1"]))
         elems.append(Spacer(1, 10))
 
-        elems.extend(
-            generar_tabla_precios_estructura(
-                df_precios_estructura,
-                df_estructuras   # 🔥 usa cantidades reales
+        try:
+            elems.extend(
+                generar_tabla_precios_estructura(
+                    df_precios_estructura,
+                    df_estructuras
+                )
             )
-        )
+        except Exception as e:
+            elems.append(Paragraph(f"Error tabla precios: {str(e)}", styles["Normal"]))
 
         elems.append(PageBreak())
 
@@ -125,8 +137,7 @@ def generar_pdf_completo(
                 str(int(r["Cantidad"]))
             ])
 
-        tabla = Table(data)
-        elems.append(tabla)
+        elems.append(Table(data))
         elems.append(PageBreak())
 
     # =====================================================
@@ -146,8 +157,7 @@ def generar_pdf_completo(
                 str(r.get("Cantidad", "")),
             ])
 
-        tabla = Table(data)
-        elems.append(tabla)
+        elems.append(Table(data))
         elems.append(PageBreak())
 
     # =====================================================
@@ -167,11 +177,10 @@ def generar_pdf_completo(
                 str(r.get("Cantidad", "")),
             ])
 
-        tabla = Table(data)
-        elems.append(tabla)
+        elems.append(Table(data))
 
     # =====================================================
-    # BUILD PDF
+    # BUILD
     # =====================================================
     doc.build(elems)
 
