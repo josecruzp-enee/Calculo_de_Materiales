@@ -16,6 +16,7 @@ def generar_pdf_completo(
     df_estructuras,
     df_mat_por_punto,
     df_costos_por_punto,
+    df_costos_estructura,
     datos_proyecto,
 ):
 
@@ -51,12 +52,14 @@ def generar_pdf_completo(
     # =====================================================
     # 🔥 PRESUPUESTO (LO MÁS IMPORTANTE)
     # =====================================================
-    elems += generar_seccion_presupuesto(
-        doc,
-        styles,
-        {"df_costos_por_punto": df_costos_por_punto}
-    )
+    from exportadores.pdf_costos_estructura import generar_tabla_costos_estructura
 
+    if df_costos_estructura is not None:
+        elems += generar_tabla_costos_estructura(
+            doc,
+            styles,
+            df_costos_estructura
+    )
     # =====================================================
     # FINAL
     # =====================================================
