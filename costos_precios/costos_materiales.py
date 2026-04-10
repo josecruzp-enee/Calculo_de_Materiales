@@ -2,37 +2,11 @@
 from __future__ import annotations
 
 import pandas as pd
-import unicodedata
 from ayuda.debug import debug_guardar
 
 
 # =========================================================
-# NORMALIZACIÓN
-# =========================================================
-def _norm_txt(s: object) -> str:
-    if s is None or (isinstance(s, float) and pd.isna(s)):
-        return ""
-
-    t = str(s).upper()
-
-    t = "".join(
-        c for c in unicodedata.normalize("NFD", t)
-        if unicodedata.category(c) != "Mn"
-    )
-
-    for p in ["DE", "DEL", "LA", "EL", "ANSI", "TIPO", "CLASE",
-              "CARRETE", "ESPIGA", "SUSPENSION"]:
-        t = t.replace(p, "")
-
-    t = t.replace("-", " ")
-    t = "".join(c if c.isalnum() else " " for c in t)
-    t = " ".join(t.split())
-
-    return t
-
-
-# =========================================================
-# PREPARAR CATÁLOGO
+# PREPARAR CATÁLOGO (SIN NORMALIZACIÓN)
 # =========================================================
 def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
 
@@ -41,11 +15,14 @@ def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
 
     df = df_catalogo.copy()
 
-    df["Materiales_norm"] = df["Materiales"].astype(str).map(_norm_txt)
-    df["Unidad_norm"] = df["Unidad"].astype(str).map(_norm_txt)
+    # VALIDACIÓN
+    required = {"Materiales", "Unidad", "Costo Unitario"}
+    if not required.issubset(df.columns):
+        raise ValueError(f"Catálogo debe tener columnas {required}")
 
-    if "Costo Unitario" not in df.columns:
-        raise ValueError("Catálogo sin columna 'Costo Unitario'")
+    # LIMPIEZA MÍNIMA (NO destructiva)
+    df["Materiales"] = df["Materiales"].astype(str).str.strip()
+    df["Unidad"] = df["Unidad"].astype(str).str.strip()
 
     df["Costo Unitario"] = pd.to_numeric(
         df["Costo Unitario"],
@@ -55,15 +32,17 @@ def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=["Costo Unitario"])
     df = df[df["Costo Unitario"] > 0]
 
+    # QUITAR DUPLICADOS EXACTOS
     df = df.drop_duplicates(
-        subset=["Materiales_norm", "Unidad_norm"]
+        subset=["Materiales", "Unidad"]
     )
 
     debug_guardar("catalogo_costos_procesado", {
-        "filas": len(df)
+        "filas": len(df),
+        "columnas": list(df.columns)
     })
 
-    return df[["Materiales_norm", "Unidad_norm", "Costo Unitario"]]
+    return df[["Materiales", "Unidad", "Costo Unitario"]]
 
 
 # =========================================================
@@ -85,9 +64,9 @@ def calcular_lista_materiales_con_costos(
 
     df = df_materiales.copy()
 
-    cols = {"Materiales", "Unidad", "Cantidad"}
-    if not cols.issubset(df.columns):
-        raise ValueError(f"df_materiales debe tener columnas {cols}")
+    required = {"Materiales", "Unidad", "Cantidad"}
+    if not required.issubset(df.columns):
+        raise ValueError(f"df_materiales debe tener columnas {required}")
 
     # =====================================================
     # CONSOLIDAR
@@ -100,43 +79,45 @@ def calcular_lista_materiales_con_costos(
     )
 
     # =====================================================
-    # NORMALIZAR
+    # LIMPIEZA SUAVE (NO destructiva)
     # =====================================================
-    df["Materiales_norm"] = df["Materiales"].map(_norm_txt)
-    df["Unidad_norm"] = df["Unidad"].map(_norm_txt)
+    df["Materiales"] = df["Materiales"].astype(str).str.strip()
+    df["Unidad"] = df["Unidad"].astype(str).str.strip()
+
+    df_catalogo_costos = df_catalogo_costos.copy()
+    df_catalogo_costos["Materiales"] = df_catalogo_costos["Materiales"].astype(str).str.strip()
+    df_catalogo_costos["Unidad"] = df_catalogo_costos["Unidad"].astype(str).str.strip()
 
     # =====================================================
-    # MERGE COSTOS
+    # MERGE DIRECTO (SIN NORMALIZAR)
     # =====================================================
     df = df.merge(
         df_catalogo_costos,
-        on=["Materiales_norm", "Unidad_norm"],
+        on=["Materiales", "Unidad"],
         how="left"
     )
 
     # =====================================================
-    # DEBUG COMPLETO 🔥
+    # DEBUG COMPLETO
     # =====================================================
     debug_guardar("tabla_costos_debug", {
         "filas": len(df),
         "columnas": list(df.columns),
-        "preview": df.head(50).to_dict(orient="records")
+        "preview": df.head(20).to_dict(orient="records")
     })
 
     # =====================================================
     # DETECTAR FALTANTES
     # =====================================================
     faltantes = df[df["Costo Unitario"].isna()]
-    total = len(df)
-    sin_costo = len(faltantes)
-    
+
     debug_guardar("materiales_sin_precio", {
         "total": len(faltantes),
         "ejemplo": faltantes.head(20).to_dict(orient="records")
     })
 
     # =====================================================
-    # ⚠️ NO ROMPER → FILTRAR
+    # FILTRAR SOLO LOS QUE TIENEN COSTO
     # =====================================================
     if not faltantes.empty:
         debug_guardar("WARNING_MATERIALES_SIN_COSTO", {
