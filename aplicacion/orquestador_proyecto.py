@@ -150,9 +150,9 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
-            df_catalogo=df_catalogo
+            df_catalogo=df_catalogo,
             df_estructuras=df_estructuras,
-            df_materiales_por_estructura=resultado_materiales.descripcion_estructuras
+            df_materiales_por_estructura=resultado_materiales.descripcion_estructuras,
         )
 
         resultado_costos = ejecutar_costos(entrada_costos)
