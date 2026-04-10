@@ -20,6 +20,15 @@ def generar_pdf_completo(
     datos_proyecto,
 ):
 
+    import streamlit as st
+
+    st.write("DEBUG PDF COMPLETO")
+
+    st.write("df_materiales:", df_materiales.shape if df_materiales is not None else None)
+    st.write("df_estructuras:", df_estructuras.shape if df_estructuras is not None else None)
+    st.write("df_mat_por_punto:", df_mat_por_punto.shape if df_mat_por_punto is not None else None)
+    st.write("df_costos_por_punto:", df_costos_por_punto.shape if df_costos_por_punto is not None else None)
+    
     buffer = BytesIO()
 
     doc = BaseDocTemplate(
