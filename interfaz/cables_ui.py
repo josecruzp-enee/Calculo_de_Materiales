@@ -124,7 +124,6 @@ def seccion_cables() -> dict:
         registros = df_ok.to_dict(orient="records")
 
         st.session_state["cables_proyecto_df"] = df_ok.copy()
-        st.session_state["cables_proyecto"] = registros
 
         dp = st.session_state.get("datos_proyecto", {}) or {}
         dp["cables_proyecto"] = registros
@@ -160,6 +159,6 @@ def seccion_cables() -> dict:
 
     return {
         "ok": True,
-        "cables": st.session_state.get("cables_proyecto", []),
+        "cables": st.session_state.get("cables_proyecto_df", pd.DataFrame()).to_dict(orient="records"),
         "df": st.session_state.get("cables_proyecto_df", pd.DataFrame()),
     }
