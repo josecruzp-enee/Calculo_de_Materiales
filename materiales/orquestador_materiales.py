@@ -17,11 +17,10 @@ from materiales.modelos.entrada import EntradaMateriales
 # =========================================================
 # CÁLCULO
 # =========================================================
-from materiales.calculos.calculo_materiales import (
-    calcular_materiales_proyecto,
-    calcular_materiales_por_estructura,  # 🔥 NUEVO
+from materiales.calculos.calculo_materiales import (calcular_materiales_proyecto)
+from materiales.calculos.materiales_puntos import (
+    calcular_materiales_por_estructura,
 )
-
 from materiales.validaciones.materiales_validacion import (
     validar_datos_proyecto,
 )
