@@ -57,9 +57,13 @@ def renderizar_datos_proyecto():
 
 def renderizar_cables():
     cables = seccion_cables()
-    if cables is not None:
-        st.session_state["cables_proyecto_df"] = cables
 
+    if cables and cables.get("ok"):
+        df = cables.get("df")
+
+        if isinstance(df, pd.DataFrame):
+            st.session_state["cables_proyecto_df"] = df.copy()
+            st.session_state["cables_proyecto"] = cables.get("cables", [])
 
 def renderizar_modo_carga():
     seleccionar_modo_carga()
