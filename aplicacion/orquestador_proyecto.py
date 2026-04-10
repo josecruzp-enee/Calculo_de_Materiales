@@ -104,7 +104,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         df_estructuras = _adaptar_df_estructuras(
             salida_entradas.df_estructuras
         )
-
+        debug_guardar("DEBUG_ENTRADAS_REAL", {
+            "tipo_df_estructuras": str(type(salida_entradas.df_estructuras)),
+            "es_dataframe": isinstance(salida_entradas.df_estructuras, pd.DataFrame),
+        })
         # =====================================================
         # 2. PROYECTO
         # =====================================================
