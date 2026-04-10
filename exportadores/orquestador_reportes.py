@@ -136,7 +136,7 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 df_mat_por_punto=entrada.df_materiales_por_punto,
                 df_costos_por_punto=costos.get("df_costos_por_punto"),
                 df_costos_estructura=costos.get("df_costos_estructura"),
-            datos_proyecto={"nombre": nombre},
+                datos_proyecto={"nombre": nombre},
             )),
         ]
 
