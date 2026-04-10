@@ -1,5 +1,4 @@
-# materiales/orquestador_materiales.py
-
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from typing import Optional, Dict, Any, List
@@ -20,6 +19,7 @@ from materiales.modelos.entrada import EntradaMateriales
 # =========================================================
 from materiales.calculos.calculo_materiales import (
     calcular_materiales_proyecto,
+    calcular_materiales_por_estructura,  # 🔥 NUEVO
 )
 
 from materiales.validaciones.materiales_validacion import (
@@ -79,7 +79,6 @@ def _merge_materiales(df_a, df_b):
     )
 
 
-
 # =========================================================
 # ORQUESTADOR PRINCIPAL
 # =========================================================
@@ -91,9 +90,6 @@ def ejecutar_materiales(
     errores: List[str] = []
     warnings: List[str] = []
 
-    # =====================================================
-    # DEBUG BASE
-    # =====================================================
     debug: Dict[str, Any] = {
         "input": {
             "filas_estructuras": len(entrada.estructuras_df)
@@ -145,7 +141,6 @@ def ejecutar_materiales(
             "tipo_resultado": str(type(resultado_calc))
         }
 
-        # 🔥 DEBUG CLAVE
         debug["calc_keys"] = list(resultado_calc.keys()) if isinstance(resultado_calc, dict) else "no_dict"
 
     except Exception as e:
@@ -165,6 +160,21 @@ def ejecutar_materiales(
             datos_proyecto=entrada.datos_proyecto,
             debug=debug
         )
+
+    # =====================================================
+    # 🔥 NUEVO: MATERIALES POR ESTRUCTURA
+    # =====================================================
+    materiales_por_estructura = calcular_materiales_por_estructura(
+        hojas_base=hojas_base,
+        df_estructuras=df_norm,
+        tension=tension,
+        calibre_mt=entrada.calibre_mt,
+        tabla_conectores_mt=entrada.tabla_conectores_mt,
+    )
+
+    debug["materiales_por_estructura"] = {
+        "total": len(materiales_por_estructura)
+    }
 
     # =====================================================
     # 2. CÁLCULO ESTRUCTURAS
@@ -204,7 +214,6 @@ def ejecutar_materiales(
         df_materiales = resultado_calc[0] if len(resultado_calc) >= 1 else None
         df_detalle = resultado_calc[1] if len(resultado_calc) >= 2 else None
 
-    # 🔥 DEBUG CRUDO
     debug["raw_materiales"] = {
         "df_materiales_none": df_materiales is None,
         "df_detalle_none": df_detalle is None,
@@ -216,16 +225,9 @@ def ejecutar_materiales(
     if df_detalle is None:
         df_detalle = _df_vacio()
 
-    # 🔥 DEBUG FINAL BUENO
     debug["post_procesado"] = {
         "materiales": len(df_materiales),
         "detalle": len(df_detalle),
-
-        "mat_cols": list(df_materiales.columns),
-        "det_cols": list(df_detalle.columns),
-
-        "mat_head": df_materiales.head(3).to_dict(),
-        "det_head": df_detalle.head(3).to_dict(),
     }
 
     # =====================================================
@@ -233,33 +235,13 @@ def ejecutar_materiales(
     # =====================================================
     if isinstance(df_materiales_extra, pd.DataFrame) and not df_materiales_extra.empty:
         try:
-
-            debug["materiales_extra_input"] = {
-                "filas": len(df_materiales_extra),
-                "columnas": list(df_materiales_extra.columns)
-            }
-
             df_materiales = _merge_materiales(df_materiales, df_materiales_extra)
-
-            debug["merge_extra"] = {
-                "extra_rows": len(df_materiales_extra)
-            }
-
         except Exception as e:
             warnings.append(f"Error integrando materiales extra: {e}")
 
     # =====================================================
     # 5. OUTPUT FINAL
     # =====================================================
-    debug["output"] = {
-        "materiales_total": len(df_materiales),
-        "detalle_total": len(df_detalle),
-    }
-
-    debug["estado"] = {
-        "ok": True
-    }
-
     return SalidaMateriales(
         ok=True,
         errores=[],
@@ -268,6 +250,10 @@ def ejecutar_materiales(
         df_materiales_por_punto=df_detalle,
         df_estructuras=df_estructuras,
         df_estructuras_por_punto=df_estructuras_por_punto,
+
+        # 🔥 AQUÍ ESTÁ LA CLAVE
+        descripcion_estructuras=materiales_por_estructura,
+
         datos_proyecto=entrada.datos_proyecto,
         debug=debug
     )
