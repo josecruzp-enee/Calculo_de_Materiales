@@ -8,138 +8,108 @@ from reportlab.lib import colors
 
 
 # =========================================================
-# TABLA PRECIOS DE ESTRUCTURA (SOLO PRESENTACIÓN)
+# TABLA PRECIOS DE ESTRUCTURA (FORMATO OFERTA)
 # =========================================================
 def generar_tabla_precios_estructura(
     df_precios: pd.DataFrame,
+    df_estructuras: pd.DataFrame | None = None,
 ):
     """
-    Renderiza la tabla de precios unitarios por estructura.
+    Renderiza precios en formato:
 
-    ⚠️ Este módulo NO calcula precios.
-    Espera un DataFrame ya procesado desde costos_precios.
+    Descripción | PU | Cantidad | Total
     """
 
-    # =====================================================
-    # VALIDACIÓN
-    # =====================================================
-    if df_precios is None or not isinstance(df_precios, pd.DataFrame):
-        raise ValueError("df_precios inválido")
-
-    if df_precios.empty:
+    if df_precios is None or df_precios.empty:
         raise ValueError("df_precios vacío")
 
-    required = [
-        "Estructura",
-        "Costo Materiales",
-        "Costo Operativo",
-        "Costo Base",
-        "Utilidad",
-        "Precio Unitario",
-    ]
+    # =====================================================
+    # AGRUPAR CANTIDADES (SI SE PROPORCIONA)
+    # =====================================================
+    cantidades = {}
 
-    faltantes = [c for c in required if c not in df_precios.columns]
-    if faltantes:
-        raise ValueError(f"df_precios no cumple contrato: {faltantes}")
+    if df_estructuras is not None and not df_estructuras.empty:
+        df_tmp = df_estructuras.copy()
+        df_tmp["Estructura"] = df_tmp["Estructura"].astype(str).str.strip()
+
+        cantidades = (
+            df_tmp.groupby("Estructura")["Cantidad"]
+            .sum()
+            .to_dict()
+        )
 
     # =====================================================
-    # CONSTRUCCIÓN DE TABLA
+    # CABECERA
     # =====================================================
     data = [[
-        "Estructura",
-        "Materiales",
-        "Operativo",
-        "Base",
-        "Utilidad",
-        "Precio Unitario",
+        "DESCRIPCIÓN",
+        "P.U.",
+        "CANT",
+        "TOTAL"
     ]]
 
+    total_general = 0.0
+
+    # =====================================================
+    # FILAS
+    # =====================================================
     for _, r in df_precios.iterrows():
+
+        estructura = str(r["Estructura"]).strip()
+        pu = float(r["Precio Unitario"])
+
+        cantidad = cantidades.get(estructura, 1)  # fallback
+        total = pu * cantidad
+
+        descripcion = f"Suministro e instalación de estructura tipo {estructura}"
+
+        total_general += total
+
         data.append([
-            str(r["Estructura"]),
-            f"L {float(r['Costo Materiales']):,.2f}",
-            f"L {float(r['Costo Operativo']):,.2f}",
-            f"L {float(r['Costo Base']):,.2f}",
-            f"L {float(r['Utilidad']):,.2f}",
-            f"L {float(r['Precio Unitario']):,.2f}",
+            descripcion,
+            f"L {pu:,.2f}",
+            f"{int(cantidad)}",
+            f"L {total:,.2f}",
         ])
 
     # =====================================================
-    # DISEÑO
+    # TOTAL GENERAL
+    # =====================================================
+    data.append([
+        "",
+        "",
+        "TOTAL",
+        f"L {total_general:,.2f}"
+    ])
+
+    # =====================================================
+    # TABLA
     # =====================================================
     tabla = Table(
         data,
-        colWidths=[90, 80, 80, 80, 80, 100]
+        colWidths=[280, 90, 60, 100]
     )
 
     tabla.setStyle(TableStyle([
         # encabezado
-        ("BACKGROUND", (0, 0), (-1, 0), colors.black),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
 
-        # contenido
-        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
-        ("ALIGN", (0, 1), (0, -1), "LEFT"),
+        # alineación
+        ("ALIGN", (1, 1), (-1, -2), "RIGHT"),
+        ("ALIGN", (2, 1), (2, -2), "CENTER"),
 
-        # bordes
+        # total
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFEFEF")),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+
+        # grid
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
 
         # padding
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
-
-        # filas alternas
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
     ]))
 
     return [tabla]
-
-
-# =========================================================
-# WRAPPER DE SECCIÓN COMPLETA
-# =========================================================
-from reportlab.platypus import Paragraph, Spacer, PageBreak
-
-
-def seccion_precios_estructura(
-    df_precios,
-    styles,
-    titulo: str = "PRECIOS UNITARIOS DE ESTRUCTURA",
-):
-    """
-    Sección completa lista para insertar en PDF.
-
-    ✔ incluye título
-    ✔ incluye tabla
-    ✔ incluye salto de página
-    """
-
-    elems = []
-
-    # =====================================================
-    # VALIDACIÓN
-    # =====================================================
-    if df_precios is None or df_precios.empty:
-        return elems  # no rompe el flujo
-
-    # =====================================================
-    # TÍTULO
-    # =====================================================
-    elems.append(Paragraph(titulo, styles["Heading1"]))
-    elems.append(Spacer(1, 10))
-
-    # =====================================================
-    # TABLA
-    # =====================================================
-    elems.extend(
-        generar_tabla_precios_estructura(df_precios)
-    )
-
-    # =====================================================
-    # PAGE BREAK
-    # =====================================================
-    elems.append(PageBreak())
-
-    return elems
