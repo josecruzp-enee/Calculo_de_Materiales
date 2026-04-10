@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-hoja_info.py (VERSIÓN PRO COMPLETA - FIX COLUMNAS)
-"""
-
 from __future__ import annotations
 
 import re
@@ -13,39 +9,6 @@ from typing import Optional
 import pandas as pd
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
-
-
-# ==========================================================
-# NORMALIZADOR
-# ==========================================================
-
-COLUMN_MAP = {
-    "codigodeestructura": "CodigoEstructura",
-    "codigo": "CodigoEstructura",
-    "cod": "CodigoEstructura",
-    "materiales": "Materiales",
-    "material": "Materiales",
-    "cantidad": "Cantidad",
-    "cant": "Cantidad",
-    "punto": "Punto",
-    "unidad": "Unidad",
-}
-
-
-def normalizar_df(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
-    if df is None or df.empty:
-        return df
-
-    df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
-
-    rename = {}
-    for c in df.columns:
-        key = c.lower().replace(" ", "")
-        if key in COLUMN_MAP:
-            rename[c] = COLUMN_MAP[key]
-
-    return df.rename(columns=rename)
 
 
 # ==========================================================
@@ -63,70 +26,61 @@ def _formato_tension(vll):
     try:
         vll = float(vll)
         vln = floor((vll / sqrt(3)) * 10) / 10
-        return f"{vln:.1f} LN / {vll:.1f} LL KV"
+        return f"{vln:.1f} / {vll:.1f} kV"
     except:
         return str(vll)
 
 
 def _get_col_estructura(df):
-    """🔥 CLAVE: detecta automáticamente la columna correcta"""
     if "CodigoEstructura" in df.columns:
         return "CodigoEstructura"
     elif "Estructura" in df.columns:
         return "Estructura"
-    else:
-        return None
+    return None
 
 
 # ==========================================================
 # EXTRACTORES
 # ==========================================================
 
-def extraer_postes(df_estructuras):
-    df_estructuras = normalizar_df(df_estructuras)
+def extraer_postes(df):
+    if df is None or df.empty:
+        return 0, {}
 
-    if df_estructuras is None or df_estructuras.empty:
-        return None, 0
-
-    col = _get_col_estructura(df_estructuras)
+    col = _get_col_estructura(df)
     if col is None:
-        return None, 0
+        return 0, {}
 
-    s = df_estructuras[col].astype(str)
+    s = df[col].astype(str)
 
-    postes = df_estructuras[s.str.contains(r"^(PC|PM|PT)", case=False, na=False)]
+    postes = df[s.str.contains(r"^(PC|PM|PT)", case=False, na=False)]
 
     if postes.empty:
-        return None, 0
+        return 0, {}
 
-    total = postes["Cantidad"].apply(_float_safe).sum()
+    agrupado = postes.groupby(col)["Cantidad"].sum()
+    total = int(postes["Cantidad"].apply(_float_safe).sum())
 
-    return None, int(total)
+    return total, agrupado.to_dict()
 
 
-def extraer_transformadores(df_estructuras, df_mat):
-    df_estructuras = normalizar_df(df_estructuras)
+def extraer_transformadores(df):
+    if df is None or df.empty:
+        return 0, ""
 
-    if df_estructuras is None or df_estructuras.empty:
-        return 0, "", []
-
-    col = _get_col_estructura(df_estructuras)
+    col = _get_col_estructura(df)
     if col is None:
-        return 0, "", []
+        return 0, ""
 
-    s = df_estructuras[col].astype(str).str.upper()
+    s = df[col].astype(str).str.upper()
 
-    # 🔥 MÁS FLEXIBLE
     ext = s.str.extract(r"(TS|TD|TT).*?(\d+)", expand=True)
 
     mask = ext[0].notna()
     if not mask.any():
-        return 0, "", []
+        return 0, ""
 
-    qty = pd.to_numeric(
-        df_estructuras.loc[mask, "Cantidad"],
-        errors="coerce"
-    ).fillna(0)
+    qty = pd.to_numeric(df.loc[mask, "Cantidad"], errors="coerce").fillna(0)
 
     bancos = {}
 
@@ -136,32 +90,25 @@ def extraer_transformadores(df_estructuras, df_mat):
 
     resumen = ", ".join([f"{v} x {k}" for k, v in bancos.items()])
 
-    total = sum(bancos.values())
-
-    return total, resumen, list(bancos.keys())
+    return sum(bancos.values()), resumen
 
 
-def extraer_luminarias(df_estructuras, df_mat):
-    df_estructuras = normalizar_df(df_estructuras)
-
-    if df_estructuras is None or df_estructuras.empty:
+def extraer_luminarias(df):
+    if df is None or df.empty:
         return 0, {}
 
-    col = _get_col_estructura(df_estructuras)
+    col = _get_col_estructura(df)
     if col is None:
         return 0, {}
 
-    s = df_estructuras[col].astype(str)
+    s = df[col].astype(str)
 
     mask = s.str.contains(r"LL", case=False, na=False)
 
     if not mask.any():
         return 0, {}
 
-    qty = pd.to_numeric(
-        df_estructuras.loc[mask, "Cantidad"],
-        errors="coerce"
-    ).fillna(0)
+    qty = pd.to_numeric(df.loc[mask, "Cantidad"], errors="coerce").fillna(0)
 
     det = {}
     for cod, q in zip(s[mask], qty):
@@ -172,95 +119,107 @@ def extraer_luminarias(df_estructuras, df_mat):
     return sum(det.values()), det
 
 
-def extraer_cables(df_cables):
-    if df_cables is None or df_cables.empty:
-        return 0, {}
+def extraer_conductor(df_mat):
+    if df_mat is None or df_mat.empty:
+        return 0, ""
 
-    if "Cantidad" not in df_cables.columns:
-        return 0, {}
+    if "Materiales" not in df_mat.columns:
+        return 0, ""
 
-    total = float(df_cables["Cantidad"].sum())
+    df = df_mat.copy()
 
-    det = {}
-    for _, r in df_cables.iterrows():
-        mat = str(r.get("Materiales", ""))
-        qty = float(r.get("Cantidad", 0))
-        det[mat] = det.get(mat, 0) + qty
+    mask = df["Materiales"].str.contains(
+        r"ACSR|AAAC|ALUMINIO|COBRE|CABLE",
+        case=False,
+        na=False
+    )
 
-    return total, det
+    df = df[mask]
+
+    if df.empty:
+        return 0, ""
+
+    agrupado = df.groupby("Materiales")["Cantidad"].sum().sort_values(ascending=False)
+
+    return float(agrupado.iloc[0]), agrupado.index[0]
 
 
 # ==========================================================
-# BUILDERS
+# TABLA DE DATOS (CLAVE)
 # ==========================================================
 
-def build_header(styleH):
-    return [
-        Paragraph("<b>Hoja de Información del Proyecto</b>", styleH),
-        Spacer(1, 12),
-    ]
-
-
-def build_tabla_datos(datos_proyecto, styleN):
+def build_tabla_datos(datos, styleN):
 
     tension = (
-        datos_proyecto.get("nivel_tension")
-        or datos_proyecto.get("nivel_de_tension")
-        or datos_proyecto.get("tension", "")
+        datos.get("nivel_tension")
+        or datos.get("nivel_de_tension")
+        or datos.get("tension")
     )
 
     data = [
-        ["Nombre del Proyecto:", datos_proyecto.get("nombre_proyecto", "")],
-        ["Código / Expediente:", datos_proyecto.get("codigo_proyecto", "")],
-        ["Nivel de Tensión:", _formato_tension(tension)],
-        ["Calibre Primario:", datos_proyecto.get("calibre_mt", "")],
-        ["Fecha de Informe:", datos_proyecto.get("fecha_informe", datetime.today().strftime("%Y-%m-%d"))],
-        ["Responsable:", datos_proyecto.get("responsable", "")],
-        ["Empresa:", datos_proyecto.get("empresa", "")],
+        ["Nombre del Proyecto:", datos.get("nombre_proyecto", "")],
+        ["Código / Expediente:", datos.get("codigo_proyecto", "")],
+        ["Nivel de Tensión (kV):", _formato_tension(tension)],
+        ["Calibre Primario:", datos.get("calibre_mt", "")],
+        ["Calibre Secundario:", datos.get("calibre_bt", "")],
+        ["Calibre Neutro:", datos.get("calibre_neutro", "")],
+        ["Calibre Piloto:", datos.get("calibre_piloto", "")],
+        ["Cable de Retenidas:", datos.get("retenida", "")],
+        ["Fecha de Informe:", datos.get("fecha_informe", datetime.today().strftime("%Y-%m-%d"))],
+        ["Responsable / Diseñador:", datos.get("responsable", "")],
+        ["Empresa / Área:", datos.get("empresa", "")],
     ]
 
-    t = Table(data, colWidths=[220, 280])
+    t = Table(data, colWidths=[230, 260])
     t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
     ]))
 
-    return [t, Spacer(1, 18)]
+    return [t, Spacer(1, 15)]
 
 
-def build_descripcion(df_estructuras, df_mat, styleN, df_cables=None):
+# ==========================================================
+# DESCRIPCIÓN (FORMATO ORIGINAL)
+# ==========================================================
 
-    partes = []
+def build_descripcion(df_estructuras, df_mat, styleN):
 
-    _, total_postes = extraer_postes(df_estructuras)
+    lines = []
+
+    # 1. POSTES
+    total_postes, det_postes = extraer_postes(df_estructuras)
     if total_postes:
-        partes.append(f"{total_postes} postes")
+        detalle = ", ".join([f"{int(v)} {k}" for k, v in det_postes.items()])
+        lines.append(f"1. Hincado de {detalle} (Total: {total_postes} postes).")
 
-    total_t, resumen_t, _ = extraer_transformadores(df_estructuras, df_mat)
+    # 2. CONDUCTORES
+    total_c, tipo_c = extraer_conductor(df_mat)
+    if total_c:
+        lines.append(f"2. Construcción de {int(total_c)} m con conductor {tipo_c}.")
+
+    # 3. TRANSFORMADORES
+    total_t, resumen_t = extraer_transformadores(df_estructuras)
     if total_t:
-        partes.append(f"{resumen_t} en transformadores")
+        lines.append(f"3. Instalación de {total_t} transformador(es) en conexión {resumen_t}.")
 
-    total_l, det_l = extraer_luminarias(df_estructuras, df_mat)
+    # 4. LUMINARIAS
+    total_l, det_l = extraer_luminarias(df_estructuras)
     if total_l:
         detalle_l = ", ".join([f"{v} de {k}" for k, v in det_l.items()])
-        partes.append(f"{detalle_l} en luminarias")
+        lines.append(f"4. Instalación de {total_l} luminaria(s) ({detalle_l}).")
 
-    total_c, det_c = extraer_cables(df_cables)
-    if total_c:
-        detalle_c = ", ".join([f"{round(v,1)} de {k}" for k, v in det_c.items()])
-        partes.append(f"{detalle_c} en conductores")
-
-    if partes:
-        texto = "Proyecto que contempla la instalación de " + ", ".join(partes) + "."
-    else:
-        texto = "Proyecto sin elementos detectados automáticamente."
-
-    return [
-        Paragraph("<b>Descripción general del Proyecto</b>", styleN),
+    elems = [
+        Paragraph("<b>Descripción general del Proyecto:</b>", styleN),
         Spacer(1, 6),
-        Paragraph(texto, styleN),
-        Spacer(1, 18),
     ]
+
+    for l in lines:
+        elems.append(Paragraph(l, styleN))
+
+    elems.append(Spacer(1, 12))
+
+    return elems
 
 
 # ==========================================================
@@ -271,17 +230,18 @@ def hoja_info_proyecto(
     datos_proyecto,
     df_estructuras=None,
     df_mat=None,
-    df_cables=None,
     *,
     styleN=None,
     styleH=None,
     _calibres_por_tipo=None,
 ):
-    df_cables = df_cables if df_cables is not None else df_mat
+
     elems = []
 
-    elems.extend(build_header(styleH))
+    elems.append(Paragraph("<b>Hoja de Información del Proyecto</b>", styleH))
+    elems.append(Spacer(1, 12))
+
     elems.extend(build_tabla_datos(datos_proyecto, styleN))
-    elems.extend(build_descripcion(df_estructuras, df_mat, styleN, df_cables))
+    elems.extend(build_descripcion(df_estructuras, df_mat, styleN))
 
     return elems
