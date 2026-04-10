@@ -54,18 +54,12 @@ def _leer(tipo: str, data: Any) -> pd.DataFrame:
 
 
 # =========================================================
-# HELPERS DEBUG
+# HELPERS DEBUG (TABLAS)
 # =========================================================
-def _safe_df_info(df: Any) -> Dict[str, Any]:
+def _safe_df_info(df: Any):
     if isinstance(df, pd.DataFrame):
-        return {
-            "filas": len(df),
-            "columnas": list(df.columns),
-            "preview": df.head(3).to_dict()
-        }
-    return {
-        "tipo": str(type(df))
-    }
+        return df.head(10)  # 🔥 tabla real
+    return pd.DataFrame({"valor": [str(type(df))]})
 
 
 # =========================================================
@@ -76,26 +70,28 @@ def ejecutar_entradas(
 ) -> SalidaEntradas:
 
     # =====================================================
-    # DEBUG BASE
+    # DEBUG BASE (TABLA)
     # =====================================================
     debug: Dict[str, Any] = {
-        "input": {
-            "tipo_entrada": entrada.tipo_entrada,
-            "tiene_data": entrada.data_entrada is not None,
-            "tipo_data": str(type(entrada.data_entrada)),
-            "datos_proyecto_keys": list(entrada.datos_proyecto.keys())
-        }
+        "input": pd.DataFrame({
+            "campo": ["tipo_entrada", "tiene_data", "tipo_data"],
+            "valor": [
+                entrada.tipo_entrada,
+                entrada.data_entrada is not None,
+                str(type(entrada.data_entrada))
+            ]
+        })
     }
 
     # =====================================================
     # VALIDACIÓN INTERFAZ
     # =====================================================
     if not entrada.ok:
-        debug["estado"] = {
-            "ok": False,
-            "origen": "interfaz",
-            "errores": entrada.errores
-        }
+        debug["estado"] = pd.DataFrame({
+            "ok": [False],
+            "origen": ["interfaz"],
+            "errores": [str(entrada.errores)]
+        })
 
         return SalidaEntradas(
             ok=False,
@@ -113,11 +109,11 @@ def ejecutar_entradas(
         debug["lectura"] = _safe_df_info(df_raw)
 
         if df_raw is None or getattr(df_raw, "empty", True):
-            debug["estado"] = {
-                "ok": False,
-                "fase": "lectura",
-                "error": "df_raw vacío o inválido"
-            }
+            debug["estado"] = pd.DataFrame({
+                "ok": [False],
+                "fase": ["lectura"],
+                "error": ["df_raw vacío o inválido"]
+            })
 
             return SalidaEntradas(
                 ok=False,
@@ -131,25 +127,18 @@ def ejecutar_entradas(
         # =====================================================
         df_norm, errores_norm, warnings_norm = normalizar_estructuras(df_raw)
 
-        debug["normalizacion"] = {
-            "df": _safe_df_info(df_norm),
-            "errores": errores_norm,
-            "warnings": warnings_norm,
-            "estructuras": (
-                df_norm["codigodeestructura"]
-                .astype(str)
-                .unique()
-                .tolist()
-                if isinstance(df_norm, pd.DataFrame) and not df_norm.empty
-                else []
-            )
-        }
+        debug["normalizacion_df"] = _safe_df_info(df_norm)
+
+        debug["normalizacion_info"] = pd.DataFrame({
+            "errores": [str(errores_norm)],
+            "warnings": [str(warnings_norm)]
+        })
 
         if errores_norm:
-            debug["estado"] = {
-                "ok": False,
-                "fase": "normalizacion"
-            }
+            debug["estado"] = pd.DataFrame({
+                "ok": [False],
+                "fase": ["normalizacion"]
+            })
 
             return SalidaEntradas(
                 ok=False,
@@ -163,15 +152,15 @@ def ejecutar_entradas(
         # =====================================================
         errores_val = validar_estructuras(df_norm)
 
-        debug["validacion"] = {
-            "errores": errores_val
-        }
+        debug["validacion"] = pd.DataFrame({
+            "errores": [str(errores_val)]
+        })
 
         if errores_val:
-            debug["estado"] = {
-                "ok": False,
-                "fase": "validacion"
-            }
+            debug["estado"] = pd.DataFrame({
+                "ok": [False],
+                "fase": ["validacion"]
+            })
 
             return SalidaEntradas(
                 ok=False,
@@ -186,18 +175,18 @@ def ejecutar_entradas(
         # =====================================================
         base_datos = cargar_base_datos()
 
-        debug["base_datos"] = {
+        debug["base_datos"] = pd.DataFrame({
             "hojas": list(base_datos.keys())
-        }
+        })
 
         # =====================================================
         # 5. OUTPUT FINAL
         # =====================================================
         debug["output"] = _safe_df_info(df_norm)
 
-        debug["estado"] = {
-            "ok": True
-        }
+        debug["estado"] = pd.DataFrame({
+            "ok": [True]
+        })
 
         return SalidaEntradas(
             ok=True,
@@ -219,13 +208,15 @@ def ejecutar_entradas(
 
     except Exception as e:
 
-        debug["estado"] = {
-            "ok": False,
-            "fase": "exception",
-            "error": str(e)
-        }
+        debug["estado"] = pd.DataFrame({
+            "ok": [False],
+            "fase": ["exception"],
+            "error": [str(e)]
+        })
 
-        debug["trace"] = traceback.format_exc()
+        debug["trace"] = pd.DataFrame({
+            "trace": [traceback.format_exc()]
+        })
 
         return SalidaEntradas(
             ok=False,
