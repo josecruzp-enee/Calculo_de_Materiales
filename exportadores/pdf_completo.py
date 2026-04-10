@@ -23,7 +23,7 @@ def generar_pdf_completo(
     df_costos_estructura,
     datos_proyecto,
 ):
-
+    df_cables = df_materiales
     buffer = BytesIO()
 
     doc = BaseDocTemplate(
