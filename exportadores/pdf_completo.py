@@ -6,12 +6,20 @@ from exportadores.pdf_reportes_simples import (
     generar_pdf_materiales,
     generar_pdf_materiales_por_punto,
 )
-from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, PageBreak, Table
+
+from reportlab.platypus import (
+    BaseDocTemplate, PageTemplate, Frame,
+    Paragraph, Spacer, PageBreak, Table
+)
+
 from exportadores.precios_estructura import generar_tabla_costos_estructura
+from exportadores.hoja_info import seccion_hoja_info
+
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from exportadores.pdf_base import styles, fondo_pagina
-from exportadores.hoja_info import hoja_info_proyecto
+
+
 # =====================================================
 # PDF COMPLETO
 # =====================================================
@@ -23,7 +31,7 @@ def generar_pdf_completo(
     df_costos_estructura,
     datos_proyecto,
 ):
-    df_cables = df_materiales
+
     buffer = BytesIO()
 
     doc = BaseDocTemplate(
@@ -35,7 +43,12 @@ def generar_pdf_completo(
         bottomMargin=50
     )
 
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
+    frame = Frame(
+        doc.leftMargin,
+        doc.bottomMargin,
+        doc.width,
+        doc.height
+    )
 
     template = PageTemplate(
         id="normal",
@@ -48,24 +61,21 @@ def generar_pdf_completo(
     elems = []
 
     # =====================================================
-    # 1. PORTADA
+    # 1. PORTADA (HOJA INFO)
     # =====================================================
-    from exportadores.hoja_info import hoja_info_proyecto
-
     elems.extend(
-        hoja_info_proyecto(
+        seccion_hoja_info(
             datos_proyecto=datos_proyecto,
             df_estructuras=df_estructuras,
-            df_mat=df_materiales,
-            styleN=styles["Normal"],
-            styleH=styles["Heading2"],
-            _calibres_por_tipo=None
+            df_mat=df_materiales
         )
     )
 
     elems.append(PageBreak())
-    elems.append(Spacer(1, 12))
 
+    # =====================================================
+    # 2. INFO BÁSICA
+    # =====================================================
     if datos_proyecto:
         nombre = datos_proyecto.get("nombre", "Proyecto")
         elems.append(Paragraph(f"Proyecto: {nombre}", styles["Normal"]))
@@ -74,7 +84,7 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. COSTOS DE ESTRUCTURA
+    # 3. COSTOS DE ESTRUCTURA
     # =====================================================
     if df_costos_estructura is not None and not df_costos_estructura.empty:
         elems.extend(
@@ -83,9 +93,10 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     # =====================================================
-    # 3. ESTRUCTURAS
+    # 4. ESTRUCTURAS
     # =====================================================
     if df_estructuras is not None and not df_estructuras.empty:
+
         elems.append(Paragraph("<b>LISTA DE ESTRUCTURAS</b>", styles["Heading2"]))
         elems.append(Spacer(1, 10))
 
@@ -94,16 +105,20 @@ def generar_pdf_completo(
         df = df_estructuras.groupby("Estructura")["Cantidad"].sum().reset_index()
 
         for _, r in df.iterrows():
-            data.append([str(r["Estructura"]), str(int(r["Cantidad"]))])
+            data.append([
+                str(r["Estructura"]),
+                str(int(r["Cantidad"]))
+            ])
 
         tabla = Table(data)
         elems.append(tabla)
         elems.append(PageBreak())
 
     # =====================================================
-    # 4. MATERIALES
+    # 5. MATERIALES
     # =====================================================
     if df_materiales is not None and not df_materiales.empty:
+
         elems.append(Paragraph("<b>LISTA DE MATERIALES</b>", styles["Heading2"]))
         elems.append(Spacer(1, 10))
 
@@ -121,9 +136,10 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     # =====================================================
-    # 5. MATERIALES POR PUNTO
+    # 6. MATERIALES POR PUNTO
     # =====================================================
     if df_mat_por_punto is not None and not df_mat_por_punto.empty:
+
         elems.append(Paragraph("<b>MATERIALES POR PUNTO</b>", styles["Heading2"]))
         elems.append(Spacer(1, 10))
 
@@ -140,7 +156,7 @@ def generar_pdf_completo(
         elems.append(tabla)
 
     # =====================================================
-    # BUILD
+    # BUILD PDF
     # =====================================================
     doc.build(elems)
 
