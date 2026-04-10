@@ -112,7 +112,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "df_estructuras_shape": getattr(salida_entradas.df_estructuras, "shape", None),
         }
 
-        # 🔥 DEBUG REAL
         if isinstance(salida_entradas.df_estructuras, pd.DataFrame):
             debug_global["entrada_df_raw"] = salida_entradas.df_estructuras.head(20)
 
@@ -128,7 +127,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "columns": list(df_estructuras.columns)
         }
 
-        # 🔥 DEBUG REAL
         debug_global["estructuras_df"] = df_estructuras.head(20)
 
         # =====================================================
@@ -178,7 +176,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "df_materiales_shape": getattr(resultado_materiales.df_materiales, "shape", None),
         }
 
-        # 🔥 DEBUG REAL
         if isinstance(resultado_materiales.df_materiales, pd.DataFrame):
             debug_global["materiales_df"] = resultado_materiales.df_materiales.head(20)
 
@@ -199,7 +196,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "empty": df_catalogo.empty if df_catalogo is not None else True
         }
 
-        # 🔥 DEBUG REAL
         if isinstance(df_catalogo, pd.DataFrame):
             debug_global["catalogo_df"] = df_catalogo.head(20)
 
@@ -213,9 +209,21 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         resultado_costos = ejecutar_costos(entrada_costos)
 
+        # 🔥 FIX REAL
         debug_global["costos"] = {
-            "tipo": str(type(resultado_costos))
+            "ok": resultado_costos.get("ok"),
+            "filas": getattr(
+                resultado_costos.get("df_materiales_costos"),
+                "shape",
+                None
+            )
         }
+
+        if resultado_costos.get("ok"):
+            df_costos = resultado_costos.get("df_materiales_costos")
+
+            if isinstance(df_costos, pd.DataFrame):
+                debug_global["costos_df"] = df_costos.head(20)
 
         # =====================================================
         # 5. REPORTES
