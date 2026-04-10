@@ -25,71 +25,49 @@ def generar_seccion_cotizacion_final(
     porcentaje_isv: float = 0.15,
 ):
 
-    elems = [PageBreak()]
+    elems = []  # 🔥 FIX
 
-    # =====================================================
-    # VALIDACIONES
-    # =====================================================
     if df_precios is None or df_precios.empty:
         raise ValueError("df_precios vacío")
 
     if df_estructuras is None or df_estructuras.empty:
         raise ValueError("df_estructuras vacío")
 
-    # =====================================================
-    # AGRUPAR CANTIDADES
-    # =====================================================
+    df_estructuras = df_estructuras.copy()
+    df_estructuras["Estructura"] = df_estructuras["Estructura"].astype(str).str.strip()
+
     cantidades = (
         df_estructuras.groupby("Estructura")["Cantidad"]
         .sum()
         .to_dict()
     )
 
-    # =====================================================
-    # TOTAL BASE DEL PROYECTO
-    # =====================================================
     total_base = 0.0
 
     for _, r in df_precios.iterrows():
         estructura = str(r["Estructura"]).strip()
         pu = float(r["Precio Unitario"])
-        cant = cantidades.get(estructura, 1)
+        cant = float(cantidades.get(estructura, 1))
 
         total_base += pu * cant
 
-    # =====================================================
-    # CARGOS
-    # =====================================================
     gestion = total_base * porcentaje_gestion
     imprevistos = total_base * porcentaje_imprevistos
 
     subtotal = total_base + gestion + imprevistos
-
     isv = subtotal * porcentaje_isv
-
     total_final = subtotal + isv
 
-    # =====================================================
-    # TÍTULO
-    # =====================================================
     elems.append(Paragraph("<b>COTIZACIÓN DEL PROYECTO</b>", styles["Heading1"]))
     elems.append(Spacer(1, 12))
 
-    # =====================================================
-    # TABLA RESUMEN (NO DETALLADA)
-    # =====================================================
     data = [
         ["Concepto", "Monto (L)"],
-
         ["Suministro e instalación del proyecto eléctrico", _fmt(total_base)],
-
         ["Gestión y aprobación ENEE (2%)", _fmt(gestion)],
         ["Imprevistos (1%)", _fmt(imprevistos)],
-
         ["SUBTOTAL", _fmt(subtotal)],
-
         ["ISV (15%)", _fmt(isv)],
-
         ["TOTAL OFERTA", _fmt(total_final)],
     ]
 
@@ -118,9 +96,6 @@ def generar_seccion_cotizacion_final(
     elems.append(tabla)
     elems.append(Spacer(1, 12))
 
-    # =====================================================
-    # NOTA
-    # =====================================================
     elems.append(
         Paragraph(
             "<font size=8><i>"
