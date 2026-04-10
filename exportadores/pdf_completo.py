@@ -1,16 +1,17 @@
-# -*- coding: utf-8 -*-
-from io import BytesIO
-
-from reportlab.platypus import (
-    BaseDocTemplate, PageTemplate, Frame,
-    Paragraph, Spacer, PageBreak
+# =====================================================
+# IMPORTS
+# =====================================================
+from exportadores.pdf_reportes_simples import (
+    generar_pdf_estructuras_global,
+    generar_pdf_materiales,
+    generar_pdf_materiales_por_punto,
 )
-from reportlab.lib.pagesizes import letter
 
-from exportadores.pdf_base import styles, fondo_pagina
-from exportadores.cotizacion import generar_seccion_presupuesto
+from exportadores.precios_estructura import generar_tabla_costos_estructura
 
-
+# =====================================================
+# PDF COMPLETO
+# =====================================================
 def generar_pdf_completo(
     df_materiales,
     df_estructuras,
@@ -20,15 +21,6 @@ def generar_pdf_completo(
     datos_proyecto,
 ):
 
-    import streamlit as st
-
-    st.write("DEBUG PDF COMPLETO")
-
-    st.write("df_materiales:", df_materiales.shape if df_materiales is not None else None)
-    st.write("df_estructuras:", df_estructuras.shape if df_estructuras is not None else None)
-    st.write("df_mat_por_punto:", df_mat_por_punto.shape if df_mat_por_punto is not None else None)
-    st.write("df_costos_por_punto:", df_costos_por_punto.shape if df_costos_por_punto is not None else None)
-    
     buffer = BytesIO()
 
     doc = BaseDocTemplate(
@@ -53,33 +45,87 @@ def generar_pdf_completo(
     elems = []
 
     # =====================================================
-    # PORTADA / INFO
+    # 1. PORTADA
     # =====================================================
     elems.append(Paragraph("<b>REPORTE DE PROYECTO</b>", styles["Heading1"]))
     elems.append(Spacer(1, 12))
 
-    # =====================================================
-    # 🔥 PRESUPUESTO (LO MÁS IMPORTANTE)
-    # =====================================================
-    from exportadores.precios_estructura import generar_tabla_costos_estructura
+    if datos_proyecto:
+        nombre = datos_proyecto.get("nombre", "Proyecto")
+        elems.append(Paragraph(f"Proyecto: {nombre}", styles["Normal"]))
+        elems.append(Spacer(1, 12))
 
-    if df_costos_estructura is not None:
-        try:
-            tabla = generar_tabla_costos_estructura(
-                doc,
-                styles,
-                df_costos_estructura
-            )
-            if tabla:
-                elems += tabla
-        except Exception as e:
-            elems.append(Paragraph(f"Error costos estructura: {str(e)}", styles["Normal"]))
-    
+    elems.append(PageBreak())
+
     # =====================================================
-    # FINAL
+    # 2. COSTOS DE ESTRUCTURA
     # =====================================================
-    if not elems:
-        elems.append(Paragraph("Sin información disponible", styles["Normal"]))
+    if df_costos_estructura is not None and not df_costos_estructura.empty:
+        elems.extend(
+            generar_tabla_costos_estructura(doc, styles, df_costos_estructura)
+        )
+        elems.append(PageBreak())
+
+    # =====================================================
+    # 3. ESTRUCTURAS
+    # =====================================================
+    if df_estructuras is not None and not df_estructuras.empty:
+        elems.append(Paragraph("<b>LISTA DE ESTRUCTURAS</b>", styles["Heading2"]))
+        elems.append(Spacer(1, 10))
+
+        data = [["Estructura", "Cantidad"]]
+
+        df = df_estructuras.groupby("Estructura")["Cantidad"].sum().reset_index()
+
+        for _, r in df.iterrows():
+            data.append([str(r["Estructura"]), str(int(r["Cantidad"]))])
+
+        tabla = Table(data)
+        elems.append(tabla)
+        elems.append(PageBreak())
+
+    # =====================================================
+    # 4. MATERIALES
+    # =====================================================
+    if df_materiales is not None and not df_materiales.empty:
+        elems.append(Paragraph("<b>LISTA DE MATERIALES</b>", styles["Heading2"]))
+        elems.append(Spacer(1, 10))
+
+        data = [["Material", "Unidad", "Cantidad"]]
+
+        for _, r in df_materiales.iterrows():
+            data.append([
+                str(r.get("Materiales", "")),
+                str(r.get("Unidad", "")),
+                str(r.get("Cantidad", "")),
+            ])
+
+        tabla = Table(data)
+        elems.append(tabla)
+        elems.append(PageBreak())
+
+    # =====================================================
+    # 5. MATERIALES POR PUNTO
+    # =====================================================
+    if df_mat_por_punto is not None and not df_mat_por_punto.empty:
+        elems.append(Paragraph("<b>MATERIALES POR PUNTO</b>", styles["Heading2"]))
+        elems.append(Spacer(1, 10))
+
+        data = [["Punto", "Material", "Cantidad"]]
+
+        for _, r in df_mat_por_punto.head(200).iterrows():
+            data.append([
+                str(r.get("Punto", "")),
+                str(r.get("Materiales", "")),
+                str(r.get("Cantidad", "")),
+            ])
+
+        tabla = Table(data)
+        elems.append(tabla)
+
+    # =====================================================
+    # BUILD
+    # =====================================================
     doc.build(elems)
 
     pdf_bytes = buffer.getvalue()
