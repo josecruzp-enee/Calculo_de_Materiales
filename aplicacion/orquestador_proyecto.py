@@ -25,7 +25,8 @@ from costos_precios.orquestador_costos import (
     ejecutar_costos,
     EntradaCostos,
 )
-
+from costos_precios.precio_estructura import calcular_precio_estructura
+from costos_precios.costos_operativos import calcular_costos_operativos
 from costos_precios.costos_estructuras import calcular_costos_por_estructura
 from exportadores.orquestador_reportes import generar_reportes
 
@@ -219,6 +220,61 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             }
 
         # =====================================================
+# 6.1 PRECIO POR ESTRUCTURA 🔥
+# =====================================================
+df_precios_estructura = None
+
+try:
+    if df_costos_estructura is not None and not df_costos_estructura.empty:
+
+        filas_precio = []
+
+        for _, row in df_costos_estructura.iterrows():
+
+            estructura = row["codigodeestructura"]
+            cantidad = row["Cantidad"]
+            costo_materiales = float(row["Costo Unitario"])
+
+            # 🔧 COSTO OPERATIVO UNITARIO
+            res_op = calcular_costos_operativos(
+                costo_cuadrilla_dia=8000,
+                fraccion_jornada=1/16,
+                costo_equipos=50,
+                costo_logistica=30,
+            )
+
+            # 🔧 PRECIO UNITARIO
+            res_precio = calcular_precio_estructura(
+                estructura=estructura,
+                costo_materiales=costo_materiales,
+                costo_operativo=res_op.operativo_total,
+                porcentaje_utilidad=0.25,
+            )
+
+            filas_precio.append({
+                "Estructura": estructura,
+                "Cantidad": cantidad,
+                "Costo Unitario": costo_materiales,
+                "Costo Operativo": res_op.operativo_total,
+                "Precio Unitario": res_precio.precio_unitario,
+                "Precio Total": res_precio.precio_unitario * cantidad,
+            })
+
+        df_precios_estructura = pd.DataFrame(filas_precio)
+
+        debug_global["precios_estructura"] = {
+            "ok": True,
+            "filas": len(df_precios_estructura),
+            "total": float(df_precios_estructura["Precio Total"].sum())
+        }
+
+except Exception as e:
+    debug_global["precios_estructura"] = {
+        "ok": False,
+        "error": str(e)
+    }
+        
+        # =====================================================
         # 7. REPORTES
         # =====================================================
         from exportadores.orquestador_reportes import EntradaReportes
@@ -230,6 +286,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             costos={
                 **resultado_costos,
                 "df_costos_estructura": df_costos_estructura,
+                "df_precios_estructura": df_precios_estructura,
+                
             },
             nombre_proyecto="Proyecto"
         )
@@ -246,6 +304,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             materiales=resultado_materiales,
             costos=resultado_costos,
             df_costos_estructura=df_costos_estructura,
+            precios_estructura=df_precios_estructura, 
             reportes=resultado_reportes,
             debug=debug_global
         )
