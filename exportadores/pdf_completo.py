@@ -12,12 +12,12 @@ from reportlab.platypus import (
     Paragraph, Spacer, PageBreak, Table
 )
 
-# 🔥 IMPORT CORRECTO
+# 🔥 EXPORTADOR (PDF)
 from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 
 from exportadores.hoja_info import seccion_hoja_info
 
-# 🔥 CÁLCULO (DOMINIO)
+# 🔥 DOMINIO (CÁLCULO)
 from costos_precios.precios_por_estructura import calcular_precios_por_estructura
 
 from io import BytesIO
@@ -68,16 +68,13 @@ def generar_pdf_completo(
     # =====================================================
     # 1. PORTADA
     # =====================================================
-    try:
-        elems.extend(
-            seccion_hoja_info(
-                datos_proyecto=datos_proyecto,
-                df_estructuras=df_estructuras,
-                df_mat=df_materiales
-            )
+    elems.extend(
+        seccion_hoja_info(
+            datos_proyecto=datos_proyecto,
+            df_estructuras=df_estructuras,
+            df_mat=df_materiales
         )
-    except Exception as e:
-        elems.append(Paragraph(f"Error Hoja Info: {str(e)}", styles["Normal"]))
+    )
 
     elems.append(PageBreak())
 
@@ -86,18 +83,14 @@ def generar_pdf_completo(
     # =====================================================
     df_precios_estructura = None
 
-    try:
-        if df_costos_estructura is not None and not df_costos_estructura.empty:
+    if df_costos_estructura is not None and not df_costos_estructura.empty:
 
-            df_precios_estructura = calcular_precios_por_estructura(
-                df_costos_estructura,
-                porcentaje_utilidad=0.15,
-                costo_cuadrilla_dia=10000,
-                fraccion_jornada=1/16,
-            )
-
-    except Exception as e:
-        elems.append(Paragraph(f"Error cálculo precios: {str(e)}", styles["Normal"]))
+        df_precios_estructura = calcular_precios_por_estructura(
+            df_costos_estructura,
+            porcentaje_utilidad=0.15,
+            costo_cuadrilla_dia=10000,
+            fraccion_jornada=1/16,
+        )
 
     # =====================================================
     # 3. PRESUPUESTO
@@ -107,15 +100,12 @@ def generar_pdf_completo(
         elems.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Heading1"]))
         elems.append(Spacer(1, 10))
 
-        try:
-            elems.extend(
-                generar_tabla_precios_estructura(
-                    df_precios_estructura,
-                    df_estructuras
-                )
+        elems.extend(
+            generar_tabla_precios_estructura(
+                df_precios_estructura,
+                df_estructuras
             )
-        except Exception as e:
-            elems.append(Paragraph(f"Error tabla precios: {str(e)}", styles["Normal"]))
+        )
 
         elems.append(PageBreak())
 
@@ -124,7 +114,7 @@ def generar_pdf_completo(
     # =====================================================
     if df_estructuras is not None and not df_estructuras.empty:
 
-        elems.append(Paragraph("<b>LISTA DE ESTRUCTURAS</b>", styles["Heading2"]))
+        elems.append(Paragraph("LISTA DE ESTRUCTURAS", styles["Heading2"]))
         elems.append(Spacer(1, 10))
 
         data = [["Estructura", "Cantidad"]]
@@ -145,7 +135,7 @@ def generar_pdf_completo(
     # =====================================================
     if df_materiales is not None and not df_materiales.empty:
 
-        elems.append(Paragraph("<b>LISTA DE MATERIALES</b>", styles["Heading2"]))
+        elems.append(Paragraph("LISTA DE MATERIALES", styles["Heading2"]))
         elems.append(Spacer(1, 10))
 
         data = [["Material", "Unidad", "Cantidad"]]
@@ -165,7 +155,7 @@ def generar_pdf_completo(
     # =====================================================
     if df_mat_por_punto is not None and not df_mat_por_punto.empty:
 
-        elems.append(Paragraph("<b>MATERIALES POR PUNTO</b>", styles["Heading2"]))
+        elems.append(Paragraph("MATERIALES POR PUNTO", styles["Heading2"]))
         elems.append(Spacer(1, 10))
 
         data = [["Punto", "Material", "Cantidad"]]
