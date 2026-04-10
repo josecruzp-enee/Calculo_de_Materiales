@@ -61,10 +61,13 @@ class SalidaCostos:
     errores: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
-    df_costos_materiales: pd.DataFrame = field(default_factory=pd.DataFrame)
-    df_costos_mano_obra: pd.DataFrame = field(default_factory=pd.DataFrame)
+    # 🔥 ALINEADO AL ORQUESTADOR REAL
+    df_materiales_costos: Optional[pd.DataFrame] = None
+    df_costos_estructura: Optional[pd.DataFrame] = None
 
-    total_proyecto: float = 0.0
+    total_materiales: float = 0.0
+    total_estructura: float = 0.0
+    total_global: float = 0.0
 
     debug: Dict[str, Any] = field(default_factory=dict)
 
