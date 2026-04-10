@@ -8,7 +8,7 @@ from exportadores.pdf_reportes_simples import (
 )
 
 from exportadores.precios_estructura import generar_tabla_costos_estructura
-
+from io import BytesIO
 # =====================================================
 # PDF COMPLETO
 # =====================================================
