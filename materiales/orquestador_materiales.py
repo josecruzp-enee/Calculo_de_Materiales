@@ -171,9 +171,10 @@ def ejecutar_materiales(
         tabla_conectores_mt=entrada.tabla_conectores_mt,
     )
 
-    debug["materiales_por_estructura"] = {
-        "total": len(materiales_por_estructura)
-    }
+    debug_guardar("MATERIALES_POR_ESTRUCTURA_FULL", {
+        "total": len(materiales_por_estructura),
+        "keys": list(materiales_por_estructura.keys())[:20]
+    })
 
     # =====================================================
     # 2. CÁLCULO ESTRUCTURAS
