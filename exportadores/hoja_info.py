@@ -38,6 +38,16 @@ def _col_cantidad(df):
             return c
     return None
 
+def _normalizar_datos(d):
+    return {
+        "nombre_proyecto": d.get("nombre_proyecto") or d.get("nombre", "SIN NOMBRE"),
+        "codigo_proyecto": d.get("codigo_proyecto") or d.get("codigo", "N/A"),
+        "empresa": d.get("empresa", "N/A"),
+        "tension": d.get("tension") or d.get("nivel_de_tension"),
+        "fecha_informe": d.get("fecha_informe") or datetime.today().strftime("%Y-%m-%d"),
+        "responsable": d.get("responsable", "N/A"),
+        "cables_proyecto": d.get("cables_proyecto", []),
+    }
 
 # ==========================================================
 # 🔥 FIX CABLES
