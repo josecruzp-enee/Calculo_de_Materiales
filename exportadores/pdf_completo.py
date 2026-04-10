@@ -57,6 +57,7 @@ def generar_pdf_completo(
             datos_proyecto=datos_proyecto,
             df_estructuras=df_estructuras,
             df_mat=df_materiales,
+            df_cables=df_cables,
             styleN=styles["Normal"],
             styleH=styles["Heading2"],
             _calibres_por_tipo=None
