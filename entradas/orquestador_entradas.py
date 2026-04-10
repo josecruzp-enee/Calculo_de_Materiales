@@ -194,7 +194,7 @@ def ejecutar_entradas(
 
             # CONTEXTO
             datos_proyecto=entrada.datos_proyecto,
-            df_cables=entrada.df_cables,
+            df_cables=entrada.df_cables if isinstance(entrada.df_cables, pd.DataFrame) else None,
             df_materiales_extra=entrada.df_materiales_extra,
 
             # DEBUG
