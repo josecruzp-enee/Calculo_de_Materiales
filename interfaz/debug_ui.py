@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
+import pandas as pd
 
 
 def seccion_debug():
@@ -16,11 +17,53 @@ def seccion_debug():
 
         st.markdown(f"### 🔍 {etapa}")
 
+        # =====================================================
+        # 🔥 SI ES DICCIONARIO → ITERAR
+        # =====================================================
         if isinstance(data, dict):
-            st.json(data)
 
-        elif hasattr(data, "head"):
-            st.dataframe(data.head(10), use_container_width=True)
+            for k, v in data.items():
 
+                st.markdown(f"#### {k}")
+
+                # 🔥 CASO 1: DataFrame directo
+                if isinstance(v, pd.DataFrame):
+                    st.dataframe(v, use_container_width=True)
+
+                # 🔥 CASO 2: dict → convertir a tabla
+                elif isinstance(v, dict):
+                    try:
+                        df = pd.DataFrame(v)
+
+                        # evitar tablas vacías feas
+                        if not df.empty:
+                            st.dataframe(df, use_container_width=True)
+                        else:
+                            st.write(v)
+
+                    except:
+                        st.write(v)
+
+                # 🔥 CASO 3: lista → tabla
+                elif isinstance(v, list):
+                    try:
+                        df = pd.DataFrame(v)
+                        st.dataframe(df, use_container_width=True)
+                    except:
+                        st.write(v)
+
+                # 🔥 OTROS
+                else:
+                    st.write(v)
+
+        # =====================================================
+        # 🔥 SI ES DATAFRAME DIRECTO
+        # =====================================================
+        elif isinstance(data, pd.DataFrame):
+            st.dataframe(data, use_container_width=True)
+
+        # =====================================================
+        # 🔥 FALLBACK
+        # =====================================================
         else:
             st.write(data)
