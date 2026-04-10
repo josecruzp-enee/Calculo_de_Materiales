@@ -277,7 +277,7 @@ def hoja_info_proyecto(
     styleH=None,
     _calibres_por_tipo=None,
 ):
-
+    df_cables = df_cables if df_cables is not None else df_mat
     elems = []
 
     elems.extend(build_header(styleH))
