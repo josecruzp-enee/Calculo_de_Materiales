@@ -124,13 +124,16 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 2. PROYECTO
         # =====================================================
+        df_tmp = salida_entradas.df_cables
+        df_cables = df_tmp if isinstance(df_tmp, pd.DataFrame) else None
+        
         entrada_proyecto = EntradaProyecto(
             base_datos=salida_entradas.base_datos,
             df_estructuras=df_estructuras,
             datos_proyecto=salida_entradas.datos_proyecto,
             calibre_mt=(salida_entradas.datos_proyecto or {}).get("calibre_mt", ""),
             tabla_conectores_mt=(salida_entradas.datos_proyecto or {}).get("tabla_conectores_mt", {}),
-            df_cables=salida_entradas.df_cables,
+            df_cables=df_cables,
             df_materiales_extra=salida_entradas.df_materiales_extra,
         )
 
