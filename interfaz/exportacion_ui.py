@@ -61,8 +61,8 @@ def seccion_exportacion():
         st.error("❌ El resultado no contiene reportes")
         return
 
-    archivos = getattr(reportes, "archivos", None)
-    errores = getattr(reportes, "errores", [])
+    archivos = reportes.get("archivos", {})
+    errores = reportes.get("errores", [])
 
     if not archivos:
         st.warning("No se generaron archivos")
