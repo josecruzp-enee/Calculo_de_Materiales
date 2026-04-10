@@ -65,7 +65,7 @@ def generar_pdf_completo(
                 elems += tabla
         except Exception as e:
         elems.append(Paragraph(f"Error costos estructura: {str(e)}", styles["Normal"]))
-    )
+    
     # =====================================================
     # FINAL
     # =====================================================
