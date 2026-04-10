@@ -141,8 +141,15 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
             break
 
     if costo_col:
-        out["Costo"] = pd.to_numeric(df[costo_col], errors="coerce").fillna(0)
+        out["Costo Unitario"] = pd.to_numeric(df[costo_col], errors="coerce")
     else:
-        out["Costo"] = 0
+       out["Costo Unitario"] = pd.Series([None] * len(df))
 
+    faltantes = out[out["Costo Unitario"].isna()]
+
+    debug_guardar("CATALOGO_COSTOS", {
+        "total": len(out),
+        "con_costo": int(out["Costo Unitario"].notna().sum()),
+        "sin_costo": int(len(faltantes)),
+    })
     return out.reset_index(drop=True)
