@@ -1,23 +1,15 @@
 # =====================================================
 # IMPORTS
 # =====================================================
-from exportadores.pdf_reportes_simples import (
-    generar_pdf_estructuras_global,
-    generar_pdf_materiales,
-    generar_pdf_materiales_por_punto,
-)
-
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
     Paragraph, Spacer, PageBreak, Table
 )
 
-# 🔥 EXPORTADOR (PDF)
 from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
-
 from exportadores.hoja_info import seccion_hoja_info
+from exportadores.cotizacion_pdf import generar_seccion_cotizacion_final
 
-# 🔥 DOMINIO (CÁLCULO)
 from costos_precios.precio_por_estructura import calcular_precios_por_estructura
 
 from io import BytesIO
@@ -26,7 +18,7 @@ from exportadores.pdf_base import styles, fondo_pagina
 
 
 # =====================================================
-# PDF COMPLETO
+# PDF COMPLETO (VERSIÓN CLIENTE)
 # =====================================================
 def generar_pdf_completo(
     df_materiales,
@@ -66,7 +58,7 @@ def generar_pdf_completo(
     elems = []
 
     # =====================================================
-    # 1. PORTADA
+    # 1. HOJA INFO
     # =====================================================
     elems.extend(
         seccion_hoja_info(
@@ -79,7 +71,7 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. PRECIOS (CORE)
+    # 2. CALCULAR PRECIOS
     # =====================================================
     df_precios_estructura = None
 
@@ -93,7 +85,7 @@ def generar_pdf_completo(
         )
 
     # =====================================================
-    # 3. PRESUPUESTO
+    # 3. PRESUPUESTO DE ESTRUCTURAS
     # =====================================================
     if df_precios_estructura is not None and not df_precios_estructura.empty:
 
@@ -110,28 +102,26 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     # =====================================================
-    # 4. ESTRUCTURAS
+    # 4. COTIZACIÓN FINAL
     # =====================================================
-    if df_estructuras is not None and not df_estructuras.empty:
+    if df_precios_estructura is not None and not df_precios_estructura.empty:
 
-        elems.append(Paragraph("LISTA DE ESTRUCTURAS", styles["Heading2"]))
-        elems.append(Spacer(1, 10))
+        elems.extend(
+            generar_seccion_cotizacion_final(
+                doc,
+                styles,
+                df_precios=df_precios_estructura,
+                df_estructuras=df_estructuras,
+                porcentaje_gestion=0.02,
+                porcentaje_imprevistos=0.01,
+                porcentaje_isv=0.15,
+            )
+        )
 
-        data = [["Estructura", "Cantidad"]]
-
-        df = df_estructuras.groupby("Estructura")["Cantidad"].sum().reset_index()
-
-        for _, r in df.iterrows():
-            data.append([
-                str(r["Estructura"]),
-                str(int(r["Cantidad"]))
-            ])
-
-        elems.append(Table(data))
         elems.append(PageBreak())
 
     # =====================================================
-    # 5. MATERIALES
+    # 5. LISTA DE MATERIALES (SIN PRECIOS)
     # =====================================================
     if df_materiales is not None and not df_materiales.empty:
 
@@ -147,27 +137,8 @@ def generar_pdf_completo(
                 str(r.get("Cantidad", "")),
             ])
 
-        elems.append(Table(data))
-        elems.append(PageBreak())
-
-    # =====================================================
-    # 6. MATERIALES POR PUNTO
-    # =====================================================
-    if df_mat_por_punto is not None and not df_mat_por_punto.empty:
-
-        elems.append(Paragraph("MATERIALES POR PUNTO", styles["Heading2"]))
-        elems.append(Spacer(1, 10))
-
-        data = [["Punto", "Material", "Cantidad"]]
-
-        for _, r in df_mat_por_punto.head(200).iterrows():
-            data.append([
-                str(r.get("Punto", "")),
-                str(r.get("Materiales", "")),
-                str(r.get("Cantidad", "")),
-            ])
-
-        elems.append(Table(data))
+        tabla = Table(data)
+        elems.append(tabla)
 
     # =====================================================
     # BUILD
