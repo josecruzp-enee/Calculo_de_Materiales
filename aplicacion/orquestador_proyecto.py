@@ -168,29 +168,29 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         df_costos_estructura = None
 
-        try:
-            df_costos_estructura = calcular_costos_por_estructura(
-                df_estructuras=df_estructuras,
-                df_materiales_por_estructura=resultado_materiales.descripcion_estructuras,
-                df_precios_materiales=df_catalogo
-            )
-            debug_global["costos_estructura_total"] = float(
-                df_costos_estructura["Costo Total"].sum()
-            ) if df_costos_estructura is not None else 0
+try:
+    df_costos_estructura = calcular_costos_por_estructura(
+        df_estructuras=df_estructuras,
+        df_materiales_por_estructura=resultado_materiales.descripcion_estructuras,
+        df_precios_materiales=df_catalogo
+    )
 
-            
-            debug_global["costos_estructura"] = {
-                "ok": True,
-                "shape": df_costos_estructura.shape
-            }
+    debug_global["costos_estructura_total"] = (
+        float(df_costos_estructura["Costo Total"].sum())
+        if df_costos_estructura is not None else 0
+    )
 
-        except Exception as e:
+    debug_global["costos_estructura"] = {
+        "ok": True,
+        "shape": df_costos_estructura.shape if df_costos_estructura is not None else None
+    }
 
-            debug_global["costos_estructura"] = {
-                "ok": False,
-                "error": str(e)
-            }
-
+except Exception as e:
+    debug_global["costos_estructura"] = {
+        "ok": False,
+        "error": str(e)
+    }
+    debug_global["costos_estructura_total"] = 0
         # =====================================================
         # 7. REPORTES
         # =====================================================
