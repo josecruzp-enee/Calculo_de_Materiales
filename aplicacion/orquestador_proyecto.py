@@ -25,9 +25,7 @@ from costos_precios.orquestador_costos import (
     EntradaCostos,
 )
 
-# 🔥 NUEVO IMPORT
 from costos_precios.costos_estructuras import calcular_costos_por_estructura
-
 from exportadores.orquestador_reportes import generar_reportes
 
 
@@ -44,10 +42,6 @@ def _fail(msg: str, debug: Optional[dict] = None) -> ResultadoProyecto:
         reportes=None,
         debug=debug or {},
     )
-
-
-def _safe_list(x):
-    return x if isinstance(x, list) else []
 
 
 def _extraer_tension(datos: Dict[str, Any]) -> float:
@@ -125,7 +119,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         entrada_proyecto.validar()
-
         tension = _extraer_tension(entrada_proyecto.datos_proyecto)
 
         # =====================================================
@@ -143,7 +136,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         resultado_materiales = ejecutar_materiales(entrada_mat)
-
         df_materiales = resultado_materiales.df_materiales
 
         # =====================================================
@@ -164,33 +156,43 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_costos = ejecutar_costos(entrada_costos)
 
         # =====================================================
-        # 🔥 6. COSTOS POR ESTRUCTURA (NUEVO)
+        # 🔥 6. COSTOS POR ESTRUCTURA (FIX SEGURO)
         # =====================================================
+
         df_costos_estructura = None
 
-try:
-    df_costos_estructura = calcular_costos_por_estructura(
-        df_estructuras=df_estructuras,
-        df_materiales_por_estructura=resultado_materiales.descripcion_estructuras,
-        df_precios_materiales=df_catalogo
-    )
+        try:
+            df_costos_estructura = calcular_costos_por_estructura(
+                df_estructuras=df_estructuras,
+                df_materiales_por_estructura=resultado_materiales.descripcion_estructuras,
+                df_precios_materiales=df_catalogo
+            )
 
-    debug_global["costos_estructura_total"] = (
-        float(df_costos_estructura["Costo Total"].sum())
-        if df_costos_estructura is not None else 0
-    )
+            total = 0.0
 
-    debug_global["costos_estructura"] = {
-        "ok": True,
-        "shape": df_costos_estructura.shape if df_costos_estructura is not None else None
-    }
+            if (
+                df_costos_estructura is not None
+                and "Costo Total" in df_costos_estructura.columns
+            ):
+                total = float(df_costos_estructura["Costo Total"].sum())
 
-except Exception as e:
-    debug_global["costos_estructura"] = {
-        "ok": False,
-        "error": str(e)
-    }
-    debug_global["costos_estructura_total"] = 0
+            debug_global["costos_estructura_total"] = total
+
+            debug_global["costos_estructura"] = {
+                "ok": True,
+                "shape": list(df_costos_estructura.shape)
+                if df_costos_estructura is not None else None
+            }
+
+        except Exception as e:
+
+            debug_global["costos_estructura"] = {
+                "ok": False,
+                "error": str(e)
+            }
+
+            debug_global["costos_estructura_total"] = 0
+
         # =====================================================
         # 7. REPORTES
         # =====================================================
