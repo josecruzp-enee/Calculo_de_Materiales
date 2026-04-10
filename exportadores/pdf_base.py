@@ -87,10 +87,10 @@ def fondo_pagina(canvas, doc):
             if logo_path and os.path.exists(logo_path):
 
                 ancho_logo = doc.width      # 🔥 ocupa todo el ancho
-                alto_logo = 80              # 🔥 altura del membrete
+                alto_logo = 60              # 🔥 altura del membrete
 
                 x = doc.leftMargin
-                y = doc.height + doc.topMargin - 90
+                y = doc.height + doc.topMargin - 60
 
                 canvas.drawImage(
                     logo_path,
