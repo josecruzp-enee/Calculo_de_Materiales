@@ -113,7 +113,7 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
 
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return pd.DataFrame(
-            columns=["Materiales", "Unidad", "Codigo", "Referencia", "Costo"]
+            columns=["Materiales", "Unidad", "Codigo", "Referencia", "Costo Unitario"]
         )
 
     df = _normalizar_dataframe(df)
