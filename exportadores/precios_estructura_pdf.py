@@ -20,17 +20,34 @@ def generar_tabla_precios_estructura(
     Descripción | PU | Cantidad | Total
     """
 
-    if df_precios is None or df_precios.empty:
+    # =====================================================
+    # VALIDACIONES
+    # =====================================================
+    if df_precios is None or not isinstance(df_precios, pd.DataFrame):
+        raise ValueError("df_precios inválido")
+
+    if df_precios.empty:
         raise ValueError("df_precios vacío")
 
+    required_cols = ["Estructura", "Precio Unitario"]
+    faltantes = [c for c in required_cols if c not in df_precios.columns]
+    if faltantes:
+        raise ValueError(f"df_precios no cumple contrato: {faltantes}")
+
     # =====================================================
-    # AGRUPAR CANTIDADES (SI SE PROPORCIONA)
+    # AGRUPAR CANTIDADES
     # =====================================================
     cantidades = {}
 
     if df_estructuras is not None and not df_estructuras.empty:
+
+        if "Estructura" not in df_estructuras.columns or "Cantidad" not in df_estructuras.columns:
+            raise ValueError("df_estructuras debe tener 'Estructura' y 'Cantidad'")
+
         df_tmp = df_estructuras.copy()
+
         df_tmp["Estructura"] = df_tmp["Estructura"].astype(str).str.strip()
+        df_tmp["Cantidad"] = pd.to_numeric(df_tmp["Cantidad"], errors="coerce").fillna(0)
 
         cantidades = (
             df_tmp.groupby("Estructura")["Cantidad"]
@@ -58,7 +75,12 @@ def generar_tabla_precios_estructura(
         estructura = str(r["Estructura"]).strip()
         pu = float(r["Precio Unitario"])
 
-        cantidad = cantidades.get(estructura, 1)  # fallback
+        cantidad = cantidades.get(estructura, 0)
+
+        # 🔥 SI NO HAY CANTIDAD, NO MOSTRAR
+        if cantidad <= 0:
+            continue
+
         total = pu * cantidad
 
         descripcion = f"Suministro e instalación de estructura tipo {estructura}"
@@ -71,6 +93,12 @@ def generar_tabla_precios_estructura(
             f"{int(cantidad)}",
             f"L {total:,.2f}",
         ])
+
+    # =====================================================
+    # CONTROL SI NO HAY FILAS
+    # =====================================================
+    if len(data) == 1:
+        data.append(["SIN DATOS", "-", "-", "-"])
 
     # =====================================================
     # TOTAL GENERAL
