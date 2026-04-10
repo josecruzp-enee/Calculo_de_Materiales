@@ -55,14 +55,22 @@ def generar_pdf_completo(
     from exportadores.pdf_costos_estructura import generar_tabla_costos_estructura
 
     if df_costos_estructura is not None:
-        elems += generar_tabla_costos_estructura(
-            doc,
-            styles,
-            df_costos_estructura
+        try:
+            tabla = generar_tabla_costos_estructura(
+                doc,
+                styles,
+                df_costos_estructura
+            )
+            if tabla:
+                elems += tabla
+        except Exception as e:
+        elems.append(Paragraph(f"Error costos estructura: {str(e)}", styles["Normal"]))
     )
     # =====================================================
     # FINAL
     # =====================================================
+    if not elems:
+        elems.append(Paragraph("Sin información disponible", styles["Normal"]))
     doc.build(elems)
 
     pdf_bytes = buffer.getvalue()
