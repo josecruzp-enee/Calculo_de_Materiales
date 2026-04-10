@@ -1,13 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-reportes/presupuesto_estructuras.py
-
-Renderiza tabla PDF de costos de estructuras.
-✔ SOLO presentación
-✔ Consume salida de costos
-✔ Sin lógica de negocio
-"""
-
 from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
 import pandas as pd
@@ -25,79 +16,73 @@ def _validar_df(df: pd.DataFrame, nombre: str):
 
 
 def _fmt_moneda(valor: float) -> str:
-    return f"L {valor:,.2f}"
+    return f"L {valor:,.0f}" if valor % 1 == 0 else f"L {valor:,.2f}"
 
 
 # =========================================================
-# RENDER TABLA
+# REPORTE COSTOS DE ESTRUCTURAS (PRESUPUESTO)
 # =========================================================
-def generar_tabla_presupuesto(
+def generar_tabla_costos_estructura(
     doc,
     styles,
-    df_costos_por_punto: pd.DataFrame,
+    df_costos_estructura: pd.DataFrame,
 ):
 
     # =====================================================
     # VALIDACIÓN
     # =====================================================
-    _validar_df(df_costos_por_punto, "df_costos_por_punto")
+    _validar_df(df_costos_estructura, "df_costos_estructura")
 
-    required_cols = [
-        "Punto",
-        "Estructura",
-        "Cantidad",
-        "Precio Unitario",
-        "Subtotal Precio",
-    ]
+    df = df_costos_estructura.copy()
 
-    faltantes = [c for c in required_cols if c not in df_costos_por_punto.columns]
+    # =====================================================
+    # NORMALIZAR NOMBRE
+    # =====================================================
+    if "Estructura" not in df.columns:
+        if "codigodeestructura" in df.columns:
+            df["Estructura"] = df["codigodeestructura"]
+        else:
+            raise ValueError("No existe columna 'Estructura'")
+
+    required = ["Estructura", "Cantidad", "Costo Unitario", "Costo Total"]
+    faltantes = [c for c in required if c not in df.columns]
     if faltantes:
-        raise ValueError(f"df_costos_por_punto sin columnas requeridas: {faltantes}")
+        raise ValueError(f"Faltan columnas: {faltantes}")
 
     # =====================================================
-    # NORMALIZACIÓN SEGURA (SIN MUTAR ORIGINAL)
+    # NORMALIZACIÓN
     # =====================================================
-    df = df_costos_por_punto.copy()
-
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
-    df["Precio Unitario"] = pd.to_numeric(df["Precio Unitario"], errors="coerce").fillna(0)
-    df["Subtotal Precio"] = pd.to_numeric(df["Subtotal Precio"], errors="coerce").fillna(0)
+    df["Costo Unitario"] = pd.to_numeric(df["Costo Unitario"], errors="coerce").fillna(0)
+    df["Costo Total"] = pd.to_numeric(df["Costo Total"], errors="coerce").fillna(0)
 
-    # ✔ orden consistente
-    df = df.sort_values(by=["Punto", "Estructura"]).reset_index(drop=True)
+    df = df.sort_values("Estructura").reset_index(drop=True)
 
     # =====================================================
     # TABLA
     # =====================================================
-    data = [["ITEM", "DESCRIPCIÓN", "CANT", "P.U.", "TOTAL"]]
+    data = [["ITEM", "ESTRUCTURA", "CANT", "P.U.", "TOTAL"]]
 
-    total_general = float(df["Subtotal Precio"].sum())
-    item = 1
+    total_general = float(df["Costo Total"].sum())
 
-    for _, row in df.iterrows():
-
-        estructura = row["Estructura"]
-        cant = int(row["Cantidad"])
-        pu = float(row["Precio Unitario"])
-        total = float(row["Subtotal Precio"])
-
-        descripcion = (
-            f"Instalación y suministro de {cant} "
-            f"estructura(s) tipo {estructura}"
-        )
+    for i, (_, row) in enumerate(df.iterrows(), start=1):
 
         data.append([
-            f"{item:02d}",
-            descripcion,
-            f"{cant}",
-            _fmt_moneda(pu),
-            _fmt_moneda(total),
+            f"{i:02d}",
+            str(row["Estructura"]),
+            f"{int(row['Cantidad'])}",
+            _fmt_moneda(row["Costo Unitario"]),
+            _fmt_moneda(row["Costo Total"]),
         ])
 
-        item += 1
-
-    # TOTAL
-    data.append(["", "TOTAL GENERAL", "", "", _fmt_moneda(total_general)])
+    # TOTAL GENERAL
+    data.append([
+        "",
+        "TOTAL GENERAL",
+        "",
+        "",
+        _fmt_moneda(total_general)
+    ])
 
     # =====================================================
     # FORMATO
@@ -106,10 +91,10 @@ def generar_tabla_presupuesto(
         data,
         colWidths=[
             doc.width * 0.08,
-            doc.width * 0.47,
-            doc.width * 0.10,
-            doc.width * 0.15,
+            doc.width * 0.32,
+            doc.width * 0.12,
             doc.width * 0.20,
+            doc.width * 0.28,
         ]
     )
 
@@ -128,7 +113,7 @@ def generar_tabla_presupuesto(
     ]))
 
     elems = []
-    elems.append(Paragraph("<b>2. COSTO DE ESTRUCTURAS</b>", styles["Heading2"]))
+    elems.append(Paragraph("<b>2. PRESUPUESTO DE ESTRUCTURAS</b>", styles["Heading2"]))
     elems.append(Spacer(1, 8))
     elems.append(tabla)
 
