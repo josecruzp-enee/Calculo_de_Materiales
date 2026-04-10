@@ -85,7 +85,7 @@ class ResultadoProyecto:
     costos: Optional[Any] = None
     reportes: Optional[Dict[str, Any]] = None
     df_costos_estructura: Optional[pd.DataFrame] = None
-
+    df_precios_estructura: Optional[pd.DataFrame] = None
     debug: Dict[str, Any] = field(default_factory=dict)
 
 
