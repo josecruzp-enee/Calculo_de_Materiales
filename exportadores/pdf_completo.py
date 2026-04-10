@@ -9,6 +9,8 @@ from exportadores.pdf_reportes_simples import (
 from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, PageBreak, Table
 from exportadores.precios_estructura import generar_tabla_costos_estructura
 from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from exportadores.pdf_base import styles, fondo_pagina
 # =====================================================
 # PDF COMPLETO
 # =====================================================
