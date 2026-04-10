@@ -18,7 +18,7 @@ from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 from exportadores.hoja_info import seccion_hoja_info
 
 # 🔥 DOMINIO (CÁLCULO)
-from costos_precios.precios_por_estructura import calcular_precios_por_estructura
+from costos_precios.precio_por_estructura import calcular_precios_por_estructura
 
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
