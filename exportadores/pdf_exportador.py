@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 exportadores/pdf_exportador.py
-Genera PDFs a partir de resultados ya calculados (DFs + datos_proyecto).
+Genera PDFs a partir de resultados ya calculados.
+VERSIÓN LIMPIA: usa SOLO PDF correcto (3 secciones)
 """
 
 from exportadores.pdf_utils import (
@@ -9,10 +10,8 @@ from exportadores.pdf_utils import (
     generar_pdf_estructuras_global,
     generar_pdf_estructuras_por_punto,
     generar_pdf_materiales_por_punto,
-    generar_pdf_completo,
+    generar_pdf_completo,  # ✅ usamos el bueno
 )
-
-from core.costos_mano_obra import calcular_mo_desde_indice
 
 _REQUERIDAS = (
     "datos_proyecto",
@@ -22,64 +21,10 @@ _REQUERIDAS = (
     "df_resumen_por_punto",
 )
 
-def _conteo_desde_df_estructuras(df_eg):
-    """
-    Construye dict {codigo: cantidad} desde df_estructuras_resumen.
-    Espera columnas: 'codigodeestructura' y 'Cantidad' (o tolera variantes comunes).
-    """
-    dfe = df_eg.copy()
-    dfe.columns = [str(c).strip() for c in dfe.columns]
-
-    # alias defensivos (compatibilidad refactor)
-    # Caso crítico: existe 'codigodeestructura' pero viene vacío; en ese caso
-    # debemos preferir 'CodigoEstructura' si tiene datos.
-    if "codigodeestructura" in dfe.columns:
-        col_base = dfe["codigodeestructura"].astype(str).str.strip()
-        base_vacia = col_base.eq("").all()
-    else:
-        base_vacia = True
-
-    if base_vacia:
-        if "CodigoEstructura" in dfe.columns and not dfe["CodigoEstructura"].astype(str).str.strip().eq("").all():
-            dfe["codigodeestructura"] = dfe["CodigoEstructura"]
-        elif "CódigoEstructura" in dfe.columns and not dfe["CódigoEstructura"].astype(str).str.strip().eq("").all():
-            dfe["codigodeestructura"] = dfe["CódigoEstructura"]
-        elif "Código de Estructura" in dfe.columns and not dfe["Código de Estructura"].astype(str).str.strip().eq("").all():
-            dfe["codigodeestructura"] = dfe["Código de Estructura"]
-        elif "Estructura" in dfe.columns and not dfe["Estructura"].astype(str).str.strip().eq("").all():
-            dfe["codigodeestructura"] = dfe["Estructura"]
-        else:
-            dfe["codigodeestructura"] = ""
-
-    if "Cantidad" not in dfe.columns:
-        if "cantidad" in dfe.columns:
-            dfe["Cantidad"] = dfe["cantidad"]
-        else:
-            dfe["Cantidad"] = 0
-
-    dfe["codigodeestructura"] = dfe["codigodeestructura"].astype(str).str.strip()
-    dfe["Cantidad"] = dfe["Cantidad"].fillna(0)
-
-    conteo = {}
-    for _, r in dfe.iterrows():
-        cod = str(r.get("codigodeestructura", "")).strip()
-        if not cod:
-            continue
-        try:
-            qty = int(float(r.get("Cantidad", 0) or 0))
-        except Exception:
-            qty = 0
-        if qty > 0:
-            conteo[cod] = conteo.get(cod, 0) + qty
-
-    return conteo
-
-
 
 def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
     """
     Genera PDFs a partir de resultados YA CALCULADOS.
-    No realiza ningún cálculo adicional.
     """
 
     if not isinstance(resultados, dict):
@@ -100,14 +45,20 @@ def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
     if any(x is None for x in (df_resumen, df_eg, df_ep, df_mpp)):
         raise ValueError("Uno o más DataFrames vienen como None en 'resultados'.")
 
-    # opcionales
-    df_costos = resultados.get("df_costos_materiales")
-    df_mo_estructuras = resultados.get("df_mo_estructuras")
+    # =====================================================
+    # 🔥 NUEVO: PRECIOS (OBLIGATORIO PARA PDF LIMPIO)
+    # =====================================================
+    df_precios_estructura = resultados.get("df_precios_estructura")
 
-    # -------------------------------------------------
-    # GENERACIÓN (SIN LÓGICA)
-    # -------------------------------------------------
+    if df_precios_estructura is None:
+        raise ValueError(
+            "df_precios_estructura no existe. "
+            "Debes generarlo antes del PDF."
+        )
 
+    # =====================================================
+    # GENERACIÓN PDFS (LEGACY SE MANTIENEN)
+    # =====================================================
     pdf_materiales = generar_pdf_materiales(df_resumen, nombre, dp)
 
     pdf_estructuras_global = generar_pdf_estructuras_global(
@@ -122,14 +73,14 @@ def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
         df_mpp, nombre
     )
 
+    # =====================================================
+    # ✅ PDF COMPLETO LIMPIO
+    # =====================================================
     pdf_completo = generar_pdf_completo(
-        df_resumen,
-        df_eg,
-        df_ep,
-        df_mpp,
-        dp,
-        df_costos=df_costos,
-        df_mo_estructuras=df_mo_estructuras,
+        df_materiales=df_resumen,
+        df_estructuras=df_eg,
+        df_precios_estructura=df_precios_estructura,
+        datos_proyecto=dp,
     )
 
     return {
