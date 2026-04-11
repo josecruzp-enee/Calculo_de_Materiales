@@ -282,7 +282,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_materiales=df_materiales,
             df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
             costos={
-                **resultado_costos,
                 "df_costos_estructura": df_costos_estructura,
                 "df_precios_estructura": df_precios_estructura,
             },
