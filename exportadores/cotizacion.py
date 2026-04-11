@@ -70,7 +70,7 @@ def generar_seccion_cotizacion_final(
         ["TOTAL GASTOS", f"L {total_gastos:,.2f}"],
         ["SUBTOTAL", f"L {subtotal:,.2f}"],
         ["ISV (15%)", f"L {isv:,.2f}"],
-        ["TOTAL PROYECTO", f"L {total_final:,.2f}],
+        ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
     ]
 
     tabla = Table(data, colWidths=[doc.width * 0.7, doc.width * 0.3])
