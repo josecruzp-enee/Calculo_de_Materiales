@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-
+from exportadores.tu_archivo_cotizacion import generar_seccion_cotizacion_final
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
     Paragraph, Spacer, PageBreak
@@ -97,7 +97,7 @@ def generar_pdf_completo(
     elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Heading1"]))
     elems.append(Spacer(1, 10))
 
-    bloque_cot = generar_cotizacion_desde_estructuras(
+    bloque_cot = generar_seccion_cotizacion_final(
         doc,
         styles,
         df_precios_estructura
