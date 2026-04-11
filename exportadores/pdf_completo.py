@@ -10,8 +10,10 @@ from reportlab.platypus import (
 )
 
 from exportadores.hoja_info import seccion_hoja_info
-from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
-from exportadores.cotizacion_pdf import generar_seccion_cotizacion_final
+from exportadores.precios_estructura_pdf import (
+    generar_tabla_precios_estructura,
+    generar_cotizacion_desde_estructuras   # 🔥 ESTA ES LA BUENA
+)
 
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
@@ -19,7 +21,7 @@ from exportadores.pdf_base import styles, fondo_pagina
 
 
 # =====================================================
-# PDF COMPLETO (LIMPIO Y SIN LÓGICA)
+# PDF COMPLETO FINAL (FUNCIONANDO)
 # =====================================================
 def generar_pdf_completo(
     df_materiales,
@@ -27,7 +29,7 @@ def generar_pdf_completo(
     df_mat_por_punto,
     df_costos_por_punto,
     df_costos_estructura,
-    df_precios_estructura,   # 👈 AHORA SE RECIBE
+    df_precios_estructura,   # 🔥 IMPORTANTE
     datos_proyecto,
 ):
 
@@ -94,21 +96,17 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     # =====================================================
-    # 3. COTIZACIÓN FINAL
+    # 3. COTIZACIÓN FINAL (🔥 ESTA ES LA CORRECTA)
     # =====================================================
     if df_precios_estructura is not None and not df_precios_estructura.empty:
 
-        try:
-            elems.extend(
-                generar_seccion_cotizacion_final(
-                    doc,
-                    styles,
-                    df_precios=df_precios_estructura,
-                )
+        elems.extend(
+            generar_cotizacion_desde_estructuras(
+                doc,
+                styles,
+                df_precios_estructura
             )
-
-        except Exception as e:
-            elems.append(Paragraph(f"ERROR COTIZACIÓN: {str(e)}", styles["Normal"]))
+        )
 
     else:
         elems.append(Paragraph("SIN COTIZACIÓN DISPONIBLE", styles["Normal"]))
