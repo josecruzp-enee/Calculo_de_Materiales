@@ -7,7 +7,6 @@ import pandas as pd
 import traceback
 import streamlit as st
 
-
 # =========================================================
 # 📦 CONTRATO
 # =========================================================
@@ -41,6 +40,9 @@ from exportadores.pdf_anexos_costos import (
 )
 
 from exportadores.excel_utils import exportar_excel
+
+# 🔥 CLAVE
+from costos_precios.precio_por_estructura import calcular_precios_por_estructura
 
 
 # =========================================================
@@ -86,32 +88,15 @@ def _validar_df(df, nombre, columnas=None):
 # =========================================================
 def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
-    if not isinstance(entrada, EntradaReportes):
-        return _fail("entrada debe ser EntradaReportes")
-
     try:
-        # =====================================================
-        # VALIDACIÓN BASE
-        # =====================================================
-        _validar_df(entrada.df_estructuras, "df_estructuras", ["Punto"])
-        _validar_df(entrada.df_materiales, "df_materiales", ["Materiales"])
-        _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto", ["Punto"])
+        _validar_df(entrada.df_estructuras, "df_estructuras")
+        _validar_df(entrada.df_materiales, "df_materiales")
+        _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto")
 
         costos = entrada.costos or {}
 
-        df_costos_materiales = costos.get("df_materiales_costos")
         df_costos_estructuras = costos.get("df_costos_estructura")
         df_costos_por_punto = costos.get("df_costos_por_punto")
-
-        # limpiar vacíos
-        if isinstance(df_costos_materiales, pd.DataFrame) and df_costos_materiales.empty:
-            df_costos_materiales = None
-
-        if isinstance(df_costos_estructuras, pd.DataFrame) and df_costos_estructuras.empty:
-            df_costos_estructuras = None
-
-        if isinstance(df_costos_por_punto, pd.DataFrame) and df_costos_por_punto.empty:
-            df_costos_por_punto = None
 
         archivos = {}
         errores = []
@@ -120,30 +105,29 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         nombre = entrada.nombre_proyecto
 
         # =====================================================
-        # 📌 DATOS PROYECTO (STREAMLIT)
+        # 📊 DATOS PROYECTO
         # =====================================================
         datos_proyecto = st.session_state.get("datos_proyecto", {})
 
-        if not datos_proyecto:
-            datos_proyecto = {
-                "nombre_proyecto": nombre,
-                "empresa": "N/A",
-                "nivel_de_tension": "",
-                "fecha_informe": "",
-                "responsable": "",
-            }
+        # =====================================================
+        # 🔥 CALCULAR PRECIOS (AQUÍ ESTABA EL PROBLEMA)
+        # =====================================================
+        df_precios_estructura = None
 
-        # opcional debug UI
-        st.write("📊 DATOS PROYECTO:", datos_proyecto)
+        if df_costos_estructuras is not None and not df_costos_estructuras.empty:
+            try:
+                df_precios_estructura, _ = calcular_precios_por_estructura(
+                    df_costos_estructuras,
+                    entrada.df_estructuras,
+                )
+            except Exception as e:
+                st.write("❌ ERROR CALCULANDO PRECIOS:", e)
 
         # =====================================================
-        # 📄 TASKS (SIN LÓGICA DE NEGOCIO)
+        # 📄 TASKS
         # =====================================================
         tasks = [
 
-            # -------------------------------
-            # REPORTES SIMPLES
-            # -------------------------------
             ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(
                 entrada.df_estructuras, nombre
             )),
@@ -160,53 +144,20 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 entrada.df_materiales_por_punto, nombre
             )),
 
-            # -------------------------------
-            # 🔥 PDF COMPLETO (AUTÓNOMO)
-            # -------------------------------
+            # 🔥 ESTE ES EL IMPORTANTE
             ("reporte_completo.pdf", lambda: generar_pdf_completo(
                 df_materiales=entrada.df_materiales,
                 df_estructuras=entrada.df_estructuras,
                 df_mat_por_punto=entrada.df_materiales_por_punto,
                 df_costos_por_punto=df_costos_por_punto,
                 df_costos_estructura=df_costos_estructuras,
+                df_precios_estructura=df_precios_estructura,  # 🔥 AQUÍ
                 datos_proyecto=datos_proyecto,
             )),
         ]
 
         # =====================================================
-        # 💰 ANEXOS DE COSTOS (OPCIONAL)
-        # =====================================================
-        if df_costos_materiales is not None:
-            tasks.append(("anexo_costos_materiales.pdf",
-                lambda: tabla_costos_materiales_pdf(df_costos_materiales)
-            ))
-
-        if df_costos_estructuras is not None:
-            tasks.append(("anexo_costos_estructuras.pdf",
-                lambda: tabla_costos_estructuras_pdf(df_costos_estructuras)
-            ))
-
-        if df_costos_por_punto is not None:
-            tasks.append(("anexo_costos_por_punto.pdf",
-                lambda: tabla_costos_por_punto_pdf(df_costos_por_punto)
-            ))
-
-        # =====================================================
-        # 📊 EXCEL
-        # =====================================================
-        tasks.append((
-            "reporte.xlsx",
-            lambda: exportar_excel(
-                df_resumen=entrada.df_materiales,
-                df_estructuras_resumen=entrada.df_estructuras,
-                df_resumen_por_punto=entrada.df_materiales_por_punto,
-                df_adicionales=df_costos_por_punto,
-                ruta_excel=f"{nombre}_reporte.xlsx",
-            )
-        ))
-
-        # =====================================================
-        # ⚙️ EJECUCIÓN
+        # EJECUCIÓN
         # =====================================================
         for nombre_archivo, fn in tasks:
 
@@ -214,14 +165,10 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
             if err:
                 errores.append(err)
-                debug[nombre_archivo] = "ERROR"
                 continue
 
             if contenido:
                 _add_file(archivos, errores, nombre_archivo, contenido)
-                debug[nombre_archivo] = "OK"
-            else:
-                debug[nombre_archivo] = "EMPTY"
 
         return {
             "archivos": archivos,
