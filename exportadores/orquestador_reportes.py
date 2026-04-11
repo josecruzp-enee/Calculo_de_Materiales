@@ -33,17 +33,6 @@ from exportadores.pdf_reportes_simples import (
 
 from exportadores.pdf_completo import generar_pdf_completo
 
-from exportadores.pdf_anexos_costos import (
-    tabla_costos_materiales_pdf,
-    tabla_costos_estructuras_pdf,
-    tabla_costos_por_punto_pdf,
-)
-
-from exportadores.excel_utils import exportar_excel
-
-# 🔥 CLAVE
-from costos_precios.precio_por_estructura import calcular_precios_por_estructura
-
 
 # =========================================================
 # 🧩 HELPERS
@@ -70,17 +59,12 @@ def _add_file(archivos, errores, nombre, contenido):
         errores.append(f"{nombre} inválido")
 
 
-def _validar_df(df, nombre, columnas=None):
+def _validar_df(df, nombre):
     if df is None or not isinstance(df, pd.DataFrame):
         raise ValueError(f"{nombre} inválido")
 
     if df.empty:
         raise ValueError(f"{nombre} vacío")
-
-    if columnas:
-        faltantes = [c for c in columnas if c not in df.columns]
-        if faltantes:
-            raise ValueError(f"{nombre} sin columnas: {faltantes}")
 
 
 # =========================================================
@@ -95,8 +79,8 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
         costos = entrada.costos or {}
 
-        df_costos_estructuras = costos.get("df_costos_estructura")
-        df_costos_por_punto = costos.get("df_costos_por_punto")
+        df_costos_estructura = costos.get("df_costos_estructura")
+        df_precios_estructura = costos.get("df_precios_estructura")
 
         archivos = {}
         errores = []
@@ -110,18 +94,15 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         datos_proyecto = st.session_state.get("datos_proyecto", {})
 
         # =====================================================
-        # 🔥 CALCULAR PRECIOS (AQUÍ ESTABA EL PROBLEMA)
+        # DEBUG PREVIO
         # =====================================================
-        df_precios_estructura = None
+        st.write("🧠 DEBUG REPORTES")
+        st.write("df_estructuras:", entrada.df_estructuras.shape)
+        st.write("df_materiales:", entrada.df_materiales.shape)
 
-        if df_costos_estructuras is not None and not df_costos_estructuras.empty:
-            try:
-                df_precios_estructura, _ = calcular_precios_por_estructura(
-                    df_costos_estructuras,
-                    entrada.df_estructuras,
-                )
-            except Exception as e:
-                st.write("❌ ERROR CALCULANDO PRECIOS:", e)
+        if df_precios_estructura is not None:
+            st.write("df_precios_estructura:", df_precios_estructura.shape)
+            st.write(df_precios_estructura.head())
 
         # =====================================================
         # 📄 TASKS
@@ -144,14 +125,11 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 entrada.df_materiales_por_punto, nombre
             )),
 
-            # 🔥 ESTE ES EL IMPORTANTE
+            # 🔥 PDF PRINCIPAL (YA CORREGIDO)
             ("reporte_completo.pdf", lambda: generar_pdf_completo(
                 df_materiales=entrada.df_materiales,
                 df_estructuras=entrada.df_estructuras,
-                df_mat_por_punto=entrada.df_materiales_por_punto,
-                df_costos_por_punto=df_costos_por_punto,
-                df_costos_estructura=df_costos_estructuras,
-                df_precios_estructura=df_precios_estructura,  # 🔥 AQUÍ
+                df_precios_estructura=df_precios_estructura,
                 datos_proyecto=datos_proyecto,
             )),
         ]
@@ -169,6 +147,12 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
             if contenido:
                 _add_file(archivos, errores, nombre_archivo, contenido)
+
+        # =====================================================
+        # DEBUG FINAL
+        # =====================================================
+        st.write("📦 ARCHIVOS GENERADOS:", list(archivos.keys()))
+        st.write("❌ ERRORES:", errores)
 
         return {
             "archivos": archivos,
