@@ -255,6 +255,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                         "Costo Operativo": res_op.operativo_total,
                         "Precio Unitario": res_precio.precio_unitario,
                         "Precio Total": res_precio.precio_unitario * cantidad,
+                        "Subtotal": res_precio.precio_unitario * cantidad,
                     })
 
                 df_precios_estructura = pd.DataFrame(filas_precio)
