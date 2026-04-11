@@ -21,7 +21,7 @@ from exportadores.pdf_base import styles, fondo_pagina
 
 
 # =====================================================
-# PDF COMPLETO (LIMPIO Y DIRECTO)
+# PDF COMPLETO (FINAL)
 # =====================================================
 def generar_pdf_completo(
     df_materiales,
@@ -75,31 +75,56 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. PRECIOS POR ESTRUCTURA
+    # 🔥 FIX CRÍTICO: ASEGURAR DATA
     # =====================================================
-    if df_precios_estructura is not None and not df_precios_estructura.empty:
+    if df_precios_estructura is None:
+        df_precios_estructura = None
 
-        elems.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Heading1"]))
-        elems.append(Spacer(1, 10))
+    else:
+        # asegurar columnas mínimas
+        if "Cantidad" not in df_precios_estructura.columns:
+            cantidades = (
+                df_estructuras.groupby("Estructura")["Cantidad"]
+                .sum()
+                .to_dict()
+            )
+            df_precios_estructura["Cantidad"] = (
+                df_precios_estructura["Estructura"]
+                .map(cantidades)
+                .fillna(0)
+            )
 
+        if "Subtotal" not in df_precios_estructura.columns:
+            df_precios_estructura["Subtotal"] = (
+                df_precios_estructura.get("Precio Unitario", 0) *
+                df_precios_estructura.get("Cantidad", 0)
+            )
+
+    # =====================================================
+    # 2. PRESUPUESTO DE ESTRUCTURAS (SIN BLOQUEO)
+    # =====================================================
+    elems.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Heading1"]))
+    elems.append(Spacer(1, 10))
+
+    if df_precios_estructura is not None:
         elems.extend(
             generar_tabla_precios_estructura(
                 df_precios_estructura,
                 df_estructuras
             )
         )
-
-        elems.append(PageBreak())
-
     else:
         elems.append(Paragraph("SIN PRESUPUESTO DISPONIBLE", styles["Normal"]))
-        elems.append(PageBreak())
+
+    elems.append(PageBreak())
 
     # =====================================================
-    # 3. COTIZACIÓN FINAL
+    # 3. COTIZACIÓN FINAL (🔥 FORZADA)
     # =====================================================
-    if df_precios_estructura is not None and not df_precios_estructura.empty:
+    elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Heading1"]))
+    elems.append(Spacer(1, 10))
 
+    if df_precios_estructura is not None:
         elems.extend(
             generar_cotizacion_desde_estructuras(
                 doc,
@@ -107,7 +132,6 @@ def generar_pdf_completo(
                 df_precios_estructura
             )
         )
-
     else:
         elems.append(Paragraph("SIN COTIZACIÓN DISPONIBLE", styles["Normal"]))
 
