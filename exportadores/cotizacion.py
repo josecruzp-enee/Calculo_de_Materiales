@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import pandas as pd
 from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
 
@@ -13,7 +14,7 @@ def _fmt(valor: float) -> str:
 
 
 # =========================================================
-# COTIZACIÓN FINAL (FORMATO COMERCIAL)
+# COTIZACIÓN FINAL (ROBUSTA + DEBUG)
 # =========================================================
 def generar_seccion_cotizacion_final(
     doc,
@@ -32,15 +33,66 @@ def generar_seccion_cotizacion_final(
     if df_precios is None or df_precios.empty:
         raise ValueError("df_precios vacío")
 
-    required_cols = ["Subtotal"]
-    faltantes = [c for c in required_cols if c not in df_precios.columns]
-    if faltantes:
-        raise ValueError(f"df_precios no cumple contrato: {faltantes}")
+    if "Subtotal" not in df_precios.columns:
+        raise ValueError("df_precios no tiene columna 'Subtotal'")
 
     # =====================================================
-    # BASE (YA CALCULADA EN DOMINIO)
+    # DEBUG INICIAL
     # =====================================================
-    total_base = float(df_precios["Subtotal"].sum())
+    try:
+        debug_info = f"""
+        DEBUG COTIZACIÓN:
+        columnas: {list(df_precios.columns)}
+        filas: {len(df_precios)}
+        subtotal_raw: {df_precios["Subtotal"].head(5).tolist()}
+        """
+        elems.append(Paragraph(debug_info, styles["Normal"]))
+        elems.append(Spacer(1, 6))
+    except Exception as e:
+        elems.append(Paragraph(f"ERROR DEBUG: {str(e)}", styles["Normal"]))
+
+    # =====================================================
+    # NORMALIZAR SUBTOTAL (CRÍTICO 🔥)
+    # =====================================================
+    df_tmp = df_precios.copy()
+
+    # Convertir a string para limpieza segura
+    df_tmp["Subtotal"] = df_tmp["Subtotal"].astype(str)
+
+    # Limpiar formato moneda si existe
+    df_tmp["Subtotal"] = (
+        df_tmp["Subtotal"]
+        .str.replace("L", "", regex=False)
+        .str.replace(",", "", regex=False)
+        .str.strip()
+    )
+
+    # Convertir a número
+    df_tmp["Subtotal"] = pd.to_numeric(df_tmp["Subtotal"], errors="coerce")
+
+    # =====================================================
+    # DEBUG POST-CONVERSIÓN
+    # =====================================================
+    elems.append(Paragraph(
+        f"DEBUG Subtotal convertidos: {df_tmp['Subtotal'].head(5).tolist()}",
+        styles["Normal"]
+    ))
+    elems.append(Spacer(1, 6))
+
+    total_base = df_tmp["Subtotal"].fillna(0).sum()
+
+    elems.append(Paragraph(
+        f"DEBUG TOTAL BASE: {total_base}",
+        styles["Normal"]
+    ))
+    elems.append(Spacer(1, 10))
+
+    # =====================================================
+    # VALIDACIÓN FINAL
+    # =====================================================
+    if total_base <= 0:
+        elems.append(Paragraph("ERROR: Total base inválido", styles["Normal"]))
+        return elems
 
     # =====================================================
     # CÁLCULOS COMERCIALES
@@ -77,24 +129,19 @@ def generar_seccion_cotizacion_final(
     )
 
     tabla.setStyle(TableStyle([
-        # encabezado
         ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
 
-        # alineación
         ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
 
-        # subtotal
         ("BACKGROUND", (0, -3), (-1, -3), colors.HexColor("#EFEFEF")),
         ("FONTNAME", (0, -3), (-1, -3), "Helvetica-Bold"),
 
-        # total final
         ("BACKGROUND", (0, -1), (-1, -1), colors.darkblue),
         ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
 
-        # grid
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
     ]))
 
