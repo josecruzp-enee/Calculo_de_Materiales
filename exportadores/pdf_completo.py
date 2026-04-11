@@ -91,6 +91,7 @@ def generar_pdf_completo(
     elems.extend(bloque_pres)
     elems.append(PageBreak())
 
+    
     # =====================================================
     # COTIZACION
     # =====================================================
@@ -115,6 +116,11 @@ def generar_pdf_completo(
         except:
             pass
 
+    if "Subtotal" not in df_precios_estructura.columns:
+    df_precios_estructura["Subtotal"] = (
+        df_precios_estructura["Precio Unitario"] *
+        df_precios_estructura["Cantidad"]
+    )
     elems.extend(bloque_cot)
 
     # =====================================================
