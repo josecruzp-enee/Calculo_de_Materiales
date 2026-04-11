@@ -2,7 +2,7 @@
 """
 exportadores/pdf_exportador.py
 Genera PDFs a partir de resultados ya calculados.
-VERSIÓN LIMPIA: usa SOLO PDF correcto (3 secciones)
+VERSIÓN FINAL: incluye FIX de cotización
 """
 
 from exportadores.pdf_utils import (
@@ -10,7 +10,7 @@ from exportadores.pdf_utils import (
     generar_pdf_estructuras_global,
     generar_pdf_estructuras_por_punto,
     generar_pdf_materiales_por_punto,
-    generar_pdf_completo,  # ✅ usamos el bueno
+    generar_pdf_completo,
 )
 
 _REQUERIDAS = (
@@ -23,9 +23,6 @@ _REQUERIDAS = (
 
 
 def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
-    """
-    Genera PDFs a partir de resultados YA CALCULADOS.
-    """
 
     if not isinstance(resultados, dict):
         raise TypeError("generar_pdfs() esperaba un dict 'resultados'.")
@@ -46,35 +43,49 @@ def generar_pdfs(resultados: dict, membrete_pdf: str = "SMART") -> dict:
         raise ValueError("Uno o más DataFrames vienen como None en 'resultados'.")
 
     # =====================================================
-    # 🔥 NUEVO: PRECIOS (OBLIGATORIO PARA PDF LIMPIO)
+    # 🔥 PRECIOS
     # =====================================================
     df_precios_estructura = resultados.get("df_precios_estructura")
 
-    if df_precios_estructura is None:
-        raise ValueError(
-            "df_precios_estructura no existe. "
-            "Debes generarlo antes del PDF."
+    if df_precios_estructura is None or df_precios_estructura.empty:
+        raise ValueError("df_precios_estructura no existe o está vacío")
+
+    # =====================================================
+    # 🔥 FIX CRÍTICO: CREAR SUBTOTAL Y CANTIDAD
+    # =====================================================
+    if "Subtotal" not in df_precios_estructura.columns:
+
+        # obtener cantidades reales del proyecto
+        cantidades = (
+            df_eg.groupby("Estructura")["Cantidad"]
+            .sum()
+            .to_dict()
+        )
+
+        df_precios_estructura["Cantidad"] = (
+            df_precios_estructura["Estructura"]
+            .map(cantidades)
+            .fillna(0)
+        )
+
+        df_precios_estructura["Subtotal"] = (
+            df_precios_estructura["Precio Unitario"] *
+            df_precios_estructura["Cantidad"]
         )
 
     # =====================================================
-    # GENERACIÓN PDFS (LEGACY SE MANTIENEN)
+    # PDFS LEGACY (SE MANTIENEN)
     # =====================================================
     pdf_materiales = generar_pdf_materiales(df_resumen, nombre, dp)
 
-    pdf_estructuras_global = generar_pdf_estructuras_global(
-        df_eg, nombre
-    )
+    pdf_estructuras_global = generar_pdf_estructuras_global(df_eg, nombre)
 
-    pdf_estructuras_por_punto = generar_pdf_estructuras_por_punto(
-        df_ep, nombre
-    )
+    pdf_estructuras_por_punto = generar_pdf_estructuras_por_punto(df_ep, nombre)
 
-    pdf_materiales_por_punto = generar_pdf_materiales_por_punto(
-        df_mpp, nombre
-    )
+    pdf_materiales_por_punto = generar_pdf_materiales_por_punto(df_mpp, nombre)
 
     # =====================================================
-    # ✅ PDF COMPLETO LIMPIO
+    # ✅ PDF COMPLETO (AQUÍ YA SALE COTIZACIÓN)
     # =====================================================
     pdf_completo = generar_pdf_completo(
         df_materiales=df_resumen,
