@@ -20,88 +20,33 @@ def generar_seccion_cotizacion_final(
     doc,
     styles,
     df_precios,
-    porcentaje_gestion: float = 0.02,
-    porcentaje_imprevistos: float = 0.01,
-    porcentaje_isv: float = 0.15,
 ):
 
     elems = []
 
-    # =====================================================
-    # VALIDACIONES
-    # =====================================================
     if df_precios is None or df_precios.empty:
         raise ValueError("df_precios vacío")
 
-    if "Subtotal" not in df_precios.columns:
-        raise ValueError("df_precios no tiene columna 'Subtotal'")
+    # 🔥 TOTAL REAL DEL PROYECTO (BASE)
+    total_base = float(df_precios["Subtotal"].sum())
 
     # =====================================================
-    # DEBUG INICIAL
+    # GASTOS
     # =====================================================
-    try:
-        debug_info = f"""
-        DEBUG COTIZACIÓN:
-        columnas: {list(df_precios.columns)}
-        filas: {len(df_precios)}
-        subtotal_raw: {df_precios["Subtotal"].head(5).tolist()}
-        """
-        elems.append(Paragraph(debug_info, styles["Normal"]))
-        elems.append(Spacer(1, 6))
-    except Exception as e:
-        elems.append(Paragraph(f"ERROR DEBUG: {str(e)}", styles["Normal"]))
+    gastos_admin = total_base * 0.04
+    ingenieria = total_base * 0.03
+    logistica = total_base * 0.02
+    seguridad = total_base * 0.02
+    enee = total_base * 0.02
+    imprevistos = total_base * 0.01
 
-    # =====================================================
-    # NORMALIZAR SUBTOTAL (CRÍTICO 🔥)
-    # =====================================================
-    df_tmp = df_precios.copy()
-
-    # Convertir a string para limpieza segura
-    df_tmp["Subtotal"] = df_tmp["Subtotal"].astype(str)
-
-    # Limpiar formato moneda si existe
-    df_tmp["Subtotal"] = (
-        df_tmp["Subtotal"]
-        .str.replace("L", "", regex=False)
-        .str.replace(",", "", regex=False)
-        .str.strip()
+    total_gastos = (
+        gastos_admin + ingenieria + logistica +
+        seguridad + enee + imprevistos
     )
 
-    # Convertir a número
-    df_tmp["Subtotal"] = pd.to_numeric(df_tmp["Subtotal"], errors="coerce")
-
-    # =====================================================
-    # DEBUG POST-CONVERSIÓN
-    # =====================================================
-    elems.append(Paragraph(
-        f"DEBUG Subtotal convertidos: {df_tmp['Subtotal'].head(5).tolist()}",
-        styles["Normal"]
-    ))
-    elems.append(Spacer(1, 6))
-
-    total_base = df_tmp["Subtotal"].fillna(0).sum()
-
-    elems.append(Paragraph(
-        f"DEBUG TOTAL BASE: {total_base}",
-        styles["Normal"]
-    ))
-    elems.append(Spacer(1, 10))
-
-    # =====================================================
-    # VALIDACIÓN FINAL
-    # =====================================================
-    if total_base <= 0:
-        elems.append(Paragraph("ERROR: Total base inválido", styles["Normal"]))
-        return elems
-
-    # =====================================================
-    # CÁLCULOS COMERCIALES
-    # =====================================================
-    gestion = total_base * porcentaje_gestion
-    imprevistos = total_base * porcentaje_imprevistos
-
-    subtotal = total_base + gestion + imprevistos
-    isv = subtotal * porcentaje_isv
+    subtotal = total_base + total_gastos
+    isv = subtotal * 0.15
     total_final = subtotal + isv
 
     # =====================================================
@@ -115,18 +60,20 @@ def generar_seccion_cotizacion_final(
     # =====================================================
     data = [
         ["Concepto", "Monto (L)"],
-        ["Suministro e instalación del proyecto eléctrico", _fmt(total_base)],
-        ["Gestión y aprobación ENEE (2%)", _fmt(gestion)],
-        ["Imprevistos (1%)", _fmt(imprevistos)],
-        ["SUBTOTAL", _fmt(subtotal)],
-        ["ISV (15%)", _fmt(isv)],
-        ["TOTAL OFERTA", _fmt(total_final)],
+        ["Suministro e instalación", f"L {total_base:,.2f}"],
+        ["Gastos Administrativos (4%)", f"L {gastos_admin:,.2f}"],
+        ["Ingeniería (3%)", f"L {ingenieria:,.2f}"],
+        ["Logística y Transporte (2%)", f"L {logistica:,.2f}"],
+        ["Higiene y Seguridad (2%)", f"L {seguridad:,.2f}"],
+        ["Gestión ENEE (2%)", f"L {enee:,.2f}"],
+        ["Imprevistos (1%)", f"L {imprevistos:,.2f}"],
+        ["TOTAL GASTOS", f"L {total_gastos:,.2f}"],
+        ["SUBTOTAL", f"L {subtotal:,.2f}"],
+        ["ISV (15%)", f"L {isv:,.2f}"],
+        ["TOTAL PROYECTO", f"L {total_final:,.2f}],
     ]
 
-    tabla = Table(
-        data,
-        colWidths=[doc.width * 0.7, doc.width * 0.3]
-    )
+    tabla = Table(data, colWidths=[doc.width * 0.7, doc.width * 0.3])
 
     tabla.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
@@ -134,9 +81,6 @@ def generar_seccion_cotizacion_final(
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
 
         ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
-
-        ("BACKGROUND", (0, -3), (-1, -3), colors.HexColor("#EFEFEF")),
-        ("FONTNAME", (0, -3), (-1, -3), "Helvetica-Bold"),
 
         ("BACKGROUND", (0, -1), (-1, -1), colors.darkblue),
         ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
@@ -146,19 +90,5 @@ def generar_seccion_cotizacion_final(
     ]))
 
     elems.append(tabla)
-    elems.append(Spacer(1, 12))
-
-    # =====================================================
-    # NOTA
-    # =====================================================
-    elems.append(
-        Paragraph(
-            "<font size=8><i>"
-            "Esta oferta incluye suministro de materiales, instalación, gestión ante ENEE "
-            "y costos asociados para la ejecución del proyecto."
-            "</i></font>",
-            styles["Normal"]
-        )
-    )
 
     return elems
