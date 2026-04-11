@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 # =====================================================
 # IMPORTS
 # =====================================================
@@ -10,15 +13,13 @@ from exportadores.hoja_info import seccion_hoja_info
 from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 from exportadores.cotizacion_pdf import generar_seccion_cotizacion_final
 
-from costos_precios.precio_por_estructura import calcular_precios_por_estructura
-
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from exportadores.pdf_base import styles, fondo_pagina
 
 
 # =====================================================
-# PDF COMPLETO LIMPIO
+# PDF COMPLETO (LIMPIO Y SIN LÓGICA)
 # =====================================================
 def generar_pdf_completo(
     df_materiales,
@@ -26,6 +27,7 @@ def generar_pdf_completo(
     df_mat_por_punto,
     df_costos_por_punto,
     df_costos_estructura,
+    df_precios_estructura,   # 👈 AHORA SE RECIBE
     datos_proyecto,
 ):
 
@@ -40,7 +42,12 @@ def generar_pdf_completo(
         bottomMargin=50
     )
 
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
+    frame = Frame(
+        doc.leftMargin,
+        doc.bottomMargin,
+        doc.width,
+        doc.height
+    )
 
     template = PageTemplate(
         id="normal",
@@ -66,24 +73,7 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. CALCULAR PRECIOS
-    # =====================================================
-    df_precios_estructura = None
-
-    if df_costos_estructura is not None and not df_costos_estructura.empty:
-        try:
-            df_precios_estructura, _ = calcular_precios_por_estructura(
-                df_costos_estructura,
-                df_estructuras,
-                porcentaje_utilidad=0.15,
-                costo_cuadrilla_dia=10000,
-                fraccion_jornada=1/16,
-            )
-        except Exception as e:
-            elems.append(Paragraph(f"ERROR PRECIOS: {str(e)}", styles["Normal"]))
-
-    # =====================================================
-    # 3. PRESUPUESTO
+    # 2. PRESUPUESTO DE ESTRUCTURAS
     # =====================================================
     if df_precios_estructura is not None and not df_precios_estructura.empty:
 
@@ -104,7 +94,7 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     # =====================================================
-    # 4. COTIZACIÓN FINAL
+    # 3. COTIZACIÓN FINAL
     # =====================================================
     if df_precios_estructura is not None and not df_precios_estructura.empty:
 
@@ -116,6 +106,7 @@ def generar_pdf_completo(
                     df_precios=df_precios_estructura,
                 )
             )
+
         except Exception as e:
             elems.append(Paragraph(f"ERROR COTIZACIÓN: {str(e)}", styles["Normal"]))
 
