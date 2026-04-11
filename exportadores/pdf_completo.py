@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-Paragraph("COTIZACIÓN DEL PROYECTO", styles["Heading1"])
+
 # =====================================================
 # IMPORTS
 # =====================================================
@@ -21,7 +21,7 @@ from exportadores.pdf_base import styles, fondo_pagina
 
 
 # =====================================================
-# PDF COMPLETO (FINAL)
+# PDF COMPLETO (LIMPIO)
 # =====================================================
 def generar_pdf_completo(
     df_materiales,
@@ -30,9 +30,6 @@ def generar_pdf_completo(
     datos_proyecto,
 ):
 
-    # =====================================================
-    # INIT PDF
-    # =====================================================
     buffer = BytesIO()
 
     doc = BaseDocTemplate(
@@ -62,7 +59,7 @@ def generar_pdf_completo(
     elems = []
 
     # =====================================================
-    # 1. HOJA INFO
+    # HOJA INFO
     # =====================================================
     elems.extend(
         seccion_hoja_info(
@@ -75,13 +72,15 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 🔥 FIX CRÍTICO: ASEGURAR DATA
+    # NORMALIZAR PRECIOS
     # =====================================================
     if df_precios_estructura is None:
-        df_precios_estructura = None
+        import pandas as pd
+        df_precios_estructura = pd.DataFrame(columns=[
+            "Estructura", "Cantidad", "Precio Unitario", "Subtotal"
+        ])
 
     else:
-        # asegurar columnas mínimas
         if "Cantidad" not in df_precios_estructura.columns:
             cantidades = (
                 df_estructuras.groupby("Estructura")["Cantidad"]
@@ -94,46 +93,43 @@ def generar_pdf_completo(
                 .fillna(0)
             )
 
+        if "Precio Unitario" not in df_precios_estructura.columns:
+            df_precios_estructura["Precio Unitario"] = 0
+
         if "Subtotal" not in df_precios_estructura.columns:
             df_precios_estructura["Subtotal"] = (
-                df_precios_estructura.get("Precio Unitario", 0) *
-                df_precios_estructura.get("Cantidad", 0)
+                df_precios_estructura["Precio Unitario"] *
+                df_precios_estructura["Cantidad"]
             )
 
     # =====================================================
-    # 2. PRESUPUESTO DE ESTRUCTURAS (SIN BLOQUEO)
+    # PRESUPUESTO
     # =====================================================
     elems.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Heading1"]))
     elems.append(Spacer(1, 10))
 
-    if df_precios_estructura is not None:
-        elems.extend(
-            generar_tabla_precios_estructura(
-                df_precios_estructura,
-                df_estructuras
-            )
+    elems.extend(
+        generar_tabla_precios_estructura(
+            df_precios_estructura,
+            df_estructuras
         )
-    else:
-        elems.append(Paragraph("SIN PRESUPUESTO DISPONIBLE", styles["Normal"]))
+    )
 
     elems.append(PageBreak())
 
     # =====================================================
-    # 3. COTIZACIÓN FINAL (🔥 FORZADA)
+    # COTIZACIÓN
     # =====================================================
     elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Heading1"]))
     elems.append(Spacer(1, 10))
 
-    if df_precios_estructura is not None:
-        elems.extend(
-            generar_cotizacion_desde_estructuras(
-                doc,
-                styles,
-                df_precios_estructura
-            )
+    elems.extend(
+        generar_cotizacion_desde_estructuras(
+            doc,
+            styles,
+            df_precios_estructura
         )
-    else:
-        elems.append(Paragraph("SIN COTIZACIÓN DISPONIBLE", styles["Normal"]))
+    )
 
     # =====================================================
     # BUILD
