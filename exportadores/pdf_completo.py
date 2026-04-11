@@ -12,7 +12,7 @@ from reportlab.platypus import (
 from exportadores.hoja_info import seccion_hoja_info
 from exportadores.precios_estructura_pdf import (
     generar_tabla_precios_estructura,
-    generar_cotizacion_desde_estructuras   # 🔥 ESTA ES LA BUENA
+    generar_cotizacion_desde_estructuras
 )
 
 from io import BytesIO
@@ -21,18 +21,18 @@ from exportadores.pdf_base import styles, fondo_pagina
 
 
 # =====================================================
-# PDF COMPLETO FINAL (FUNCIONANDO)
+# PDF COMPLETO (LIMPIO Y DIRECTO)
 # =====================================================
 def generar_pdf_completo(
     df_materiales,
     df_estructuras,
-    df_mat_por_punto,
-    df_costos_por_punto,
-    df_costos_estructura,
-    df_precios_estructura,   # 🔥 IMPORTANTE
+    df_precios_estructura,
     datos_proyecto,
 ):
 
+    # =====================================================
+    # INIT PDF
+    # =====================================================
     buffer = BytesIO()
 
     doc = BaseDocTemplate(
@@ -75,7 +75,7 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. PRESUPUESTO DE ESTRUCTURAS
+    # 2. PRECIOS POR ESTRUCTURA
     # =====================================================
     if df_precios_estructura is not None and not df_precios_estructura.empty:
 
@@ -96,7 +96,7 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     # =====================================================
-    # 3. COTIZACIÓN FINAL (🔥 ESTA ES LA CORRECTA)
+    # 3. COTIZACIÓN FINAL
     # =====================================================
     if df_precios_estructura is not None and not df_precios_estructura.empty:
 
