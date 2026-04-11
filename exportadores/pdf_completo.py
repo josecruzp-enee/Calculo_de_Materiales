@@ -10,13 +10,15 @@ from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 from exportadores.hoja_info import seccion_hoja_info
 from exportadores.cotizacion_pdf import generar_seccion_cotizacion_final
 
+from costos_precios.precio_por_estructura import calcular_precios_por_estructura
+
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from exportadores.pdf_base import styles, fondo_pagina
 
 
 # =====================================================
-# PDF COMPLETO (VERSIÓN CLIENTE)
+# PDF COMPLETO (AUTÓNOMO)
 # =====================================================
 def generar_pdf_completo(
     df_materiales,
@@ -24,7 +26,6 @@ def generar_pdf_completo(
     df_mat_por_punto,
     df_costos_por_punto,
     df_costos_estructura,
-    df_precios_estructura,   # 👈 AHORA VIENE CALCULADO
     datos_proyecto,
 ):
 
@@ -39,12 +40,7 @@ def generar_pdf_completo(
         bottomMargin=50
     )
 
-    frame = Frame(
-        doc.leftMargin,
-        doc.bottomMargin,
-        doc.width,
-        doc.height
-    )
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
 
     template = PageTemplate(
         id="normal",
@@ -70,7 +66,24 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. PRESUPUESTO DE ESTRUCTURAS
+    # 2. CALCULAR PRECIOS (INTERNO 🔥)
+    # =====================================================
+    df_precios_estructura = None
+
+    if df_costos_estructura is not None and not df_costos_estructura.empty:
+        try:
+            df_precios_estructura, _ = calcular_precios_por_estructura(
+                df_costos_estructura,
+                df_estructuras,
+                porcentaje_utilidad=0.15,
+                costo_cuadrilla_dia=10000,
+                fraccion_jornada=1/16,
+            )
+        except Exception as e:
+            elems.append(Paragraph(f"ERROR PRECIOS: {str(e)}", styles["Normal"]))
+
+    # =====================================================
+    # 3. PRESUPUESTO
     # =====================================================
     if df_precios_estructura is not None and not df_precios_estructura.empty:
 
@@ -86,43 +99,31 @@ def generar_pdf_completo(
 
         elems.append(PageBreak())
 
-    # =====================================================
-    # 3. COTIZACIÓN FINAL
-    # =====================================================
-    if df_precios_estructura is not None and not df_precios_estructura.empty:
-
-        elems.extend(
-            generar_seccion_cotizacion_final(
-                doc,
-                styles,
-                df_precios=df_precios_estructura,
-                porcentaje_gestion=0.02,
-                porcentaje_imprevistos=0.01,
-                porcentaje_isv=0.15,
-            )
-        )
-
+    else:
+        elems.append(Paragraph("SIN PRESUPUESTO DE ESTRUCTURAS", styles["Normal"]))
         elems.append(PageBreak())
 
     # =====================================================
-    # 4. LISTA DE MATERIALES
+    # 4. COTIZACIÓN FINAL
     # =====================================================
-    if df_materiales is not None and not df_materiales.empty:
+    if df_precios_estructura is not None and not df_precios_estructura.empty:
 
-        elems.append(Paragraph("LISTA DE MATERIALES", styles["Heading2"]))
-        elems.append(Spacer(1, 10))
+        try:
+            elems.extend(
+                generar_seccion_cotizacion_final(
+                    doc,
+                    styles,
+                    df_precios=df_precios_estructura,
+                    porcentaje_gestion=0.02,
+                    porcentaje_imprevistos=0.01,
+                    porcentaje_isv=0.15,
+                )
+            )
+        except Exception as e:
+            elems.append(Paragraph(f"ERROR COTIZACIÓN: {str(e)}", styles["Normal"]))
 
-        data = [["Material", "Unidad", "Cantidad"]]
-
-        for _, r in df_materiales.iterrows():
-            data.append([
-                str(r.get("Materiales", "")),
-                str(r.get("Unidad", "")),
-                str(r.get("Cantidad", "")),
-            ])
-
-        tabla = Table(data)
-        elems.append(tabla)
+    else:
+        elems.append(Paragraph("SIN COTIZACIÓN DISPONIBLE", styles["Normal"]))
 
     # =====================================================
     # BUILD
