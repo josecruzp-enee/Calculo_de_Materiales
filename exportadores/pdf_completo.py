@@ -3,11 +3,11 @@
 # =====================================================
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
-    Paragraph, Spacer, PageBreak, Table
+    Paragraph, Spacer, PageBreak
 )
 
-from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 from exportadores.hoja_info import seccion_hoja_info
+from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 from exportadores.cotizacion_pdf import generar_seccion_cotizacion_final
 
 from costos_precios.precio_por_estructura import calcular_precios_por_estructura
@@ -18,7 +18,7 @@ from exportadores.pdf_base import styles, fondo_pagina
 
 
 # =====================================================
-# PDF COMPLETO (AUTÓNOMO)
+# PDF COMPLETO LIMPIO
 # =====================================================
 def generar_pdf_completo(
     df_materiales,
@@ -66,7 +66,7 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # 2. CALCULAR PRECIOS (INTERNO 🔥)
+    # 2. CALCULAR PRECIOS
     # =====================================================
     df_precios_estructura = None
 
@@ -100,7 +100,7 @@ def generar_pdf_completo(
         elems.append(PageBreak())
 
     else:
-        elems.append(Paragraph("SIN PRESUPUESTO DE ESTRUCTURAS", styles["Normal"]))
+        elems.append(Paragraph("SIN PRESUPUESTO DISPONIBLE", styles["Normal"]))
         elems.append(PageBreak())
 
     # =====================================================
@@ -114,9 +114,6 @@ def generar_pdf_completo(
                     doc,
                     styles,
                     df_precios=df_precios_estructura,
-                    porcentaje_gestion=0.02,
-                    porcentaje_imprevistos=0.01,
-                    porcentaje_isv=0.15,
                 )
             )
         except Exception as e:
