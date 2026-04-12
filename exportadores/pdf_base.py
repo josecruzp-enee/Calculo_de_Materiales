@@ -63,119 +63,118 @@ def quitar_saltos_finales(elems):
 # ==========================
 # FONDO DE PÁGINA (MEMBRETE)
 # ==========================
-from reportlab.lib.pagesizes import letter
-import os
-
-PAGE_WIDTH, PAGE_HEIGHT = letter
-
 def fondo_pagina(canvas, doc):
+    """
+    Dibuja el membrete seleccionado.
+
+    Tipos:
+    - ENEE   → fondo completo
+    - SMART  → banner horizontal superior
+    - ROMARIO → logo pequeño en esquina superior derecha
+    """
+
     try:
+        import streamlit as st
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        import os
+
         canvas.saveState()
 
-        import streamlit as st
+        # =========================================================
+        # OBTENER TIPO DE MEMBRETE
+        # =========================================================
+        membrete = None
 
-        membrete = st.session_state.get("membrete_pdf", "SMART")
+        try:
+            if "membrete_pdf" in st.session_state:
+                membrete = st.session_state.get("membrete_pdf")
+            elif "membrete_pdf_val" in st.session_state:
+                membrete = st.session_state.get("membrete_pdf_val")
+        except Exception:
+            membrete = None
 
-        # =========================
-        # 🟦 CASO 1: SMART (MEMBRETE HORIZONTAL)
-        # =========================
-        if membrete == "SMART":
+        if not membrete:
+            membrete = getattr(doc, "membrete_pdf", None) or getattr(doc, "membrete_pdf_val", None)
 
-            logo_path = os.path.join(BASE_DIR, "data", "Membrete_smart.png")
+        membrete = str(membrete or "SMART").strip().upper()
 
-            if logo_path and os.path.exists(logo_path):
+        # =========================================================
+        # RUTA DE IMAGEN
+        # =========================================================
+        BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
-                ancho_logo = doc.width
-                alto_logo = 60
-
-                x = doc.leftMargin
-                y = doc.height + doc.topMargin - 60
-
-                canvas.drawImage(
-                    logo_path,
-                    x,
-                    y,
-                    width=ancho_logo,
-                    height=alto_logo,
-                    preserveAspectRatio=False,
-                    mask="auto"
-                )
-
-                canvas.setLineWidth(1)
-                canvas.line(
-                    doc.leftMargin,
-                    y - 5,
-                    doc.width + doc.leftMargin,
-                    y - 5
-                )
-
-        # =========================
-        # 🟥 CASO 2: ENEE (FONDO COMPLETO)
-        # =========================
-        elif membrete == "ENEE":
-
-            logo_path = os.path.join(BASE_DIR, "data", "membrete_enee.jpg")
-
-            if logo_path and os.path.exists(logo_path):
-
-                canvas.drawImage(
-                    logo_path,
-                    0,
-                    0,
-                    width=PAGE_WIDTH,
-                    height=PAGE_HEIGHT,
-                    preserveAspectRatio=False,
-                    mask="auto"
-                )
-
-        # =========================
-        # 🟩 CASO 3: ROMARIO (TU MEMBRETE)
-        # =========================
+        if membrete == "ENEE":
+            fondo = os.path.join(BASE_DIR, "data", "membrete_enee.jpg")
         elif membrete == "ROMARIO":
+            fondo = os.path.join(BASE_DIR, "data", "logo_romario.png")
+        else:
+            fondo = os.path.join(BASE_DIR, "data", "Membrete_smart.png")
 
-            logo_path = os.path.join(BASE_DIR, "data", "Logo_romario.png")
+        ancho, alto = letter
 
-            if logo_path and os.path.exists(logo_path):
+        # =========================================================
+        # DIBUJO SEGÚN TIPO
+        # =========================================================
+        if os.path.exists(fondo):
 
-                ancho_logo = doc.width
-                alto_logo = 60
+            # =========================
+            # ENEE → fondo completo
+            # =========================
+            if membrete == "ENEE":
+                canvas.drawImage(
+                    fondo,
+                    0, 0,
+                    width=ancho,
+                    height=alto,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
 
-                x = doc.leftMargin
-                y = doc.height + doc.topMargin - 60
+            # =========================
+            # SMART → banner completo
+            # =========================
+            elif membrete == "SMART":
+                h = 1.05 * inch
+                y = alto - h
 
                 canvas.drawImage(
-                    logo_path,
-                    x,
+                    fondo,
+                    0, y,
+                    width=ancho,
+                    height=h,
+                    preserveAspectRatio=True,
+                    anchor="n",
+                    mask="auto",
+                )
+
+            # =========================
+            # ROMARIO → logo esquina
+            # =========================
+            elif membrete == "ROMARIO":
+                h = 1.2 * inch
+                y = alto - h
+
+                canvas.drawImage(
+                    fondo,
+                    0,
                     y,
-                    width=ancho_logo,
-                    height=alto_logo,
-                    preserveAspectRatio=False,
-                    mask="auto"
+                    width=ancho,
+                    height=h,
+                    preserveAspectRatio=True,
+                    anchor="n",
+                    mask="auto",
                 )
-
-                canvas.setLineWidth(1)
-                canvas.line(
-                    doc.leftMargin,
-                    y - 5,
-                    doc.width + doc.leftMargin,
-                    y - 5
-                )
-
-        # =========================
-        # ⚪ CASO 4: SIN MEMBRETE
-        # =========================
-        else:
-            pass
 
         canvas.restoreState()
 
     except Exception as e:
-        print(f"⚠️ Error en fondo_pagina: {e}")
+        try:
+            canvas.restoreState()
+        except Exception:
+            pass
 
-
-
-
-
+        print(f"⚠️ Error aplicando fondo: {e}")
 
 # ==========================================================
 # CALIBRES desde tabla de Cables (sin longitudes)
