@@ -118,7 +118,7 @@ def main():
 
     st.radio(
         "Membrete del PDF",
-        ["SMART", "ENEE", "SIN LOGO"],
+        ["SMART", "ENEE", "ROMARIO", "SIN LOGO"],
         key="membrete_pdf",
         horizontal=True,
     )
