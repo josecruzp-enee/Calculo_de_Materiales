@@ -285,7 +285,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                 "df_costos_estructura": df_costos_estructura,
                 "df_precios_estructura": df_precios_estructura,
             },
-            nombre_proyecto="Proyecto"
+            nombre_proyecto="Proyecto",
+            datos_proyecto=st.session_state.get("datos_proyecto", {})
         )
 
         resultado_reportes = generar_reportes(entrada_reportes)
