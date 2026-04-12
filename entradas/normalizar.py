@@ -74,7 +74,6 @@ def _convertir(df: pd.DataFrame):
     for idx, row in df.iterrows():
 
         texto = " ".join(str(v) for v in row.values if pd.notna(v))
-
         texto = limpiar_texto_dxf(texto)
 
         if not texto:
@@ -89,25 +88,40 @@ def _convertir(df: pd.DataFrame):
         punto = f"P-{m.group(1)}" if m else f"P-{idx+1}"
 
         # =====================================================
-        # 🔥 EXTRAER ESTRUCTURAS CON TIPO (P, D, E, R)
+        # 🔥 TOKENIZAR (CLAVE - IDEA DEL CÓDIGO VIEJO)
         # =====================================================
-        matches = re.finditer(
-            r'([A-Z0-9\-\.]+)\s*\((P|D|E|R)\)',
-            texto_upper
-        )
+        tokens = re.findall(r'\S+(?:\s*\([EPDR]\))?', texto_upper)
 
-        for m_struct in matches:
+        for token in tokens:
 
-            est_raw = m_struct.group(1)
-            tipo = m_struct.group(2)
+            # =====================================================
+            # DETECTAR TIPO (P, D, E, R)
+            # =====================================================
+            m_tipo = re.search(r'\((P|D|E|R)\)', token)
+
+            if not m_tipo:
+                continue
+
+            tipo = m_tipo.group(1)
 
             # 🔥 SOLO PROYECTADO
             if tipo != "P":
                 continue
 
+            # =====================================================
+            # LIMPIAR TOKEN → QUITAR (P)
+            # =====================================================
+            est_raw = re.sub(r'\s*\([EPDR]\)', '', token)
+
             est = limpiar_codigo(est_raw)
 
             if not est:
+                continue
+
+            # =====================================================
+            # FILTRO FINAL: SOLO ESTRUCTURAS VÁLIDAS
+            # =====================================================
+            if not PATRON.match(est):
                 continue
 
             registros.append({
@@ -135,6 +149,8 @@ def _convertir(df: pd.DataFrame):
         )["Cantidad"]
         .sum()
     )
+
+
 
 # =========================================================
 # API
