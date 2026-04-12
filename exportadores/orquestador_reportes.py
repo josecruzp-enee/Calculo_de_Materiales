@@ -19,7 +19,7 @@ class EntradaReportes:
     costos: Optional[Dict[str, Any]] = None
 
     nombre_proyecto: str = "Proyecto"
-
+    datos_proyecto: Optional[Dict[str, Any]] = None
 
 # =========================================================
 # 📄 IMPORTS
