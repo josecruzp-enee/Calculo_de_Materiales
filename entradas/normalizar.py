@@ -76,6 +76,16 @@ def _convertir(df: pd.DataFrame):
         texto = " ".join(str(v) for v in row.values if pd.notna(v))
 
         texto = limpiar_texto_dxf(texto)
+        if not texto:
+            continue
+
+        # =====================================================
+        # 🔥 FILTRO ESTRICTO SOLO (P)
+        # =====================================================
+        texto_upper = texto.upper()
+
+        if "(P)" not in texto_upper:
+            continue
 
         if not texto:
             continue
