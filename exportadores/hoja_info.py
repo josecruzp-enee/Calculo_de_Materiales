@@ -5,7 +5,7 @@ from datetime import datetime
 from math import sqrt, floor
 from typing import List
 import pandas as pd
-
+from ayuda.debug import debug_guardar
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
@@ -138,6 +138,10 @@ def hoja_info_proyecto(
     df_estructuras: pd.DataFrame = None,
     df_mat_por_estructura: dict = None,  # se mantiene por compatibilidad
 ):
+
+    debug_guardar("HOJA_INFO_USO", {
+        "mensaje": "NUEVA FUNCION EJECUTADA"
+    })
 
     from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
@@ -292,3 +296,10 @@ def hoja_info_proyecto(
     elems.append(Spacer(1, 12))
 
     return elems
+
+def seccion_hoja_info(datos_proyecto, df_estructuras, df_mat):
+    return hoja_info_proyecto(
+        datos_proyecto=datos_proyecto,
+        df_estructuras=df_estructuras,
+        df_mat_por_estructura=df_mat,
+    )
