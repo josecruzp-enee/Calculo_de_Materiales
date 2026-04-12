@@ -68,7 +68,6 @@ import os
 
 PAGE_WIDTH, PAGE_HEIGHT = letter
 
-
 def fondo_pagina(canvas, doc):
     try:
         canvas.saveState()
@@ -86,8 +85,8 @@ def fondo_pagina(canvas, doc):
 
             if logo_path and os.path.exists(logo_path):
 
-                ancho_logo = doc.width      # 🔥 ocupa todo el ancho
-                alto_logo = 60              # 🔥 altura del membrete
+                ancho_logo = doc.width
+                alto_logo = 60
 
                 x = doc.leftMargin
                 y = doc.height + doc.topMargin - 60
@@ -98,11 +97,10 @@ def fondo_pagina(canvas, doc):
                     y,
                     width=ancho_logo,
                     height=alto_logo,
-                    preserveAspectRatio=False,  # 🔥 clave para membrete
+                    preserveAspectRatio=False,
                     mask="auto"
                 )
 
-                # Línea inferior del membrete
                 canvas.setLineWidth(1)
                 canvas.line(
                     doc.leftMargin,
@@ -126,20 +124,59 @@ def fondo_pagina(canvas, doc):
                     0,
                     width=PAGE_WIDTH,
                     height=PAGE_HEIGHT,
-                    preserveAspectRatio=False,  # 🔥 llena toda la hoja
+                    preserveAspectRatio=False,
                     mask="auto"
                 )
 
         # =========================
-        # ⚪ CASO 3: SIN MEMBRETE
+        # 🟩 CASO 3: ROMARIO (TU MEMBRETE)
+        # =========================
+        elif membrete == "ROMARIO":
+
+            logo_path = os.path.join(BASE_DIR, "data", "Logo_romario.png")
+
+            if logo_path and os.path.exists(logo_path):
+
+                ancho_logo = doc.width
+                alto_logo = 60
+
+                x = doc.leftMargin
+                y = doc.height + doc.topMargin - 60
+
+                canvas.drawImage(
+                    logo_path,
+                    x,
+                    y,
+                    width=ancho_logo,
+                    height=alto_logo,
+                    preserveAspectRatio=False,
+                    mask="auto"
+                )
+
+                canvas.setLineWidth(1)
+                canvas.line(
+                    doc.leftMargin,
+                    y - 5,
+                    doc.width + doc.leftMargin,
+                    y - 5
+                )
+
+        # =========================
+        # ⚪ CASO 4: SIN MEMBRETE
         # =========================
         else:
-            pass  # no dibuja nada
+            pass
 
         canvas.restoreState()
 
     except Exception as e:
         print(f"⚠️ Error en fondo_pagina: {e}")
+
+
+
+
+
+
 # ==========================================================
 # CALIBRES desde tabla de Cables (sin longitudes)
 # ==========================================================
