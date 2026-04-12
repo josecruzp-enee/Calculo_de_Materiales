@@ -130,10 +130,13 @@ def build_descripcion(df_estructuras, styleN):
 # =========================================================
 # HOJA INFO PROFESIONAL (RECUPERADA)
 # =========================================================
+# =========================================================
+# HOJA DE INFORMACIÓN DEL PROYECTO (VERSIÓN FINAL)
+# =========================================================
 def hoja_info_proyecto(
     datos_proyecto: dict,
     df_estructuras: pd.DataFrame = None,
-    df_mat_por_estructura: dict = None,
+    df_mat_por_estructura: dict = None,  # se mantiene por compatibilidad
 ):
 
     from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
@@ -152,50 +155,58 @@ def hoja_info_proyecto(
     elems.append(Paragraph("Hoja de Información del Proyecto", styleH))
     elems.append(Spacer(1, 12))
 
-    # =====================================================
-    # NORMALIZAR DATOS
-    # =====================================================
-    datos = _normalizar_datos(datos_proyecto)
-    tension_fmt = _formato_tension(datos["tension"])
+    datos = datos_proyecto or {}
 
     # =====================================================
-    # CALIBRES REALES
+    # FORMATO TENSIÓN
     # =====================================================
-    prim, sec, neu, pil = "", "", "", ""
+    def _formato_tension(t):
+        if not t:
+            return "N/A"
+        return str(t)
 
-    if isinstance(df_mat_por_estructura, dict):
+    tension_fmt = _formato_tension(datos.get("tension"))
 
-        for df in df_mat_por_estructura.values():
+    # =====================================================
+    # 🔥 CALIBRES DESDE UI (FUENTE CORRECTA)
+    # =====================================================
+    def extraer_calibres_desde_cables(datos_proyecto):
 
-            if not isinstance(df, pd.DataFrame):
-                continue
+        prim = ""
+        sec = ""
+        neu = ""
+        pil = ""
 
-            for _, row in df.iterrows():
-                mat = str(row.get("Materiales", "")).upper()
+        cables = datos_proyecto.get("cables_proyecto", [])
 
-                if "ACSR" in mat and not prim:
-                    prim = mat
-                elif "WP" in mat and not sec:
-                    sec = mat
-                elif "NEUTRO" in mat and not neu:
-                    neu = mat
-                elif "PILOTO" in mat and not pil:
-                    pil = mat
+        for c in cables:
+            tipo = str(c.get("Tipo", "")).upper()
+            calibre = str(c.get("Calibre", "")).strip()
+
+            if tipo == "MT" and not prim:
+                prim = calibre
+
+            elif tipo == "BT" and not sec:
+                sec = calibre
+
+        return prim, sec, neu, pil
+
+    prim, sec, neu, pil = extraer_calibres_desde_cables(datos)
 
     # =====================================================
     # TABLA
     # =====================================================
     data = [
-        ["Nombre del Proyecto:", datos["nombre_proyecto"]],
-        ["Código / Expediente:", datos["codigo_proyecto"]],
+        ["Nombre del Proyecto:", datos.get("nombre_proyecto", "SIN NOMBRE")],
+        ["Código / Expediente:", datos.get("codigo_proyecto", "N/A")],
         ["Nivel de Tensión (kV):", tension_fmt],
         ["Calibre Primario:", prim],
         ["Calibre Secundario:", sec],
         ["Calibre Neutro:", neu],
         ["Calibre Piloto:", pil],
-        ["Fecha de Informe:", datos["fecha_informe"]],
-        ["Responsable:", datos["responsable"]],
-        ["Empresa:", datos["empresa"]],
+        ["Fecha de Informe:", datos.get("fecha_informe", "N/A")],
+        ["Responsable:", datos.get("responsable", "N/A")],
+        ["Empresa:", datos.get("empresa", "N/A")],
     ]
 
     tabla = Table(data, colWidths=[200, 320])
@@ -209,7 +220,7 @@ def hoja_info_proyecto(
     elems.append(Spacer(1, 12))
 
     # =====================================================
-    # DESCRIPCIÓN NIVEL ENEE
+    # DESCRIPCIÓN GENERAL
     # =====================================================
     lineas = []
 
@@ -218,79 +229,58 @@ def hoja_info_proyecto(
         df = df_estructuras.copy()
         df["cod"] = df["codigodeestructura"].astype(str).str.upper()
 
+        # -------------------------------------------------
         # POSTES
+        # -------------------------------------------------
         postes = df[df["cod"].str.contains("PC")]
+
         if not postes.empty:
             resumen = postes.groupby("cod")["Cantidad"].sum().reset_index()
-            partes = [f'{r["Cantidad"]} {r["cod"]}' for _, r in resumen.iterrows()]
+
+            partes = [
+                f'{r["Cantidad"]} {r["cod"]}'
+                for _, r in resumen.iterrows()
+            ]
+
             total = int(postes["Cantidad"].sum())
 
             lineas.append(
                 f"Hincado de {', '.join(partes)} (Total: {total} postes)."
             )
 
+        # -------------------------------------------------
         # TRANSFORMADORES
+        # -------------------------------------------------
         trafos = df[df["cod"].str.contains("TS")]
+
         if not trafos.empty:
             resumen = trafos.groupby("cod")["Cantidad"].sum().reset_index()
-            partes = [f'{r["Cantidad"]} x {r["cod"]}' for _, r in resumen.iterrows()]
+
+            partes = [
+                f'{r["Cantidad"]} x {r["cod"]}'
+                for _, r in resumen.iterrows()
+            ]
+
             total = int(trafos["Cantidad"].sum())
 
             lineas.append(
                 f"Instalación de {total} transformador(es) en conexión {', '.join(partes)}."
             )
 
+        # -------------------------------------------------
         # LUMINARIAS
+        # -------------------------------------------------
         lum = df[df["cod"].str.contains("LL")]
+
         if not lum.empty:
             total = int(lum["Cantidad"].sum())
-            lineas.append(f"Instalación de {total} luminarias.")
+
+            lineas.append(
+                f"Instalación de {total} luminarias."
+            )
 
     # =====================================================
-    # 🔥 DESCRIPCIÓN TÉCNICA REAL (LP / LS)
-    # =====================================================
-    redes = {"LP": {}, "LS": {}}
-
-    if isinstance(df_mat_por_estructura, dict):
-
-        for _, df in df_mat_por_estructura.items():
-
-            if not isinstance(df, pd.DataFrame):
-                continue
-
-            for _, row in df.iterrows():
-
-                mat = str(row["Materiales"]).upper()
-                cant = int(row["Cantidad"])
-
-                tipo = None
-
-                if "ACSR" in mat:
-                    tipo = "LP"
-                elif "WP" in mat:
-                    tipo = "LS"
-
-                if not tipo:
-                    continue
-
-                redes[tipo][mat] = redes[tipo].get(mat, 0) + cant
-
-    # LP
-    if redes["LP"]:
-        partes = [f"{v} x {k}" for k, v in redes["LP"].items()]
-        lineas.append(
-            f"Construcción de red LP, {tension_fmt}, 3F+N, " + " + ".join(partes)
-        )
-
-    # LS
-    if redes["LS"]:
-        partes = [f"{v} x {k}" for k, v in redes["LS"].items()]
-        lineas.append(
-            f"Construcción de red LS, 120/240 V, 2F+HP+N, " + " + ".join(partes)
-        )
-
-    # =====================================================
-    # RENDER
+    # RENDER DESCRIPCIÓN
     # =====================================================
     elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
     elems.append(Spacer(1, 6))
