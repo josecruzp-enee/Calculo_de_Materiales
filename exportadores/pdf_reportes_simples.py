@@ -70,9 +70,17 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 # ==========================================================
 # PDF: RESUMEN DE ESTRUCTURAS (GLOBAL)
 # ==========================================================
+
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     buffer = BytesIO()
-    doc = BaseDocTemplate(buffer, pagesize=letter)
+    doc = BaseDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=50,
+        rightMargin=50,
+        topMargin=70,
+        bottomMargin=40
+    )
 
     frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
@@ -81,12 +89,12 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     def _safe_para(texto):
         t = "" if pd.isna(texto) else str(texto)
         t = escape(t)
-        t = t.replace("-", "-\u200b").replace("/", "/\u200b").replace("_", "_\u200b")
+        t = t.replace("■", "")  # limpia caracteres raros
         return t
 
     elems = [
         Paragraph(f"<b>Resumen de Estructuras - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
-        Spacer(1, 10)
+        Spacer(1, 8)
     ]
 
     if df_estructuras is None or df_estructuras.empty:
@@ -94,30 +102,80 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         doc.build(elems)
         return buffer.getvalue()
 
-    st_hdr = ParagraphStyle("hdr_est", parent=styles["Normal"], fontName="Helvetica-Bold",
-                            fontSize=9, leading=10, alignment=TA_CENTER)
-    st_code = ParagraphStyle("code_est", parent=styles["Normal"], fontSize=8)
-    st_desc = ParagraphStyle("desc_est", parent=styles["Normal"], fontSize=8, wordWrap="CJK")
-    st_desc.splitLongWords = 1
-    st_qty = ParagraphStyle("qty_est", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER)
+    # =========================================================
+    # 🔥 LIMPIEZA
+    # =========================================================
+    df = df_estructuras.copy()
 
-    ancho = doc.width * 0.98
+    df["codigodeestructura"] = (
+        df["codigodeestructura"]
+        .astype(str)
+        .str.replace("■", "")
+        .str.strip()
+    )
+
+    df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
+
+    # =========================================================
+    # 🔥 AGRUPACIÓN INTELIGENTE
+    # =========================================================
+    df = df.groupby("codigodeestructura", as_index=False).agg({
+        "Cantidad": "sum",
+        "Descripcion": "first"  # toma la primera válida
+    })
+
+    # =========================================================
+    # ESTILOS
+    # =========================================================
+    st_hdr = ParagraphStyle(
+        "hdr_est",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        alignment=TA_CENTER
+    )
+
+    st_code = ParagraphStyle(
+        "code_est",
+        parent=styles["Normal"],
+        fontSize=9
+    )
+
+    st_desc = ParagraphStyle(
+        "desc_est",
+        parent=styles["Normal"],
+        fontSize=9,
+        wordWrap="CJK"
+    )
+
+    st_qty = ParagraphStyle(
+        "qty_est",
+        parent=styles["Normal"],
+        fontSize=9,
+        alignment=TA_CENTER
+    )
+
+    # =========================================================
+    # TABLA
+    # =========================================================
+    ancho = doc.width * 0.95
+
     data = [[
         Paragraph("Estructura", st_hdr),
         Paragraph("Descripción", st_hdr),
         Paragraph("Cantidad", st_hdr),
     ]]
 
-    for _, r in df_estructuras.iterrows():
+    for _, r in df.iterrows():
         data.append([
-            Paragraph(_safe_para(r.get("codigodeestructura", "")), st_code),
-            Paragraph(_safe_para(r.get("Descripcion", "")), st_desc),
-            Paragraph(_safe_para(r.get("Cantidad", "")), st_qty),
+            Paragraph(_safe_para(r["codigodeestructura"]), st_code),
+            Paragraph(_safe_para(r["Descripcion"]), st_desc),
+            Paragraph(str(int(r["Cantidad"])), st_qty),
         ])
 
     tabla = Table(
         data,
-        colWidths=[ancho * 0.18, ancho * 0.67, ancho * 0.15],
+        colWidths=[ancho * 0.25, ancho * 0.55, ancho * 0.20],
         repeatRows=1,
         hAlign="CENTER"
     )
@@ -126,17 +184,17 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (2, 1), (2, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
 
     elems.append(tabla)
+
     doc.build(elems)
 
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
 
 # ==========================================================
 # PDF: ESTRUCTURAS POR PUNTO
