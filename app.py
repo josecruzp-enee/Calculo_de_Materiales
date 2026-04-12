@@ -120,7 +120,6 @@ def main():
         "Membrete del PDF",
         ["SMART", "ENEE", "ROMARIO", "SIN LOGO"],
         key="membrete_pdf",
-        horizontal=True,
     )
 
     # 🔥 SOLO ORQUESTADOR INTERFAZ
