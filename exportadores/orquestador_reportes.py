@@ -91,7 +91,12 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         # =====================================================
         # 📊 DATOS PROYECTO
         # =====================================================
-        datos_proyecto = st.session_state.get("datos_proyecto", {})
+        datos_ui = st.session_state.get("datos_proyecto", {}) or {}
+        datos_pipeline = getattr(entrada, "datos_proyecto", {}) or {}
+        datos_proyecto = {
+            **datos_pipeline,
+            **datos_ui,  # 🔥 UI MANDA
+        }
 
         # =====================================================
         # DEBUG PREVIO
