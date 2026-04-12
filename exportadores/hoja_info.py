@@ -153,30 +153,19 @@ def hoja_info_proyecto(
     elems.append(Spacer(1, 12))
 
     # =====================================================
-    # DATOS
+    # NORMALIZAR DATOS
     # =====================================================
-    datos = datos_proyecto or {}
-
-    tension = datos.get("tension", "N/A")
-    if isinstance(tension, (int, float)):
-        tension_fmt = f"{tension} kV"
-    else:
-        tension_fmt = str(tension)
+    datos = _normalizar_datos(datos_proyecto)
+    tension_fmt = _formato_tension(datos["tension"])
 
     # =====================================================
-    # CALIBRES DESDE MATERIALES (REAL)
+    # CALIBRES REALES
     # =====================================================
-    def extraer_calibres(df_mat_por_estructura):
+    prim, sec, neu, pil = "", "", "", ""
 
-        primario = ""
-        secundario = ""
-        neutro = ""
-        piloto = ""
+    if isinstance(df_mat_por_estructura, dict):
 
-        if not isinstance(df_mat_por_estructura, dict):
-            return primario, secundario, neutro, piloto
-
-        for _, df in df_mat_por_estructura.items():
+        for df in df_mat_por_estructura.values():
 
             if not isinstance(df, pd.DataFrame):
                 continue
@@ -184,33 +173,29 @@ def hoja_info_proyecto(
             for _, row in df.iterrows():
                 mat = str(row.get("Materiales", "")).upper()
 
-                if "ACSR" in mat and not primario:
-                    primario = mat
-                elif "WP" in mat and not secundario:
-                    secundario = mat
-                elif "NEUTRO" in mat and not neutro:
-                    neutro = mat
-                elif "PILOTO" in mat and not piloto:
-                    piloto = mat
-
-        return primario, secundario, neutro, piloto
-
-    prim, sec, neu, pil = extraer_calibres(df_mat_por_estructura)
+                if "ACSR" in mat and not prim:
+                    prim = mat
+                elif "WP" in mat and not sec:
+                    sec = mat
+                elif "NEUTRO" in mat and not neu:
+                    neu = mat
+                elif "PILOTO" in mat and not pil:
+                    pil = mat
 
     # =====================================================
     # TABLA
     # =====================================================
     data = [
-        ["Nombre del Proyecto:", datos.get("nombre", "SIN NOMBRE")],
-        ["Código / Expediente:", datos.get("codigo", "N/A")],
+        ["Nombre del Proyecto:", datos["nombre_proyecto"]],
+        ["Código / Expediente:", datos["codigo_proyecto"]],
         ["Nivel de Tensión (kV):", tension_fmt],
         ["Calibre Primario:", prim],
         ["Calibre Secundario:", sec],
         ["Calibre Neutro:", neu],
         ["Calibre Piloto:", pil],
-        ["Fecha de Informe:", datos.get("fecha", "N/A")],
-        ["Responsable / Diseñador:", datos.get("responsable", "N/A")],
-        ["Empresa / Área:", datos.get("empresa", "N/A")],
+        ["Fecha de Informe:", datos["fecha_informe"]],
+        ["Responsable:", datos["responsable"]],
+        ["Empresa:", datos["empresa"]],
     ]
 
     tabla = Table(data, colWidths=[200, 320])
@@ -224,7 +209,7 @@ def hoja_info_proyecto(
     elems.append(Spacer(1, 12))
 
     # =====================================================
-    # DESCRIPCIÓN GENERAL (RECUPERADA)
+    # DESCRIPCIÓN NIVEL ENEE
     # =====================================================
     lineas = []
 
@@ -237,7 +222,6 @@ def hoja_info_proyecto(
         postes = df[df["cod"].str.contains("PC")]
         if not postes.empty:
             resumen = postes.groupby("cod")["Cantidad"].sum().reset_index()
-
             partes = [f'{r["Cantidad"]} {r["cod"]}' for _, r in resumen.iterrows()]
             total = int(postes["Cantidad"].sum())
 
@@ -249,7 +233,6 @@ def hoja_info_proyecto(
         trafos = df[df["cod"].str.contains("TS")]
         if not trafos.empty:
             resumen = trafos.groupby("cod")["Cantidad"].sum().reset_index()
-
             partes = [f'{r["Cantidad"]} x {r["cod"]}' for _, r in resumen.iterrows()]
             total = int(trafos["Cantidad"].sum())
 
@@ -264,34 +247,50 @@ def hoja_info_proyecto(
             lineas.append(f"Instalación de {total} luminarias.")
 
     # =====================================================
-    # DESCRIPCIÓN TÉCNICA DESDE MATERIALES
+    # 🔥 DESCRIPCIÓN TÉCNICA REAL (LP / LS)
     # =====================================================
+    redes = {"LP": {}, "LS": {}}
+
     if isinstance(df_mat_por_estructura, dict):
 
-        for estructura, df_mat in df_mat_por_estructura.items():
+        for _, df in df_mat_por_estructura.items():
 
-            if not isinstance(df_mat, pd.DataFrame) or df_mat.empty:
+            if not isinstance(df, pd.DataFrame):
                 continue
 
-            conductores = df_mat[
-                df_mat["Materiales"].str.contains("ACSR|WP", case=False, na=False)
-            ]
+            for _, row in df.iterrows():
 
-            if conductores.empty:
-                continue
-
-            partes = []
-
-            for _, row in conductores.iterrows():
-                mat = row["Materiales"]
+                mat = str(row["Materiales"]).upper()
                 cant = int(row["Cantidad"])
-                partes.append(f"{cant} x {mat}")
 
-            if partes:
-                lineas.append(f"{estructura}: " + " + ".join(partes))
+                tipo = None
+
+                if "ACSR" in mat:
+                    tipo = "LP"
+                elif "WP" in mat:
+                    tipo = "LS"
+
+                if not tipo:
+                    continue
+
+                redes[tipo][mat] = redes[tipo].get(mat, 0) + cant
+
+    # LP
+    if redes["LP"]:
+        partes = [f"{v} x {k}" for k, v in redes["LP"].items()]
+        lineas.append(
+            f"Construcción de red LP, {tension_fmt}, 3F+N, " + " + ".join(partes)
+        )
+
+    # LS
+    if redes["LS"]:
+        partes = [f"{v} x {k}" for k, v in redes["LS"].items()]
+        lineas.append(
+            f"Construcción de red LS, 120/240 V, 2F+HP+N, " + " + ".join(partes)
+        )
 
     # =====================================================
-    # RENDER DESCRIPCIÓN
+    # RENDER
     # =====================================================
     elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
     elems.append(Spacer(1, 6))
