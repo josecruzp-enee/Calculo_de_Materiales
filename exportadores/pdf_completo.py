@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from exportadores.tu_archivo_cotizacion import generar_seccion_cotizacion_final
+from exportadores.cotizacion import generar_seccion_cotizacion_final
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
     Paragraph, Spacer, PageBreak
