@@ -298,6 +298,9 @@ def hoja_info_proyecto(
     return elems
 
 def seccion_hoja_info(datos_proyecto, df_estructuras, df_mat):
+
+    import streamlit as st
+    st.warning("🔥 USANDO NUEVA HOJA INFO")
     return hoja_info_proyecto(
         datos_proyecto=datos_proyecto,
         df_estructuras=df_estructuras,
