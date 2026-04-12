@@ -80,21 +80,44 @@ def _extraer_datos(df_estructuras):
 # ==========================================================
 def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
 
-    registros = _extraer_datos(df_estructuras)
+    df = _normalizar_df(df_estructuras)
 
-    if not registros:
-        return pd.DataFrame(columns=["Estructura", "Cantidad"])
+    if df.empty:
+        return pd.DataFrame(columns=["Estructura", "Cantidad", "Descripcion"])
 
-    conteo = Counter()
+    col_est = _obtener_columna(df, ["codigoestructura", "estructura"])
+    col_cant = _obtener_columna(df, ["cantidad", "cant"])
 
-    for r in registros:
-        conteo[r["Estructura"]] += r["Cantidad"]
+    # 🔥 NUEVO: detectar descripcion
+    col_desc = _obtener_columna(df, ["descripcion"])
 
-    return pd.DataFrame([
-        {"Estructura": est, "Cantidad": cant}
-        for est, cant in conteo.items()
-    ])
+    if col_est is None:
+        raise ValueError(f"No se encontró columna de estructuras: {list(df.columns)}")
 
+    df_tmp = df.copy()
+
+    df_tmp["Estructura"] = df_tmp[col_est].apply(limpiar_codigo)
+
+    df_tmp["Cantidad"] = pd.to_numeric(
+        df_tmp.get(col_cant, 1), errors="coerce"
+    ).fillna(1)
+
+    if col_desc:
+        df_tmp["Descripcion"] = df_tmp[col_desc].astype(str)
+    else:
+        df_tmp["Descripcion"] = ""
+
+    # 🔥 AGRUPAR SIN PERDER DESCRIPCION
+    df_out = (
+        df_tmp
+        .groupby("Estructura", as_index=False)
+        .agg({
+            "Cantidad": "sum",
+            "Descripcion": "first"
+        })
+    )
+
+    return df_out
 
 # ==========================================================
 # POR PUNTO
