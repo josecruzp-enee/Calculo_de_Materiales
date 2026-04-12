@@ -87,8 +87,16 @@ def cargar_base_datos(ruta: Path | None = None) -> dict[str, pd.DataFrame]:
             df = _normalizar_dataframe(df)
             nombre = _norm_col(hoja)
 
-            # 🔥 CLAVE: incluir estructuras + catálogo
-            if _es_hoja_estructura(df) or nombre == "MATERIALES":
+            # 🔥 DETECTAR HOJA ÍNDICE
+            cols = [_norm_col(c) for c in df.columns]
+
+            es_indice = (
+                "CODIGO DE ESTRUCTURA" in cols and
+                "DESCRIPCION" in cols
+            )
+
+            # 🔥 INCLUIR TODO
+            if _es_hoja_estructura(df) or nombre == "MATERIALES" or es_indice:
                 hojas[nombre] = df
 
         except Exception:
