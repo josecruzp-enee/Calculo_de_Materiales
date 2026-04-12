@@ -117,7 +117,7 @@ def generar_pdf_completo(
             pass
 
     if "Subtotal" not in df_precios_estructura.columns:
-    df_precios_estructura["Subtotal"] = (
+        df_precios_estructura["Subtotal"] = (
         df_precios_estructura["Precio Unitario"] *
         df_precios_estructura["Cantidad"]
     )
