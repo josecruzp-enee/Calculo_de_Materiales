@@ -163,36 +163,73 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
+# ==========================================================
+# CATÁLOGO DE ESTRUCTURAS DESDE HOJA ÍNDICE (ROBUSTO)
+# ==========================================================
 def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
+    """
+    Busca en todas las hojas del Excel una tabla tipo índice con:
+    - Código de estructura
+    - Descripción
 
-    # buscar hoja que tenga estas columnas
+    Devuelve:
+        {codigo_estructura: descripcion}
+    """
+
+    if not data:
+        return {}
+
     for nombre, df in data.items():
 
-        cols = [c.upper() for c in df.columns]
+        if df is None or df.empty:
+            continue
 
-        if "CÓDIGO DE ESTRUCTURA" in cols or "CODIGO DE ESTRUCTURA" in cols:
+        # ==========================================
+        # NORMALIZAR COLUMNAS
+        # ==========================================
+        df = df.copy()
+        df.columns = [_norm_col(c) for c in df.columns]
 
-            df = df.copy()
-            df.columns = [c.upper().strip() for c in df.columns]
+        # ==========================================
+        # DETECCIÓN FLEXIBLE DE COLUMNAS
+        # ==========================================
+        col_codigo = next(
+            (c for c in df.columns if "CODIGO" in c and "ESTRUCT" in c),
+            None
+        )
 
-            col_codigo = "CODIGO DE ESTRUCTURA"
-            col_desc = "DESCRIPCION"
+        col_desc = next(
+            (c for c in df.columns if "DESCRIP" in c),
+            None
+        )
 
-            if col_codigo not in df.columns:
+        # Si no cumple, no es hoja índice
+        if not col_codigo or not col_desc:
+            continue
+
+        # ==========================================
+        # CONSTRUIR MAPA
+        # ==========================================
+        mapa = {}
+
+        for _, r in df.iterrows():
+
+            codigo = str(r.get(col_codigo, "")).strip()
+            if not codigo or codigo.lower() == "nan":
                 continue
 
-            mapa = {}
+            desc = str(r.get(col_desc, "")).strip()
 
-            for _, r in df.iterrows():
+            mapa[codigo] = desc
 
-                codigo = str(r.get(col_codigo, "")).strip()
-                if not codigo:
-                    continue
+        # DEBUG (opcional, puedes quitarlo luego)
+        print(f"[DEBUG] Hoja índice detectada: {nombre}")
+        print(f"[DEBUG] Columnas: {df.columns.tolist()}")
+        print(f"[DEBUG] Muestra mapa: {list(mapa.items())[:5]}")
 
-                desc = str(r.get(col_desc, "")).strip()
+        return mapa
 
-                mapa[codigo] = desc
-
-            return mapa
+    # Si no encontró nada
+    print("[DEBUG] No se encontró hoja índice de estructuras")
 
     return {}
