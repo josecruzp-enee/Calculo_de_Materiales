@@ -127,46 +127,179 @@ def build_descripcion(df_estructuras, styleN):
 # ==========================================================
 # FUNCIÓN PRINCIPAL
 # ==========================================================
+# =========================================================
+# HOJA INFO PROFESIONAL (RECUPERADA)
+# =========================================================
 def hoja_info_proyecto(
-    datos_proyecto,
-    df_estructuras=None,
-    df_mat=None,
+    datos_proyecto: dict,
+    df_estructuras: pd.DataFrame = None,
+    df_mat_por_estructura: dict = None,
 ):
+
+    from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet
 
     styles = getSampleStyleSheet()
     styleN = styles["Normal"]
     styleH = styles["Heading1"]
 
-    datos = _normalizar_datos(datos_proyecto)
-
-    # 🔥 INYECTAR CABLES
-    if df_mat is not None and not df_mat.empty:
-        datos["cables_proyecto"] = df_mat.to_dict(orient="records")
-
-    tension_fmt = _formato_tension(datos["tension"])
-    cables = datos["cables_proyecto"]
-
     elems = []
 
+    # =====================================================
+    # HEADER
+    # =====================================================
     elems.append(Paragraph("Hoja de Información del Proyecto", styleH))
     elems.append(Spacer(1, 12))
 
-    elems.extend(build_tabla(datos, cables, tension_fmt, styleN))
-    elems.extend(build_descripcion(df_estructuras, styleN))
+    # =====================================================
+    # DATOS
+    # =====================================================
+    datos = datos_proyecto or {}
+
+    tension = datos.get("tension", "N/A")
+    if isinstance(tension, (int, float)):
+        tension_fmt = f"{tension} kV"
+    else:
+        tension_fmt = str(tension)
+
+    # =====================================================
+    # CALIBRES DESDE MATERIALES (REAL)
+    # =====================================================
+    def extraer_calibres(df_mat_por_estructura):
+
+        primario = ""
+        secundario = ""
+        neutro = ""
+        piloto = ""
+
+        if not isinstance(df_mat_por_estructura, dict):
+            return primario, secundario, neutro, piloto
+
+        for _, df in df_mat_por_estructura.items():
+
+            if not isinstance(df, pd.DataFrame):
+                continue
+
+            for _, row in df.iterrows():
+                mat = str(row.get("Materiales", "")).upper()
+
+                if "ACSR" in mat and not primario:
+                    primario = mat
+                elif "WP" in mat and not secundario:
+                    secundario = mat
+                elif "NEUTRO" in mat and not neutro:
+                    neutro = mat
+                elif "PILOTO" in mat and not piloto:
+                    piloto = mat
+
+        return primario, secundario, neutro, piloto
+
+    prim, sec, neu, pil = extraer_calibres(df_mat_por_estructura)
+
+    # =====================================================
+    # TABLA
+    # =====================================================
+    data = [
+        ["Nombre del Proyecto:", datos.get("nombre", "SIN NOMBRE")],
+        ["Código / Expediente:", datos.get("codigo", "N/A")],
+        ["Nivel de Tensión (kV):", tension_fmt],
+        ["Calibre Primario:", prim],
+        ["Calibre Secundario:", sec],
+        ["Calibre Neutro:", neu],
+        ["Calibre Piloto:", pil],
+        ["Fecha de Informe:", datos.get("fecha", "N/A")],
+        ["Responsable / Diseñador:", datos.get("responsable", "N/A")],
+        ["Empresa / Área:", datos.get("empresa", "N/A")],
+    ]
+
+    tabla = Table(data, colWidths=[200, 320])
+
+    tabla.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+    ]))
+
+    elems.append(tabla)
+    elems.append(Spacer(1, 12))
+
+    # =====================================================
+    # DESCRIPCIÓN GENERAL (RECUPERADA)
+    # =====================================================
+    lineas = []
+
+    if isinstance(df_estructuras, pd.DataFrame) and not df_estructuras.empty:
+
+        df = df_estructuras.copy()
+        df["cod"] = df["codigodeestructura"].astype(str).str.upper()
+
+        # POSTES
+        postes = df[df["cod"].str.contains("PC")]
+        if not postes.empty:
+            resumen = postes.groupby("cod")["Cantidad"].sum().reset_index()
+
+            partes = [f'{r["Cantidad"]} {r["cod"]}' for _, r in resumen.iterrows()]
+            total = int(postes["Cantidad"].sum())
+
+            lineas.append(
+                f"Hincado de {', '.join(partes)} (Total: {total} postes)."
+            )
+
+        # TRANSFORMADORES
+        trafos = df[df["cod"].str.contains("TS")]
+        if not trafos.empty:
+            resumen = trafos.groupby("cod")["Cantidad"].sum().reset_index()
+
+            partes = [f'{r["Cantidad"]} x {r["cod"]}' for _, r in resumen.iterrows()]
+            total = int(trafos["Cantidad"].sum())
+
+            lineas.append(
+                f"Instalación de {total} transformador(es) en conexión {', '.join(partes)}."
+            )
+
+        # LUMINARIAS
+        lum = df[df["cod"].str.contains("LL")]
+        if not lum.empty:
+            total = int(lum["Cantidad"].sum())
+            lineas.append(f"Instalación de {total} luminarias.")
+
+    # =====================================================
+    # DESCRIPCIÓN TÉCNICA DESDE MATERIALES
+    # =====================================================
+    if isinstance(df_mat_por_estructura, dict):
+
+        for estructura, df_mat in df_mat_por_estructura.items():
+
+            if not isinstance(df_mat, pd.DataFrame) or df_mat.empty:
+                continue
+
+            conductores = df_mat[
+                df_mat["Materiales"].str.contains("ACSR|WP", case=False, na=False)
+            ]
+
+            if conductores.empty:
+                continue
+
+            partes = []
+
+            for _, row in conductores.iterrows():
+                mat = row["Materiales"]
+                cant = int(row["Cantidad"])
+                partes.append(f"{cant} x {mat}")
+
+            if partes:
+                lineas.append(f"{estructura}: " + " + ".join(partes))
+
+    # =====================================================
+    # RENDER DESCRIPCIÓN
+    # =====================================================
+    elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
+    elems.append(Spacer(1, 6))
+
+    for i, l in enumerate(lineas):
+        elems.append(Paragraph(f"{i+1}. {l}", styleN))
+        elems.append(Spacer(1, 4))
+
+    elems.append(Spacer(1, 12))
 
     return elems
-
-
-# ==========================================================
-# WRAPPER
-# ==========================================================
-def seccion_hoja_info(
-    datos_proyecto,
-    df_estructuras=None,
-    df_mat=None,
-):
-    return hoja_info_proyecto(
-        datos_proyecto,
-        df_estructuras,
-        df_mat,
-    )
