@@ -153,3 +153,38 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
         "sin_costo": int(len(faltantes)),
     })
     return out.reset_index(drop=True)
+
+
+def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
+
+    # buscar hoja que tenga estas columnas
+    for nombre, df in data.items():
+
+        cols = [c.upper() for c in df.columns]
+
+        if "CÓDIGO DE ESTRUCTURA" in cols or "CODIGO DE ESTRUCTURA" in cols:
+
+            df = df.copy()
+            df.columns = [c.upper().strip() for c in df.columns]
+
+            col_codigo = "CODIGO DE ESTRUCTURA"
+            col_desc = "DESCRIPCIÓN"
+
+            if col_codigo not in df.columns:
+                continue
+
+            mapa = {}
+
+            for _, r in df.iterrows():
+
+                codigo = str(r.get(col_codigo, "")).strip()
+                if not codigo:
+                    continue
+
+                desc = str(r.get(col_desc, "")).strip()
+
+                mapa[codigo] = desc
+
+            return mapa
+
+    return {}
