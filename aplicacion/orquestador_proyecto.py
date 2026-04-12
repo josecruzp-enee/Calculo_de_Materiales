@@ -114,6 +114,31 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             salida_entradas.df_estructuras
         )
 
+
+        # =====================================================
+        # 🔥 ENRIQUECER DESCRIPCIONES DE ESTRUCTURAS
+        # =====================================================
+        from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
+
+        mapa = cargar_catalogo_estructuras_desde_indice(
+            salida_entradas.base_datos
+        )
+
+        def enriquecer(df):
+            if df is None or df.empty:
+                return df
+
+            df = df.copy()
+
+            col = "Estructura" if "Estructura" in df.columns else "codigodeestructura"
+
+            df["Descripcion"] = df[col].map(mapa).fillna("")
+
+            return df
+
+        df_estructuras = enriquecer(df_estructuras)
+
+
         debug_global["estructuras"] = {
             "is_none": df_estructuras is None,
             "shape": df_estructuras.shape if df_estructuras is not None else None,
