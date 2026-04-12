@@ -76,31 +76,36 @@ def _convertir(df: pd.DataFrame):
         texto = " ".join(str(v) for v in row.values if pd.notna(v))
 
         texto = limpiar_texto_dxf(texto)
+
         if not texto:
             continue
 
-        # =====================================================
-        # 🔥 FILTRO ESTRICTO SOLO (P)
-        # =====================================================
         texto_upper = texto.upper()
 
-        if "(P)" not in texto_upper:
-            continue
-
-        if not texto:
-            continue
-
-        # detectar punto
-        m = re.search(r"P[-\s]?(\d+)", texto)
+        # =====================================================
+        # DETECTAR PUNTO
+        # =====================================================
+        m = re.search(r"P[-\s]?(\d+)", texto_upper)
         punto = f"P-{m.group(1)}" if m else f"P-{idx+1}"
 
-        estructuras = PATRON.findall(texto)
+        # =====================================================
+        # 🔥 EXTRAER ESTRUCTURAS CON TIPO (P, D, E, R)
+        # =====================================================
+        matches = re.finditer(
+            r'([A-Z0-9\-\.]+)\s*\((P|D|E|R)\)',
+            texto_upper
+        )
 
-        estructuras = [e for grupo in estructuras for e in grupo if e]
+        for m_struct in matches:
 
-        for e in estructuras:
+            est_raw = m_struct.group(1)
+            tipo = m_struct.group(2)
 
-            est = limpiar_codigo(e)
+            # 🔥 SOLO PROYECTADO
+            if tipo != "P":
+                continue
+
+            est = limpiar_codigo(est_raw)
 
             if not est:
                 continue
@@ -114,7 +119,6 @@ def _convertir(df: pd.DataFrame):
 
     df_out = pd.DataFrame(registros)
 
-    # 🔴 ESTO EVITA TU ERROR ACTUAL
     if df_out.empty:
         return pd.DataFrame(columns=[
             "Punto",
@@ -131,7 +135,6 @@ def _convertir(df: pd.DataFrame):
         )["Cantidad"]
         .sum()
     )
-
 
 # =========================================================
 # API
