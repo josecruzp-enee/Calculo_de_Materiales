@@ -176,7 +176,7 @@ def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
             df.columns = [c.upper().strip() for c in df.columns]
 
             col_codigo = "CODIGO DE ESTRUCTURA"
-            col_desc = "DESCRIPCIÓN"
+            col_desc = "DESCRIPCION"
 
             if col_codigo not in df.columns:
                 continue
