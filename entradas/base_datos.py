@@ -94,13 +94,22 @@ def cargar_base_datos(ruta: Path | None = None) -> dict[str, pd.DataFrame]:
             df = _normalizar_dataframe(df)
             nombre = _norm_col(hoja)
 
-            # 🔥 DETECTAR HOJA ÍNDICE
+            # ==========================================================
+            # 🔥 DETECCIÓN ROBUSTA DE HOJA ÍNDICE
+            # ==========================================================
             cols = [_norm_col(c) for c in df.columns]
 
-            es_indice = (
-                "CODIGO DE ESTRUCTURA" in cols and
-                "DESCRIPCION" in cols
+            col_codigo = next(
+                (c for c in cols if "CODIGO" in c and "ESTRUCT" in c),
+                None
             )
+
+            col_desc = next(
+                (c for c in cols if "DESCRIP" in c),
+                None
+            )
+
+            es_indice = col_codigo is not None and col_desc is not None
 
             # ==========================================================
             # 🔍 DEBUG POR HOJA
@@ -108,11 +117,15 @@ def cargar_base_datos(ruta: Path | None = None) -> dict[str, pd.DataFrame]:
             debug_guardar(f"HOJA_{hoja}", {
                 "nombre_normalizado": nombre,
                 "columnas": cols[:10],
+                "col_codigo_detectada": col_codigo,
+                "col_desc_detectada": col_desc,
                 "es_indice": es_indice,
                 "shape": df.shape
             })
 
-            # 🔥 INCLUIR TODO
+            # ==========================================================
+            # 🔥 INCLUSIÓN DE HOJAS
+            # ==========================================================
             if _es_hoja_estructura(df) or nombre == "MATERIALES" or es_indice:
                 hojas[nombre] = df
 
@@ -131,7 +144,6 @@ def cargar_base_datos(ruta: Path | None = None) -> dict[str, pd.DataFrame]:
         raise ValueError("No se encontró ninguna hoja válida")
 
     return hojas
-
 # ==========================================================
 # ACCESO
 # ==========================================================
