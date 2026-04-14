@@ -105,7 +105,18 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 🔥 DESCRIPCIONES DESDE INDICE
         # =====================================================
-        df_indice = salida_entradas.base_datos.get("INDICE")
+        # 🔍 DEBUG + FIX de clave
+        base = salida_entradas.base_datos or {}
+
+        df_indice = base.get("INDICE") or base.get("indice")
+
+        debug_global["INDICE_DEBUG"] = {
+            "keys_base_datos": list(base.keys())[:10],
+            "usa_INDICE": "INDICE" in base,
+            "usa_indice": "indice" in base,
+            "df_indice_es_None": df_indice is None,
+            "preview_cols": list(df_indice.columns) if isinstance(df_indice, pd.DataFrame) else None
+        }
 
         if df_indice is not None:
 
