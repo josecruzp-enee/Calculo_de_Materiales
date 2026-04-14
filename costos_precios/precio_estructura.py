@@ -23,6 +23,9 @@ class ResultadoPrecioEstructura:
 # =========================================================
 # FUNCIÓN PRINCIPAL
 # =========================================================
+# =========================================================
+# FUNCIÓN PRINCIPAL
+# =========================================================
 def calcular_precio_estructura(
     *,
     estructura: str,
@@ -33,9 +36,10 @@ def calcular_precio_estructura(
     """
     Calcula el precio unitario por estructura.
 
-    PRECIO = materiales + operativo + utilidad
+    PRECIO = materiales + operación + utilidad
 
-    utilidad = % sobre costo base
+    Donde:
+    operación = MO + equipos + logística
     """
 
     # =====================================================
