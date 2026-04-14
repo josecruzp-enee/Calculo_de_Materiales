@@ -76,6 +76,13 @@ def cargar_base_datos(ruta: Path | None = None) -> dict[str, pd.DataFrame]:
 
     hojas: dict[str, pd.DataFrame] = {}
 
+    # ==========================================================
+    # 🔍 DEBUG GENERAL
+    # ==========================================================
+    debug_guardar("BASE_DATOS_LECTURA", {
+        "hojas_excel": xls.sheet_names
+    })
+
     for hoja in xls.sheet_names:
 
         try:
@@ -95,18 +102,35 @@ def cargar_base_datos(ruta: Path | None = None) -> dict[str, pd.DataFrame]:
                 "DESCRIPCION" in cols
             )
 
+            # ==========================================================
+            # 🔍 DEBUG POR HOJA
+            # ==========================================================
+            debug_guardar(f"HOJA_{hoja}", {
+                "nombre_normalizado": nombre,
+                "columnas": cols[:10],
+                "es_indice": es_indice,
+                "shape": df.shape
+            })
+
             # 🔥 INCLUIR TODO
             if _es_hoja_estructura(df) or nombre == "MATERIALES" or es_indice:
                 hojas[nombre] = df
 
-        except Exception:
+        except Exception as e:
+            debug_guardar(f"ERROR_HOJA_{hoja}", str(e))
             continue
+
+    # ==========================================================
+    # 🔍 DEBUG FINAL
+    # ==========================================================
+    debug_guardar("BASE_DATOS_FINAL", {
+        "hojas_cargadas": list(hojas.keys())
+    })
 
     if not hojas:
         raise ValueError("No se encontró ninguna hoja válida")
 
     return hojas
-
 
 # ==========================================================
 # ACCESO
