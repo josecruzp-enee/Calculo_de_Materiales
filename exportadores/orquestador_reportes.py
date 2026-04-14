@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 import pandas as pd
 import traceback
 
+
 # =========================================================
 # 📦 CONTRATO
 # =========================================================
@@ -15,12 +16,13 @@ class EntradaReportes:
     df_materiales: pd.DataFrame
     df_materiales_por_punto: pd.DataFrame
 
-    base_datos: Optional[Dict[str, Any]] = None   # 🔥 AGREGAR
+    base_datos: Optional[Dict[str, Any]] = None
 
     costos: Optional[Dict[str, Any]] = None
     nombre_proyecto: str = "Proyecto"
     datos_proyecto: Optional[Dict[str, Any]] = None
     df_cables: Optional[pd.DataFrame] = None
+
 
 # =========================================================
 # 📄 IMPORTS
@@ -57,7 +59,7 @@ def _add_file(archivos, errores, nombre, contenido):
     if isinstance(contenido, (bytes, bytearray)):
         archivos[nombre] = contenido
     else:
-        errores.append(f"{nombre} inválido")
+        errores.append(f"{nombre} inválido (no es bytes)")
 
 
 def _validar_df(df, nombre):
@@ -69,11 +71,18 @@ def _validar_df(df, nombre):
 
 
 # =========================================================
-# 🚀 ORQUESTADOR LIMPIO
+# 🚀 ORQUESTADOR
 # =========================================================
 def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
+    debug = {}
+    errores_lista = []
+    archivos = {}
+
     try:
+        # =====================================================
+        # VALIDACIONES
+        # =====================================================
         _validar_df(entrada.df_estructuras, "df_estructuras")
         _validar_df(entrada.df_materiales, "df_materiales")
         _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto")
@@ -83,15 +92,7 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         df_costos_estructura = costos.get("df_costos_estructura")
         df_precios_estructura = costos.get("df_precios_estructura")
 
-        archivos = {}
-        errores = {}
-        debug = {}
-
         nombre = entrada.nombre_proyecto
-
-        # =====================================================
-        # 🔥 USAR SOLO DOMINIO (CLAVE)
-        # =====================================================
         datos_proyecto = entrada.datos_proyecto or {}
 
         # =====================================================
@@ -100,19 +101,24 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         tasks = [
 
             ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(
-                entrada.df_estructuras, nombre, entrada.base_datos
+                entrada.df_estructuras,
+                nombre,
+                entrada.base_datos
             )),
 
             ("estructuras_por_punto.pdf", lambda: generar_pdf_estructuras_por_punto(
-                entrada.df_estructuras, nombre
+                entrada.df_estructuras,
+                nombre
             )),
 
             ("materiales.pdf", lambda: generar_pdf_materiales(
-                entrada.df_materiales, nombre
+                entrada.df_materiales,
+                nombre
             )),
 
             ("materiales_por_punto.pdf", lambda: generar_pdf_materiales_por_punto(
-                entrada.df_materiales_por_punto, nombre
+                entrada.df_materiales_por_punto,
+                nombre
             )),
 
             ("reporte_completo.pdf", lambda: generar_pdf_completo(
@@ -131,17 +137,31 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
             contenido, err = _safe_exec(nombre_archivo, fn)
 
             if err:
-                errores[nombre_archivo] = err
+                errores_lista.append(err)
                 continue
 
             if contenido:
-                _add_file(archivos, errores, nombre_archivo, contenido)
+                _add_file(archivos, errores_lista, nombre_archivo, contenido)
+            else:
+                errores_lista.append(f"{nombre_archivo}: contenido vacío")
 
+        # =====================================================
+        # DEBUG SI TODO FALLA
+        # =====================================================
+        if not archivos:
+            debug["error_general"] = "No se generó ningún archivo"
+            debug["cantidad_errores"] = len(errores_lista)
+
+        # =====================================================
+        # SALIDA
+        # =====================================================
         return {
             "archivos": archivos,
-            "errores": errores,
+            "errores": errores_lista,
             "debug": debug,
         }
 
     except Exception as e:
-        return _fail(str(e), {"traceback": traceback.format_exc()})
+        return _fail(str(e), {
+            "traceback": traceback.format_exc()
+        })
