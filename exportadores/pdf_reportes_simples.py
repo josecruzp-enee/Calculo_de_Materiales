@@ -56,7 +56,6 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
         ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
 
     elems.append(tabla)
@@ -73,28 +72,18 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None):
 
     buffer = BytesIO()
-    doc = BaseDocTemplate(
-        buffer,
-        pagesize=letter,
-        leftMargin=50,
-        rightMargin=50,
-        topMargin=70,
-        bottomMargin=40
-    )
+    doc = BaseDocTemplate(buffer, pagesize=letter)
 
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
-    def _safe_para(texto):
-        t = "" if pd.isna(texto) else str(texto)
-        t = escape(t)
-        t = t.replace("■", "")
-        return t
+    def _safe(texto):
+        return escape("" if pd.isna(texto) else str(texto))
 
     elems = [
         Paragraph(f"<b>Resumen de Estructuras - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
-        Spacer(1, 8)
+        Spacer(1, 10)
     ]
 
     if df_estructuras is None or df_estructuras.empty:
@@ -105,39 +94,45 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
     df = df_estructuras.copy()
 
     # =========================================================
-    # LIMPIEZA
+    # 🔥 DETECCIÓN DE COLUMNA
     # =========================================================
-    df["codigodeestructura"] = (
-        df["codigodeestructura"]
+    col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
+
+    df[col_codigo] = (
+        df[col_codigo]
         .astype(str)
         .str.replace("■", "")
         .str.strip()
     )
 
     # =========================================================
-    # 🔥 RECONSTRUCCIÓN DESCRIPCIÓN DESDE BASE
+    # 🔥 DESCRIPCIÓN SEGURA
     # =========================================================
     if ("Descripcion" not in df.columns or df["Descripcion"].isna().all()) and base_datos:
 
         mapa_desc = {}
 
         for nombre_estructura, df_mat in base_datos.items():
-
             if isinstance(df_mat, pd.DataFrame) and "Descripcion" in df_mat.columns:
                 desc = df_mat["Descripcion"].dropna().astype(str).unique()
-
                 if len(desc) > 0:
                     mapa_desc[nombre_estructura.strip()] = desc[0]
 
-        df["Descripcion"] = df["codigodeestructura"].map(mapa_desc).fillna("")
+        df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
 
     else:
-        df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
+        if "Descripcion" not in df.columns:
+            df["Descripcion"] = ""
+
+        df["Descripcion"] = df["Descripcion"].fillna("").astype(str)
 
     # =========================================================
     # AGRUPACIÓN
     # =========================================================
-    df = df.groupby("codigodeestructura", as_index=False).agg({
+    if "Cantidad" not in df.columns:
+        df["Cantidad"] = 1
+
+    df = df.groupby(col_codigo, as_index=False).agg({
         "Cantidad": "sum",
         "Descripcion": "first"
     })
@@ -145,27 +140,20 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
     # =========================================================
     # TABLA
     # =========================================================
-    ancho = doc.width * 0.95
-
-    data = [[
-        Paragraph("Estructura", styles["Normal"]),
-        Paragraph("Descripción", styles["Normal"]),
-        Paragraph("Cantidad", styles["Normal"]),
-    ]]
+    data = [["Estructura", "Descripción", "Cantidad"]]
 
     for _, r in df.iterrows():
         data.append([
-            Paragraph(_safe_para(r["codigodeestructura"]), styles["Normal"]),
-            Paragraph(_safe_para(r["Descripcion"]), styles["Normal"]),
-            Paragraph(str(int(r["Cantidad"])), styles["Normal"]),
+            Paragraph(_safe(r[col_codigo]), styleN),
+            Paragraph(_safe(r["Descripcion"]), styleN),
+            Paragraph(str(int(r["Cantidad"])), styleN),
         ])
 
-    tabla = Table(
-        data,
-        colWidths=[ancho * 0.25, ancho * 0.55, ancho * 0.20],
-        repeatRows=1,
-        hAlign="CENTER"
-    )
+    tabla = Table(data, colWidths=[2 * inch, 3.5 * inch, 1 * inch])
+    tabla.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightblue),
+    ]))
 
     elems.append(tabla)
     doc.build(elems)
@@ -174,10 +162,12 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
     buffer.close()
     return pdf_bytes
 
+
 # ==========================================================
 # PDF: ESTRUCTURAS POR PUNTO
 # ==========================================================
-def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
+def generar_pdf_estructuras_por_punto(df, nombre_proy):
+
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -190,43 +180,31 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
         Spacer(1, 12)
     ]
 
-    if df_por_punto is None or df_por_punto.empty:
-        elems.append(Paragraph("No se encontraron estructuras por punto.", styleN))
+    if df is None or df.empty:
+        elems.append(Paragraph("No hay datos.", styleN))
         doc.build(elems)
         return buffer.getvalue()
 
-    puntos = sorted(
-        df_por_punto["Punto"].unique(),
-        key=lambda x: int(re.sub(r"\D", "", str(x)) or 0)
-    )
+    col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
-    for p in puntos:
-        m = re.search(r"(\d+)", str(p))
-        num = m.group(1) if m else str(p)
+    for punto, df_p in df.groupby("Punto"):
 
-        elems.append(Spacer(1, 6))
-        elems.append(Paragraph(f"<b>Punto {escape(num)}</b>", styles["Heading2"]))
-
-        df_p = df_por_punto[df_por_punto["Punto"] == p]
+        elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
 
         data = [["Estructura", "Descripción", "Cantidad"]]
+
         for _, r in df_p.iterrows():
             data.append([
-                escape(str(r.get("codigodeestructura", ""))),
+                escape(str(r.get(col_codigo, ""))),
                 escape(str(r.get("Descripcion", ""))),
                 escape(str(r.get("Cantidad", ""))),
             ])
 
-        tabla = Table(data, colWidths=[1.5 * inch, 4 * inch, 1 * inch])
-        tabla.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightblue),
-            ("ALIGN", (2, 1), (2, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ]))
+        tabla = Table(data)
+        tabla.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.black)]))
 
         elems.append(tabla)
-        elems.append(Spacer(1, 0.2 * inch))
+        elems.append(Spacer(1, 10))
 
     doc.build(elems)
     pdf_bytes = buffer.getvalue()
@@ -235,48 +213,10 @@ def generar_pdf_estructuras_por_punto(df_por_punto, nombre_proy):
 
 
 # ==========================================================
-# TABLA: ESTRUCTURAS POR PUNTO (USADA EN PDF COMPLETO)
-# ==========================================================
-def _tabla_estructuras_por_punto(punto, df_p, doc_width):
-    st_hdr = ParagraphStyle("hdr", parent=styles["Normal"], fontName="Helvetica-Bold",
-                            fontSize=9, alignment=TA_CENTER)
-    st_code = ParagraphStyle("code", parent=styles["Normal"], fontSize=8)
-    st_desc = ParagraphStyle("desc", parent=styles["Normal"], fontSize=8, wordWrap="CJK")
-    st_desc.splitLongWords = 1
-    st_qty = ParagraphStyle("qty", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER)
-
-    data = [[
-        Paragraph("Estructura", st_hdr),
-        Paragraph("Descripción", st_hdr),
-        Paragraph("Cantidad", st_hdr)
-    ]]
-
-    for _, r in df_p.iterrows():
-        data.append([
-            Paragraph(escape(str(r.get("codigodeestructura", ""))), st_code),
-            Paragraph(escape(str(r.get("Descripcion", ""))), st_desc),
-            Paragraph(escape(str(r.get("Cantidad", ""))), st_qty),
-        ])
-
-    t = Table(
-        data,
-        colWidths=[doc_width * 0.20, doc_width * 0.65, doc_width * 0.15],
-        repeatRows=1
-    )
-
-    t.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightblue),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]))
-
-    return t
-
-
-# ==========================================================
 # PDF: MATERIALES POR PUNTO
 # ==========================================================
-def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
+def generar_pdf_materiales_por_punto(df, nombre_proy):
+
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -286,29 +226,22 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
 
     elems = [
         Paragraph(f"<b>Materiales por Punto - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
-        Spacer(1, 12),
+        Spacer(1, 12)
     ]
 
-    if df_por_punto is None or df_por_punto.empty:
-        elems.append(Paragraph("No se encontraron materiales por punto.", styleN))
+    if df is None or df.empty:
+        elems.append(Paragraph("No hay materiales.", styleN))
         doc.build(elems)
         return buffer.getvalue()
 
-    puntos = sorted(
-        df_por_punto["Punto"].unique(),
-        key=lambda x: int(re.search(r"\d+", str(x)).group(0)) if re.search(r"\d+", str(x)) else 0
-    )
+    for punto, df_p in df.groupby("Punto"):
 
-    for p in puntos:
-        m = re.search(r"(\d+)", str(p))
-        num = m.group(1) if m else str(p)
+        elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
 
-        elems.append(Paragraph(f"<b>Punto {escape(num)}</b>", styles["Heading2"]))
-
-        df_p = df_por_punto[df_por_punto["Punto"] == p]
         df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
         data = [["Material", "Unidad", "Cantidad"]]
+
         for _, r in df_agr.iterrows():
             data.append([
                 Paragraph(formatear_material(r["Materiales"]), styleN),
@@ -316,16 +249,11 @@ def generar_pdf_materiales_por_punto(df_por_punto, nombre_proy):
                 f"{float(r['Cantidad']):.2f}",
             ])
 
-        tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
-        tabla.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.darkgreen),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-        ]))
+        tabla = Table(data)
+        tabla.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.black)]))
 
         elems.append(tabla)
-        elems.append(Spacer(1, 0.2 * inch))
+        elems.append(Spacer(1, 10))
 
     doc.build(elems)
     pdf_bytes = buffer.getvalue()
