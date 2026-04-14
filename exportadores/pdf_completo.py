@@ -36,7 +36,7 @@ def generar_pdf_completo(
 
     _log(f"df_materiales: {None if df_materiales is None else df_materiales.shape}")
     _log(f"df_estructuras: {None if df_estructuras is None else df_estructuras.shape}")
-    _log(f"df_precios: {None if df_precios_estructura is None else df_precios_estructura.shape}")
+    _log(f"df_precios: {None if df_precios_estructura is None else df_precios_estructura}")
 
     buffer = BytesIO()
 
@@ -70,8 +70,6 @@ def generar_pdf_completo(
         df_mat=df_materiales
     )
 
-    _log(f"HOJA INFO elems: {len(bloque_info)}")
-
     elems.extend(bloque_info)
     elems.append(PageBreak())
 
@@ -81,52 +79,60 @@ def generar_pdf_completo(
     elems.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Heading1"]))
     elems.append(Spacer(1, 10))
 
-    bloque_pres = generar_tabla_precios_estructura(
-        df_precios_estructura,
-        df_estructuras
-    )
+    # 🔥 VALIDACIÓN CRÍTICA
+    if (
+        df_precios_estructura is None
+        or not isinstance(df_precios_estructura, pd.DataFrame)
+        or df_precios_estructura.empty
+    ):
+        _log("⚠️ NO HAY PRECIOS")
 
-    _log(f"PRESUPUESTO elems: {len(bloque_pres)}")
+        elems.append(Paragraph(
+            "No se dispone de información de precios de estructuras.",
+            styles["Normal"]
+        ))
 
-    elems.extend(bloque_pres)
+    else:
+        bloque_pres = generar_tabla_precios_estructura(
+            df_precios_estructura,
+            df_estructuras
+        )
+
+        elems.extend(bloque_pres)
+
     elems.append(PageBreak())
 
-    
     # =====================================================
     # COTIZACION
     # =====================================================
     elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Heading1"]))
     elems.append(Spacer(1, 10))
 
-    bloque_cot = generar_seccion_cotizacion_final(
-        doc,
-        styles,
-        df_precios_estructura
-    )
+    if (
+        df_precios_estructura is None
+        or not isinstance(df_precios_estructura, pd.DataFrame)
+        or df_precios_estructura.empty
+    ):
+        elems.append(Paragraph(
+            "No se puede generar la cotización por falta de precios.",
+            styles["Normal"]
+        ))
+    else:
 
-    _log(f"COTIZACION elems: {len(bloque_cot)}")
+        # 🔥 SUBTOTAL SEGURO
+        if "Subtotal" not in df_precios_estructura.columns:
+            df_precios_estructura["Subtotal"] = (
+                df_precios_estructura["Precio Unitario"] *
+                df_precios_estructura["Cantidad"]
+            )
 
-    # 🔥 DETECTOR
-    for i, e in enumerate(bloque_cot):
-        try:
-            if hasattr(e, "getPlainText"):
-                txt = e.getPlainText().upper()
-                if "MATERIALES" in txt:
-                    _log(f"🔥 TEXTO SOSPECHOSO EN COTIZACION [{i}]: {txt}")
-        except:
-            pass
+        bloque_cot = generar_seccion_cotizacion_final(
+            doc,
+            styles,
+            df_precios_estructura
+        )
 
-    if "Subtotal" not in df_precios_estructura.columns:
-        df_precios_estructura["Subtotal"] = (
-        df_precios_estructura["Precio Unitario"] *
-        df_precios_estructura["Cantidad"]
-    )
-    elems.extend(bloque_cot)
-
-    # =====================================================
-    # RESUMEN FINAL
-    # =====================================================
-    _log(f"TOTAL elems PDF: {len(elems)}")
+        elems.extend(bloque_cot)
 
     # =====================================================
     # BUILD
