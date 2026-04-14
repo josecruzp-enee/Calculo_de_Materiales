@@ -99,7 +99,7 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         tasks = [
 
             ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(
-                entrada.df_estructuras, nombre
+                entrada.df_estructuras, nombre, entrada.base_datos
             )),
 
             ("estructuras_por_punto.pdf", lambda: generar_pdf_estructuras_por_punto(
