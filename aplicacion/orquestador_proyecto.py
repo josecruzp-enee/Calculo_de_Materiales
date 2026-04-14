@@ -103,44 +103,37 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         }
 
         # =====================================================
-        # 🔥 DESCRIPCIONES DESDE INDICE
+        # 🔥 DESCRIPCIONES (SOLUCIÓN SIMPLE Y DIRECTA)
         # =====================================================
-        # 🔍 DEBUG + FIX de clave
-        base = salida_entradas.base_datos or {}
+        try:
+            df_indice = pd.read_excel(
+                "data/Estructura_datos.xlsx",
+                sheet_name="indice"
+            )
 
-        df_indice = base.get("INDICE") or base.get("indice")
-
-        debug_global["INDICE_DEBUG"] = {
-            "keys_base_datos": list(base.keys())[:10],
-            "usa_INDICE": "INDICE" in base,
-            "usa_indice": "indice" in base,
-            "df_indice_es_None": df_indice is None,
-            "preview_cols": list(df_indice.columns) if isinstance(df_indice, pd.DataFrame) else None
-        }
-
-        if df_indice is not None:
+            df_indice.columns = [c.strip().upper() for c in df_indice.columns]
 
             mapa = dict(zip(
-                df_indice["Código de Estructura"].astype(str).str.strip().str.upper(),
-                df_indice["Descripción"].astype(str).str.strip()
+                df_indice["CÓDIGO DE ESTRUCTURA"].astype(str).str.strip().str.upper(),
+                df_indice["DESCRIPCIÓN"].astype(str).str.strip()
             ))
 
-            df_estructuras["Estructura"] = (
-                df_estructuras["Estructura"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-            )
+        except Exception:
+            mapa = {}
 
-            df_estructuras["Descripcion"] = (
-                df_estructuras["Estructura"]
-                .map(mapa)
-                .fillna("")
-            )
+        df_estructuras["Estructura"] = (
+            df_estructuras["Estructura"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
 
-        if "Descripcion" not in df_estructuras.columns:
-            df_estructuras["Descripcion"] = ""
-        
+        df_estructuras["Descripcion"] = (
+            df_estructuras["Estructura"]
+            .map(mapa)
+            .fillna("")
+        )
+
         debug_global["DESCRIPCIONES"] = {
             "total": len(df_estructuras),
             "con_descripcion": int((df_estructuras["Descripcion"] != "").sum()),
