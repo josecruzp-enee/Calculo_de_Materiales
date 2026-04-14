@@ -21,9 +21,6 @@ class ResultadoCostosOperativos:
 # =========================================================
 # FUNCIÓN PRINCIPAL
 # =========================================================
-# =========================================================
-# FUNCIÓN PRINCIPAL (NUEVO MODELO)
-# =========================================================
 def calcular_costos_operativos(
     *,
     costo_material_total: float,
@@ -31,17 +28,10 @@ def calcular_costos_operativos(
     factor_equipos: float = 0.05,
     factor_logistica: float = 0.15,
 ) -> ResultadoCostosOperativos:
-    """
-    Consolida costos operativos del proyecto.
 
-    ✔ Mano de obra ya calculada externamente
-    ✔ Equipos como % de materiales
-    ✔ Logística como % de materiales
-    """
-
-    # =====================================================
+    # =========================
     # VALIDACIONES
-    # =====================================================
+    # =========================
     for nombre, valor in {
         "costo_material_total": costo_material_total,
         "costo_mano_obra": costo_mano_obra,
@@ -57,23 +47,17 @@ def calcular_costos_operativos(
     if costo_mano_obra < 0:
         raise ValueError("costo_mano_obra inválido")
 
-    if factor_equipos < 0:
-        raise ValueError("factor_equipos inválido")
-
-    if factor_logistica < 0:
-        raise ValueError("factor_logistica inválido")
-
-    # =====================================================
-    # CÁLCULOS
-    # =====================================================
+    # =========================
+    # CÁLCULO
+    # =========================
     equipos = costo_material_total * factor_equipos
     logistica = costo_material_total * factor_logistica
 
     operativo_total = costo_mano_obra + equipos + logistica
 
-    # =====================================================
+    # =========================
     # OUTPUT
-    # =====================================================
+    # =========================
     return ResultadoCostosOperativos(
         mano_obra=round(costo_mano_obra, 2),
         equipos=round(equipos, 2),
