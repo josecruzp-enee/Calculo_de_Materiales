@@ -118,33 +118,56 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 🔥 ENRIQUECER DESCRIPCIONES DE ESTRUCTURAS
         # =====================================================
-        from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
-
-        mapa = cargar_catalogo_estructuras_desde_indice(
-            salida_entradas.base_datos
-        )
-
-        def enriquecer(df):
-            if df is None or df.empty:
-                return df
-
-            df = df.copy()
-
-            col = "Estructura" if "Estructura" in df.columns else "codigodeestructura"
-
-            df["Descripcion"] = df[col].map(mapa).fillna("")
-
-            return df
-
-        df_estructuras = enriquecer(df_estructuras)
 
 
-        debug_global["estructuras"] = {
-            "is_none": df_estructuras is None,
-            "shape": df_estructuras.shape if df_estructuras is not None else None,
-            "columns": list(df_estructuras.columns) if df_estructuras is not None else None,
-            "sample": df_estructuras.head(10).to_dict() if df_estructuras is not None else None
-        }
+        # =====================================================
+# 🔥 ENRIQUECER DESCRIPCIONES DE ESTRUCTURAS (FIX FINAL)
+# =====================================================
+from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
+
+mapa = cargar_catalogo_estructuras_desde_indice(
+    salida_entradas.base_datos
+)
+
+def enriquecer(df):
+    if df is None or df.empty:
+        print("[DEBUG] df_estructuras vacío")
+        return df
+
+    df = df.copy()
+
+    # detectar columna
+    col = "Estructura" if "Estructura" in df.columns else "codigodeestructura"
+
+    # 🔥 NORMALIZAR CÓDIGOS
+    df[col] = (
+        df[col]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    # 🔥 NORMALIZAR MAPA
+    mapa_norm = {
+        str(k).strip().upper(): v
+        for k, v in mapa.items()
+    }
+
+    # 🔥 CONSTRUIR DESCRIPCIÓN
+    df["Descripcion"] = df[col].map(mapa_norm).fillna("")
+
+    # 🔍 DEBUG REAL
+    total = len(df)
+    vacias = (df["Descripcion"] == "").sum()
+
+    print(f"[DEBUG] Descripciones asignadas: {total - vacias}/{total}")
+
+    if vacias == total:
+        print("[ERROR] Ninguna descripción hizo match → revisar mapa o códigos")
+
+    return df
+
+df_estructuras = enriquecer(df_estructuras)
 
         # =====================================================
         # 2. PROYECTO
