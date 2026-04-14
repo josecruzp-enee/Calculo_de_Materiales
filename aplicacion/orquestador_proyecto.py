@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 import traceback
 import pandas as pd
-import streamlit as st
 
 # =========================================================
 # CONTRATOS
@@ -24,7 +23,8 @@ from costos_precios.orquestador_costos import (
     EntradaCostos,
 )
 
-from exportadores.orquestador_reportes import generar_reportes
+# 🔥 IMPORT CORRECTO
+from exportadores.orquestador_reportes import generar_reportes, EntradaReportes
 
 
 # =========================================================
@@ -90,7 +90,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         # =====================================================
-        # 🔥 FIX DESCRIPCIONES (DIRECTO DESDE INDICE)
+        # 🔥 FIX DESCRIPCIONES DESDE INDICE
         # =====================================================
         df_indice = salida_entradas.base_datos.get("indice")
 
@@ -160,18 +160,22 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_costos = ejecutar_costos(entrada_costos)
 
         # =====================================================
-        # 5. REPORTES (FIX CORRECTO)
+        # 5. REPORTES (🔥 FIX CLAVE)
         # =====================================================
-        reportes = generar_reportes({
-            "df_estructuras": df_estructuras,
-            "df_materiales": df_materiales,
-            "df_materiales_por_punto": resultado_materiales.df_materiales_por_punto,
-            "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
-            "df_precios_estructura": resultado_costos.get("df_precios_estructura"),
-            "datos_proyecto": salida_entradas.datos_proyecto,
-            "nombre_proyecto": "Proyecto"
-        })
-        
+        entrada_reportes = EntradaReportes(
+            df_estructuras=df_estructuras,
+            df_materiales=df_materiales,
+            df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
+            costos={
+                "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
+                "df_precios_estructura": resultado_costos.get("df_precios_estructura"),
+            },
+            nombre_proyecto="Proyecto",
+            datos_proyecto=salida_entradas.datos_proyecto,
+            df_cables=salida_entradas.df_cables
+        )
+
+        reportes = generar_reportes(entrada_reportes)
 
         # =====================================================
         # SALIDA FINAL
@@ -187,4 +191,4 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
     except Exception as e:
-        return _fail(str(e), debug_global)
+        return _fail(str(e), {"traceback": traceback.format_exc()})
