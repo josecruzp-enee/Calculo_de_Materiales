@@ -15,8 +15,9 @@ class EntradaReportes:
     df_materiales: pd.DataFrame
     df_materiales_por_punto: pd.DataFrame
 
-    costos: Optional[Dict[str, Any]] = None
+    base_datos: Optional[Dict[str, Any]] = None   # 🔥 AGREGAR
 
+    costos: Optional[Dict[str, Any]] = None
     nombre_proyecto: str = "Proyecto"
     datos_proyecto: Optional[Dict[str, Any]] = None
     df_cables: Optional[pd.DataFrame] = None
