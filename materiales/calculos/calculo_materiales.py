@@ -4,7 +4,7 @@ import pandas as pd
 
 from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
 from ayuda.debug import debug_guardar
-from core.cables_materiales import materiales_desde_cables
+from materiales.cables.cables_materiales import materiales_desde_cables
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
