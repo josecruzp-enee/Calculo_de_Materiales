@@ -77,10 +77,18 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
     try:
 
+        debug_global["ETAPA"] = "INICIO"
+
         # =====================================================
         # 1. ENTRADAS
         # =====================================================
         salida_entradas = ejecutar_entradas(salida_interfaz)
+
+        debug_global["ENTRADAS"] = {
+            "ok": salida_entradas.ok,
+            "df_estructuras": None if salida_entradas.df_estructuras is None else salida_entradas.df_estructuras.shape,
+            "base_datos_keys": list(salida_entradas.base_datos.keys())[:10] if salida_entradas.base_datos else None,
+        }
 
         if not salida_entradas.ok:
             return _fail("Error en Entradas", debug_global)
@@ -89,8 +97,13 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             salida_entradas.df_estructuras
         )
 
+        debug_global["DF_ESTRUCTURAS_INICIAL"] = {
+            "shape": df_estructuras.shape,
+            "columns": list(df_estructuras.columns)
+        }
+
         # =====================================================
-        # 🔥 FIX DESCRIPCIONES DESDE INDICE
+        # 🔥 DESCRIPCIONES DESDE INDICE
         # =====================================================
         df_indice = salida_entradas.base_datos.get("indice")
 
@@ -114,6 +127,12 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                 .fillna("")
             )
 
+        debug_global["DESCRIPCIONES"] = {
+            "total": len(df_estructuras),
+            "con_descripcion": int((df_estructuras["Descripcion"] != "").sum()),
+            "sin_descripcion": int((df_estructuras["Descripcion"] == "").sum()),
+        }
+
         # =====================================================
         # 2. PROYECTO
         # =====================================================
@@ -129,6 +148,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         entrada_proyecto.validar()
         tension = _extraer_tension(entrada_proyecto.datos_proyecto)
+
+        debug_global["PROYECTO"] = {
+            "tension": tension
+        }
 
         # =====================================================
         # 3. MATERIALES
@@ -147,6 +170,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_materiales = ejecutar_materiales(entrada_mat)
         df_materiales = resultado_materiales.df_materiales
 
+        debug_global["MATERIALES"] = {
+            "df_materiales": None if df_materiales is None else df_materiales.shape
+        }
+
         # =====================================================
         # 4. COSTOS
         # =====================================================
@@ -159,8 +186,13 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         resultado_costos = ejecutar_costos(entrada_costos)
 
+        debug_global["COSTOS"] = {
+            "df_precios": None if resultado_costos.get("df_precios_estructura") is None else "OK",
+            "df_costos": None if resultado_costos.get("df_costos_estructura") is None else "OK"
+        }
+
         # =====================================================
-        # 5. REPORTES (🔥 FIX CLAVE)
+        # 5. REPORTES
         # =====================================================
         entrada_reportes = EntradaReportes(
             df_estructuras=df_estructuras,
@@ -177,6 +209,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         reportes = generar_reportes(entrada_reportes)
 
+        debug_global["REPORTES"] = {
+            "archivos": list(reportes["archivos"].keys()),
+            "errores": reportes["errores"]
+        }
+
         # =====================================================
         # SALIDA FINAL
         # =====================================================
@@ -191,4 +228,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
     except Exception as e:
-        return _fail(str(e), {"traceback": traceback.format_exc()})
+        return _fail(str(e), {
+            "traceback": traceback.format_exc(),
+            **debug_global
+        })
