@@ -186,7 +186,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
-            df_catalogo=salida_entradas.base_datos.get("catalogo", pd.DataFrame()),
+            df_catalogo=salida_entradas.base_datos.get("MATERIALES", pd.DataFrame()),
             df_estructuras=df_estructuras,
             df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
         )
