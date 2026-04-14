@@ -4,7 +4,7 @@ import pandas as pd
 
 from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
 from ayuda.debug import debug_guardar
-
+from core.cables_materiales import materiales_desde_cables
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
@@ -129,6 +129,9 @@ def _consolidar(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 # FUNCIÓN PRINCIPAL
 # =========================================================
+# =========================================================
+# FUNCIÓN PRINCIPAL
+# =========================================================
 def calcular_materiales_proyecto(
     *,
     hojas_base,
@@ -136,7 +139,10 @@ def calcular_materiales_proyecto(
     tension,
     calibre_mt=None,
     tabla_conectores_mt=None,
+    df_cables=None,  # 🔥 NUEVO
 ) -> dict:
+
+    from core.cables_materiales import materiales_desde_cables  # 🔥 LOCAL IMPORT
 
     # -----------------------------
     # DEBUG INPUT
@@ -144,6 +150,7 @@ def calcular_materiales_proyecto(
     debug_guardar("CALCULO::input", {
         "filas_estructuras": None if df_estructuras is None else len(df_estructuras),
         "tension": tension,
+        "tiene_cables": isinstance(df_cables, pd.DataFrame)
     })
 
     # -----------------------------
@@ -156,17 +163,17 @@ def calcular_materiales_proyecto(
         raise ValueError("tension no válida")
 
     # -----------------------------
-    # NORMALIZAR INPUT 🔥
+    # NORMALIZAR INPUT
     # -----------------------------
     df_estructuras = _normalizar_estructuras(df_estructuras)
 
     # -----------------------------
-    # VALIDAR MATCH 🔥
+    # VALIDAR MATCH
     # -----------------------------
     _validar_match_estructuras(df_estructuras, hojas_base)
 
     # -----------------------------
-    # CÁLCULO DETALLE
+    # CÁLCULO DETALLE (ESTRUCTURAS)
     # -----------------------------
     try:
         df_detalle = calcular_materiales_por_punto(
@@ -179,17 +186,29 @@ def calcular_materiales_proyecto(
     except Exception as e:
         raise RuntimeError(f"Error en materiales_por_punto: {e}")
 
-    # -----------------------------
-    # VALIDAR RESULTADO BRUTO 🔥
-    # -----------------------------
     if not isinstance(df_detalle, pd.DataFrame):
         raise TypeError("calcular_materiales_por_punto no devolvió DataFrame")
 
-    # -----------------------------
-    # NORMALIZAR + VALIDAR
-    # -----------------------------
     df_detalle = _normalizar_df_materiales(df_detalle)
     _validar_df_salida(df_detalle)
+
+    # =====================================================
+    # 🔥 INTEGRACIÓN DE CABLES (AQUÍ ESTÁ LA MAGIA)
+    # =====================================================
+    df_cables_mat = materiales_desde_cables(df_cables)
+
+    if isinstance(df_cables_mat, pd.DataFrame) and not df_cables_mat.empty:
+
+        df_cables_mat = _normalizar_df_materiales(df_cables_mat)
+
+        df_detalle = pd.concat(
+            [df_detalle, df_cables_mat],
+            ignore_index=True
+        )
+
+        debug_guardar("CALCULO::cables_integrados", {
+            "filas_cables": len(df_cables_mat)
+        })
 
     # -----------------------------
     # CONSOLIDADO GLOBAL
