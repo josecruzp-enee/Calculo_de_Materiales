@@ -73,7 +73,9 @@ def cargar_base_datos(ruta: Path | None = None) -> dict[str, pd.DataFrame]:
         raise FileNotFoundError(f"No se encontró el archivo: {ruta}")
 
     xls = pd.ExcelFile(ruta)
-
+    debug_guardar("EXCEL_HOJAS_DETECTADAS", {
+        "hojas_raw": xls.sheet_names[:10]  # primeras 10
+    })
     hojas: dict[str, pd.DataFrame] = {}
 
     # ==========================================================
