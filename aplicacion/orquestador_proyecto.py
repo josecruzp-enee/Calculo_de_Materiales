@@ -127,6 +127,9 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                 .fillna("")
             )
 
+        if "Descripcion" not in df_estructuras.columns:
+            df_estructuras["Descripcion"] = ""
+        
         debug_global["DESCRIPCIONES"] = {
             "total": len(df_estructuras),
             "con_descripcion": int((df_estructuras["Descripcion"] != "").sum()),
