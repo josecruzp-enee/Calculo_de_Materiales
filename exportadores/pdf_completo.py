@@ -11,7 +11,7 @@ from exportadores.precios_estructura_pdf import (
     generar_tabla_precios_estructura,
     generar_cotizacion_desde_estructuras
 )
-
+import pandas as pd
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
 from exportadores.pdf_base import styles, fondo_pagina
