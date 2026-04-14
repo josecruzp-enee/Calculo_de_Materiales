@@ -1,156 +1,146 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Optional, Dict, Any
+from dataclasses import dataclass
+from typing import Dict, Any, Optional
 import pandas as pd
 import traceback
 
-from interfaz.contratos import ResultadoProyecto, SalidaInterfaz
-from aplicacion.modelos_proyecto import EntradaProyecto
+# =========================================================
+# 📦 CONTRATO
+# =========================================================
+@dataclass(slots=True)
+class EntradaReportes:
+    df_estructuras: pd.DataFrame
+    df_materiales: pd.DataFrame
+    df_materiales_por_punto: pd.DataFrame
 
-from entradas.orquestador_entradas import ejecutar_entradas
-from materiales.modelos.entrada import EntradaMateriales
-from materiales.orquestador_materiales import ejecutar_materiales
+    costos: Optional[Dict[str, Any]] = None
 
-from costos_precios.orquestador_costos import ejecutar_costos, EntradaCostos
+    nombre_proyecto: str = "Proyecto"
+    datos_proyecto: Optional[Dict[str, Any]] = None
+    df_cables: Optional[pd.DataFrame] = None
 
-from exportadores.orquestador_reportes import generar_reportes, EntradaReportes
+# =========================================================
+# 📄 IMPORTS
+# =========================================================
+from exportadores.pdf_reportes_simples import (
+    generar_pdf_estructuras_global,
+    generar_pdf_estructuras_por_punto,
+    generar_pdf_materiales,
+    generar_pdf_materiales_por_punto,
+)
+
+from exportadores.pdf_completo import generar_pdf_completo
 
 
 # =========================================================
-# HELPERS
+# 🧩 HELPERS
 # =========================================================
-def _fail(msg: str, debug: Optional[dict] = None) -> ResultadoProyecto:
-    return ResultadoProyecto(
-        ok=False,
-        errores=[msg],
-        warnings=[],
-        materiales=None,
-        costos=None,
-        reportes=None,
-        debug=debug or {},
-    )
+def _fail(msg: str, debug: Optional[dict] = None):
+    return {
+        "archivos": {},
+        "errores": [msg],
+        "debug": debug or {},
+    }
 
 
-def _extraer_tension(datos: Dict[str, Any]) -> float:
-    t = datos.get("tension") or datos.get("nivel_de_tension")
-    if t is None:
-        raise ValueError("Tensión no definida")
-    t = float(t)
-    if t <= 0:
-        raise ValueError("Tensión inválida")
-    return t
+def _safe_exec(nombre, fn):
+    try:
+        return fn(), None
+    except Exception as e:
+        return None, f"{nombre}: {str(e)}\n{traceback.format_exc()}"
 
 
-def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
-    if df is None:
-        raise ValueError("df_estructuras es None")
+def _add_file(archivos, errores, nombre, contenido):
+    if isinstance(contenido, (bytes, bytearray)):
+        archivos[nombre] = contenido
+    else:
+        errores.append(f"{nombre} inválido")
 
-    df = df.copy()
-    cols = set(df.columns)
 
-    if {"Estructura", "Cantidad"}.issubset(cols):
-        return df
+def _validar_df(df, nombre):
+    if df is None or not isinstance(df, pd.DataFrame):
+        raise ValueError(f"{nombre} inválido")
 
-    if {"codigodeestructura", "Cantidad"}.issubset(cols):
-        return df.rename(columns={"codigodeestructura": "Estructura"})
-
-    raise ValueError(f"df_estructuras inválido: {list(cols)}")
+    if df.empty:
+        raise ValueError(f"{nombre} vacío")
 
 
 # =========================================================
-# ORQUESTADOR
+# 🚀 ORQUESTADOR LIMPIO
 # =========================================================
-def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
-
-    debug_global: Dict[str, Any] = {}
+def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
     try:
-        # ================= ENTRADAS =================
-        salida = ejecutar_entradas(salida_interfaz)
-        if not salida.ok:
-            return _fail("Error en Entradas", debug_global)
+        _validar_df(entrada.df_estructuras, "df_estructuras")
+        _validar_df(entrada.df_materiales, "df_materiales")
+        _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto")
 
-        df = _adaptar_df_estructuras(salida.df_estructuras)
+        costos = entrada.costos or {}
 
-        # ================= DESCRIPCIONES =================
-        df_indice = salida.base_datos.get("indice")
-        if df_indice is not None and "Estructura" in df.columns:
-            mapa = dict(zip(
-                df_indice["Código de Estructura"].astype(str).str.strip().str.upper(),
-                df_indice["Descripción"].astype(str).str.strip()
-            ))
+        df_costos_estructura = costos.get("df_costos_estructura")
+        df_precios_estructura = costos.get("df_precios_estructura")
 
-            df["Estructura"] = (
-                df["Estructura"].astype(str).str.strip().str.upper()
-            )
+        archivos = {}
+        errores = {}
+        debug = {}
 
-            df["Descripcion"] = df["Estructura"].map(mapa).fillna("")
+        nombre = entrada.nombre_proyecto
 
-        # ================= PROYECTO =================
-        entrada = EntradaProyecto(
-            base_datos=salida.base_datos,
-            df_estructuras=df,
-            datos_proyecto=salida.datos_proyecto,
-            calibre_mt=(salida.datos_proyecto or {}).get("calibre_mt", ""),
-            tabla_conectores_mt=(salida.datos_proyecto or {}).get("tabla_conectores_mt", {}),
-            df_cables=salida.df_cables,
-            df_materiales_extra=salida.df_materiales_extra,
-        )
+        # =====================================================
+        # 🔥 USAR SOLO DOMINIO (CLAVE)
+        # =====================================================
+        datos_proyecto = entrada.datos_proyecto or {}
 
-        entrada.validar()
-        tension = _extraer_tension(entrada.datos_proyecto)
+        # =====================================================
+        # 📄 TASKS
+        # =====================================================
+        tasks = [
 
-        # ================= MATERIALES =================
-        entrada_mat = EntradaMateriales(
-            estructuras_df=df,
-            tension=tension,
-            base_datos=entrada.base_datos,
-            datos_proyecto=entrada.datos_proyecto,
-            df_cables=entrada.df_cables,
-            df_materiales_extra=entrada.df_materiales_extra,
-            calibre_mt=entrada.calibre_mt,
-            tabla_conectores_mt=entrada.tabla_conectores_mt,
-        )
+            ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(
+                entrada.df_estructuras, nombre
+            )),
 
-        resultado_materiales = ejecutar_materiales(entrada_mat)
-        df_materiales = resultado_materiales.df_materiales
+            ("estructuras_por_punto.pdf", lambda: generar_pdf_estructuras_por_punto(
+                entrada.df_estructuras, nombre
+            )),
 
-        # ================= COSTOS =================
-        entrada_costos = EntradaCostos(
-            df_materiales=df_materiales,
-            df_catalogo=salida.base_datos.get("catalogo", pd.DataFrame()),
-            df_estructuras=df,
-            df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
-        )
+            ("materiales.pdf", lambda: generar_pdf_materiales(
+                entrada.df_materiales, nombre
+            )),
 
-        resultado_costos = ejecutar_costos(entrada_costos)
+            ("materiales_por_punto.pdf", lambda: generar_pdf_materiales_por_punto(
+                entrada.df_materiales_por_punto, nombre
+            )),
 
-        # ================= REPORTES (CORRECTO) =================
-        entrada_reportes = EntradaReportes(
-            df_estructuras=df,
-            df_materiales=df_materiales,
-            df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
-            costos={
-                "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
-                "df_precios_estructura": resultado_costos.get("df_precios_estructura"),
-            },
-            nombre_proyecto="Proyecto",
-            datos_proyecto=salida.datos_proyecto,
-        )
+            ("reporte_completo.pdf", lambda: generar_pdf_completo(
+                df_materiales=entrada.df_materiales,
+                df_estructuras=entrada.df_estructuras,
+                df_precios_estructura=df_precios_estructura,
+                datos_proyecto=datos_proyecto,
+            )),
+        ]
 
-        reportes = generar_reportes(entrada_reportes)
+        # =====================================================
+        # EJECUCIÓN
+        # =====================================================
+        for nombre_archivo, fn in tasks:
 
-        # ================= SALIDA =================
-        return ResultadoProyecto(
-            ok=True,
-            errores=[],
-            warnings=[],
-            materiales=resultado_materiales,
-            costos=resultado_costos,
-            reportes=reportes,
-            debug=debug_global
-        )
+            contenido, err = _safe_exec(nombre_archivo, fn)
+
+            if err:
+                errores[nombre_archivo] = err
+                continue
+
+            if contenido:
+                _add_file(archivos, errores, nombre_archivo, contenido)
+
+        return {
+            "archivos": archivos,
+            "errores": errores,
+            "debug": debug,
+        }
 
     except Exception as e:
-        return _fail(str(e), {"trace": traceback.format_exc()})
+        return _fail(str(e), {"traceback": traceback.format_exc()})
