@@ -160,19 +160,18 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_costos = ejecutar_costos(entrada_costos)
 
         # =====================================================
-        # 5. REPORTES (FIX CLAVE)
+        # 5. REPORTES (FIX CORRECTO)
         # =====================================================
-        reportes = generar_reportes(
-            df_estructuras=df_estructuras,
-            df_materiales=df_materiales,
-            df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
-            costos={
-                "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
-                "df_precios_estructura": resultado_costos.get("df_precios_estructura"),
-            },
-            nombre_proyecto="Proyecto",
-            datos_proyecto=salida_entradas.datos_proyecto
-        )
+        reportes = generar_reportes({
+            "df_estructuras": df_estructuras,
+            "df_materiales": df_materiales,
+            "df_materiales_por_punto": resultado_materiales.df_materiales_por_punto,
+            "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
+            "df_precios_estructura": resultado_costos.get("df_precios_estructura"),
+            "datos_proyecto": salida_entradas.datos_proyecto,
+            "nombre_proyecto": "Proyecto"
+        })
+        
 
         # =====================================================
         # SALIDA FINAL
