@@ -142,7 +142,7 @@ def calcular_materiales_proyecto(
     df_cables=None,  # 🔥 NUEVO
 ) -> dict:
 
-    from core.cables_materiales import materiales_desde_cables  # 🔥 LOCAL IMPORT
+    from materiales.cables.cables_materiales import materiales_desde_cables
 
     # -----------------------------
     # DEBUG INPUT
