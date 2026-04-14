@@ -10,17 +10,52 @@ from ayuda.debug import debug_guardar
 # =========================================================
 def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
 
+    from ayuda.debug import debug_guardar
+
     if df_catalogo is None or df_catalogo.empty:
         raise ValueError("Catálogo de costos vacío")
 
     df = df_catalogo.copy()
 
-    # VALIDACIÓN
-    required = {"Materiales", "Unidad", "Costo Unitario"}
-    if not required.issubset(df.columns):
-        raise ValueError(f"Catálogo debe tener columnas {required}")
+    # =====================================================
+    # NORMALIZAR NOMBRES DE COLUMNAS
+    # =====================================================
+    df.columns = [str(c).strip() for c in df.columns]
 
+    # =====================================================
+    # DETECCIÓN FLEXIBLE DE COLUMNAS
+    # =====================================================
+    col_material = None
+    col_unidad = None
+    col_costo = None
+
+    for c in df.columns:
+        c_up = c.upper()
+
+        if "MATER" in c_up:
+            col_material = c
+
+        elif "UNIDAD" in c_up:
+            col_unidad = c
+
+        elif "COSTO" in c_up:
+            col_costo = c
+
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
+    if not all([col_material, col_unidad, col_costo]):
+        raise ValueError(f"No se pudieron detectar columnas válidas: {df.columns}")
+
+    # =====================================================
+    # FORMATO ESTÁNDAR
+    # =====================================================
+    df = df[[col_material, col_unidad, col_costo]].copy()
+    df.columns = ["Materiales", "Unidad", "Costo Unitario"]
+
+    # =====================================================
     # LIMPIEZA MÍNIMA (NO destructiva)
+    # =====================================================
     df["Materiales"] = df["Materiales"].astype(str).str.strip()
     df["Unidad"] = df["Unidad"].astype(str).str.strip()
 
@@ -29,22 +64,27 @@ def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
         errors="coerce"
     )
 
+    # =====================================================
+    # FILTRO DE DATOS VÁLIDOS
+    # =====================================================
     df = df.dropna(subset=["Costo Unitario"])
     df = df[df["Costo Unitario"] > 0]
 
-    # QUITAR DUPLICADOS EXACTOS
-    df = df.drop_duplicates(
-        subset=["Materiales", "Unidad"]
-    )
+    # =====================================================
+    # ELIMINAR DUPLICADOS
+    # =====================================================
+    df = df.drop_duplicates(subset=["Materiales", "Unidad"])
 
+    # =====================================================
+    # DEBUG
+    # =====================================================
     debug_guardar("catalogo_costos_procesado", {
         "filas": len(df),
-        "columnas": list(df.columns)
+        "columnas": list(df.columns),
+        "preview": df.head(10).to_dict(orient="records")
     })
 
     return df[["Materiales", "Unidad", "Costo Unitario"]]
-
-
 # =========================================================
 # MOTOR PRINCIPAL
 # =========================================================
