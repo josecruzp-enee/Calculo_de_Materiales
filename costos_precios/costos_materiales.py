@@ -88,6 +88,8 @@ def calcular_lista_materiales_con_costos(
     df_catalogo_costos["Materiales"] = df_catalogo_costos["Materiales"].astype(str).str.strip()
     df_catalogo_costos["Unidad"] = df_catalogo_costos["Unidad"].astype(str).str.strip()
 
+    debug_guardar("DEBUG_CATALOGO", df_catalogo_costos.head(10).to_dict(orient="records"))
+    debug_guardar("DEBUG_PROYECTO", df.head(10).to_dict(orient="records"))
     # =====================================================
     # MERGE DIRECTO (SIN NORMALIZAR)
     # =====================================================
