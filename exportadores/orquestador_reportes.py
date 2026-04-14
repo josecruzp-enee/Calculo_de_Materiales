@@ -21,6 +21,7 @@ class EntradaReportes:
     nombre_proyecto: str = "Proyecto"
     datos_proyecto: Optional[Dict[str, Any]] = None
 
+
 # =========================================================
 # 📄 IMPORTS
 # =========================================================
@@ -95,16 +96,36 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         datos_pipeline = getattr(entrada, "datos_proyecto", {}) or {}
         datos_proyecto = {
             **datos_pipeline,
-            **datos_ui,  # 🔥 UI MANDA
+            **datos_ui,
         }
 
         # =====================================================
-        # DEBUG PREVIO
+        # 🧠 DEBUG
         # =====================================================
         st.write("🧠 DEBUG REPORTES")
         st.write("df_estructuras:", entrada.df_estructuras.shape)
         st.write("df_materiales:", entrada.df_materiales.shape)
 
+        # =====================================================
+        # 🔥 FIX DESCRIPCIÓN (CLAVE)
+        # =====================================================
+        mapa_desc = st.session_state.get("mapa_desc", {})
+
+        if mapa_desc and "Estructura" in entrada.df_estructuras.columns:
+            entrada.df_estructuras["Descripcion"] = (
+                entrada.df_estructuras["Estructura"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+                .map(mapa_desc)
+                .fillna("")
+            )
+        else:
+            st.warning("⚠️ mapa_desc no disponible o columna Estructura faltante")
+
+        # =====================================================
+        # DEBUG COSTOS
+        # =====================================================
         if df_precios_estructura is not None:
             st.write("df_precios_estructura:", df_precios_estructura.shape)
             st.write(df_precios_estructura.head())
@@ -130,7 +151,6 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 entrada.df_materiales_por_punto, nombre
             )),
 
-            # 🔥 PDF PRINCIPAL (YA CORREGIDO)
             ("reporte_completo.pdf", lambda: generar_pdf_completo(
                 df_materiales=entrada.df_materiales,
                 df_estructuras=entrada.df_estructuras,
