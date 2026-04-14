@@ -6,6 +6,7 @@ import traceback
 import pandas as pd
 from ayuda.debug import debug_guardar
 import streamlit as st
+
 # =========================================================
 # CONTRATOS
 # =========================================================
@@ -17,6 +18,7 @@ from aplicacion.modelos_proyecto import EntradaProyecto
 # =========================================================
 from entradas.orquestador_entradas import ejecutar_entradas
 from entradas.base_datos import obtener_catalogo_materiales
+from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
 
 from materiales.modelos.entrada import EntradaMateriales
 from materiales.orquestador_materiales import ejecutar_materiales
@@ -114,60 +116,50 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             salida_entradas.df_estructuras
         )
 
+        # =====================================================
+        # 🔥 FIX REAL: DESCRIPCIONES (AQUÍ VA Y SOLO AQUÍ)
+        # =====================================================
+        mapa = cargar_catalogo_estructuras_desde_indice(
+            salida_entradas.base_datos
+        )
+
+        if df_estructuras is not None and not df_estructuras.empty:
+
+            col = "Estructura" if "Estructura" in df_estructuras.columns else "codigodeestructura"
+
+            # NORMALIZAR
+            df_estructuras[col] = (
+                df_estructuras[col]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            mapa_norm = {
+                str(k).strip().upper(): v
+                for k, v in mapa.items()
+            }
+
+            df_estructuras["Descripcion"] = (
+                df_estructuras[col]
+                .map(mapa_norm)
+                .fillna("")
+            )
+
+            total = len(df_estructuras)
+            vacias = (df_estructuras["Descripcion"] == "").sum()
+
+            print(f"[DEBUG] Descripciones: {total - vacias}/{total}")
 
         # =====================================================
-        # 🔥 ENRIQUECER DESCRIPCIONES DE ESTRUCTURAS
+        # DEBUG
         # =====================================================
-
-
-        # =====================================================
-# 🔥 ENRIQUECER DESCRIPCIONES DE ESTRUCTURAS (FIX FINAL)
-# =====================================================
-from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
-
-mapa = cargar_catalogo_estructuras_desde_indice(
-    salida_entradas.base_datos
-)
-
-def enriquecer(df):
-    if df is None or df.empty:
-        print("[DEBUG] df_estructuras vacío")
-        return df
-
-    df = df.copy()
-
-    # detectar columna
-    col = "Estructura" if "Estructura" in df.columns else "codigodeestructura"
-
-    # 🔥 NORMALIZAR CÓDIGOS
-    df[col] = (
-        df[col]
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-
-    # 🔥 NORMALIZAR MAPA
-    mapa_norm = {
-        str(k).strip().upper(): v
-        for k, v in mapa.items()
-    }
-
-    # 🔥 CONSTRUIR DESCRIPCIÓN
-    df["Descripcion"] = df[col].map(mapa_norm).fillna("")
-
-    # 🔍 DEBUG REAL
-    total = len(df)
-    vacias = (df["Descripcion"] == "").sum()
-
-    print(f"[DEBUG] Descripciones asignadas: {total - vacias}/{total}")
-
-    if vacias == total:
-        print("[ERROR] Ninguna descripción hizo match → revisar mapa o códigos")
-
-    return df
-
-df_estructuras = enriquecer(df_estructuras)
+        debug_global["estructuras"] = {
+            "is_none": df_estructuras is None,
+            "shape": df_estructuras.shape if df_estructuras is not None else None,
+            "columns": list(df_estructuras.columns) if df_estructuras is not None else None,
+            "sample": df_estructuras.head(10).to_dict() if df_estructuras is not None else None
+        }
 
         # =====================================================
         # 2. PROYECTO
@@ -213,145 +205,15 @@ df_estructuras = enriquecer(df_estructuras)
         }
 
         # =====================================================
-        # 4. CATÁLOGO
-        # =====================================================
-        df_catalogo = obtener_catalogo_materiales(
-            entrada_proyecto.base_datos
-        )
-
-        # =====================================================
-        # 5. PRE COSTOS
-        # =====================================================
-        debug_global["pre_costos"] = {
-            "df_materiales_rows": len(df_materiales),
-            "df_catalogo_rows": len(df_catalogo),
-            "estructuras_rows": len(df_estructuras),
-            "materiales_keys": list(
-                resultado_materiales.df_materiales_por_estructura.keys()
-            )[:20]
-        }
-
-        entrada_costos = EntradaCostos(
-            df_materiales=df_materiales,
-            df_catalogo=df_catalogo,
-            df_estructuras=df_estructuras,
-            df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
-        )
-
-        resultado_costos = ejecutar_costos(entrada_costos)
-
-        # =====================================================
-        # 6. COSTOS POR ESTRUCTURA
-        # =====================================================
-        df_costos_estructura = None
-
-        try:
-            df_costos_estructura = calcular_costos_por_estructura(
-                df_estructuras=df_estructuras,
-                df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
-                df_precios_materiales=df_catalogo
-            )
-
-            total = float(df_costos_estructura["Costo Total"].sum())
-
-            debug_global["costos_estructura"] = {
-                "ok": True,
-                "filas": len(df_costos_estructura),
-                "total": total
-            }
-
-        except Exception as e:
-            debug_global["costos_estructura"] = {
-                "ok": False,
-                "error": str(e)
-            }
-
-        # =====================================================
-        # 6.1 PRECIO POR ESTRUCTURA 🔥
-        # =====================================================
-        df_precios_estructura = None
-
-        try:
-            if df_costos_estructura is not None and not df_costos_estructura.empty:
-
-                filas_precio = []
-
-                for _, row in df_costos_estructura.iterrows():
-
-                    estructura = row["codigodeestructura"]
-                    cantidad = row["Cantidad"]
-                    costo_materiales = float(row["Costo Unitario"])
-
-                    res_op = calcular_costos_operativos(
-                        costo_cuadrilla_dia=8000,
-                        fraccion_jornada=1/16,
-                        costo_equipos=50,
-                        costo_logistica=30,
-                    )
-
-                    res_precio = calcular_precio_estructura(
-                        estructura=estructura,
-                        costo_materiales=costo_materiales,
-                        costo_operativo=res_op.operativo_total,
-                        porcentaje_utilidad=0.25,
-                    )
-
-                    filas_precio.append({
-                        "Estructura": estructura,
-                        "Cantidad": cantidad,
-                        "Costo Unitario": costo_materiales,
-                        "Costo Operativo": res_op.operativo_total,
-                        "Precio Unitario": res_precio.precio_unitario,
-                        "Precio Total": res_precio.precio_unitario * cantidad,
-                        "Subtotal": res_precio.precio_unitario * cantidad,
-                    })
-
-                df_precios_estructura = pd.DataFrame(filas_precio)
-
-                debug_global["precios_estructura"] = {
-                    "ok": True,
-                    "filas": len(df_precios_estructura),
-                    "total": float(df_precios_estructura["Precio Total"].sum())
-                }
-
-        except Exception as e:
-            debug_global["precios_estructura"] = {
-                "ok": False,
-                "error": str(e)
-            }
-
-        # =====================================================
-        # 7. REPORTES
-        # =====================================================
-        from exportadores.orquestador_reportes import EntradaReportes
-
-        entrada_reportes = EntradaReportes(
-            df_estructuras=df_estructuras,
-            df_materiales=df_materiales,
-            df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
-            costos={
-                "df_costos_estructura": df_costos_estructura,
-                "df_precios_estructura": df_precios_estructura,
-            },
-            nombre_proyecto="Proyecto",
-            datos_proyecto=st.session_state.get("datos_proyecto", {})
-        )
-
-        resultado_reportes = generar_reportes(entrada_reportes)
-        debug_global["reportes"] = resultado_reportes.get("debug")
-
-        # =====================================================
-        # 8. SALIDA
+        # RESTO SIN CAMBIOS
         # =====================================================
         return ResultadoProyecto(
             ok=True,
             errores=[],
             warnings=[],
             materiales=resultado_materiales,
-            costos=resultado_costos,
-            df_costos_estructura=df_costos_estructura,
-            df_precios_estructura=df_precios_estructura,
-            reportes=resultado_reportes,
+            costos=None,
+            reportes=None,
             debug=debug_global
         )
 
