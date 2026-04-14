@@ -18,7 +18,6 @@ from aplicacion.modelos_proyecto import EntradaProyecto
 # =========================================================
 from entradas.orquestador_entradas import ejecutar_entradas
 from entradas.base_datos import obtener_catalogo_materiales
-from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
 
 from materiales.modelos.entrada import EntradaMateriales
 from materiales.orquestador_materiales import ejecutar_materiales
@@ -117,17 +116,20 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         # =====================================================
-        # 🔥 FIX REAL: DESCRIPCIONES (AQUÍ VA Y SOLO AQUÍ)
+        # 🔥 FIX REAL Y ÚNICO: DESCRIPCIONES
         # =====================================================
-        mapa = cargar_catalogo_estructuras_desde_indice(
-            salida_entradas.base_datos
-        )
+        df_indice = salida_entradas.base_datos.get("indice")
 
-        if df_estructuras is not None and not df_estructuras.empty:
+        if df_indice is not None and df_estructuras is not None:
+
+            # construir mapa directo (SIN funciones rotas)
+            mapa = dict(zip(
+                df_indice["Código de Estructura"].astype(str).str.strip().str.upper(),
+                df_indice["Descripción"].astype(str).str.strip()
+            ))
 
             col = "Estructura" if "Estructura" in df_estructuras.columns else "codigodeestructura"
 
-            # NORMALIZAR
             df_estructuras[col] = (
                 df_estructuras[col]
                 .astype(str)
@@ -135,14 +137,9 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                 .str.upper()
             )
 
-            mapa_norm = {
-                str(k).strip().upper(): v
-                for k, v in mapa.items()
-            }
-
             df_estructuras["Descripcion"] = (
                 df_estructuras[col]
-                .map(mapa_norm)
+                .map(mapa)
                 .fillna("")
             )
 
@@ -150,6 +147,9 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             vacias = (df_estructuras["Descripcion"] == "").sum()
 
             print(f"[DEBUG] Descripciones: {total - vacias}/{total}")
+
+        else:
+            print("[ERROR] No existe hoja indice o df_estructuras vacío")
 
         # =====================================================
         # DEBUG
@@ -205,7 +205,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         }
 
         # =====================================================
-        # RESTO SIN CAMBIOS
+        # SALIDA
         # =====================================================
         return ResultadoProyecto(
             ok=True,
