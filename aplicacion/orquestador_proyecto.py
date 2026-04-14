@@ -105,7 +105,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 🔥 DESCRIPCIONES DESDE INDICE
         # =====================================================
-        df_indice = salida_entradas.base_datos.get("indice")
+        df_indice = salida_entradas.base_datos.get("INDICE")
 
         if df_indice is not None:
 
