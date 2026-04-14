@@ -70,8 +70,8 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 # ==========================================================
 # PDF: RESUMEN DE ESTRUCTURAS (GLOBAL)
 # ==========================================================
+def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None):
 
-def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     buffer = BytesIO()
     doc = BaseDocTemplate(
         buffer,
@@ -89,7 +89,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     def _safe_para(texto):
         t = "" if pd.isna(texto) else str(texto)
         t = escape(t)
-        t = t.replace("■", "")  # limpia caracteres raros
+        t = t.replace("■", "")
         return t
 
     elems = [
@@ -102,11 +102,11 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         doc.build(elems)
         return buffer.getvalue()
 
-    # =========================================================
-    # 🔥 LIMPIEZA
-    # =========================================================
     df = df_estructuras.copy()
 
+    # =========================================================
+    # LIMPIEZA
+    # =========================================================
     df["codigodeestructura"] = (
         df["codigodeestructura"]
         .astype(str)
@@ -114,46 +114,33 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         .str.strip()
     )
 
-    df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
+    # =========================================================
+    # 🔥 RECONSTRUCCIÓN DESCRIPCIÓN DESDE BASE
+    # =========================================================
+    if ("Descripcion" not in df.columns or df["Descripcion"].isna().all()) and base_datos:
+
+        mapa_desc = {}
+
+        for nombre_estructura, df_mat in base_datos.items():
+
+            if isinstance(df_mat, pd.DataFrame) and "Descripcion" in df_mat.columns:
+                desc = df_mat["Descripcion"].dropna().astype(str).unique()
+
+                if len(desc) > 0:
+                    mapa_desc[nombre_estructura.strip()] = desc[0]
+
+        df["Descripcion"] = df["codigodeestructura"].map(mapa_desc).fillna("")
+
+    else:
+        df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
 
     # =========================================================
-    # 🔥 AGRUPACIÓN INTELIGENTE
+    # AGRUPACIÓN
     # =========================================================
     df = df.groupby("codigodeestructura", as_index=False).agg({
         "Cantidad": "sum",
-        "Descripcion": "first"  # toma la primera válida
+        "Descripcion": "first"
     })
-
-    # =========================================================
-    # ESTILOS
-    # =========================================================
-    st_hdr = ParagraphStyle(
-        "hdr_est",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=9,
-        alignment=TA_CENTER
-    )
-
-    st_code = ParagraphStyle(
-        "code_est",
-        parent=styles["Normal"],
-        fontSize=9
-    )
-
-    st_desc = ParagraphStyle(
-        "desc_est",
-        parent=styles["Normal"],
-        fontSize=9,
-        wordWrap="CJK"
-    )
-
-    st_qty = ParagraphStyle(
-        "qty_est",
-        parent=styles["Normal"],
-        fontSize=9,
-        alignment=TA_CENTER
-    )
 
     # =========================================================
     # TABLA
@@ -161,16 +148,16 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
     ancho = doc.width * 0.95
 
     data = [[
-        Paragraph("Estructura", st_hdr),
-        Paragraph("Descripción", st_hdr),
-        Paragraph("Cantidad", st_hdr),
+        Paragraph("Estructura", styles["Normal"]),
+        Paragraph("Descripción", styles["Normal"]),
+        Paragraph("Cantidad", styles["Normal"]),
     ]]
 
     for _, r in df.iterrows():
         data.append([
-            Paragraph(_safe_para(r["codigodeestructura"]), st_code),
-            Paragraph(_safe_para(r["Descripcion"]), st_desc),
-            Paragraph(str(int(r["Cantidad"])), st_qty),
+            Paragraph(_safe_para(r["codigodeestructura"]), styles["Normal"]),
+            Paragraph(_safe_para(r["Descripcion"]), styles["Normal"]),
+            Paragraph(str(int(r["Cantidad"])), styles["Normal"]),
         ])
 
     tabla = Table(
@@ -180,16 +167,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy):
         hAlign="CENTER"
     )
 
-    tabla.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("ALIGN", (2, 1), (2, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-
     elems.append(tabla)
-
     doc.build(elems)
 
     pdf_bytes = buffer.getvalue()
