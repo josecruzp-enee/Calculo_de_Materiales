@@ -52,14 +52,14 @@ def limpiar_codigo(codigo: str) -> str:
 # =========================================================
 PATRON = re.compile(
     r"""
-    (A-[IVX]+-\d+[A-Z]?)|
-    (B-[IVX]+-\d+[A-Z]?)|
-    (C[A-Z]-\d+)|              
-    (P[CMT][A-Z]?-\d+)
-    (TS-\d+(?:\.\d+)?KVA)|
-    (CT-[A-Z])|
-    (R-\d+[A-Z]?)|
-    (LL-\d+(?:-\d+[A-Z]+)+)
+    \b(A-[IVX]+-\d+[A-Z]?)\b|
+    \b(B-[IVX]+-\d+[A-Z]?)\b|
+    \b(C[S]-\d+)\b|
+    \b(P[CMT][A-Z]?-\d+)\b|
+    \b(TS-\d+(?:\.\d+)?KVA)\b|
+    \b(CT-[A-Z])\b|
+    \b(R-\d+[A-Z]?)\b|
+    \b(LL-\d+(?:-\d+[A-Z]+)+)\b
     """,
     re.VERBOSE
 )
