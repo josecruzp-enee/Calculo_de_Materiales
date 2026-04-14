@@ -10,7 +10,7 @@ from dataclasses import dataclass
 @dataclass(slots=True)
 class ResultadoCostosOperativos:
     """
-    Costos operativos UNITARIOS (por estructura)
+    Costos operativos del proyecto
     """
     mano_obra: float
     equipos: float
@@ -28,10 +28,21 @@ def calcular_costos_operativos(
     factor_equipos: float = 0.05,
     factor_logistica: float = 0.15,
 ) -> ResultadoCostosOperativos:
+    """
+    Consolida los costos operativos del proyecto.
 
-    # =========================
+    ✔ Mano de obra (modelo A) se recibe como entrada
+    ✔ Equipos/herramientas como % de materiales
+    ✔ Logística como % de materiales
+
+    Fórmula:
+
+    Operativo = MO + Equipos + Logística
+    """
+
+    # =====================================================
     # VALIDACIONES
-    # =========================
+    # =====================================================
     for nombre, valor in {
         "costo_material_total": costo_material_total,
         "costo_mano_obra": costo_mano_obra,
@@ -47,17 +58,23 @@ def calcular_costos_operativos(
     if costo_mano_obra < 0:
         raise ValueError("costo_mano_obra inválido")
 
-    # =========================
-    # CÁLCULO
-    # =========================
+    if factor_equipos < 0:
+        raise ValueError("factor_equipos inválido")
+
+    if factor_logistica < 0:
+        raise ValueError("factor_logistica inválido")
+
+    # =====================================================
+    # CÁLCULOS
+    # =====================================================
     equipos = costo_material_total * factor_equipos
     logistica = costo_material_total * factor_logistica
 
     operativo_total = costo_mano_obra + equipos + logistica
 
-    # =========================
+    # =====================================================
     # OUTPUT
-    # =========================
+    # =====================================================
     return ResultadoCostosOperativos(
         mano_obra=round(costo_mano_obra, 2),
         equipos=round(equipos, 2),
