@@ -14,8 +14,6 @@ from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
 
 from exportadores.pdf_base import styles, styleN, fondo_pagina, formatear_material
 
@@ -24,10 +22,11 @@ from exportadores.pdf_base import styles, styleN, fondo_pagina, formatear_materi
 # PDF: RESUMEN DE MATERIALES (GLOBAL)
 # ==========================================================
 def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
+
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id="normal")
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
@@ -44,6 +43,7 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     df_agrupado = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
     data = [["Material", "Unidad", "Cantidad"]]
+
     for _, row in df_agrupado.iterrows():
         data.append([
             Paragraph(formatear_material(row["Materiales"]), styleN),
@@ -94,7 +94,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
     df = df_estructuras.copy()
 
     # =========================================================
-    # 🔥 DETECCIÓN DE COLUMNA
+    # DETECCIÓN DE COLUMNA
     # =========================================================
     col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
@@ -103,22 +103,31 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
         .astype(str)
         .str.replace("■", "")
         .str.strip()
+        .str.upper()
     )
 
     # =========================================================
-    # 🔥 DESCRIPCIÓN SEGURA
+    # 🔥 DESCRIPCIÓN DESDE INDICE (CORRECTO)
     # =========================================================
-    if ("Descripcion" not in df.columns or df["Descripcion"].isna().all()) and base_datos:
+    if base_datos and "indice" in base_datos:
 
-        mapa_desc = {}
+        df_indice = base_datos["indice"]
 
-        for nombre_estructura, df_mat in base_datos.items():
-            if isinstance(df_mat, pd.DataFrame) and "Descripcion" in df_mat.columns:
-                desc = df_mat["Descripcion"].dropna().astype(str).unique()
-                if len(desc) > 0:
-                    mapa_desc[nombre_estructura.strip()] = desc[0]
+        if isinstance(df_indice, pd.DataFrame):
 
-        df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
+            df_indice["Código de Estructura"] = (
+                df_indice["Código de Estructura"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            mapa_desc = dict(zip(
+                df_indice["Código de Estructura"],
+                df_indice["Descripción"]
+            ))
+
+            df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
 
     else:
         if "Descripcion" not in df.columns:
@@ -201,7 +210,9 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy):
             ])
 
         tabla = Table(data)
-        tabla.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.black)]))
+        tabla.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black)
+        ]))
 
         elems.append(tabla)
         elems.append(Spacer(1, 10))
@@ -250,7 +261,9 @@ def generar_pdf_materiales_por_punto(df, nombre_proy):
             ])
 
         tabla = Table(data)
-        tabla.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.black)]))
+        tabla.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black)
+        ]))
 
         elems.append(tabla)
         elems.append(Spacer(1, 10))
