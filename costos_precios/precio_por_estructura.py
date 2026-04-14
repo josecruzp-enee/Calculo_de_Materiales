@@ -10,45 +10,43 @@ from costos_precios.precio_estructura import calcular_precio_estructura
 # =========================================================
 # ORQUESTADOR DE PRECIOS POR ESTRUCTURA
 # =========================================================
+# =========================================================
+# ORQUESTADOR DE PRECIOS POR ESTRUCTURA (CORREGIDO)
+# =========================================================
 def calcular_precios_por_estructura(
     df_costos_estructura: pd.DataFrame,
     df_estructuras: pd.DataFrame,
+    df_mano_obra: pd.DataFrame,  # 🔥 NUEVO
     *,
     porcentaje_utilidad: float = 0.15,
-    costo_cuadrilla_dia: float = 10000,
-    fraccion_jornada: float = 1/16,
 ):
-    """
-    OUTPUT:
-    - df_precios_estructura
-    - total_base_proyecto
-    """
 
     # =====================================================
     # VALIDACIONES
     # =====================================================
-    if df_costos_estructura is None or not isinstance(df_costos_estructura, pd.DataFrame):
-        raise ValueError("df_costos_estructura inválido")
-
-    if df_costos_estructura.empty:
+    if df_costos_estructura is None or df_costos_estructura.empty:
         raise ValueError("df_costos_estructura vacío")
 
-    if df_estructuras is None or not isinstance(df_estructuras, pd.DataFrame):
-        raise ValueError("df_estructuras inválido")
-
-    if df_estructuras.empty:
+    if df_estructuras is None or df_estructuras.empty:
         raise ValueError("df_estructuras vacío")
 
-    required_cols = ["codigodeestructura", "Costo Unitario"]
-    faltantes = [c for c in required_cols if c not in df_costos_estructura.columns]
-    if faltantes:
-        raise ValueError(f"Faltan columnas en df_costos_estructura: {faltantes}")
-
-    if "Estructura" not in df_estructuras.columns or "Cantidad" not in df_estructuras.columns:
-        raise ValueError("df_estructuras debe tener 'Estructura' y 'Cantidad'")
+    if df_mano_obra is None or df_mano_obra.empty:
+        raise ValueError("df_mano_obra vacío")
 
     # =====================================================
-    # NORMALIZAR CANTIDADES
+    # TOTALES DEL PROYECTO
+    # =====================================================
+    material_total = df_costos_estructura["Costo Total"].sum()
+    mo_total = df_mano_obra["MO Total"].sum()
+
+    # 🔥 COSTOS OPERATIVOS GLOBAL
+    costos_op = calcular_costos_operativos(
+        costo_material_total=material_total,
+        costo_mano_obra=mo_total
+    )
+
+    # =====================================================
+    # CANTIDADES
     # =====================================================
     df_tmp = df_estructuras.copy()
     df_tmp["Estructura"] = df_tmp["Estructura"].astype(str).str.strip()
@@ -69,43 +67,46 @@ def calcular_precios_por_estructura(
     for _, r in df_costos_estructura.iterrows():
 
         estructura = str(r["codigodeestructura"]).strip()
-        costo_material = float(r["Costo Unitario"])
+        costo_material_unit = float(r["Costo Unitario"])
+        costo_material_total_estructura = float(r["Costo Total"])
+        cantidad = max(1, int(r["Cantidad"]))
 
         # -------------------------------------------------
-        # COSTOS OPERATIVOS
+        # PESO DE LA ESTRUCTURA
         # -------------------------------------------------
-        costo_equipos = costo_material * 0.05
-        costo_logistica = costo_material * 0.15
+        if material_total <= 0:
+            continue
 
-        costos_op = calcular_costos_operativos(
-            costo_cuadrilla_dia=costo_cuadrilla_dia,
-            fraccion_jornada=fraccion_jornada,
-            costo_equipos=costo_equipos,
-            costo_logistica=costo_logistica,
-        )
+        peso = costo_material_total_estructura / material_total
+
+        # -------------------------------------------------
+        # COSTO OPERATIVO DISTRIBUIDO
+        # -------------------------------------------------
+        costo_operativo_unitario = (
+            costos_op.operativo_total * peso
+        ) / cantidad
 
         # -------------------------------------------------
         # PRECIO FINAL
         # -------------------------------------------------
         precio = calcular_precio_estructura(
             estructura=estructura,
-            costo_materiales=costo_material,
-            costo_operativo=costos_op.operativo_total,
+            costo_materiales=costo_material_unit,
+            costo_operativo=costo_operativo_unitario,
             porcentaje_utilidad=porcentaje_utilidad,
         )
 
-        cantidad = cantidades.get(precio.estructura, 0)
+        cantidad_real = cantidades.get(precio.estructura, 0)
 
-        # 🔥 SI NO EXISTE EN PROYECTO, NO CONTAR
-        if cantidad <= 0:
+        if cantidad_real <= 0:
             continue
 
-        subtotal = precio.precio_unitario * cantidad
+        subtotal = precio.precio_unitario * cantidad_real
         total_base += subtotal
 
         filas.append({
             "Estructura": precio.estructura,
-            "Cantidad": cantidad,
+            "Cantidad": cantidad_real,
             "Precio Unitario": precio.precio_unitario,
             "Subtotal": subtotal,
         })
