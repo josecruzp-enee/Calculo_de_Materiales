@@ -16,6 +16,7 @@ from costos_precios.costos_estructuras import (
 
 from costos_precios.costos_operativos import calcular_costos_operativos
 from costos_precios.precio_estructura import calcular_precio_estructura
+from costos_precios.mano_obra import calcular_mano_obra  # 🔥 NUEVO
 
 from ayuda.debug import debug_guardar
 
@@ -30,7 +31,8 @@ class EntradaCostos:
 
     df_estructuras: Optional[pd.DataFrame] = None
     df_materiales_por_estructura: Optional[Dict[str, pd.DataFrame]] = None
-    df_mano_obra: Optional[pd.DataFrame] = None  # 🔥 CLAVE
+
+    ruta_datos_materiales: Optional[str] = None  # 🔥 NUEVO (para MO)
 
 
 # =====================================================
@@ -69,7 +71,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         }
 
         # =====================================================
-        # 2. PREPARAR CATÁLOGO
+        # 2. CATÁLOGO
         # =====================================================
         df_costos = preparar_catalogo_costos(entrada.df_catalogo)
 
@@ -106,19 +108,32 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             debug["costos_estructura"] = _preview_df(df_costos_estructura)
 
         # =====================================================
-        # 5. PRECIOS POR ESTRUCTURA (MODELO FINAL)
+        # 5. MANO DE OBRA (🔥 INTEGRADO)
         # =====================================================
-        df_precios_estructura = None
+        df_mano_obra = None
 
         if df_costos_estructura is not None:
 
-            if entrada.df_mano_obra is None or entrada.df_mano_obra.empty:
-                raise ValueError("df_mano_obra requerido para precios")
+            if not entrada.ruta_datos_materiales:
+                raise ValueError("ruta_datos_materiales requerida para MO")
+
+            df_mano_obra = calcular_mano_obra(
+                df_estructuras=entrada.df_estructuras,
+                archivo_materiales=entrada.ruta_datos_materiales
+            )
+
+            debug["mano_obra"] = _preview_df(df_mano_obra)
+
+        # =====================================================
+        # 6. PRECIOS POR ESTRUCTURA
+        # =====================================================
+        df_precios_estructura = None
+
+        if df_costos_estructura is not None and df_mano_obra is not None:
 
             material_total = df_costos_estructura["Costo Total"].sum()
-            mo_total = entrada.df_mano_obra["MO Total"].sum()
+            mo_total = df_mano_obra["MO Total"].sum()
 
-            # 🔥 COSTOS OPERATIVOS GLOBAL
             costos_op = calcular_costos_operativos(
                 costo_material_total=material_total,
                 costo_mano_obra=mo_total
@@ -133,21 +148,15 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 costo_total_estructura = float(r["Costo Total"])
                 cantidad = max(1, int(r["Cantidad"]))
 
-                # -------------------------------------------------
-                # PESO
-                # -------------------------------------------------
+                if material_total <= 0:
+                    continue
+
                 peso = costo_total_estructura / material_total
 
-                # -------------------------------------------------
-                # COSTO OPERATIVO DISTRIBUIDO
-                # -------------------------------------------------
                 costo_operativo_unit = (
                     costos_op.operativo_total * peso
                 ) / cantidad
 
-                # -------------------------------------------------
-                # PRECIO
-                # -------------------------------------------------
                 res = calcular_precio_estructura(
                     estructura=estructura,
                     costo_materiales=costo_mat_unit,
@@ -169,7 +178,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             debug["precios_estructura"] = _preview_df(df_precios_estructura)
 
         # =====================================================
-        # 6. MÉTRICAS
+        # 7. MÉTRICAS
         # =====================================================
         total_materiales = float(df_materiales_costos["Costo Total"].sum())
 
@@ -187,15 +196,13 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             "precio_total": total_precio
         }
 
-        # =====================================================
-        # DEBUG FINAL
-        # =====================================================
         debug_guardar("ORQUESTADOR_COSTOS_FINAL", debug)
 
         return {
             "ok": True,
             "df_materiales_costos": df_materiales_costos,
             "df_costos_estructura": df_costos_estructura,
+            "df_mano_obra": df_mano_obra,  # 🔥 NUEVO
             "df_precios_estructura": df_precios_estructura,
             "debug": debug
         }
@@ -210,6 +217,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             "errores": [str(e)],
             "df_materiales_costos": None,
             "df_costos_estructura": None,
+            "df_mano_obra": None,
             "df_precios_estructura": None,
             "debug": debug
         }
