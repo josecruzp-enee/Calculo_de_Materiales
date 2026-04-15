@@ -16,7 +16,7 @@ from costos_precios.costos_estructuras import (
 
 from costos_precios.costos_operativos import calcular_costos_operativos
 from costos_precios.precio_estructura import calcular_precio_estructura
-from costos_precios.mano_obra import calcular_mano_obra  # 🔥 NUEVO
+from costos_precios.costos_mano_obra import calcular_mano_obra
 
 from ayuda.debug import debug_guardar
 
