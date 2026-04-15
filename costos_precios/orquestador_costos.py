@@ -108,31 +108,38 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             debug["costos_estructura"] = _preview_df(df_costos_estructura)
 
         # =====================================================
-        # 5. MANO DE OBRA (🔥 INTEGRADO)
+        # 5. MANO DE OBRA (OPCIONAL - NO BLOQUEANTE)
         # =====================================================
         df_mano_obra = None
 
         if df_costos_estructura is not None:
 
-            if not entrada.ruta_datos_materiales:
-                raise ValueError("ruta_datos_materiales requerida para MO")
-
-            df_mano_obra = calcular_mano_obra(
-                df_estructuras=entrada.df_estructuras,
-                archivo_materiales=entrada.ruta_datos_materiales
-            )
+            if entrada.ruta_datos_materiales:
+                try:
+                    df_mano_obra = calcular_mano_obra(
+                        df_estructuras=entrada.df_estructuras,
+                        archivo_materiales=entrada.ruta_datos_materiales
+                    )
+                except Exception as e:
+                    debug["mano_obra_error"] = str(e)
+                    df_mano_obra = None
 
             debug["mano_obra"] = _preview_df(df_mano_obra)
 
         # =====================================================
-        # 6. PRECIOS POR ESTRUCTURA
+        # 6. PRECIOS POR ESTRUCTURA (DESACOPLADO)
         # =====================================================
         df_precios_estructura = None
 
-        if df_costos_estructura is not None and df_mano_obra is not None:
+        if df_costos_estructura is not None:
 
             material_total = df_costos_estructura["Costo Total"].sum()
-            mo_total = df_mano_obra["MO Total"].sum()
+
+            # 🔥 SI NO HAY MO → USAR 0
+            if df_mano_obra is not None:
+                mo_total = df_mano_obra["MO Total"].sum()
+            else:
+                mo_total = 0.0
 
             costos_op = calcular_costos_operativos(
                 costo_material_total=material_total,
@@ -202,7 +209,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             "ok": True,
             "df_materiales_costos": df_materiales_costos,
             "df_costos_estructura": df_costos_estructura,
-            "df_mano_obra": df_mano_obra,  # 🔥 NUEVO
+            "df_mano_obra": df_mano_obra,
             "df_precios_estructura": df_precios_estructura,
             "debug": debug
         }
