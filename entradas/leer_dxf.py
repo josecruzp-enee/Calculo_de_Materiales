@@ -135,7 +135,7 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
     }
 
     debug["estado"] = {"ok": True}
-
+    debug["raw_textos"] = textos[:10]
     _guardar_debug(debug)
 
     return df
