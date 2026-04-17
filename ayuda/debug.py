@@ -7,25 +7,38 @@ import re
 
 
 # =========================================================
-# 🔷 GUARDAR DF GLOBAL (LLAMAR DESDE ORQUESTADOR)
+# 🔷 BUSCAR DF AUTOMÁTICO (NO DEPENDE DEL ORQUESTADOR)
 # =========================================================
-def guardar_df_estructuras(df: pd.DataFrame):
-    if df is not None and not df.empty:
-        st.session_state["df_estructuras"] = df.copy()
+def _buscar_df_estructuras():
+
+    for key, val in st.session_state.items():
+        if isinstance(val, pd.DataFrame):
+            cols = [c.lower() for c in val.columns]
+
+            if "punto" in cols and (
+                "codigodeestructura" in cols or "estructura" in cols
+            ):
+                return val
+
+    return None
 
 
 # =========================================================
-# 🔷 NORMALIZACIÓN (ANTI DUPLICADOS)
+# 🔷 NORMALIZACIÓN
 # =========================================================
-def normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
+def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
 
-    # limpiar texto
-    df["Estructura"] = df["Estructura"].astype(str).str.upper().str.strip()
+    # limpiar
+    df.columns = [c.strip() for c in df.columns]
+
+    col_est = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
+
+    df[col_est] = df[col_est].astype(str).str.upper().str.strip()
     df["Punto"] = df["Punto"].astype(str).str.upper().str.strip()
 
-    # normalizar puntos → P-01
+    # normalizar puntos
     def fix_punto(p):
         m = re.search(r"P-(\d+)", p)
         if m:
@@ -35,70 +48,73 @@ def normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
     df["Punto"] = df["Punto"].apply(fix_punto)
 
     # eliminar duplicados reales
-    df = df.drop_duplicates(subset=["Punto", "Estructura"])
+    df = df.drop_duplicates(subset=["Punto", col_est])
 
     return df
 
 
 # =========================================================
-# 🔷 AUDITORÍA REAL
+# 🔷 DEBUG PRINCIPAL
 # =========================================================
-def auditar_estructuras():
+def ejecutar_debug_completo():
 
-    st.markdown("## 🔍 AUDITORÍA REAL")
+    st.title("🧠 DEBUG REAL DEL SISTEMA")
 
-    df = st.session_state.get("df_estructuras")
+    # =====================================================
+    # BUSCAR DF
+    # =====================================================
+    df = _buscar_df_estructuras()
 
     if df is None:
-        st.error("❌ df_estructuras NO existe")
+        st.error("❌ No se encontró df_estructuras en session_state")
+        st.write(list(st.session_state.keys()))
         return
 
-    if df.empty:
-        st.error("❌ df_estructuras está vacío")
-        return
+    # =====================================================
+    # NORMALIZAR
+    # =====================================================
+    df = _normalizar_df(df)
 
-    # normalizar antes de analizar
-    df = normalizar_df(df)
+    # detectar columna
+    col = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
-    # guardar versión limpia
-    st.session_state["df_estructuras_clean"] = df
-
-    # -----------------------------------------------------
+    # =====================================================
     # INFO GENERAL
-    # -----------------------------------------------------
-    st.success("✔ df cargado correctamente")
+    # =====================================================
+    st.success("✔ DF detectado correctamente")
     st.write("Shape:", df.shape)
     st.write("Columnas:", list(df.columns))
 
     st.markdown("### 📊 Preview")
     st.dataframe(df.head(30), use_container_width=True)
 
-    # -----------------------------------------------------
-    # CONTEO POR ESTRUCTURA
-    # -----------------------------------------------------
-    col = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
-
+    # =====================================================
+    # CONTEO
+    # =====================================================
     st.markdown("### 🔢 Conteo por estructura")
-    conteo = df.groupby(col)["Cantidad"].sum().sort_values(ascending=False)
+
+    if "Cantidad" in df.columns:
+        conteo = df.groupby(col)["Cantidad"].sum().sort_values(ascending=False)
+    else:
+        conteo = df[col].value_counts()
+
     st.dataframe(conteo)
 
-    # -----------------------------------------------------
-    # DETECTAR PROBLEMA PC-30
-    # -----------------------------------------------------
+    # =====================================================
+    # VALIDACIÓN PC-30
+    # =====================================================
     st.markdown("### ⚠️ Validación PC-30")
 
     df_pc30 = df[df[col].str.contains("PC-30", na=False)]
 
-    puntos_pc30 = df_pc30["Punto"].unique()
+    st.write("Total registros PC-30:", len(df_pc30))
+    st.write("Puntos únicos con PC-30:", df_pc30["Punto"].nunique())
+    st.write("Lista de puntos:", sorted(df_pc30["Punto"].unique()))
 
-    st.write("Total PC-30 detectados:", len(df_pc30))
-    st.write("Puntos únicos con PC-30:", len(puntos_pc30))
-    st.write("Lista de puntos:", sorted(puntos_pc30))
-
-    # -----------------------------------------------------
-    # DUPLICADOS POR PUNTO
-    # -----------------------------------------------------
-    st.markdown("### 🧨 Duplicados por punto")
+    # =====================================================
+    # DUPLICADOS
+    # =====================================================
+    st.markdown("### 🧨 Duplicados")
 
     dup = df[df.duplicated(subset=["Punto", col], keep=False)]
 
@@ -108,20 +124,9 @@ def auditar_estructuras():
         st.error("❌ DUPLICADOS DETECTADOS")
         st.dataframe(dup)
 
-    # -----------------------------------------------------
+    # =====================================================
     # CONTEO POR PUNTO
-    # -----------------------------------------------------
+    # =====================================================
     st.markdown("### 📍 Conteo por punto")
 
-    puntos = df["Punto"].value_counts().sort_index()
-    st.dataframe(puntos)
-
-
-# =========================================================
-# 🔷 USO EN TU APP
-# =========================================================
-def ejecutar_debug_completo():
-
-    st.title("🧠 DEBUG REAL DEL SISTEMA")
-
-    auditar_estructuras()
+    st.dataframe(df["Punto"].value_counts().sort_index())
