@@ -3,296 +3,125 @@ from __future__ import annotations
 
 import streamlit as st
 import pandas as pd
+import re
 
 
 # =========================================================
-# 🔷 STORAGE GLOBAL DEBUG
+# 🔷 GUARDAR DF GLOBAL (LLAMAR DESDE ORQUESTADOR)
 # =========================================================
-def debug_guardar(clave: str, valor):
-
-    if "debug_pipeline" not in st.session_state:
-        st.session_state["debug_pipeline"] = {}
-
-    try:
-        st.session_state["debug_pipeline"][clave] = valor
-    except Exception:
-        st.session_state["debug_pipeline"][clave] = str(valor)
+def guardar_df_estructuras(df: pd.DataFrame):
+    if df is not None and not df.empty:
+        st.session_state["df_estructuras"] = df.copy()
 
 
 # =========================================================
-# 🔷 DEBUG ESTRUCTURADO
+# 🔷 NORMALIZACIÓN (ANTI DUPLICADOS)
 # =========================================================
-def debug_step(nombre: str, data):
+def normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 
-    debug_guardar(nombre, {
-        "tipo": type(data).__name__,
-        "shape": getattr(data, "shape", None),
-        "preview": str(data)[:500]
-    })
+    df = df.copy()
 
+    # limpiar texto
+    df["Estructura"] = df["Estructura"].astype(str).str.upper().str.strip()
+    df["Punto"] = df["Punto"].astype(str).str.upper().str.strip()
 
-# =========================================================
-# 🔷 ESTADO VISUAL
-# =========================================================
-def _estado(ok):
-    return "🟢" if ok else "🔴"
+    # normalizar puntos → P-01
+    def fix_punto(p):
+        m = re.search(r"P-(\d+)", p)
+        if m:
+            return f"P-{int(m.group(1)):02d}"
+        return p
 
+    df["Punto"] = df["Punto"].apply(fix_punto)
 
-# =========================================================
-# 🔷 PIPELINE RUNTIME REAL
-# =========================================================
-def _pipeline_runtime():
+    # eliminar duplicados reales
+    df = df.drop_duplicates(subset=["Punto", "Estructura"])
 
-    df = st.session_state.get("df_estructuras")
-    resultado = st.session_state.get("resultado_calculo")
-
-    return [
-        ("UI", True),
-
-        ("Entradas",
-         isinstance(df, pd.DataFrame) and not df.empty),
-
-        ("Normalización",
-         isinstance(df, pd.DataFrame)
-         and "codigodeestructura" in df.columns
-         and df["codigodeestructura"].notna().any()),
-
-        ("Materiales",
-         resultado is not None
-         and hasattr(resultado, "df_materiales")),
-
-        ("Exportación", resultado is not None),
-        ("PDF", resultado is not None),
-    ]
+    return df
 
 
 # =========================================================
-# 🔷 RENDER PIPELINE
+# 🔷 AUDITORÍA REAL
 # =========================================================
-def _render_pipeline_runtime():
+def auditar_estructuras():
 
-    st.markdown("### 🧠 Pipeline en tiempo real")
-
-    pasos = _pipeline_runtime()
-
-    for nombre, ok in pasos:
-
-        st.write(f"{_estado(ok)} {nombre}")
-
-        if not ok:
-            st.error(f"⚠️ Falla en: {nombre}")
-            break
-
-
-# =========================================================
-# 🔷 RENDER VALORES DEBUG
-# =========================================================
-def _render_valor_debug(valor):
-
-    # =====================================================
-    # DATAFRAME DIRECTO
-    # =====================================================
-    if isinstance(valor, pd.DataFrame):
-        st.caption(f"Filas: {len(valor)} | Columnas: {list(valor.columns)}")
-        st.dataframe(valor, use_container_width=True)
-
-    # =====================================================
-    # DICT (CLAVE: NO convertir todo a string)
-    # =====================================================
-    elif isinstance(valor, dict):
-
-        # Mostrar JSON limpio pero SIN romper estructuras
-        try:
-            st.json({
-                k: v if not isinstance(v, pd.DataFrame) else f"<<DataFrame {v.shape}>>"
-                for k, v in valor.items()
-            })
-        except:
-            st.write(valor)
-
-        # 🔥 DETECTAR DATAFRAMES INTERNOS
-        for k, v in valor.items():
-            if isinstance(v, pd.DataFrame):
-                st.markdown(f"📊 DataFrame interno: `{k}`")
-                st.caption(f"Filas: {len(v)} | Columnas: {list(v.columns)}")
-                st.dataframe(v, use_container_width=True)
-
-    # =====================================================
-    # OBJETO (dataclass / class)
-    # =====================================================
-    elif hasattr(valor, "__dict__"):
-        try:
-            contenido = vars(valor)
-
-            st.json({
-                k: v if not isinstance(v, pd.DataFrame) else f"<<DataFrame {v.shape}>>"
-                for k, v in contenido.items()
-            })
-
-            for k, v in contenido.items():
-                if isinstance(v, pd.DataFrame):
-                    st.markdown(f"📊 DataFrame interno: `{k}`")
-                    st.dataframe(v, use_container_width=True)
-
-        except:
-            st.write(valor)
-
-    # =====================================================
-    # OTROS
-    # =====================================================
-    else:
-        st.write(valor)
-# =========================================================
-# 🔷 AUDITORÍA ESTRUCTURAS
-# =========================================================
-def _auditar_estructuras():
-
-    st.markdown("### 🔍 Auditoría de estructuras")
+    st.markdown("## 🔍 AUDITORÍA REAL")
 
     df = st.session_state.get("df_estructuras")
 
     if df is None:
-        st.error("df_estructuras = None")
+        st.error("❌ df_estructuras NO existe")
         return
 
+    if df.empty:
+        st.error("❌ df_estructuras está vacío")
+        return
+
+    # normalizar antes de analizar
+    df = normalizar_df(df)
+
+    # guardar versión limpia
+    st.session_state["df_estructuras_clean"] = df
+
+    # -----------------------------------------------------
+    # INFO GENERAL
+    # -----------------------------------------------------
+    st.success("✔ df cargado correctamente")
     st.write("Shape:", df.shape)
     st.write("Columnas:", list(df.columns))
-    st.dataframe(df.head(10))
 
-    col = None
-    if "codigodeestructura" in df.columns:
-        col = "codigodeestructura"
-    elif "Estructura" in df.columns:
-        col = "Estructura"
+    st.markdown("### 📊 Preview")
+    st.dataframe(df.head(30), use_container_width=True)
 
-    if col:
-        st.markdown("### 🔎 Valores únicos")
-        st.write(sorted(df[col].dropna().unique())[:50])
-
-
-# =========================================================
-# 🔷 DEBUG MATERIAL PROFUNDO
-# =========================================================
-def _debug_materiales_profundo():
-
-    st.markdown("### 🔬 Trazabilidad de materiales")
-
-    hojas = st.session_state.get("hojas_base")
-    df = st.session_state.get("df_estructuras")
-    tension = st.session_state.get("tension")
-
-    if hojas is None:
-        st.error("❌ No hay hojas_base")
-        return
-
-    if df is None or df.empty:
-        st.error("❌ No hay estructuras")
-        return
-
+    # -----------------------------------------------------
+    # CONTEO POR ESTRUCTURA
+    # -----------------------------------------------------
     col = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
-    estructuras = sorted(df[col].dropna().unique())
+    st.markdown("### 🔢 Conteo por estructura")
+    conteo = df.groupby(col)["Cantidad"].sum().sort_values(ascending=False)
+    st.dataframe(conteo)
 
-    st.write("Total estructuras:", len(estructuras))
+    # -----------------------------------------------------
+    # DETECTAR PROBLEMA PC-30
+    # -----------------------------------------------------
+    st.markdown("### ⚠️ Validación PC-30")
 
-    for est in estructuras:
+    df_pc30 = df[df[col].str.contains("PC-30", na=False)]
 
-        with st.expander(f"🔎 {est}"):
+    puntos_pc30 = df_pc30["Punto"].unique()
 
-            df_est = hojas.get(est)
+    st.write("Total PC-30 detectados:", len(df_pc30))
+    st.write("Puntos únicos con PC-30:", len(puntos_pc30))
+    st.write("Lista de puntos:", sorted(puntos_pc30))
 
-            if df_est is None:
-                st.error("❌ NO EXISTE EN BASE")
-                continue
+    # -----------------------------------------------------
+    # DUPLICADOS POR PUNTO
+    # -----------------------------------------------------
+    st.markdown("### 🧨 Duplicados por punto")
 
-            st.success("✔ Hoja encontrada")
+    dup = df[df.duplicated(subset=["Punto", col], keep=False)]
 
-            # buscar tensión
-            col_tension = None
-
-            for c in df_est.columns:
-                try:
-                    val = float(str(c).replace(",", "."))
-                    if abs(val - float(tension)) < 0.1:
-                        col_tension = c
-                        break
-                except:
-                    continue
-
-            if col_tension is None:
-                st.error(f"❌ No tiene tensión {tension}")
-                continue
-
-            df_est[col_tension] = pd.to_numeric(df_est[col_tension], errors="coerce").fillna(0)
-
-            df_filtrado = df_est[
-                (df_est[col_tension] > 0)
-                & df_est["MATERIALES"].notna()
-            ]
-
-            if df_filtrado.empty:
-                st.error("❌ SIN MATERIALES")
-            else:
-                st.success(f"✔ {len(df_filtrado)} materiales")
-                st.dataframe(df_filtrado.head(10))
-
-
-# =========================================================
-# 🔷 DEBUG PRINCIPAL
-# =========================================================
-def seccion_debug():
-
-    st.title("🧠 Debug del sistema")
-
-    debug = st.session_state.get("debug_pipeline", {})
-
-    if debug:
-        st.markdown("### 📊 Variables capturadas")
-
-        for k, v in debug.items():
-            st.markdown(f"#### 🔹 {k}")
-
-            # 🔥 FIX: mostrar DXF completo (sin recorte)
-            if k == "DXF":
-                try:
-                    st.json(v)
-                except:
-                    st.write(v)
-            else:
-                _render_valor_debug(v)
-
+    if dup.empty:
+        st.success("✔ No hay duplicados")
     else:
-        st.info("No hay debug aún")
+        st.error("❌ DUPLICADOS DETECTADOS")
+        st.dataframe(dup)
 
-    # ======================================================
-    # Auditoría
-    # ======================================================
-    _auditar_estructuras()
+    # -----------------------------------------------------
+    # CONTEO POR PUNTO
+    # -----------------------------------------------------
+    st.markdown("### 📍 Conteo por punto")
 
-    # ======================================================
-    # Conteo correcto
-    # ======================================================
-    df = st.session_state.get("df_estructuras")
+    puntos = df["Punto"].value_counts().sort_index()
+    st.dataframe(puntos)
 
-    if df is not None and not df.empty:
 
-        col = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
+# =========================================================
+# 🔷 USO EN TU APP
+# =========================================================
+def ejecutar_debug_completo():
 
-        st.markdown("### 🔢 Conteo por estructura")
+    st.title("🧠 DEBUG REAL DEL SISTEMA")
 
-        st.dataframe(
-            df.groupby(col)["cantidad"]
-            .sum()
-            .sort_values(ascending=False)
-        )
-
-    # ======================================================
-    # Pipeline
-    # ======================================================
-    _render_pipeline_runtime()
-
-    # ======================================================
-    # Session completa
-    # ======================================================
-    with st.expander("🔍 session_state completo"):
-        st.json({k: str(v)[:200] for k, v in st.session_state.items()})
+    auditar_estructuras()
