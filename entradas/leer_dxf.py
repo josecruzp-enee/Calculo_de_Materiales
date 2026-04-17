@@ -118,7 +118,15 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
         "total_lineas": len(lineas),
         "capas_detectadas": list(capas_detectadas),
         "total_textos": len(textos),
-        "preview_textos": textos[:10]
+        "preview_textos": [
+            {
+                "i": i,
+                "texto": t[:80],
+                "conteo_P": t.upper().count("P-"),
+                "empieza_con_P": t.upper().strip().startswith("P-")
+            }
+            for i, t in enumerate(textos)
+        ]
     }
 
     debug["output"] = {
