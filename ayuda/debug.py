@@ -61,7 +61,50 @@ def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+# =========================================================
+# 🔷 DEBUG BÁSICO (SIN DEPENDENCIAS)
+# =========================================================
+def seccion_debug():
 
+    st.title("🧠 Debug del sistema (modo estable)")
+
+    debug = st.session_state.get("debug_pipeline", {})
+
+    if debug:
+        st.markdown("### 📊 Variables capturadas")
+        for k, v in debug.items():
+            st.markdown(f"#### 🔹 {k}")
+            try:
+                st.json(v)
+            except:
+                st.write(v)
+    else:
+        st.info("No hay debug aún")
+
+    # Intentar mostrar cualquier DataFrame de estructuras sin romper nada
+    st.markdown("### 🔎 Vista rápida de estructuras")
+
+    df = None
+    for val in st.session_state.values():
+        if isinstance(val, pd.DataFrame) and "Punto" in val.columns:
+            df = val
+            break
+
+    if df is None:
+        st.warning("No se encontró DataFrame de estructuras")
+        return
+
+    st.success("✔ DF encontrado")
+    st.write("Shape:", df.shape)
+    st.dataframe(df.head(20))
+
+    col = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
+
+    st.markdown("### 🔢 Conteo por estructura")
+    if "Cantidad" in df.columns:
+        st.dataframe(df.groupby(col)["Cantidad"].sum().sort_values(ascending=False))
+    else:
+        st.dataframe(df[col].value_counts()) 
 # =========================================================
 # 🔷 DEBUG PRINCIPAL
 # =========================================================
