@@ -251,7 +251,16 @@ def seccion_debug():
 
         for k, v in debug.items():
             st.markdown(f"#### 🔹 {k}")
-            _render_valor_debug(v)
+
+            # 🔥 FIX: mostrar DXF completo (sin recorte)
+            if k == "DXF":
+                try:
+                    st.json(v)
+                except:
+                    st.write(v)
+            else:
+                _render_valor_debug(v)
+
     else:
         st.info("No hay debug aún")
 
@@ -261,7 +270,7 @@ def seccion_debug():
     _auditar_estructuras()
 
     # ======================================================
-    # Conteo correcto (FIX)
+    # Conteo correcto
     # ======================================================
     df = st.session_state.get("df_estructuras")
 
