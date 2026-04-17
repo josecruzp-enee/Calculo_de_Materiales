@@ -101,7 +101,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "shape": df_estructuras.shape,
             "columns": list(df_estructuras.columns)
         }
-
+        st.subheader("🔥 RAW DF ESTRUCTURAS")
+        st.write(salida_entradas.df_estructuras)
         # =====================================================
         # 🔥 DESCRIPCIONES (SOLUCIÓN SIMPLE Y DIRECTA)
         # =====================================================
