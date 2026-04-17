@@ -47,9 +47,7 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
             raise ValueError("DXF vacío")
 
         contenido = raw.decode("latin-1", errors="ignore")
-        st.text(contenido)
-
-        st.stop()
+       
     except Exception as e:
         debug["estado"] = {"ok": False, "error": str(e)}
         _guardar_debug(debug)
