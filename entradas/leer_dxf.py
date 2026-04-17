@@ -147,13 +147,11 @@ def leer_dxf(archivo_dxf: Any) -> pd.DataFrame:
 def _guardar_debug(debug: dict):
     st.session_state.setdefault("debug_pipeline", {})
 
-    # 🔥 guardar debug normal
+    # 🔥 guardar debug completo SIEMPRE
     st.session_state["debug_pipeline"]["DXF"] = debug
 
-    # =====================================================
-    # 🔥 EXTRA: mostrar DXF crudo si existe
-    # =====================================================
-    raw = debug.get("raw_dxf")
-
-    if raw:
-        st.session_state["debug_pipeline"]["DXF_RAW"] = raw[:200]
+    # 🔥 FORZAR VISUALIZACIÓN DE TODO (sin depender de raw_dxf)
+    try:
+        st.session_state["debug_pipeline"]["DXF_RAW"] = str(debug)[:5000]
+    except:
+        st.session_state["debug_pipeline"]["DXF_RAW"] = "ERROR AL MOSTRAR DEBUG"
