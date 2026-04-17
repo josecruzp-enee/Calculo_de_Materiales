@@ -5,7 +5,16 @@ import streamlit as st
 import pandas as pd
 import re
 
+def debug_guardar(clave, valor):
+    import streamlit as st
 
+    if "debug_pipeline" not in st.session_state:
+        st.session_state["debug_pipeline"] = {}
+
+    try:
+        st.session_state["debug_pipeline"][clave] = valor
+    except:
+        st.session_state["debug_pipeline"][clave] = str(valor) 
 # =========================================================
 # 🔷 BUSCAR DF AUTOMÁTICO (NO DEPENDE DEL ORQUESTADOR)
 # =========================================================
