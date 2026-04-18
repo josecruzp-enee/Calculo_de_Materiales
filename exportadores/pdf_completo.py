@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+
 from exportadores.cotizacion import generar_seccion_cotizacion_final
+
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
     Paragraph, Spacer, PageBreak
 )
 
 from exportadores.hoja_info import seccion_hoja_info
-from exportadores.precios_estructura_pdf import (
-    generar_tabla_precios_estructura,
-    generar_cotizacion_desde_estructuras
-)
+from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
+
 import pandas as pd
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
@@ -19,12 +19,18 @@ from exportadores.pdf_base import styles, fondo_pagina
 import streamlit as st
 
 
+# =========================================================
+# DEBUG
+# =========================================================
 def _log(msg):
     if "debug_pdf" not in st.session_state:
         st.session_state["debug_pdf"] = []
     st.session_state["debug_pdf"].append(msg)
 
 
+# =========================================================
+# PDF COMPLETO
+# =========================================================
 def generar_pdf_completo(
     df_materiales,
     df_estructuras,
@@ -62,7 +68,7 @@ def generar_pdf_completo(
     elems = []
 
     # =====================================================
-    # HOJA INFO
+    # 1. HOJA INFO
     # =====================================================
     bloque_info = seccion_hoja_info(
         datos_proyecto=datos_proyecto,
@@ -74,12 +80,11 @@ def generar_pdf_completo(
     elems.append(PageBreak())
 
     # =====================================================
-    # PRESUPUESTO
+    # 2. PRESUPUESTO
     # =====================================================
     elems.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Heading1"]))
     elems.append(Spacer(1, 10))
 
-    # 🔥 VALIDACIÓN CRÍTICA
     if (
         df_precios_estructura is None
         or not isinstance(df_precios_estructura, pd.DataFrame)
@@ -97,15 +102,16 @@ def generar_pdf_completo(
             df_precios_estructura,
             df_estructuras
         )
-
         elems.extend(bloque_pres)
 
     elems.append(PageBreak())
 
     # =====================================================
-    # COTIZACION
+    # 3. COTIZACIÓN
     # =====================================================
-    
+    elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Heading1"]))
+    elems.append(Spacer(1, 10))
+
     if (
         df_precios_estructura is None
         or not isinstance(df_precios_estructura, pd.DataFrame)
@@ -115,19 +121,21 @@ def generar_pdf_completo(
             "No se puede generar la cotización por falta de precios.",
             styles["Normal"]
         ))
-    else:
 
-        # 🔥 SUBTOTAL SEGURO
-        if "Subtotal" not in df_precios_estructura.columns:
-            df_precios_estructura["Subtotal"] = (
-                df_precios_estructura["Precio Unitario"] *
-                df_precios_estructura["Cantidad"]
+    else:
+        # 🔥 COPIA SEGURA (NO MUTAR ORIGINAL)
+        df_tmp = df_precios_estructura.copy()
+
+        if "Subtotal" not in df_tmp.columns:
+            df_tmp["Subtotal"] = (
+                df_tmp["Precio Unitario"] *
+                df_tmp["Cantidad"]
             )
 
         bloque_cot = generar_seccion_cotizacion_final(
             doc,
             styles,
-            df_precios_estructura
+            df_tmp
         )
 
         elems.extend(bloque_cot)
