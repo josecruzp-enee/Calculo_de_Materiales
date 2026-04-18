@@ -6,7 +6,7 @@ import pandas as pd
 import traceback
 
 from interfaz.contratos import SalidaInterfaz
-from entradas.modelos import SalidaEntradas
+from interfaz.contratos import SalidaInterfaz
 
 
 # =========================================================
