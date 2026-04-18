@@ -6,7 +6,13 @@ import pandas as pd
 
 # ✔ IMPORT CORRECTO (sin duplicados y con SalidaEntradas)
 from interfaz.contratos import SalidaInterfaz, SalidaEntradas
-
+def ejecutar_proyecto(salida_interfaz):
+    return {
+        "ok": True,
+        "errores": [],
+        "warnings": [],
+        "salida_interfaz": salida_interfaz
+    }
 
 # =========================================================
 # HELPERS
