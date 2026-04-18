@@ -1,142 +1,90 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Dict, Any
 import pandas as pd
 
-# ✔ IMPORT CORRECTO (sin duplicados y con SalidaEntradas)
 from interfaz.contratos import SalidaInterfaz, SalidaEntradas
-def ejecutar_proyecto(salida_interfaz):
-    return {
-        "ok": True,
-        "errores": [],
-        "warnings": [],
-        "salida_interfaz": salida_interfaz
-    }
+from entradas.orquestador_entradas import ejecutar_entradas
+
 
 # =========================================================
 # HELPERS
 # =========================================================
-def _fail(msg: str) -> SalidaEntradas:
-    return SalidaEntradas(
-        ok=False,
-        errores=[msg],
-        warnings=[],
-        df_estructuras=None,
-        base_datos=None,
-        datos_proyecto=None,
-        df_cables=None,
-    )
+def _fail(msg: str) -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "errores": [msg],
+        "warnings": [],
+        "debug": {}
+    }
 
 
-def _normalizar_df(df: Optional[pd.DataFrame]) -> pd.DataFrame:
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
-        return pd.DataFrame()
-
-    df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
-    return df
-
-
-def _validar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
-    if df is None or df.empty:
-        raise ValueError("df_estructuras vacío")
-
-    df = _normalizar_df(df)
-    columnas = set(df.columns)
-
-    if {"Estructura", "Cantidad"}.issubset(columnas):
-        pass
-    elif {"codigodeestructura", "Cantidad"}.issubset(columnas):
-        df = df.rename(columns={"codigodeestructura": "Estructura"})
-    else:
-        raise ValueError(f"df_estructuras inválido: {list(columnas)}")
-
-    df["Estructura"] = (
-        df["Estructura"]
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
-
-    df["Cantidad"] = pd.to_numeric(
-        df["Cantidad"],
-        errors="coerce"
-    ).fillna(0)
-
-    return df
-
-
-def _procesar_cables(df_cables: Optional[pd.DataFrame]) -> pd.DataFrame:
-    if df_cables is None or not isinstance(df_cables, pd.DataFrame) or df_cables.empty:
-        return pd.DataFrame()
-
-    df = df_cables.copy()
-    df.columns = [str(c).strip().lower() for c in df.columns]
-
-    if "tipo" in df.columns:
-        df["tipo"] = (
-            df["tipo"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
-
-    if "longitud" in df.columns:
-        df["longitud"] = pd.to_numeric(
-            df["longitud"],
-            errors="coerce"
-        ).fillna(0)
-
-    return df
+def _extraer_tension(datos: Dict[str, Any]) -> float:
+    t = datos.get("tension") or datos.get("nivel_de_tension")
+    if t is None:
+        raise ValueError("Tensión no definida")
+    t = float(t)
+    if t <= 0:
+        raise ValueError("Tensión inválida")
+    return t
 
 
 # =========================================================
-# ORQUESTADOR DE ENTRADAS
+# ORQUESTADOR PRINCIPAL
 # =========================================================
-def ejecutar_entradas(salida_interfaz: SalidaInterfaz) -> SalidaEntradas:
+def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> Dict[str, Any]:
+
+    debug_global = {}
 
     try:
-        if not salida_interfaz:
-            return _fail("SalidaInterfaz es None")
 
-        datos_proyecto = salida_interfaz.datos_proyecto or {}
-        base_datos = salida_interfaz.base_datos or {}
+        debug_global["ETAPA"] = "INICIO"
 
         # =====================================================
-        # ESTRUCTURAS
+        # 1. ENTRADAS
         # =====================================================
-        df_estructuras = _validar_estructuras(
-            salida_interfaz.df_estructuras
-        )
+        salida_entradas = ejecutar_entradas(salida_interfaz)
+
+        if not salida_entradas or not getattr(salida_entradas, "ok", False):
+            return _fail("Error en orquestador de entradas")
+
+        debug_global["ENTRADAS_OK"] = True
 
         # =====================================================
-        # CABLES (seguro contra None)
+        # 2. DF ESTRUCTURAS
         # =====================================================
-        df_cables = _procesar_cables(
-            getattr(salida_interfaz, "df_cables", None)
-        )
+        df_estructuras = salida_entradas.df_estructuras
+
+        debug_global["DF_ESTRUCTURAS"] = None if df_estructuras is None else df_estructuras.shape
 
         # =====================================================
-        # SALIDA FINAL
+        # 3. TENSIÓN
         # =====================================================
-        return SalidaEntradas(
-            ok=True,
-            df_estructuras=df_estructuras,
-            base_datos=base_datos,
-            datos_proyecto=datos_proyecto,
-            df_cables=df_cables,
-            errores=[],
-            warnings=[],
-        )
+        datos_proyecto = salida_entradas.datos_proyecto or {}
+        tension = _extraer_tension(datos_proyecto)
+
+        debug_global["TENSION"] = tension
+
+        # =====================================================
+        # 4. SALIDA FINAL (ESTABLE)
+        # =====================================================
+        return {
+            "ok": True,
+            "errores": [],
+            "warnings": [],
+            "tension": tension,
+            "df_estructuras": df_estructuras,
+            "base_datos": salida_entradas.base_datos,
+            "datos_proyecto": datos_proyecto,
+            "df_cables": salida_entradas.df_cables,
+            "debug": debug_global
+        }
 
     except Exception as e:
-        return SalidaEntradas(
-            ok=False,
-            errores=[str(e)],
-            warnings=[],
-            df_estructuras=None,
-            base_datos=None,
-            datos_proyecto=None,
-            df_cables=None,
-        )
+        return {
+            "ok": False,
+            "errores": [str(e)],
+            "warnings": [],
+            "debug": debug_global
+        }
