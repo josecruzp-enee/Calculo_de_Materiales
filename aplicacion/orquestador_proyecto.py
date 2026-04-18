@@ -11,6 +11,19 @@ from entradas.modelos import SalidaEntradas
 # =========================================================
 # ORQUESTADOR DE ENTRADAS
 # =========================================================
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+from typing import Dict, Any
+import pandas as pd
+
+from interfaz.contratos import SalidaInterfaz
+from entradas.modelos import SalidaEntradas
+
+
+# =========================================================
+# ORQUESTADOR DE ENTRADAS
+# =========================================================
 def ejecutar_entradas(salida_interfaz: SalidaInterfaz) -> SalidaEntradas:
 
     try:
@@ -24,7 +37,7 @@ def ejecutar_entradas(salida_interfaz: SalidaInterfaz) -> SalidaEntradas:
         base_datos = salida_interfaz.base_datos or {}
 
         # =====================================================
-        # 2. ESTRUCTURAS (YA LO TENÍAS)
+        # 2. ESTRUCTURAS
         # =====================================================
         df_estructuras = salida_interfaz.df_estructuras
 
@@ -32,28 +45,33 @@ def ejecutar_entradas(salida_interfaz: SalidaInterfaz) -> SalidaEntradas:
             raise ValueError("df_estructuras vacío")
 
         # =====================================================
-        # 🔥 3. EXTRAER CABLES DEL PROYECTO (NUEVO)
+        # 🔥 3. CABLES (CORREGIDO)
         # =====================================================
-        cables_raw = datos_proyecto.get("cables_proyecto", [])
+        df_cables = salida_interfaz.df_cables  # 👈 ESTE ES EL FIX
 
-        if cables_raw and isinstance(cables_raw, list):
-            try:
-                df_cables = pd.DataFrame(cables_raw)
+        if isinstance(df_cables, pd.DataFrame) and not df_cables.empty:
 
-                # Normalización básica (CLAVE)
-                df_cables.columns = [c.strip().lower() for c in df_cables.columns]
+            df_cables = df_cables.copy()
 
-                if "tipo" in df_cables.columns:
-                    df_cables["tipo"] = df_cables["tipo"].astype(str).str.strip().str.upper()
+            # normalizar nombres
+            df_cables.columns = [c.strip().lower() for c in df_cables.columns]
 
-                if "longitud" in df_cables.columns:
-                    df_cables["longitud"] = pd.to_numeric(
-                        df_cables["longitud"],
-                        errors="coerce"
-                    ).fillna(0)
+            # normalizar tipo
+            if "tipo" in df_cables.columns:
+                df_cables["tipo"] = (
+                    df_cables["tipo"]
+                    .astype(str)
+                    .str.strip()
+                    .str.upper()
+                )
 
-            except Exception:
-                df_cables = pd.DataFrame()
+            # normalizar longitud
+            if "longitud" in df_cables.columns:
+                df_cables["longitud"] = pd.to_numeric(
+                    df_cables["longitud"],
+                    errors="coerce"
+                ).fillna(0)
+
         else:
             df_cables = pd.DataFrame()
 
@@ -65,7 +83,7 @@ def ejecutar_entradas(salida_interfaz: SalidaInterfaz) -> SalidaEntradas:
             df_estructuras=df_estructuras,
             base_datos=base_datos,
             datos_proyecto=datos_proyecto,
-            df_cables=df_cables,   # 🔥 ESTA ES LA CLAVE
+            df_cables=df_cables,
         )
 
     except Exception as e:
