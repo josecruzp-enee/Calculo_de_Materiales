@@ -137,3 +137,62 @@ def generar_tabla_precios_estructura(
     ]))
 
     return [tabla]
+
+# =========================================================
+# COTIZACIÓN SIMPLE (RESTAURADA)
+# =========================================================
+def generar_cotizacion_desde_estructuras(doc, styles, df_precios):
+
+    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib import colors
+
+    elems = []
+
+    if df_precios is None or df_precios.empty:
+        elems.append(Paragraph("SIN DATOS PARA COTIZACIÓN", styles["Normal"]))
+        return elems
+
+    total_base = float(df_precios["Subtotal"].sum()) if "Subtotal" in df_precios.columns else float(df_precios["Precio Total"].sum())
+
+    # =====================================================
+    # GASTOS
+    # =====================================================
+    enee = total_base * 0.02
+    imprevistos = total_base * 0.01
+
+    subtotal = total_base + enee + imprevistos
+    isv = subtotal * 0.15
+    total_final = subtotal + isv
+
+    elems.append(Paragraph("<b>COTIZACIÓN DEL PROYECTO</b>", styles["Heading1"]))
+    elems.append(Spacer(1, 12))
+
+    data = [
+        ["Concepto", "Monto (L)"],
+        ["Suministro e instalación", f"L {total_base:,.2f}"],
+        ["Gestión ENEE (2%)", f"L {enee:,.2f}"],
+        ["Imprevistos (1%)", f"L {imprevistos:,.2f}"],
+        ["SUBTOTAL", f"L {subtotal:,.2f}"],
+        ["ISV (15%)", f"L {isv:,.2f}"],
+        ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
+    ]
+
+    tabla = Table(data, colWidths=[doc.width * 0.7, doc.width * 0.3])
+
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+
+        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+
+        ("BACKGROUND", (0, -1), (-1, -1), colors.darkblue),
+        ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+    ]))
+
+    elems.append(tabla)
+
+    return elems
