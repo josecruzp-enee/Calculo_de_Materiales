@@ -186,50 +186,36 @@ def calcular_costos_operativos(
 # =========================================================
 # 🔥 INTERNO: AGREGAR CABLE (AQUÍ VIVE TODO)
 # =========================================================
-def _agregar_cable_a_precios(df_precios, df_cables):
+def _agregar_cable_a_precios(df_precios, entrada):
 
-    if df_precios is None or df_precios.empty:
-        return df_precios
+    datos = getattr(entrada, "_datos_proyecto", {}) or {}
+    cables = datos.get("cables_proyecto", [])
 
-    if df_cables is None or df_cables.empty:
-        return df_precios
-
-    df_cables = df_cables.copy()
-    df_cables.columns = [str(c).strip().upper() for c in df_cables.columns]
-
-    col_tipo = next((c for c in df_cables.columns if "TIPO" in c), None)
-    col_long = next((c for c in df_cables.columns if "LONG" in c), None)
-    col_calibre = next((c for c in df_cables.columns if "CALIBRE" in c), None)
-
-    if not col_tipo or not col_long:
+    if not cables:
         return df_precios
 
     filas = []
 
-    for _, r in df_cables.iterrows():
-
-        tipo = str(r.get(col_tipo, "")).strip().upper()
+    for c in cables:
+        tipo = str(c.get("Tipo", "")).upper()
+        calibre = str(c.get("Calibre", "")).strip()
 
         try:
-            longitud = float(r.get(col_long, 0))
+            longitud = float(c.get("Longitud", 0))
         except:
             continue
 
         if longitud <= 0:
             continue
 
-        if "PRIMARIO" in tipo or tipo == "MT":
+        if tipo in ["MT", "PRIMARIO"]:
             precio = 120
             nombre = "línea primaria"
-
-        elif "SECUNDARIO" in tipo or tipo == "BT":
+        elif tipo in ["BT", "SECUNDARIO"]:
             precio = 80
             nombre = "línea secundaria"
-
         else:
             continue
-
-        calibre = str(r.get(col_calibre, "")).strip() if col_calibre else ""
 
         desc = f"Suministro e instalación de {round(longitud,2)} m de {nombre}"
         if calibre:
@@ -248,8 +234,6 @@ def _agregar_cable_a_precios(df_precios, df_cables):
         return df_precios
 
     return pd.concat([df_precios, pd.DataFrame(filas)], ignore_index=True)
-
-
 # =========================================================
 # ORQUESTADOR LOCAL (SE QUEDA AQUÍ TODO)
 # =========================================================
