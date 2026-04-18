@@ -83,7 +83,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
     prim, sec, neu, pil = extraer_calibres(datos)
 
     # =====================================================
-    # TABLA CORREGIDA
+    # TABLA
     # =====================================================
     data = [
         ["Nombre del Proyecto:", datos.get("nombre_proyecto", "SIN NOMBRE")],
@@ -121,25 +121,80 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
         df = df_estructuras.copy()
         df["cod"] = df["codigodeestructura"].astype(str).str.upper()
 
-        # POSTES
+        # =================================================
+        # POSTES (MEJORADO)
+        # =================================================
         postes = df[df["cod"].str.contains("PC")]
         if not postes.empty:
-            total = int(postes["Cantidad"].sum())
-            lineas.append(f"Hincado de {total} postes.")
 
-        # TRANSFORMADORES
+            resumen = postes.groupby("cod")["Cantidad"].sum().reset_index()
+
+            partes = [
+                f'{int(r["Cantidad"])} {r["cod"]}'
+                for _, r in resumen.iterrows()
+            ]
+
+            total = int(postes["Cantidad"].sum())
+
+            lineas.append(
+                f"Hincado de {', '.join(partes)} (Total: {total} postes)."
+            )
+
+        # =================================================
+        # TRANSFORMADORES (MEJORADO)
+        # =================================================
         trafos = df[df["cod"].str.contains("TS")]
         if not trafos.empty:
-            total = int(trafos["Cantidad"].sum())
-            lineas.append(f"Instalación de {total} transformador(es).")
 
+            resumen = trafos.groupby("cod")["Cantidad"].sum().reset_index()
+
+            partes = [
+                f'{int(r["Cantidad"])} x {r["cod"]}'
+                for _, r in resumen.iterrows()
+            ]
+
+            total = int(trafos["Cantidad"].sum())
+
+            lineas.append(
+                f"Instalación de {total} transformador(es) en conexión {', '.join(partes)}."
+            )
+
+        # =================================================
         # LUMINARIAS
+        # =================================================
         lum = df[df["cod"].str.contains("LL")]
         if not lum.empty:
-            resumen = lum.groupby("cod")["Cantidad"].sum().reset_index()
-            partes = [f'{r["Cantidad"]} x {r["cod"]}' for _, r in resumen.iterrows()]
-            lineas.append(f"Instalación de luminarias tipo {', '.join(partes)}.")
 
+            total = int(lum["Cantidad"].sum())
+
+            # Detectar potencia desde el código (ej: LL-1-50W → 50W)
+            potencias = []
+
+            for cod in lum["cod"]:
+                cod = str(cod).upper()
+
+                if "W" in cod:
+                    try:
+                        w = cod.split("-")[-1]  # toma "50W"
+                        potencias.append(w)
+                    except:
+                        continue
+
+            # quitar duplicados
+            potencias = list(dict.fromkeys(potencias))
+
+            if potencias:
+                desc_pot = " / ".join(potencias)
+                lineas.append(
+                    f"Instalación de {total} luminarias tipo LED de {desc_pot}."
+            )
+            else:
+                lineas.append(
+                    f"Instalación de {total} luminarias tipo LED."
+            )
+
+
+   
     # =====================================================
     # LÍNEAS ELÉCTRICAS
     # =====================================================
@@ -182,7 +237,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
 
 
 # =========================================================
-# WRAPPER (NO ROMPER IMPORTS)
+# WRAPPER
 # =========================================================
 def seccion_hoja_info(datos_proyecto, df_estructuras, df_mat):
     return hoja_info_proyecto(
