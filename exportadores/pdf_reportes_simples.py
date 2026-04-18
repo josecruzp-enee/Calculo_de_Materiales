@@ -5,15 +5,13 @@ Reportes PDF unitarios: materiales/estructuras global y por punto.
 Autor: José Nikol Cruz
 """
 
-import re
 import pandas as pd
 from io import BytesIO
 from xml.sax.saxutils import escape
 
-from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Table
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.lib import colors
 
 from exportadores.pdf_base import (
     styles,
@@ -22,6 +20,7 @@ from exportadores.pdf_base import (
     formatear_material,
     estilo_tabla,
 )
+
 
 # ==========================================================
 # PDF: RESUMEN DE MATERIALES (GLOBAL)
@@ -56,12 +55,8 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
             f"{float(row['Cantidad']):.2f}"
         ])
 
-    tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch])
-    tabla.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-    ]))
+    tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch], repeatRows=1)
+    tabla.setStyle(estilo_tabla())
 
     elems.append(tabla)
     doc.build(elems)
@@ -98,9 +93,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
 
     df = df_estructuras.copy()
 
-    # =========================================================
-    # DETECCIÓN DE COLUMNA
-    # =========================================================
     col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
     df[col_codigo] = (
@@ -111,9 +103,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
         .str.upper()
     )
 
-    # =========================================================
-    # 🔥 DESCRIPCIÓN DESDE INDICE (CORRECTO)
-    # =========================================================
+    # ===== MAPEO DE DESCRIPCIÓN =====
     if base_datos and "indice" in base_datos:
 
         df_indice = base_datos["indice"]
@@ -135,14 +125,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
             df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
 
     else:
-        if "Descripcion" not in df.columns:
-            df["Descripcion"] = ""
+        df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
 
-        df["Descripcion"] = df["Descripcion"].fillna("").astype(str)
-
-    # =========================================================
-    # AGRUPACIÓN
-    # =========================================================
     if "Cantidad" not in df.columns:
         df["Cantidad"] = 1
 
@@ -151,9 +135,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
         "Descripcion": "first"
     })
 
-    # =========================================================
-    # TABLA
-    # =========================================================
     data = [["Estructura", "Descripción", "Cantidad"]]
 
     for _, r in df.iterrows():
@@ -163,11 +144,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
             Paragraph(str(int(r["Cantidad"])), styleN),
         ])
 
-    tabla = Table(data, colWidths=[2 * inch, 3.5 * inch, 1 * inch])
-    tabla.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightblue),
-    ]))
+    tabla = Table(data, colWidths=[2 * inch, 3.5 * inch, 1 * inch], repeatRows=1)
+    tabla.setStyle(estilo_tabla())
 
     elems.append(tabla)
     doc.build(elems)
@@ -214,10 +192,8 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy):
                 escape(str(r.get("Cantidad", ""))),
             ])
 
-        tabla = Table(data)
-        tabla.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.black)
-        ]))
+        tabla = Table(data, repeatRows=1)
+        tabla.setStyle(estilo_tabla())
 
         elems.append(tabla)
         elems.append(Spacer(1, 10))
@@ -265,10 +241,8 @@ def generar_pdf_materiales_por_punto(df, nombre_proy):
                 f"{float(r['Cantidad']):.2f}",
             ])
 
-        tabla = Table(data)
-        tabla.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.black)
-        ]))
+        tabla = Table(data, repeatRows=1)
+        tabla.setStyle(estilo_tabla())
 
         elems.append(tabla)
         elems.append(Spacer(1, 10))
