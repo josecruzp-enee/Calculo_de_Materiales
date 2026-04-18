@@ -6,7 +6,7 @@ import pandas as pd
 from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
-
+from exportadores.pdf_base import estilo_tabla
 
 # =========================================================
 # TABLA PRECIOS DE ESTRUCTURA (FORMATO OFERTA FINAL)
