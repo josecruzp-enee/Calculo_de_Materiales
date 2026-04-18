@@ -81,6 +81,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
     debug: Dict[str, Any] = {}
 
     try:
+        debug["CABLES_EN_COSTOS"] = getattr(entrada, "_datos_proyecto", {})
         # =====================================================
         # 1. VALIDACIÓN
         # =====================================================
