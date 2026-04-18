@@ -195,7 +195,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             })
 
         df_precios_estructura = pd.DataFrame(filas)
-
+        '''
         # =====================================================
         # 🔥 CABLE
         # =====================================================
@@ -216,7 +216,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 [df_precios_estructura, fila_cable],
                 ignore_index=True
             )
-
+        '''
         # =====================================================
         # 🔥 SUBTOTAL FINAL (CORRECTO)
         # =====================================================
