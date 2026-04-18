@@ -244,6 +244,13 @@ def _agregar_cable_a_precios(df_precios, entrada):
             continue
 
         # =====================================================
+        # DATOS PARA PRESENTACIÓN
+        # =====================================================
+        longitud_tramo = float(c.get("Longitud", 0) or 0)
+        fases = int(c.get("Conductores", 1) or 1)
+
+        
+        # =====================================================
         # DESCRIPCIÓN
         # =====================================================
         desc = f"Suministro e instalación de {int(longitud)} m de {nombre}"
