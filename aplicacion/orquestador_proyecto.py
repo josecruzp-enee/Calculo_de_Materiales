@@ -225,7 +225,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
             df_cables=salida_interfaz.df_cables,   # 🔥 ESTA ES LA CLAVE
         )
-
+        entrada_costos._datos_proyecto = salida_interfaz.datos_proyecto
         resultado_costos = ejecutar_costos(entrada_costos)
 
         debug_global["COSTOS"] = {
