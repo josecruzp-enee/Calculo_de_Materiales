@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Optional, Dict, Any
+from typing import Optional
 import pandas as pd
-import traceback
 
+# ✔ IMPORT CORRECTO (sin duplicados y con SalidaEntradas)
 from interfaz.contratos import SalidaInterfaz, SalidaEntradas
+
 
 # =========================================================
 # HELPERS
@@ -32,12 +33,10 @@ def _normalizar_df(df: Optional[pd.DataFrame]) -> pd.DataFrame:
 
 
 def _validar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
-
     if df is None or df.empty:
         raise ValueError("df_estructuras vacío")
 
     df = _normalizar_df(df)
-
     columnas = set(df.columns)
 
     if {"Estructura", "Cantidad"}.issubset(columnas):
@@ -63,12 +62,10 @@ def _validar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _procesar_cables(df_cables: Optional[pd.DataFrame]) -> pd.DataFrame:
-
     if df_cables is None or not isinstance(df_cables, pd.DataFrame) or df_cables.empty:
         return pd.DataFrame()
 
     df = df_cables.copy()
-
     df.columns = [str(c).strip().lower() for c in df.columns]
 
     if "tipo" in df.columns:
@@ -108,10 +105,10 @@ def ejecutar_entradas(salida_interfaz: SalidaInterfaz) -> SalidaEntradas:
         )
 
         # =====================================================
-        # CABLES
+        # CABLES (seguro contra None)
         # =====================================================
         df_cables = _procesar_cables(
-            salida_interfaz.df_cables
+            getattr(salida_interfaz, "df_cables", None)
         )
 
         # =====================================================
