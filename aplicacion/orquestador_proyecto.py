@@ -26,6 +26,9 @@ from costos_precios.orquestador_costos import (
 
 from exportadores.orquestador_reportes import generar_reportes, EntradaReportes
 
+# 🔥 FIX REAL (IMPORT CORRECTO)
+from entradas.base_datos import obtener_catalogo_materiales
+
 
 # =========================================================
 # HELPERS
@@ -69,7 +72,7 @@ def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =========================================================
-# NORMALIZADOR DE TEXTO (CLAVE DEL FIX)
+# NORMALIZADOR TEXTO
 # =========================================================
 def limpiar_columna(texto: str) -> str:
     if texto is None:
@@ -115,7 +118,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         }
 
         # =====================================================
-        # 2. DESCRIPCIONES (FIX DEFINITIVO)
+        # 2. DESCRIPCIONES
         # =====================================================
         base = salida_entradas.base_datos or {}
         df_indice = base.get("INDICE") or base.get("indice")
@@ -133,7 +136,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         if isinstance(df_indice, pd.DataFrame):
 
-            # 🔥 FIX: eliminar tildes
             df_indice.columns = [limpiar_columna(c) for c in df_indice.columns]
 
             col_codigo = None
@@ -212,11 +214,13 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         }
 
         # =====================================================
-        # 5. COSTOS
+        # 5. COSTOS (FIX REAL)
         # =====================================================
+        df_catalogo = obtener_catalogo_materiales(salida_entradas.base_datos)
+
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
-            df_catalogo=salida_entradas.base_datos.get("catalogo", pd.DataFrame()),
+            df_catalogo=df_catalogo,
             df_estructuras=df_estructuras,
             df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
         )
