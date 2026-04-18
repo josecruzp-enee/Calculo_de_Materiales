@@ -32,11 +32,12 @@ class EntradaCostos:
     df_estructuras: Optional[pd.DataFrame] = None
     df_materiales_por_estructura: Optional[Dict[str, pd.DataFrame]] = None
 
-    ruta_datos_materiales: Optional[str] = None  # 🔥 NUEVO (para MO)
+    ruta_datos_materiales: Optional[str] = None
     df_cables: Optional[pd.DataFrame] = None 
 
+
 # =====================================================
-# HELPERS DEBUG
+# HELPERS
 # =====================================================
 def _preview_df(df: pd.DataFrame, n=5):
     if df is None:
@@ -49,13 +50,12 @@ def _preview_df(df: pd.DataFrame, n=5):
 
 
 def calcular_costos_cable(df_cables):
-
     total = 0
 
     for _, r in df_cables.iterrows():
 
         tipo = str(r.get("tipo", "")).strip().upper()
-        
+
         try:
             longitud = float(r.get("longitud", 0))
         except:
@@ -66,13 +66,15 @@ def calcular_costos_cable(df_cables):
         elif tipo == "SECUNDARIO":
             precio = 80
         else:
-            continue  # 🔥 ignora basura
+            continue
 
         total += longitud * precio
 
     return total
+
+
 # =====================================================
-# ORQUESTADOR PRINCIPAL
+# ORQUESTADOR
 # =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
@@ -101,8 +103,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         if df_costos is None or df_costos.empty:
             raise ValueError("df_costos vacío")
 
-        debug["catalogo_procesado"] = _preview_df(df_costos)
-
         # =====================================================
         # 3. COSTOS DE MATERIALES
         # =====================================================
@@ -111,135 +111,124 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             df_catalogo_costos=df_costos
         )
 
-        debug["materiales_costos"] = _preview_df(df_materiales_costos)
-
         # =====================================================
-        # 4. COSTOS POR ESTRUCTURA
+        # 4. VALIDACIÓN CRÍTICA (🔥 AQUÍ ESTABA EL PROBLEMA)
         # =====================================================
-        df_costos_estructura = None
-
         if (
-            entrada.df_estructuras is not None and
-            entrada.df_materiales_por_estructura is not None
+            entrada.df_estructuras is None or
+            entrada.df_materiales_por_estructura is None or
+            not isinstance(entrada.df_materiales_por_estructura, dict) or
+            len(entrada.df_materiales_por_estructura) == 0
         ):
-            df_costos_estructura = calcular_costos_por_estructura(
-                df_estructuras=entrada.df_estructuras,
-                df_materiales_por_estructura=entrada.df_materiales_por_estructura,
-                df_precios_materiales=df_costos
-            )
-
-            debug["costos_estructura"] = _preview_df(df_costos_estructura)
+            raise ValueError("🚨 df_materiales_por_estructura vacío o inválido")
 
         # =====================================================
-        # 5. MANO DE OBRA
+        # 5. COSTOS POR ESTRUCTURA
+        # =====================================================
+        df_costos_estructura = calcular_costos_por_estructura(
+            df_estructuras=entrada.df_estructuras,
+            df_materiales_por_estructura=entrada.df_materiales_por_estructura,
+            df_precios_materiales=df_costos
+        )
+
+        if df_costos_estructura is None or df_costos_estructura.empty:
+            raise ValueError("🚨 COSTOS POR ESTRUCTURA VACÍOS")
+
+        # =====================================================
+        # 6. MANO DE OBRA
         # =====================================================
         df_mano_obra = None
 
-        if df_costos_estructura is not None:
-
-            if entrada.ruta_datos_materiales:
-                try:
-                    df_mano_obra = calcular_mano_obra(
-                        df_estructuras=entrada.df_estructuras,
-                        archivo_materiales=entrada.ruta_datos_materiales
-                    )
-                except Exception as e:
-                    debug["mano_obra_error"] = str(e)
-                    df_mano_obra = None
-
-            debug["mano_obra"] = _preview_df(df_mano_obra)
+        if entrada.ruta_datos_materiales:
+            try:
+                df_mano_obra = calcular_mano_obra(
+                    df_estructuras=entrada.df_estructuras,
+                    archivo_materiales=entrada.ruta_datos_materiales
+                )
+            except Exception as e:
+                debug["mano_obra_error"] = str(e)
 
         # =====================================================
-        # 6. PRECIOS POR ESTRUCTURA
+        # 7. PRECIOS POR ESTRUCTURA
         # =====================================================
-        df_precios_estructura = None
+        material_total = df_costos_estructura["Costo Total"].sum()
 
-        if df_costos_estructura is not None:
+        mo_total = df_mano_obra["MO Total"].sum() if df_mano_obra is not None else 0.0
 
-            material_total = df_costos_estructura["Costo Total"].sum()
+        costos_op = calcular_costos_operativos(
+            costo_material_total=material_total,
+            costo_mano_obra=mo_total
+        )
 
-            mo_total = df_mano_obra["MO Total"].sum() if df_mano_obra is not None else 0.0
+        filas = []
 
-            costos_op = calcular_costos_operativos(
-                costo_material_total=material_total,
-                costo_mano_obra=mo_total
+        for _, r in df_costos_estructura.iterrows():
+
+            estructura = str(r["codigodeestructura"]).strip()
+            costo_mat_unit = float(r["Costo Unitario"])
+            costo_total_estructura = float(r["Costo Total"])
+            cantidad = max(1, int(r["Cantidad"]))
+
+            if material_total <= 0:
+                continue
+
+            peso = costo_total_estructura / material_total
+
+            costo_operativo_unit = (
+                costos_op.operativo_total * peso
+            ) / cantidad
+
+            res = calcular_precio_estructura(
+                estructura=estructura,
+                costo_materiales=costo_mat_unit,
+                costo_operativo=costo_operativo_unit,
+                porcentaje_utilidad=0.25,
             )
 
-            filas = []
+            filas.append({
+                "Estructura": estructura,
+                "Cantidad": cantidad,
+                "Costo Unitario": costo_mat_unit,
+                "Costo Operativo": costo_operativo_unit,
+                "Precio Unitario": res.precio_unitario,
+                "Precio Total": res.precio_unitario * cantidad,
+            })
 
-            for _, r in df_costos_estructura.iterrows():
-
-                estructura = str(r["codigodeestructura"]).strip()
-                costo_mat_unit = float(r["Costo Unitario"])
-                costo_total_estructura = float(r["Costo Total"])
-                cantidad = max(1, int(r["Cantidad"]))
-
-                if material_total <= 0:
-                    continue
-
-                peso = costo_total_estructura / material_total
-
-                costo_operativo_unit = (
-                    costos_op.operativo_total * peso
-                ) / cantidad
-
-                res = calcular_precio_estructura(
-                    estructura=estructura,
-                    costo_materiales=costo_mat_unit,
-                    costo_operativo=costo_operativo_unit,
-                    porcentaje_utilidad=0.25,
-                )
-
-                filas.append({
-                    "Estructura": estructura,
-                    "Cantidad": cantidad,
-                    "Costo Unitario": costo_mat_unit,
-                    "Costo Operativo": costo_operativo_unit,
-                    "Precio Unitario": res.precio_unitario,
-                    "Precio Total": res.precio_unitario * cantidad,
-                })
-
-            df_precios_estructura = pd.DataFrame(filas)
-
-            # =====================================================
-            # 🔥 AGREGAR CABLE COMO ESTRUCTURA
-            # =====================================================
-            if entrada.df_cables is not None and not entrada.df_cables.empty:
-
-                total_cable = calcular_costos_cable(entrada.df_cables)
-
-                fila_cable = pd.DataFrame([{
-                    "Estructura": "LÍNEA MT/BT",
-                    "Cantidad": 1,
-                    "Costo Unitario": total_cable,
-                    "Costo Operativo": 0,
-                    "Precio Unitario": total_cable,
-                    "Precio Total": total_cable,
-                }])
-
-                df_precios_estructura = pd.concat(
-                    [df_precios_estructura, fila_cable],
-                    ignore_index=True
-                )
-
-            debug["precios_estructura"] = _preview_df(df_precios_estructura)
+        df_precios_estructura = pd.DataFrame(filas)
 
         # =====================================================
-        # 7. MÉTRICAS
+        # 🔥 CABLE
         # =====================================================
-        total_materiales = float(df_materiales_costos["Costo Total"].sum())
+        if entrada.df_cables is not None and not entrada.df_cables.empty:
 
-        total_estructura = float(df_costos_estructura["Costo Total"].sum()) if df_costos_estructura is not None else 0.0
+            total_cable = calcular_costos_cable(entrada.df_cables)
 
-        total_precio = float(df_precios_estructura["Precio Total"].sum()) if df_precios_estructura is not None else 0.0
+            fila_cable = pd.DataFrame([{
+                "Estructura": "LÍNEA MT/BT",
+                "Cantidad": 1,
+                "Costo Unitario": total_cable,
+                "Costo Operativo": 0,
+                "Precio Unitario": total_cable,
+                "Precio Total": total_cable,
+            }])
 
-        debug["metricas"] = {
-            "materiales": total_materiales,
-            "estructuras": total_estructura,
-            "precio_total": total_precio
-        }
+            df_precios_estructura = pd.concat(
+                [df_precios_estructura, fila_cable],
+                ignore_index=True
+            )
 
-        debug_guardar("ORQUESTADOR_COSTOS_FINAL", debug)
+        # =====================================================
+        # 🔥 SUBTOTAL FINAL (CORRECTO)
+        # =====================================================
+        if not df_precios_estructura.empty:
+            df_precios_estructura["Subtotal"] = df_precios_estructura["Precio Total"]
+
+        # =====================================================
+        # SALIDA
+        # =====================================================
+        debug_guardar("ORQUESTADOR_COSTOS_FINAL", {
+            "precios": _preview_df(df_precios_estructura)
+        })
 
         return {
             "ok": True,
