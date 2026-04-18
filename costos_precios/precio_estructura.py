@@ -6,25 +6,53 @@ import pandas as pd
 
 
 # =========================================================
-# CONTRATOS
+# CONFIGURACIÓN
+# =========================================================
+USAR_BIBLIOTECA = True
+
+
+# =========================================================
+# BIBLIOTECA DE PRECIOS
+# =========================================================
+PRECIOS_BIBLIOTECA = {
+    "A-I-1": 1500,
+    "A-I-1V": 2000,
+    "A-I-4": 1500,
+    "A-I-4V": 2000,
+    "A-I-6": 1800,
+
+    "B-I-4D": 900,
+    "B-III-1": 1200,
+    "B-III-4": 1400,
+    "B-III-6": 1600,
+
+    "R-1": 1500,
+    "R-3V": 1800,
+    "R-4": 2200,
+    "R-5T": 2500,
+
+    "CT-N": 1500,
+
+    "CS-2": 3000,
+    "CA-32": 2500,
+}
+
+
+# =========================================================
+# CONTRATO
 # =========================================================
 @dataclass(slots=True)
 class ResultadoPrecioEstructura:
     estructura: str
-    costo_materiales: float
-    costo_operativo: float
-    costo_base: float
-    utilidad: float
     precio_unitario: float
 
 
 # =========================================================
-# COSTOS OPERATIVOS
+# COSTOS OPERATIVOS (SOLO INDIRECTOS)
 # =========================================================
 def calcular_costos_operativos(
     *,
     costo_material_total: float,
-    costo_mano_obra: float,
     factor_equipos: float = 0.05,
     factor_logistica: float = 0.15,
 ):
@@ -32,54 +60,13 @@ def calcular_costos_operativos(
     equipos = costo_material_total * factor_equipos
     logistica = costo_material_total * factor_logistica
 
-    operativo_total = costo_mano_obra + equipos + logistica
-
     return {
-        "operativo_total": round(operativo_total, 2)
+        "operativo_total": round(equipos + logistica, 2)
     }
 
 
 # =========================================================
-# 🔥 ACOTAMIENTO COMERCIAL (CLAVE)
-# =========================================================
-def acotar_precio_comercial(codigo: str, precio: float) -> float:
-
-    codigo = str(codigo).strip().upper()
-
-    # PRIMARIO
-    if codigo.startswith("A-I"):
-        return max(1500, min(precio, 2000))
-
-    if codigo.startswith("A-II"):
-        return max(3000, min(precio, 4000))
-
-    if codigo.startswith("A-III"):
-        return max(5000, min(precio, 6000))
-
-    # SECUNDARIO
-    if codigo.startswith("B-I"):
-        return max(800, min(precio, 1300))
-
-    if codigo.startswith("B-II") or codigo.startswith("B-III"):
-        return max(1200, min(precio, 1800))
-
-    # RETENIDAS
-    if codigo.startswith("R"):
-        return max(1500, min(precio, 2500))
-
-    # TIERRA
-    if codigo.startswith("CT"):
-        return 1500
-
-    # CUCHILLAS
-    if codigo.startswith("CS") or codigo.startswith("CA"):
-        return min(precio, 3000)
-
-    return precio
-
-
-# =========================================================
-# PRECIO POR ESTRUCTURA (CON CONTROL)
+# MODELO DE PRECIO (OPCIONAL)
 # =========================================================
 def calcular_precio_estructura(
     *,
@@ -89,30 +76,17 @@ def calcular_precio_estructura(
     porcentaje_utilidad: float,
 ) -> ResultadoPrecioEstructura:
 
-    estructura = str(estructura).strip().upper()
-
-    costo_base = float(costo_materiales) + float(costo_operativo)
-    utilidad = costo_base * float(porcentaje_utilidad)
-    precio_unitario = costo_base + utilidad
-
-    # 🔥 CONTROL AQUÍ (PUNTO CORRECTO)
-    precio_unitario = acotar_precio_comercial(
-        estructura,
-        precio_unitario
-    )
+    costo_base = costo_materiales + costo_operativo
+    precio = costo_base * (1 + porcentaje_utilidad)
 
     return ResultadoPrecioEstructura(
-        estructura=estructura,
-        costo_materiales=round(costo_materiales, 2),
-        costo_operativo=round(costo_operativo, 2),
-        costo_base=round(costo_base, 2),
-        utilidad=round(utilidad, 2),
-        precio_unitario=round(precio_unitario, 2),
+        estructura=estructura.strip().upper(),
+        precio_unitario=round(precio, 2)
     )
 
 
 # =========================================================
-# ORQUESTADOR PRINCIPAL
+# ORQUESTADOR
 # =========================================================
 def calcular_precios_por_estructura(
     df_costos_estructura: pd.DataFrame,
@@ -135,11 +109,9 @@ def calcular_precios_por_estructura(
     # TOTALES
     # =====================================================
     material_total = df_costos_estructura["Costo Total"].sum()
-    mo_total = df_mano_obra["MO Total"].sum()
 
     costos_op = calcular_costos_operativos(
-        costo_material_total=material_total,
-        costo_mano_obra=mo_total
+        costo_material_total=material_total
     )
 
     # =====================================================
@@ -178,32 +150,48 @@ def calcular_precios_por_estructura(
             costos_op["operativo_total"] * peso
         ) / cantidad
 
-        # PRECIO FINAL (YA ACOTADO)
-        precio = calcular_precio_estructura(
-            estructura=estructura,
-            costo_materiales=costo_material_unit,
-            costo_operativo=costo_operativo_unitario,
-            porcentaje_utilidad=porcentaje_utilidad,
-        )
+        # =================================================
+        # 🔥 DECISIÓN: BIBLIOTECA O MODELO
+        # =================================================
+        if USAR_BIBLIOTECA:
 
+            precio_unitario = PRECIOS_BIBLIOTECA.get(
+                estructura,
+                1500  # fallback
+            )
+
+        else:
+
+            precio = calcular_precio_estructura(
+                estructura=estructura,
+                costo_materiales=costo_material_unit,
+                costo_operativo=costo_operativo_unitario,
+                porcentaje_utilidad=porcentaje_utilidad,
+            )
+
+            precio_unitario = precio.precio_unitario
+
+        # =================================================
+        # CANTIDAD REAL
+        # =================================================
         cantidad_real = cantidades.get(estructura, 0)
 
         if cantidad_real <= 0:
             continue
 
-        subtotal = precio.precio_unitario * cantidad_real
+        subtotal = precio_unitario * cantidad_real
         total_base += subtotal
 
         filas.append({
             "Estructura": estructura,
             "Cantidad": cantidad_real,
-            "Precio Unitario": precio.precio_unitario,
+            "Precio Unitario": precio_unitario,
             "Subtotal": round(subtotal, 2),
         })
 
     df_out = pd.DataFrame(filas)
 
     if df_out.empty:
-        raise ValueError("No se generaron precios de estructura")
+        raise ValueError("No se generaron precios")
 
     return df_out, round(total_base, 2)
