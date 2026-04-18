@@ -126,7 +126,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             debug["costos_estructura"] = _preview_df(df_costos_estructura)
 
         # =====================================================
-        # 5. MANO DE OBRA (OPCIONAL - NO BLOQUEANTE)
+        # 5. MANO DE OBRA
         # =====================================================
         df_mano_obra = None
 
@@ -145,7 +145,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             debug["mano_obra"] = _preview_df(df_mano_obra)
 
         # =====================================================
-        # 6. PRECIOS POR ESTRUCTURA (DESACOPLADO)
+        # 6. PRECIOS POR ESTRUCTURA
         # =====================================================
         df_precios_estructura = None
 
@@ -153,11 +153,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
             material_total = df_costos_estructura["Costo Total"].sum()
 
-            # 🔥 SI NO HAY MO → USAR 0
-            if df_mano_obra is not None:
-                mo_total = df_mano_obra["MO Total"].sum()
-            else:
-                mo_total = 0.0
+            mo_total = df_mano_obra["MO Total"].sum() if df_mano_obra is not None else 0.0
 
             costos_op = calcular_costos_operativos(
                 costo_material_total=material_total,
@@ -200,77 +196,38 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
             df_precios_estructura = pd.DataFrame(filas)
 
-            debug["precios_estructura"] = _preview_df(df_precios_estructura)
-
-
-            # =====================================================    
-            # 🔥 AGREGAR CABLE COMO "ESTRUCTURA"
+            # =====================================================
+            # 🔥 AGREGAR CABLE COMO ESTRUCTURA
             # =====================================================
             if entrada.df_cables is not None and not entrada.df_cables.empty:
 
                 total_cable = calcular_costos_cable(entrada.df_cables)
 
                 fila_cable = pd.DataFrame([{
-                "Estructura": "LÍNEA MT/BT",
-                "Cantidad": 1,
-                "Costo Unitario": total_cable,
-                "Costo Operativo": 0,
-                "Precio Unitario": total_cable,
-                "Precio Total": total_cable,
-            }])
+                    "Estructura": "LÍNEA MT/BT",
+                    "Cantidad": 1,
+                    "Costo Unitario": total_cable,
+                    "Costo Operativo": 0,
+                    "Precio Unitario": total_cable,
+                    "Precio Total": total_cable,
+                }])
 
-            df_precios_estructura = pd.concat(
-                [df_precios_estructura, fila_cable],
-                ignore_index=True
-            )
+                df_precios_estructura = pd.concat(
+                    [df_precios_estructura, fila_cable],
+                    ignore_index=True
+                )
 
-            
+            debug["precios_estructura"] = _preview_df(df_precios_estructura)
+
         # =====================================================
         # 7. MÉTRICAS
         # =====================================================
         total_materiales = float(df_materiales_costos["Costo Total"].sum())
 
-        total_estructura = 0.0
-        if df_costos_estructura is not None:
-            total_estructura = float(df_costos_estructura["Costo Total"].sum())
+        total_estructura = float(df_costos_estructura["Costo Total"].sum()) if df_costos_estructura is not None else 0.0
 
-        total_precio = 0.0
-        if df_precios_estructura is not None:
-            total_precio = float(df_precios_estructura["Precio Total"].sum())
+        total_precio = float(df_precios_estructura["Precio Total"].sum()) if df_precios_estructura is not None else 0.0
 
-        # =====================================================
-        # 🔥 COSTO DE CABLE (NUEVO)
-        # =====================================================
-        total_cable = 0.0
-
-        if "df_cables" in locals() and df_cables is not None and not df_cables.empty:
-
-            # Ajusta nombres de columnas según tu df real
-            for _, r in df_cables.iterrows():
-
-                tipo = str(r.get("tipo", "")).upper()
-                longitud = float(r.get("longitud", 0))
-
-                # 🔥 precios que ya definiste
-                if tipo == "PRIMARIO":
-                    precio_inst = 120   # INST-LP
-                else:
-                    precio_inst = 80    # INST-LS
-
-                # 👉 si tienes precio de material por metro, súmalo aquí
-                precio_material = float(r.get("precio_material_m", 0))
-
-                total_cable += longitud * (precio_inst + precio_material)
-
-        # =====================================================
-        # 🔥 ACTUALIZAR TOTAL PROYECTO
-        # =====================================================
-        total_precio = total_precio + total_cable
-
-
-
-
-        
         debug["metricas"] = {
             "materiales": total_materiales,
             "estructuras": total_estructura,
