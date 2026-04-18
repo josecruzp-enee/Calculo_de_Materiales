@@ -73,7 +73,7 @@ def _formato_conductores(cables, tipo_busqueda):
 # =========================================================
 # HOJA DE INFORMACIÓN
 # =========================================================
-def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
+def hoja_info_(datos_proyecto, df_estructuras=None):
 
     styles = getSampleStyleSheet()
     styleN = styles["Normal"]
