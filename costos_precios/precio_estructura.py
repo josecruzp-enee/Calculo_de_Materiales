@@ -186,11 +186,21 @@ def calcular_costos_operativos(
 # =========================================================
 # 🔥 INTERNO: AGREGAR CABLE (AQUÍ VIVE TODO)
 # =========================================================
+
 def _agregar_cable_a_precios(df_precios, entrada):
+    """
+    Agrega líneas de presupuesto para cables a partir de entrada.df_cables.
+
+    ✔ Usa "Total Cable (m)" si existe
+    ✔ Soporta tipos MT / BT desde UI
+    ✔ Ignora neutro, piloto y retenidas
+    """
+
+    import pandas as pd
 
     df_cables = getattr(entrada, "df_cables", None)
 
-    if df_cables is None or df_cables.empty:
+    if df_cables is None or not isinstance(df_cables, pd.DataFrame) or df_cables.empty:
         return df_precios
 
     filas = []
@@ -200,27 +210,49 @@ def _agregar_cable_a_precios(df_precios, entrada):
         tipo = str(c.get("Tipo", "")).strip().upper()
         calibre = str(c.get("Calibre", "")).strip()
 
+        # 🔥 USAR TOTAL REAL DEL SISTEMA
         try:
-            longitud = float(c.get("Longitud", 0))
-        except:
+            longitud = float(c.get("Total Cable (m)", c.get("Longitud", 0)))
+        except Exception:
             continue
 
         if longitud <= 0:
             continue
 
-        if tipo in ["MT", "PRIMARIO"]:
+        # =====================================================
+        # CLASIFICACIÓN DE LÍNEA
+        # =====================================================
+        if tipo.startswith("MT"):
             precio = 120
             nombre = "línea primaria"
-        elif tipo in ["BT", "SECUNDARIO"]:
+
+        elif tipo.startswith("BT"):
             precio = 80
             nombre = "línea secundaria"
+
+        # ❌ NO SE COBRAN AQUÍ
+        elif tipo.startswith("N"):
+            continue  # neutro
+
+        elif tipo.startswith("HP"):
+            continue  # piloto
+
+        elif "RETENIDA" in tipo:
+            continue
+
         else:
             continue
 
+        # =====================================================
+        # DESCRIPCIÓN
+        # =====================================================
         desc = f"Suministro e instalación de {int(longitud)} m de {nombre}"
         if calibre:
             desc += f" ({calibre})"
 
+        # =====================================================
+        # FILA
+        # =====================================================
         filas.append({
             "Estructura": desc,
             "Cantidad": longitud,
@@ -234,6 +266,9 @@ def _agregar_cable_a_precios(df_precios, entrada):
         return df_precios
 
     return pd.concat([df_precios, pd.DataFrame(filas)], ignore_index=True)
+
+
+
 # =========================================================
 # ORQUESTADOR LOCAL (SE QUEDA AQUÍ TODO)
 # =========================================================
