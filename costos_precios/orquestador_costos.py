@@ -225,19 +225,19 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             # Ajusta nombres de columnas según tu df real
             for _, r in df_cables.iterrows():
 
-            tipo = str(r.get("tipo", "")).upper()
-            longitud = float(r.get("longitud", 0))
+                tipo = str(r.get("tipo", "")).upper()
+                longitud = float(r.get("longitud", 0))
 
-            # 🔥 precios que ya definiste
-            if tipo == "PRIMARIO":
-                precio_inst = 120   # INST-LP
-            else:
-                precio_inst = 80    # INST-LS
+                # 🔥 precios que ya definiste
+                if tipo == "PRIMARIO":
+                    precio_inst = 120   # INST-LP
+                else:
+                    precio_inst = 80    # INST-LS
 
-            # 👉 si tienes precio de material por metro, súmalo aquí
-            precio_material = float(r.get("precio_material_m", 0))
+                # 👉 si tienes precio de material por metro, súmalo aquí
+                precio_material = float(r.get("precio_material_m", 0))
 
-            total_cable += longitud * (precio_inst + precio_material)
+                total_cable += longitud * (precio_inst + precio_material)
 
         # =====================================================
         # 🔥 ACTUALIZAR TOTAL PROYECTO
