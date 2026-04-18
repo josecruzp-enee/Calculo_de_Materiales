@@ -156,7 +156,9 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
             total = int(trafos["Cantidad"].sum())
 
             lineas.append(
-                f"Instalación de {total} transformador(es) en conexión {', '.join(partes)}."
+                tipo_txt = "transformador" if total == 1 else "transformadores"
+                lineas.append(
+                    f"Instalación de {total} {tipo_txt} en conexión {', '.join(partes)}.")
             )
 
         # =================================================
