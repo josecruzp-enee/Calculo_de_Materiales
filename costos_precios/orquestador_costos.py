@@ -48,6 +48,24 @@ def _preview_df(df: pd.DataFrame, n=5):
     }
 
 
+def calcular_costos_cable(df_cables):
+
+    total = 0
+
+    for _, r in df_cables.iterrows():
+
+        tipo = r["tipo"]   # PRIMARIO / SECUNDARIO
+        longitud = float(r["longitud"])
+
+        if tipo == "PRIMARIO":
+            precio = 120   # INST-LP
+        else:
+            precio = 80    # INST-LS
+
+        total += longitud * precio
+
+    return total
+
 # =====================================================
 # ORQUESTADOR PRINCIPAL
 # =====================================================
@@ -197,6 +215,39 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         if df_precios_estructura is not None:
             total_precio = float(df_precios_estructura["Precio Total"].sum())
 
+        # =====================================================
+        # 🔥 COSTO DE CABLE (NUEVO)
+        # =====================================================
+        total_cable = 0.0
+
+        if "df_cables" in locals() and df_cables is not None and not df_cables.empty:
+
+            # Ajusta nombres de columnas según tu df real
+            for _, r in df_cables.iterrows():
+
+            tipo = str(r.get("tipo", "")).upper()
+            longitud = float(r.get("longitud", 0))
+
+            # 🔥 precios que ya definiste
+            if tipo == "PRIMARIO":
+                precio_inst = 120   # INST-LP
+            else:
+                precio_inst = 80    # INST-LS
+
+            # 👉 si tienes precio de material por metro, súmalo aquí
+            precio_material = float(r.get("precio_material_m", 0))
+
+            total_cable += longitud * (precio_inst + precio_material)
+
+        # =====================================================
+        # 🔥 ACTUALIZAR TOTAL PROYECTO
+        # =====================================================
+        total_precio = total_precio + total_cable
+
+
+
+
+        
         debug["metricas"] = {
             "materiales": total_materiales,
             "estructuras": total_estructura,
