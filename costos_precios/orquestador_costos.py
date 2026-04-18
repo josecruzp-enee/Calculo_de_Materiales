@@ -202,6 +202,29 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
             debug["precios_estructura"] = _preview_df(df_precios_estructura)
 
+
+            # =====================================================    
+            # 🔥 AGREGAR CABLE COMO "ESTRUCTURA"
+            # =====================================================
+            if entrada.df_cables is not None and not entrada.df_cables.empty:
+
+                total_cable = calcular_costos_cable(entrada.df_cables)
+
+                fila_cable = pd.DataFrame([{
+                "Estructura": "LÍNEA MT/BT",
+                "Cantidad": 1,
+                "Costo Unitario": total_cable,
+                "Costo Operativo": 0,
+                "Precio Unitario": total_cable,
+                "Precio Total": total_cable,
+            }])
+
+            df_precios_estructura = pd.concat(
+                [df_precios_estructura, fila_cable],
+                ignore_index=True
+            )
+
+            
         # =====================================================
         # 7. MÉTRICAS
         # =====================================================
