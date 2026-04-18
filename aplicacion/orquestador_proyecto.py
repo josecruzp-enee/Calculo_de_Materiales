@@ -223,6 +223,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_catalogo=df_catalogo,
             df_estructuras=df_estructuras,
             df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
+            df_cables=salida_entradas.df_cables,
         )
 
         resultado_costos = ejecutar_costos(entrada_costos)
