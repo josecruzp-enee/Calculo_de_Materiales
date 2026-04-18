@@ -3,27 +3,100 @@ from __future__ import annotations
 
 import pandas as pd
 
-from costos_precios.costos_operativos import calcular_costos_operativos
-from costos_precios.precio_estructura import calcular_precio_estructura
+
+# =========================================================
+# COSTOS OPERATIVOS
+# =========================================================
+def calcular_costos_operativos(
+    *,
+    costo_material_total: float,
+    costo_mano_obra: float,
+    factor_equipos: float = 0.05,
+    factor_logistica: float = 0.15,
+):
+
+    equipos = costo_material_total * factor_equipos
+    logistica = costo_material_total * factor_logistica
+
+    operativo_total = costo_mano_obra + equipos + logistica
+
+    return {
+        "equipos": round(equipos, 2),
+        "logistica": round(logistica, 2),
+        "operativo_total": round(operativo_total, 2),
+    }
 
 
 # =========================================================
-# ORQUESTADOR DE PRECIOS POR ESTRUCTURA
+# PRECIO TÉCNICO (SIN CONTROL)
 # =========================================================
+def calcular_precio_estructura(
+    *,
+    estructura: str,
+    costo_materiales: float,
+    costo_operativo: float,
+    porcentaje_utilidad: float,
+):
+
+    costo_base = costo_materiales + costo_operativo
+    precio = costo_base * (1 + porcentaje_utilidad)
+
+    return {
+        "estructura": estructura,
+        "precio_unitario": round(precio, 2)
+    }
+
+
 # =========================================================
-# ORQUESTADOR DE PRECIOS POR ESTRUCTURA (CORREGIDO)
+# 🔥 ACOTAMIENTO COMERCIAL (CLAVE)
+# =========================================================
+def acotar_precio_comercial(codigo: str, precio: float) -> float:
+
+    codigo = str(codigo).upper()
+
+    # PRIMARIO
+    if codigo.startswith("A-I"):
+        return max(1500, min(precio, 2000))
+
+    if codigo.startswith("A-II"):
+        return max(3000, min(precio, 4000))
+
+    if codigo.startswith("A-III"):
+        return max(5000, min(precio, 6000))
+
+    # SECUNDARIO
+    if codigo.startswith("B-I"):
+        return max(800, min(precio, 1300))
+
+    if codigo.startswith("B-II") or codigo.startswith("B-III"):
+        return max(1200, min(precio, 1800))
+
+    # RETENIDAS
+    if codigo.startswith("R"):
+        return max(1500, min(precio, 2500))
+
+    # TIERRA
+    if codigo.startswith("CT"):
+        return 1500
+
+    # CUCHILLAS
+    if codigo.startswith("CS") or codigo.startswith("CA"):
+        return min(precio, 3000)
+
+    return precio
+
+
+# =========================================================
+# ORQUESTADOR PRINCIPAL
 # =========================================================
 def calcular_precios_por_estructura(
     df_costos_estructura: pd.DataFrame,
     df_estructuras: pd.DataFrame,
-    df_mano_obra: pd.DataFrame,  # 🔥 NUEVO
+    df_mano_obra: pd.DataFrame,
     *,
     porcentaje_utilidad: float = 0.15,
 ):
 
-    # =====================================================
-    # VALIDACIONES
-    # =====================================================
     if df_costos_estructura is None or df_costos_estructura.empty:
         raise ValueError("df_costos_estructura vacío")
 
@@ -39,7 +112,6 @@ def calcular_precios_por_estructura(
     material_total = df_costos_estructura["Costo Total"].sum()
     mo_total = df_mano_obra["MO Total"].sum()
 
-    # 🔥 COSTOS OPERATIVOS GLOBAL
     costos_op = calcular_costos_operativos(
         costo_material_total=material_total,
         costo_mano_obra=mo_total
@@ -71,24 +143,18 @@ def calcular_precios_por_estructura(
         costo_material_total_estructura = float(r["Costo Total"])
         cantidad = max(1, int(r["Cantidad"]))
 
-        # -------------------------------------------------
-        # PESO DE LA ESTRUCTURA
-        # -------------------------------------------------
         if material_total <= 0:
             continue
 
+        # PESO DE LA ESTRUCTURA
         peso = costo_material_total_estructura / material_total
 
-        # -------------------------------------------------
         # COSTO OPERATIVO DISTRIBUIDO
-        # -------------------------------------------------
         costo_operativo_unitario = (
-            costos_op.operativo_total * peso
+            costos_op["operativo_total"] * peso
         ) / cantidad
 
-        # -------------------------------------------------
-        # PRECIO FINAL
-        # -------------------------------------------------
+        # PRECIO TÉCNICO
         precio = calcular_precio_estructura(
             estructura=estructura,
             costo_materiales=costo_material_unit,
@@ -96,19 +162,25 @@ def calcular_precios_por_estructura(
             porcentaje_utilidad=porcentaje_utilidad,
         )
 
-        cantidad_real = cantidades.get(precio.estructura, 0)
+        # 🔥 AJUSTE COMERCIAL FINAL
+        precio_unitario = acotar_precio_comercial(
+            estructura,
+            precio["precio_unitario"]
+        )
+
+        cantidad_real = cantidades.get(estructura, 0)
 
         if cantidad_real <= 0:
             continue
 
-        subtotal = precio.precio_unitario * cantidad_real
+        subtotal = precio_unitario * cantidad_real
         total_base += subtotal
 
         filas.append({
-            "Estructura": precio.estructura,
+            "Estructura": estructura,
             "Cantidad": cantidad_real,
-            "Precio Unitario": precio.precio_unitario,
-            "Subtotal": subtotal,
+            "Precio Unitario": precio_unitario,
+            "Subtotal": round(subtotal, 2),
         })
 
     df_out = pd.DataFrame(filas)
@@ -116,4 +188,4 @@ def calcular_precios_por_estructura(
     if df_out.empty:
         raise ValueError("No se generaron precios de estructura")
 
-    return df_out, total_base
+    return df_out, round(total_base, 2)
