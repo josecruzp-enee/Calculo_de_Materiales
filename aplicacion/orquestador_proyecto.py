@@ -5,9 +5,7 @@ from typing import Optional, Dict, Any
 import pandas as pd
 import traceback
 
-from interfaz.contratos import SalidaInterfaz
-from interfaz.contratos import SalidaInterfaz
-
+from interfaz.contratos import SalidaInterfaz, SalidaEntradas
 
 # =========================================================
 # HELPERS
