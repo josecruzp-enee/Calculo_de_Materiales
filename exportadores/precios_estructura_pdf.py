@@ -18,6 +18,9 @@ def generar_tabla_precios_estructura(
     Renderiza precios en formato:
 
     Descripción | PU | Cantidad | Total
+
+    ✔ Soporta estructuras (desde df_estructuras)
+    ✔ Soporta cable (usa Cantidad del df_precios)
     """
 
     # =====================================================
@@ -35,7 +38,7 @@ def generar_tabla_precios_estructura(
         raise ValueError(f"df_precios no cumple contrato: {faltantes}")
 
     # =====================================================
-    # AGRUPAR CANTIDADES
+    # AGRUPAR CANTIDADES (SOLO ESTRUCTURAS)
     # =====================================================
     cantidades = {}
 
@@ -75,9 +78,14 @@ def generar_tabla_precios_estructura(
         estructura = str(r["Estructura"]).strip()
         pu = float(r["Precio Unitario"])
 
-        cantidad = cantidades.get(estructura, 0)
+        # 🔥 INTENTA SACAR CANTIDAD DESDE ESTRUCTURAS
+        cantidad = cantidades.get(estructura, None)
 
-        # 🔥 SI NO HAY CANTIDAD, NO MOSTRAR
+        # 🔥 SI NO EXISTE → ES CABLE → USA SU PROPIA CANTIDAD
+        if cantidad is None or cantidad == 0:
+            cantidad = float(r.get("Cantidad", 0))
+
+        # si sigue sin valor → no mostrar
         if cantidad <= 0:
             continue
 
@@ -119,29 +127,23 @@ def generar_tabla_precios_estructura(
     )
 
     tabla.setStyle(TableStyle([
-        # encabezado
         ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
 
-        # alineación
         ("ALIGN", (1, 1), (-1, -2), "RIGHT"),
         ("ALIGN", (2, 1), (2, -2), "CENTER"),
 
-        # total
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFEFEF")),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
 
-        # grid
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
 
-        # padding
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
     ]))
 
     return [tabla]
-
 
 # =========================================================
 # COTIZACIÓN SIMPLE (DESDE PRECIOS DE ESTRUCTURA)
