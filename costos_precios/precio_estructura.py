@@ -304,6 +304,8 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 })
 
             df_precios_estructura = pd.DataFrame(filas)
+            if not df_precios_estructura.empty:
+                df_precios_estructura["Subtotal"] = df_precios_estructura["Precio Total"]
 
             # =====================================================
             # 🔥 CABLE COMPLETO (MT, BT, NEUTRO, PILOTO, RETENIDA)
