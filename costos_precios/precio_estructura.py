@@ -254,9 +254,9 @@ def _agregar_cable_a_precios(df_precios, entrada):
         # FILA
         # =====================================================
         filas.append({
-            "Estructura": f"LÍNEA PRIMARIA {calibre} ({int(longitud)} m)"
+            "Estructura": f"LP-{calibre} ({int(longitud)} m)"
                   if tipo.startswith("MT")
-                  else f"LÍNEA SECUNDARIA {calibre} ({int(longitud)} m)",
+                  else f"LS-{calibre} ({int(longitud)} m)",
             "Cantidad": longitud,
             "Costo Unitario": precio,
             "Costo Operativo": 0,
