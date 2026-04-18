@@ -13,7 +13,7 @@ from costos_precios.costos_materiales import (
 from costos_precios.costos_estructuras import (
     calcular_costos_por_estructura
 )
-
+from costos_precios.precio_estructura import _agregar_cable_a_precios
 from costos_precios.costos_operativos import calcular_costos_operativos
 from costos_precios.precio_estructura import calcular_precio_estructura
 from costos_precios.costos_mano_obra import calcular_mano_obra
@@ -200,7 +200,10 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 })
 
         df_precios_estructura = pd.DataFrame(filas)
-
+        df_precios_estructura = _agregar_cable_a_precios(
+            df_precios_estructura,
+            entrada
+        )
         # =====================================================
         # 🔥 SUBTOTAL FINAL
         # =====================================================
