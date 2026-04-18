@@ -15,8 +15,13 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 
-from exportadores.pdf_base import styles, styleN, fondo_pagina, formatear_material
-
+from exportadores.pdf_base import (
+    styles,
+    styleN,
+    fondo_pagina,
+    formatear_material,
+    estilo_tabla,
+)
 
 # ==========================================================
 # PDF: RESUMEN DE MATERIALES (GLOBAL)
