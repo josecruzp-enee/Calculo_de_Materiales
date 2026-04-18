@@ -33,7 +33,7 @@ class EntradaCostos:
     df_materiales_por_estructura: Optional[Dict[str, pd.DataFrame]] = None
 
     ruta_datos_materiales: Optional[str] = None  # 🔥 NUEVO (para MO)
-
+    df_cables: Optional[pd.DataFrame] = None 
 
 # =====================================================
 # HELPERS DEBUG
