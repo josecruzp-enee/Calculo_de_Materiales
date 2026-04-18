@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 import traceback
 import pandas as pd
+import unicodedata
 
 # =========================================================
 # CONTRATOS
@@ -68,6 +69,18 @@ def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =========================================================
+# NORMALIZADOR DE TEXTO (CLAVE DEL FIX)
+# =========================================================
+def limpiar_columna(texto: str) -> str:
+    if texto is None:
+        return ""
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', str(texto))
+        if unicodedata.category(c) != 'Mn'
+    ).upper().strip()
+
+
+# =========================================================
 # ORQUESTADOR
 # =========================================================
 def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
@@ -102,7 +115,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         }
 
         # =====================================================
-        # 2. DESCRIPCIONES (FIX LIMPIO)
+        # 2. DESCRIPCIONES (FIX DEFINITIVO)
         # =====================================================
         base = salida_entradas.base_datos or {}
         df_indice = base.get("INDICE") or base.get("indice")
@@ -120,13 +133,14 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         if isinstance(df_indice, pd.DataFrame):
 
-            df_indice.columns = [c.strip().upper() for c in df_indice.columns]
+            # 🔥 FIX: eliminar tildes
+            df_indice.columns = [limpiar_columna(c) for c in df_indice.columns]
 
             col_codigo = None
             col_desc = None
 
             for c in df_indice.columns:
-                if "CODIGO" in c:
+                if "CODIGO" in c and "ESTRUCTURA" in c:
                     col_codigo = c
                 if "DESCRIP" in c:
                     col_desc = c
@@ -237,9 +251,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             "errores": reportes["errores"]
         }
 
-        # =====================================================
-        # SALIDA FINAL
-        # =====================================================
         return ResultadoProyecto(
             ok=True,
             errores=[],
