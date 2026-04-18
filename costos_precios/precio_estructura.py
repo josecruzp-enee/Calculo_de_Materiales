@@ -298,7 +298,7 @@ def ejecutar_costos(entrada) -> Dict[str, Any]:
         # 🔥 AQUÍ SE AGREGA CABLE (CONTROLADO)
         df_precios = _agregar_cable_a_precios(
             df_precios,
-            entrada.df_cables
+            entrada
         )
 
         return {
