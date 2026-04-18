@@ -186,6 +186,9 @@ def calcular_costos_operativos(
 # =========================================================
 # 🔥 INTERNO: AGREGAR CABLE (AQUÍ VIVE TODO)
 # =========================================================
+# =========================================================
+# 🔥 INTERNO: AGREGAR CABLE (ROBUSTO)
+# =========================================================
 def _agregar_cable_a_precios(df_precios, df_cables):
 
     if df_precios is None or df_precios.empty:
@@ -194,44 +197,62 @@ def _agregar_cable_a_precios(df_precios, df_cables):
     if df_cables is None or df_cables.empty:
         return df_precios
 
+    # Normalizar columnas (evita errores por mayúsculas/minúsculas)
+    df_cables = df_cables.copy()
+    df_cables.columns = [str(c).strip().upper() for c in df_cables.columns]
+
+    # Detectar columnas automáticamente
+    col_tipo = next((c for c in df_cables.columns if "TIPO" in c), None)
+    col_long = next((c for c in df_cables.columns if "LONG" in c), None)
+    col_calibre = next((c for c in df_cables.columns if "CALIBRE" in c), None)
+
+    if col_tipo is None or col_long is None:
+        # No hay datos válidos → no romper
+        return df_precios
+
     filas = []
 
     for _, r in df_cables.iterrows():
 
-        tipo = str(r.get("tipo", "")).strip().upper()
+        tipo = str(r.get(col_tipo, "")).strip().upper()
 
         try:
-            longitud = float(r.get("longitud", 0))
+            longitud = float(r.get(col_long, 0))
         except:
             continue
 
         if longitud <= 0:
             continue
 
-        if tipo in ["MT", "PRIMARIO"]:
+        # 🔧 REGLAS COMERCIALES
+        if "PRIMARIO" in tipo or tipo == "MT":
             precio = 120
             nombre = "línea primaria"
 
-        elif tipo in ["BT", "SECUNDARIO"]:
+        elif "SECUNDARIO" in tipo or tipo == "BT":
             precio = 80
             nombre = "línea secundaria"
 
-        elif tipo == "NEUTRO":
+        elif "NEUTRO" in tipo:
             precio = 60
             nombre = "conductor neutro"
 
-        elif tipo == "PILOTO":
+        elif "PILOTO" in tipo:
             precio = 40
             nombre = "hilo piloto"
 
-        elif tipo == "RETENIDA":
+        elif "RETENIDA" in tipo:
             precio = 70
             nombre = "cable de retenida"
 
         else:
             continue
 
-        descripcion = f"Suministro e instalación de {int(longitud)} m de {nombre}"
+        calibre = str(r.get(col_calibre, "")).strip() if col_calibre else ""
+
+        descripcion = f"Suministro e instalación de {round(longitud, 2)} m de {nombre}"
+        if calibre:
+            descripcion += f" ({calibre})"
 
         filas.append({
             "Estructura": descripcion,
@@ -248,8 +269,6 @@ def _agregar_cable_a_precios(df_precios, df_cables):
     df_cable = pd.DataFrame(filas)
 
     return pd.concat([df_precios, df_cable], ignore_index=True)
-
-
 # =========================================================
 # ORQUESTADOR LOCAL (SE QUEDA AQUÍ TODO)
 # =========================================================
