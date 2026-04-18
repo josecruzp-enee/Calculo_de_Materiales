@@ -11,19 +11,6 @@ from entradas.modelos import SalidaEntradas
 # =========================================================
 # ORQUESTADOR DE ENTRADAS
 # =========================================================
-# -*- coding: utf-8 -*-
-from __future__ import annotations
-
-from typing import Dict, Any
-import pandas as pd
-
-from interfaz.contratos import SalidaInterfaz
-from entradas.modelos import SalidaEntradas
-
-
-# =========================================================
-# ORQUESTADOR DE ENTRADAS
-# =========================================================
 def ejecutar_entradas(salida_interfaz: SalidaInterfaz) -> SalidaEntradas:
 
     try:
