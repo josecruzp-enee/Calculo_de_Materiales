@@ -188,16 +188,16 @@ def calcular_costos_operativos(
 # =========================================================
 def _agregar_cable_a_precios(df_precios, entrada):
 
-    datos = getattr(entrada, "_datos_proyecto", {}) or {}
-    cables = datos.get("cables_proyecto", [])
+    df_cables = getattr(entrada, "df_cables", None)
 
-    if not cables:
+    if df_cables is None or df_cables.empty:
         return df_precios
 
     filas = []
 
-    for c in cables:
-        tipo = str(c.get("Tipo", "")).upper()
+    for _, c in df_cables.iterrows():
+
+        tipo = str(c.get("Tipo", "")).strip().upper()
         calibre = str(c.get("Calibre", "")).strip()
 
         try:
@@ -217,7 +217,7 @@ def _agregar_cable_a_precios(df_precios, entrada):
         else:
             continue
 
-        desc = f"Suministro e instalación de {round(longitud,2)} m de {nombre}"
+        desc = f"Suministro e instalación de {int(longitud)} m de {nombre}"
         if calibre:
             desc += f" ({calibre})"
 
