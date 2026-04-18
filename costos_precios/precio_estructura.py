@@ -201,9 +201,6 @@ def limpiar_calibre(txt):
 # =========================================================
 # 🔥 AGREGAR CABLE A PRECIOS (VERSIÓN FINAL)
 # =========================================================
-# =========================================================
-# 🔥 INTERNO: AGREGAR CABLE (VERSIÓN FINAL)
-# =========================================================
 def _agregar_cable_a_precios(df_precios, entrada):
 
     import pandas as pd
@@ -223,8 +220,9 @@ def _agregar_cable_a_precios(df_precios, entrada):
         # -------------------------------------------------
         # LONGITUD TOTAL (YA CON FASES)
         # -------------------------------------------------
+        longitud = c.get("Total Cable (m)", c.get("Longitud", 0))
         try:
-            longitud = float(c.get("Total Cable (m)", c.get("Longitud", 0)) or 0)
+            longitud = float(longitud or 0)
         except:
             continue
 
@@ -234,36 +232,38 @@ def _agregar_cable_a_precios(df_precios, entrada):
         # -------------------------------------------------
         # IGNORAR LO QUE NO SE COBRA
         # -------------------------------------------------
-        if tipo.startswith("N") or tipo.startswith("HP") or "RETENIDA" in tipo:
+        if tipo.startswith(("N", "HP")) or "RETENIDA" in tipo:
             continue
 
         # -------------------------------------------------
         # DATOS PRESENTACIÓN
         # -------------------------------------------------
+        longitud_tramo = c.get("Longitud", 0)
         try:
-            longitud_tramo = float(c.get("Longitud", 0) or 0)
+            longitud_tramo = int(float(longitud_tramo or 0))
         except:
             longitud_tramo = 0
 
+        fases = c.get("Conductores", 1)
         try:
-            fases = int(c.get("Conductores", 1) or 1)
+            fases = int(fases or 1)
         except:
             fases = 1
 
         # -------------------------------------------------
         # LIMPIAR CALIBRE
         # -------------------------------------------------
-        calibre_limpio = limpiar_calibre(calibre)
+        calibre_limpio = limpiar_calibre(calibre).replace("WP", "").strip()
 
         # -------------------------------------------------
-        # DEFINIR TIPO (BIEN HECHO)
+        # DEFINIR TIPO
         # -------------------------------------------------
         if tipo.startswith("MT"):
-            descripcion = f"LP {calibre_limpio} | {int(longitud_tramo)} m | {fases}F"
+            descripcion = f"LP {calibre_limpio} | {longitud_tramo} m | {fases}F"
             precio = 120
 
         elif tipo.startswith("BT"):
-            descripcion = f"LS {calibre_limpio} | {int(longitud_tramo)} m | {fases}F"
+            descripcion = f"LS {calibre_limpio} | {longitud_tramo} m | {fases}F"
             precio = 80
 
         else:
@@ -274,21 +274,18 @@ def _agregar_cable_a_precios(df_precios, entrada):
         # -------------------------------------------------
         filas.append({
             "Estructura": descripcion,
-            "Cantidad": float(longitud),
-            "Costo Unitario": float(precio),
+            "Cantidad": longitud,
+            "Costo Unitario": precio,
             "Costo Operativo": 0.0,
-            "Precio Unitario": float(precio),
-            "Precio Total": round(float(longitud) * float(precio), 2),
+            "Precio Unitario": precio,
+            "Precio Total": round(longitud * precio, 2),
         })
 
     if not filas:
         return df_precios
 
     return pd.concat([df_precios, pd.DataFrame(filas)], ignore_index=True)
-
-
-
-
+    
 # =========================================================
 # ORQUESTADOR LOCAL (SE QUEDA AQUÍ TODO)
 # =========================================================
