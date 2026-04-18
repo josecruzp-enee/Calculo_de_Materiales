@@ -186,96 +186,122 @@ def calcular_costos_operativos(
 # =========================================================
 # 🔥 INTERNO: AGREGAR CABLE (AQUÍ VIVE TODO)
 # =========================================================
+# =========================================================
+# 🔥 LIMPIAR CALIBRE (FORMATO CORTO)
+# =========================================================
+def limpiar_calibre(txt):
+    txt = str(txt).upper()
 
+    # Caso ACSR
+    if "ACSR" in txt:
+        partes = txt.split("ACSR")
+        return partes[-1].replace("#", "").strip()
+
+    # Caso AWG genérico
+    if "AWG" in txt:
+        partes = txt.split("AWG")
+        return (partes[0] + "AWG").replace("#", "").strip()
+
+    # Fallback
+    return txt.replace("CABLE DE ALUMINIO", "").replace("#", "").strip()
+
+
+# =========================================================
+# 🔥 AGREGAR CABLE A PRECIOS (VERSIÓN FINAL)
+# =========================================================
 def _agregar_cable_a_precios(df_precios, entrada):
-    """
-    Agrega líneas de presupuesto para cables a partir de entrada.df_cables.
-
-    ✔ Usa "Total Cable (m)" si existe
-    ✔ Soporta tipos MT / BT desde UI
-    ✔ Ignora neutro, piloto y retenidas
-    """
 
     import pandas as pd
 
     df_cables = getattr(entrada, "df_cables", None)
 
-    if df_cables is None or not isinstance(df_cables, pd.DataFrame) or df_cables.empty:
+    # -----------------------------------------------------
+    # VALIDACIÓN
+    # -----------------------------------------------------
+    if df_cables is None or df_cables.empty:
         return df_precios
 
     filas = []
 
+    # -----------------------------------------------------
+    # LOOP PRINCIPAL
+    # -----------------------------------------------------
     for _, c in df_cables.iterrows():
 
         tipo = str(c.get("Tipo", "")).strip().upper()
         calibre = str(c.get("Calibre", "")).strip()
 
-        # 🔥 USAR TOTAL REAL DEL SISTEMA
+        # -------------------------------------------------
+        # IGNORAR NEUTRO Y PILOTO
+        # -------------------------------------------------
+        if tipo.startswith("N") or tipo.startswith("HP"):
+            continue
+
+        # -------------------------------------------------
+        # LONGITUD TOTAL (YA CON FASES)
+        # -------------------------------------------------
         try:
-            longitud = float(c.get("Total Cable (m)", c.get("Longitud", 0)))
-        except Exception:
+            longitud = float(c.get("Total Cable (m)", c.get("Longitud", 0)) or 0)
+        except:
             continue
 
         if longitud <= 0:
             continue
 
-        # =====================================================
-        # CLASIFICACIÓN DE LÍNEA
-        # =====================================================
+        # -------------------------------------------------
+        # DATOS PARA PRESENTACIÓN
+        # -------------------------------------------------
+        try:
+            longitud_tramo = float(c.get("Longitud", 0) or 0)
+        except:
+            longitud_tramo = 0
+
+        try:
+            fases = int(c.get("Conductores", 1) or 1)
+        except:
+            fases = 1
+
+        # -------------------------------------------------
+        # LIMPIAR CALIBRE
+        # -------------------------------------------------
+        calibre_limpio = limpiar_calibre(calibre)
+
+        # -------------------------------------------------
+        # DEFINIR TIPO Y PRECIO
+        # -------------------------------------------------
         if tipo.startswith("MT"):
-            precio = 120
-            nombre = "línea primaria"
-
+            prefijo = "LÍNEA MT"
+            precio = 120  # ajustable
         elif tipo.startswith("BT"):
-            precio = 80
-            nombre = "línea secundaria"
-
-        # ❌ NO SE COBRAN AQUÍ
-        elif tipo.startswith("N"):
-            continue  # neutro
-
-        elif tipo.startswith("HP"):
-            continue  # piloto
-
-        elif "RETENIDA" in tipo:
-            continue
-
+            prefijo = "LÍNEA BT"
+            precio = 80   # ajustable
         else:
             continue
 
-        # =====================================================
-        # DATOS PARA PRESENTACIÓN
-        # =====================================================
-        longitud_tramo = float(c.get("Longitud", 0) or 0)
-        fases = int(c.get("Conductores", 1) or 1)
+        # -------------------------------------------------
+        # DESCRIPCIÓN FINAL (PROFESIONAL)
+        # -------------------------------------------------
+        descripcion = f"{prefijo} {calibre_limpio} | {int(longitud_tramo)} m | {fases}F"
 
-        
-        # =====================================================
-        # DESCRIPCIÓN
-        # =====================================================
-        desc = f"Suministro e instalación de {int(longitud)} m de {nombre}"
-        if calibre:
-            desc += f" ({calibre})"
-
-        # =====================================================
-        # FILA
-        # =====================================================
+        # -------------------------------------------------
+        # AGREGAR FILA
+        # -------------------------------------------------
         filas.append({
-            "Estructura": ( f"LP {calibre} | {int(longitud_tramo)} m | {fases}F"
-                if tipo.startswith("MT")
-                else f"LS {calibre} | {int(longitud_tramo)} m | {fases}F"),
-            "Cantidad": longitud,
-            "Costo Unitario": precio,
-            "Costo Operativo": 0,
-            "Precio Unitario": precio,
-            "Precio Total": round(longitud * precio, 2),
+            "Estructura": descripcion,
+            "Cantidad": float(longitud),
+            "Costo Unitario": float(precio),
+            "Costo Operativo": 0.0,
+            "Precio Unitario": float(precio),
+            "Precio Total": round(float(longitud) * float(precio), 2),
         })
 
+    # -----------------------------------------------------
+    # CONCATENAR
+    # -----------------------------------------------------
     if not filas:
         return df_precios
 
     return pd.concat([df_precios, pd.DataFrame(filas)], ignore_index=True)
-
 
 
 # =========================================================
