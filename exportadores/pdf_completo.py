@@ -105,9 +105,7 @@ def generar_pdf_completo(
     # =====================================================
     # COTIZACION
     # =====================================================
-    elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Heading1"]))
-    elems.append(Spacer(1, 10))
-
+    
     if (
         df_precios_estructura is None
         or not isinstance(df_precios_estructura, pd.DataFrame)
