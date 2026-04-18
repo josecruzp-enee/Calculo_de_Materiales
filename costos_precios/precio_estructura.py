@@ -183,31 +183,26 @@ def calcular_costos_operativos(
     }
 
 
+
 # =========================================================
-# 🔥 INTERNO: AGREGAR CABLE (AQUÍ VIVE TODO)
-# =========================================================
-# =========================================================
-# 🔥 LIMPIAR CALIBRE (FORMATO CORTO)
+#  LIMPIAR CALIBRE
 # =========================================================
 def limpiar_calibre(txt):
-    txt = str(txt).upper()
+    txt = str(txt).upper().strip()
 
-    # Caso ACSR
-    if "ACSR" in txt:
-        partes = txt.split("ACSR")
-        return partes[-1].replace("#", "").strip()
+    txt = txt.replace("CABLE DE ALUMINIO", "")
+    txt = txt.replace("FORRADO", "")
+    txt = txt.replace("ACSR", "")
+    txt = txt.replace("#", "")
+    txt = txt.replace("  ", " ")
 
-    # Caso AWG genérico
-    if "AWG" in txt:
-        partes = txt.split("AWG")
-        return (partes[0] + "AWG").replace("#", "").strip()
-
-    # Fallback
-    return txt.replace("CABLE DE ALUMINIO", "").replace("#", "").strip()
-
+    return txt.strip()
 
 # =========================================================
 # 🔥 AGREGAR CABLE A PRECIOS (VERSIÓN FINAL)
+# =========================================================
+# =========================================================
+# 🔥 INTERNO: AGREGAR CABLE (VERSIÓN FINAL)
 # =========================================================
 def _agregar_cable_a_precios(df_precios, entrada):
 
@@ -215,27 +210,15 @@ def _agregar_cable_a_precios(df_precios, entrada):
 
     df_cables = getattr(entrada, "df_cables", None)
 
-    # -----------------------------------------------------
-    # VALIDACIÓN
-    # -----------------------------------------------------
-    if df_cables is None or df_cables.empty:
+    if df_cables is None or not isinstance(df_cables, pd.DataFrame) or df_cables.empty:
         return df_precios
 
     filas = []
 
-    # -----------------------------------------------------
-    # LOOP PRINCIPAL
-    # -----------------------------------------------------
     for _, c in df_cables.iterrows():
 
         tipo = str(c.get("Tipo", "")).strip().upper()
         calibre = str(c.get("Calibre", "")).strip()
-
-        # -------------------------------------------------
-        # IGNORAR NEUTRO Y PILOTO
-        # -------------------------------------------------
-        if tipo.startswith("N") or tipo.startswith("HP"):
-            continue
 
         # -------------------------------------------------
         # LONGITUD TOTAL (YA CON FASES)
@@ -249,7 +232,13 @@ def _agregar_cable_a_precios(df_precios, entrada):
             continue
 
         # -------------------------------------------------
-        # DATOS PARA PRESENTACIÓN
+        # IGNORAR LO QUE NO SE COBRA
+        # -------------------------------------------------
+        if tipo.startswith("N") or tipo.startswith("HP") or "RETENIDA" in tipo:
+            continue
+
+        # -------------------------------------------------
+        # DATOS PRESENTACIÓN
         # -------------------------------------------------
         try:
             longitud_tramo = float(c.get("Longitud", 0) or 0)
@@ -267,24 +256,21 @@ def _agregar_cable_a_precios(df_precios, entrada):
         calibre_limpio = limpiar_calibre(calibre)
 
         # -------------------------------------------------
-        # DEFINIR TIPO Y PRECIO
+        # DEFINIR TIPO (BIEN HECHO)
         # -------------------------------------------------
         if tipo.startswith("MT"):
-            prefijo = "LÍNEA MT"
-            precio = 120  # ajustable
+            descripcion = f"LP {calibre_limpio} | {int(longitud_tramo)} m | {fases}F"
+            precio = 120
+
         elif tipo.startswith("BT"):
-            prefijo = "LÍNEA BT"
-            precio = 80   # ajustable
+            descripcion = f"LS {calibre_limpio} | {int(longitud_tramo)} m | {fases}F"
+            precio = 80
+
         else:
             continue
 
         # -------------------------------------------------
-        # DESCRIPCIÓN FINAL (PROFESIONAL)
-        # -------------------------------------------------
-        descripcion = f"{prefijo} {calibre_limpio} | {int(longitud_tramo)} m | {fases}F"
-
-        # -------------------------------------------------
-        # AGREGAR FILA
+        # FILA FINAL
         # -------------------------------------------------
         filas.append({
             "Estructura": descripcion,
@@ -295,13 +281,12 @@ def _agregar_cable_a_precios(df_precios, entrada):
             "Precio Total": round(float(longitud) * float(precio), 2),
         })
 
-    # -----------------------------------------------------
-    # CONCATENAR
-    # -----------------------------------------------------
     if not filas:
         return df_precios
 
     return pd.concat([df_precios, pd.DataFrame(filas)], ignore_index=True)
+
+
 
 
 # =========================================================
