@@ -5,41 +5,80 @@ Base común para PDFs: estilos, helpers, membrete, calibres.
 Autor: José Nikol Cruz
 """
 
-from reportlab.platypus import PageBreak
+from reportlab.platypus import PageBreak, TableStyle
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.lib import colors
 import os
 import pandas as pd
 from xml.sax.saxutils import escape
 
 
-# ======== ESTILOS COMUNES ========
+# ==========================================================
+# ESTILOS COMUNES
+# ==========================================================
 styles = getSampleStyleSheet()
+
 styleN = ParagraphStyle(
     name="Normal9",
     parent=styles["Normal"],
     fontSize=9,
     leading=11
 )
+
 styleH = styles["Heading1"]
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
 # ==========================================================
-# FIX: formatear_material (IDENTIDAD)
+# 🎯 ESTILO DE TABLA UNIFORME (NUEVO)
+# ==========================================================
+def estilo_tabla():
+    return TableStyle([
+
+        # HEADER (AZUL PROFESIONAL)
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+
+        # CUERPO
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 8),
+
+        # ALINEACIÓN
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+        # FILAS ALTERNADAS (PRO)
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#F2F2F2")]),
+
+        # BORDES
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
+
+        # PADDING
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ])
+
+
+# ==========================================================
+# FIX: FORMATEAR MATERIAL
 # ==========================================================
 def formatear_material(nombre):
-    """Convierte a texto seguro para Paragraph."""
     if nombre is None or (isinstance(nombre, float) and pd.isna(nombre)):
         return ""
     return escape(str(nombre).strip())
 
 
-# ==========================
+# ==========================================================
 # HELPERS (ANTI PÁGINAS EN BLANCO)
-# ==========================
+# ==========================================================
 def salto_pagina_seguro(elems):
     if elems and not isinstance(elems[-1], PageBreak):
         elems.append(PageBreak())
@@ -60,30 +99,16 @@ def quitar_saltos_finales(elems):
     return elems
 
 
-# ==========================
+# ==========================================================
 # FONDO DE PÁGINA (MEMBRETE)
-# ==========================
+# ==========================================================
 def fondo_pagina(canvas, doc):
-    """
-    Dibuja el membrete seleccionado.
-
-    Tipos:
-    - ENEE   → fondo completo
-    - SMART  → banner horizontal superior
-    - ROMARIO → logo pequeño en esquina superior derecha
-    """
 
     try:
         import streamlit as st
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.units import inch
-        import os
 
         canvas.saveState()
 
-        # =========================================================
-        # OBTENER TIPO DE MEMBRETE
-        # =========================================================
         membrete = None
 
         try:
@@ -99,9 +124,6 @@ def fondo_pagina(canvas, doc):
 
         membrete = str(membrete or "SMART").strip().upper()
 
-        # =========================================================
-        # RUTA DE IMAGEN
-        # =========================================================
         BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
         if membrete == "ENEE":
@@ -113,58 +135,18 @@ def fondo_pagina(canvas, doc):
 
         ancho, alto = letter
 
-        # =========================================================
-        # DIBUJO SEGÚN TIPO
-        # =========================================================
         if os.path.exists(fondo):
 
-            # =========================
-            # ENEE → fondo completo
-            # =========================
             if membrete == "ENEE":
-                canvas.drawImage(
-                    fondo,
-                    0, 0,
-                    width=ancho,
-                    height=alto,
-                    preserveAspectRatio=True,
-                    mask="auto",
-                )
+                canvas.drawImage(fondo, 0, 0, width=ancho, height=alto)
 
-            # =========================
-            # SMART → banner completo
-            # =========================
             elif membrete == "SMART":
                 h = 1.05 * inch
-                y = alto - h
+                canvas.drawImage(fondo, 0, alto - h, width=ancho, height=h)
 
-                canvas.drawImage(
-                    fondo,
-                    0, y,
-                    width=ancho,
-                    height=h,
-                    preserveAspectRatio=True,
-                    anchor="n",
-                    mask="auto",
-                )
-
-            # =========================
-            # ROMARIO → logo esquina
-            # =========================
             elif membrete == "ROMARIO":
                 h = 1.2 * inch
-                y = alto - h
-
-                canvas.drawImage(
-                    fondo,
-                    0,
-                    y,
-                    width=ancho,
-                    height=h,
-                    preserveAspectRatio=True,
-                    anchor="n",
-                    mask="auto",
-                )
+                canvas.drawImage(fondo, 0, alto - h, width=ancho, height=h)
 
         canvas.restoreState()
 
@@ -176,8 +158,9 @@ def fondo_pagina(canvas, doc):
 
         print(f"⚠️ Error aplicando fondo: {e}")
 
+
 # ==========================================================
-# CALIBRES desde tabla de Cables (sin longitudes)
+# CALIBRES
 # ==========================================================
 def _dedupe_keep_order(vals):
     seen = set()
@@ -193,22 +176,26 @@ def _dedupe_keep_order(vals):
     return out
 
 
-def _calibres_por_tipo(cables, tipo_buscar: str) -> str:
-    """
-    Devuelve calibres únicos separados por coma para un tipo de cable:
-    MT, BT, N, HP, RETENIDA.
-    Lee claves flexibles: "Tipo"/"tipo" y "Calibre"/"calibre".
-    """
+def _calibres_por_tipo(cables, tipo_buscar: str):
+
     t = (tipo_buscar or "").strip().upper()
+
     if not cables:
         return ""
+
     calibres = []
+
     for c in cables:
         tipo = str(c.get("Tipo", c.get("tipo", ""))).strip().upper()
+
         if tipo != t:
             continue
+
         cal = str(c.get("Calibre", c.get("calibre", ""))).strip()
+
         if cal:
             calibres.append(cal)
+
     calibres = _dedupe_keep_order(calibres)
+
     return ", ".join(calibres)
