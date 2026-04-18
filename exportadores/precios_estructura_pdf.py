@@ -16,6 +16,10 @@ def generar_tabla_precios_estructura(
     df_estructuras: pd.DataFrame | None = None,
 ):
 
+    from reportlab.platypus import Table, TableStyle, Paragraph
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+
     # =====================================================
     # VALIDACIONES
     # =====================================================
@@ -24,29 +28,6 @@ def generar_tabla_precios_estructura(
 
     if df_precios.empty:
         raise ValueError("df_precios vacío")
-
-    required_cols = ["Estructura", "Precio Unitario"]
-    faltantes = [c for c in required_cols if c not in df_precios.columns]
-    if faltantes:
-        raise ValueError(f"df_precios no cumple contrato: {faltantes}")
-
-    # =====================================================
-    # AGRUPAR CANTIDADES (SOLO ESTRUCTURAS)
-    # =====================================================
-    cantidades = {}
-
-    if df_estructuras is not None and not df_estructuras.empty:
-
-        df_tmp = df_estructuras.copy()
-
-        df_tmp["Estructura"] = df_tmp["Estructura"].astype(str).str.strip()
-        df_tmp["Cantidad"] = pd.to_numeric(df_tmp["Cantidad"], errors="coerce").fillna(0)
-
-        cantidades = (
-            df_tmp.groupby("Estructura")["Cantidad"]
-            .sum()
-            .to_dict()
-        )
 
     # =====================================================
     # ESTILO TEXTO (CLAVE)
@@ -59,14 +40,26 @@ def generar_tabla_precios_estructura(
     )
 
     # =====================================================
+    # AGRUPAR CANTIDADES
+    # =====================================================
+    cantidades = {}
+
+    if df_estructuras is not None and not df_estructuras.empty:
+
+        df_tmp = df_estructuras.copy()
+        df_tmp["Estructura"] = df_tmp["Estructura"].astype(str).str.strip()
+        df_tmp["Cantidad"] = pd.to_numeric(df_tmp["Cantidad"], errors="coerce").fillna(0)
+
+        cantidades = (
+            df_tmp.groupby("Estructura")["Cantidad"]
+            .sum()
+            .to_dict()
+        )
+
+    # =====================================================
     # CABECERA
     # =====================================================
-    data = [[
-        "DESCRIPCIÓN",
-        "P.U.",
-        "CANT",
-        "TOTAL"
-    ]]
+    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
 
     total_general = 0.0
 
@@ -80,7 +73,6 @@ def generar_tabla_precios_estructura(
 
         cantidad = cantidades.get(estructura, None)
 
-        # si no es estructura → usar su propia cantidad (cable)
         if cantidad is None or cantidad == 0:
             cantidad = float(r.get("Cantidad", 0))
 
@@ -89,9 +81,8 @@ def generar_tabla_precios_estructura(
 
         total = pu * cantidad
 
-        # 🔥 TEXTO EN UNA SOLA LÍNEA
+        # 🔥 TEXTO LIMPIO EN UNA SOLA LÍNEA
         texto = f"Suministro e instalación de estructura tipo {estructura}"
-
         descripcion = Paragraph(texto, style_small)
 
         total_general += total
@@ -120,35 +111,29 @@ def generar_tabla_precios_estructura(
     ])
 
     # =====================================================
-    # TABLA (AJUSTE FINAL)
+    # TABLA
     # =====================================================
     tabla = Table(
         data,
-        colWidths=[320, 80, 60, 90]  # 🔥 ancho optimizado
+        colWidths=[320, 80, 60, 90]  # 🔥 ancho corregido
     )
 
     tabla.setStyle(TableStyle([
 
-        # HEADER
         ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
 
-        # ALIGN
         ("ALIGN", (1, 1), (-1, -2), "RIGHT"),
         ("ALIGN", (2, 1), (2, -2), "CENTER"),
 
-        # TOTAL
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFEFEF")),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
 
-        # GRID
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
 
-        # PADDING
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
-
     ]))
 
     return [tabla]
