@@ -186,71 +186,59 @@ def calcular_costos_operativos(
 # =========================================================
 # 🔥 INTERNO: AGREGAR CABLE (AQUÍ VIVE TODO)
 # =========================================================
-# =========================================================
-# 🔥 INTERNO: AGREGAR CABLE (ROBUSTO)
-# =========================================================
-def _agregar_cable_a_precios(df_precios, df_cables):
+def _agregar_cable_a_precios(df_precios, datos_proyecto):
 
     if df_precios is None or df_precios.empty:
         return df_precios
 
-    if df_cables is None or df_cables.empty:
+    if not datos_proyecto:
         return df_precios
 
-    # Normalizar columnas (evita errores por mayúsculas/minúsculas)
-    df_cables = df_cables.copy()
-    df_cables.columns = [str(c).strip().upper() for c in df_cables.columns]
+    cables = datos_proyecto.get("cables_proyecto", [])
 
-    # Detectar columnas automáticamente
-    col_tipo = next((c for c in df_cables.columns if "TIPO" in c), None)
-    col_long = next((c for c in df_cables.columns if "LONG" in c), None)
-    col_calibre = next((c for c in df_cables.columns if "CALIBRE" in c), None)
-
-    if col_tipo is None or col_long is None:
-        # No hay datos válidos → no romper
+    if not cables:
         return df_precios
 
     filas = []
 
-    for _, r in df_cables.iterrows():
+    for c in cables:
 
-        tipo = str(r.get(col_tipo, "")).strip().upper()
+        tipo = str(c.get("Tipo", "")).strip().upper()
+        calibre = str(c.get("Calibre", "")).strip()
 
         try:
-            longitud = float(r.get(col_long, 0))
+            longitud = float(c.get("Longitud", 0))
         except:
             continue
 
         if longitud <= 0:
             continue
 
-        # 🔧 REGLAS COMERCIALES
-        if "PRIMARIO" in tipo or tipo == "MT":
+        # 🔧 REGLAS
+        if tipo in ["MT", "PRIMARIO"]:
             precio = 120
             nombre = "línea primaria"
 
-        elif "SECUNDARIO" in tipo or tipo == "BT":
+        elif tipo in ["BT", "SECUNDARIO"]:
             precio = 80
             nombre = "línea secundaria"
 
-        elif "NEUTRO" in tipo:
+        elif tipo == "NEUTRO":
             precio = 60
             nombre = "conductor neutro"
 
-        elif "PILOTO" in tipo:
+        elif tipo == "PILOTO":
             precio = 40
             nombre = "hilo piloto"
 
-        elif "RETENIDA" in tipo:
+        elif tipo == "RETENIDA":
             precio = 70
             nombre = "cable de retenida"
 
         else:
             continue
 
-        calibre = str(r.get(col_calibre, "")).strip() if col_calibre else ""
-
-        descripcion = f"Suministro e instalación de {round(longitud, 2)} m de {nombre}"
+        descripcion = f"Suministro e instalación de {round(longitud,2)} m de {nombre}"
         if calibre:
             descripcion += f" ({calibre})"
 
@@ -333,7 +321,7 @@ def ejecutar_costos(entrada) -> Dict[str, Any]:
         # 🔥 AQUÍ SE AGREGA CABLE (CONTROLADO)
         df_precios = _agregar_cable_a_precios(
             df_precios,
-            entrada.df_cables
+            entrada.datos_proyecto
         )
 
         return {
