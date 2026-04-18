@@ -54,18 +54,23 @@ def calcular_costos_cable(df_cables):
 
     for _, r in df_cables.iterrows():
 
-        tipo = r["tipo"]   # PRIMARIO / SECUNDARIO
-        longitud = float(r["longitud"])
+        tipo = str(r.get("tipo", "")).strip().upper()
+        
+        try:
+            longitud = float(r.get("longitud", 0))
+        except:
+            continue
 
         if tipo == "PRIMARIO":
-            precio = 120   # INST-LP
+            precio = 120
+        elif tipo == "SECUNDARIO":
+            precio = 80
         else:
-            precio = 80    # INST-LS
+            continue  # 🔥 ignora basura
 
         total += longitud * precio
 
     return total
-
 # =====================================================
 # ORQUESTADOR PRINCIPAL
 # =====================================================
