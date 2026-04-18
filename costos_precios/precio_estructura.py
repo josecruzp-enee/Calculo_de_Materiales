@@ -6,13 +6,7 @@ import pandas as pd
 
 
 # =========================================================
-# CONFIGURACIÓN
-# =========================================================
-USAR_BIBLIOTECA = True
-
-
-# =========================================================
-# BIBLIOTECA DE PRECIOS
+# BIBLIOTECA DE PRECIOS (CONTROL TOTAL)
 # =========================================================
 PRECIOS_BIBLIOTECA = {
     "A-I-1": 1500,
@@ -48,7 +42,35 @@ class ResultadoPrecioEstructura:
 
 
 # =========================================================
-# COSTOS OPERATIVOS (SOLO INDIRECTOS)
+# FUNCIÓN ÚNICA DE PRECIO (🔥 ESTA MANDA TODO)
+# =========================================================
+def calcular_precio_estructura(
+    *,
+    estructura: str,
+    costo_materiales: float,
+    costo_operativo: float,
+    porcentaje_utilidad: float,
+) -> ResultadoPrecioEstructura:
+
+    estructura_norm = estructura.strip().upper()
+
+    # 🔥 PRIORIDAD: BIBLIOTECA
+    if estructura_norm in PRECIOS_BIBLIOTECA:
+        precio_unitario = PRECIOS_BIBLIOTECA[estructura_norm]
+
+    else:
+        # 🔧 MODELO AUTOMÁTICO (fallback)
+        costo_base = costo_materiales + costo_operativo
+        precio_unitario = costo_base * (1 + porcentaje_utilidad)
+
+    return ResultadoPrecioEstructura(
+        estructura=estructura_norm,
+        precio_unitario=round(precio_unitario, 2)
+    )
+
+
+# =========================================================
+# FUNCIONES AUXILIARES (SE MANTIENEN)
 # =========================================================
 def calcular_costos_operativos(
     *,
@@ -66,27 +88,7 @@ def calcular_costos_operativos(
 
 
 # =========================================================
-# MODELO DE PRECIO (OPCIONAL)
-# =========================================================
-def calcular_precio_estructura(
-    *,
-    estructura: str,
-    costo_materiales: float,
-    costo_operativo: float,
-    porcentaje_utilidad: float,
-) -> ResultadoPrecioEstructura:
-
-    costo_base = costo_materiales + costo_operativo
-    precio = costo_base * (1 + porcentaje_utilidad)
-
-    return ResultadoPrecioEstructura(
-        estructura=estructura.strip().upper(),
-        precio_unitario=round(precio, 2)
-    )
-
-
-# =========================================================
-# ORQUESTADOR
+# ORQUESTADOR LOCAL (SI ALGUNA VEZ LO USAS)
 # =========================================================
 def calcular_precios_por_estructura(
     df_costos_estructura: pd.DataFrame,
@@ -96,42 +98,19 @@ def calcular_precios_por_estructura(
     porcentaje_utilidad: float = 0.15,
 ):
 
-    if df_costos_estructura is None or df_costos_estructura.empty:
-        raise ValueError("df_costos_estructura vacío")
-
-    if df_estructuras is None or df_estructuras.empty:
-        raise ValueError("df_estructuras vacío")
-
-    if df_mano_obra is None or df_mano_obra.empty:
-        raise ValueError("df_mano_obra vacío")
-
-    # =====================================================
-    # TOTALES
-    # =====================================================
     material_total = df_costos_estructura["Costo Total"].sum()
 
     costos_op = calcular_costos_operativos(
         costo_material_total=material_total
     )
 
-    # =====================================================
-    # CANTIDADES
-    # =====================================================
     df_tmp = df_estructuras.copy()
     df_tmp["Estructura"] = df_tmp["Estructura"].astype(str).str.strip().str.upper()
     df_tmp["Cantidad"] = pd.to_numeric(df_tmp["Cantidad"], errors="coerce").fillna(0)
 
-    cantidades = (
-        df_tmp.groupby("Estructura")["Cantidad"]
-        .sum()
-        .to_dict()
-    )
+    cantidades = df_tmp.groupby("Estructura")["Cantidad"].sum().to_dict()
 
-    # =====================================================
-    # PROCESO
-    # =====================================================
     filas = []
-    total_base = 0.0
 
     for _, r in df_costos_estructura.iterrows():
 
@@ -143,55 +122,32 @@ def calcular_precios_por_estructura(
         if material_total <= 0:
             continue
 
-        # DISTRIBUCIÓN OPERATIVA
         peso = costo_material_total_estructura / material_total
 
         costo_operativo_unitario = (
             costos_op["operativo_total"] * peso
         ) / cantidad
 
-        # =================================================
-        # 🔥 DECISIÓN: BIBLIOTECA O MODELO
-        # =================================================
-        if USAR_BIBLIOTECA:
+        # 🔥 LLAMADA CENTRAL
+        res = calcular_precio_estructura(
+            estructura=estructura,
+            costo_materiales=costo_material_unit,
+            costo_operativo=costo_operativo_unitario,
+            porcentaje_utilidad=porcentaje_utilidad,
+        )
 
-            precio_unitario = PRECIOS_BIBLIOTECA.get(
-                estructura,
-                1500  # fallback
-            )
-
-        else:
-
-            precio = calcular_precio_estructura(
-                estructura=estructura,
-                costo_materiales=costo_material_unit,
-                costo_operativo=costo_operativo_unitario,
-                porcentaje_utilidad=porcentaje_utilidad,
-            )
-
-            precio_unitario = precio.precio_unitario
-
-        # =================================================
-        # CANTIDAD REAL
-        # =================================================
         cantidad_real = cantidades.get(estructura, 0)
 
         if cantidad_real <= 0:
             continue
 
-        subtotal = precio_unitario * cantidad_real
-        total_base += subtotal
+        subtotal = res.precio_unitario * cantidad_real
 
         filas.append({
             "Estructura": estructura,
             "Cantidad": cantidad_real,
-            "Precio Unitario": precio_unitario,
+            "Precio Unitario": res.precio_unitario,
             "Subtotal": round(subtotal, 2),
         })
 
-    df_out = pd.DataFrame(filas)
-
-    if df_out.empty:
-        raise ValueError("No se generaron precios")
-
-    return df_out, round(total_base, 2)
+    return pd.DataFrame(filas)
