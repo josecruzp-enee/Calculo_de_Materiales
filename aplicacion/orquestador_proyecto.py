@@ -28,6 +28,9 @@ from exportadores.orquestador_reportes import generar_reportes, EntradaReportes
 
 from entradas.base_datos import obtener_catalogo_materiales
 
+# 🔥 NUEVO
+from costos_proyecto.calcular_costos_proyecto import calcular_costos_proyecto
+
 
 # =========================================================
 # HELPERS
@@ -95,12 +98,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         salida_entradas = ejecutar_entradas(salida_interfaz)
 
-        debug_global["ENTRADAS"] = {
-            "ok": salida_entradas.ok,
-            "df_estructuras": None if salida_entradas.df_estructuras is None else salida_entradas.df_estructuras.shape,
-            "base_datos_keys": list(salida_entradas.base_datos.keys())[:10] if salida_entradas.base_datos else None,
-        }
-
         if not salida_entradas.ok:
             return _fail("Error en Entradas", debug_global)
 
@@ -108,25 +105,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             salida_entradas.df_estructuras
         )
 
-        debug_global["DF_ESTRUCTURAS_INICIAL"] = {
-            "shape": df_estructuras.shape,
-            "columns": list(df_estructuras.columns)
-        }
-
         # =====================================================
         # 2. DESCRIPCIONES
         # =====================================================
         base = salida_entradas.base_datos or {}
         df_indice = base.get("INDICE") or base.get("indice")
-
-        if df_indice is None:
-            try:
-                df_indice = pd.read_excel(
-                    "data/Estructura_datos.xlsx",
-                    sheet_name="indice"
-                )
-            except Exception:
-                df_indice = None
 
         mapa = {}
 
@@ -162,12 +145,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             .fillna("")
         )
 
-        debug_global["DESCRIPCIONES"] = {
-            "total": len(df_estructuras),
-            "con_descripcion": int((df_estructuras["Descripcion"] != "").sum()),
-            "sin_descripcion": int((df_estructuras["Descripcion"] == "").sum()),
-        }
-
         # =====================================================
         # 3. PROYECTO
         # =====================================================
@@ -183,10 +160,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         entrada_proyecto.validar()
         tension = _extraer_tension(entrada_proyecto.datos_proyecto)
-
-        debug_global["PROYECTO"] = {
-            "tension": tension
-        }
 
         # =====================================================
         # 4. MATERIALES
@@ -205,12 +178,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         resultado_materiales = ejecutar_materiales(entrada_mat)
         df_materiales = resultado_materiales.df_materiales
 
-        debug_global["MATERIALES"] = {
-            "df_materiales": None if df_materiales is None else df_materiales.shape
-        }
-
         # =====================================================
-        # 5. COSTOS
+        # 5. COSTOS / PRECIOS
         # =====================================================
         df_catalogo = obtener_catalogo_materiales(salida_entradas.base_datos)
 
@@ -219,60 +188,48 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_catalogo=df_catalogo,
             df_estructuras=df_estructuras,
             df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
-            df_cables=salida_interfaz.df_cables,
+            df_cables=salida_entradas.df_cables,
         )
-
-        entrada_costos._datos_proyecto = salida_interfaz.datos_proyecto
 
         resultado_costos = ejecutar_costos(entrada_costos)
 
-        debug_global["COSTOS"] = {
-            "df_precios": None if resultado_costos.get("df_precios_estructura") is None else "OK",
-            "df_costos": None if resultado_costos.get("df_costos_estructura") is None else "OK"
-        }
-
-        # =====================================================
-        # 🔥 PRECIO DE VENTA
-        # =====================================================
         df_precios_estructura = resultado_costos.get("df_precios_estructura")
 
-        precio_venta = (
-            pd.to_numeric(df_precios_estructura.get("Precio Total", 0), errors="coerce")
-            .fillna(0)
-            .sum()
-            if df_precios_estructura is not None else 0
+        # =====================================================
+        # 6. COSTOS DE PROYECTO (🔥 NUEVO)
+        # =====================================================
+        precio_total_proyecto = (
+            float(pd.to_numeric(df_precios_estructura["Precio Total"], errors="coerce").fillna(0).sum())
+            if df_precios_estructura is not None and not df_precios_estructura.empty
+            else 0.0
         )
 
-        # =====================================================
-        # 🔥 COSTOS DE PROYECTO (FIX CORRECTO)
-        # =====================================================
-        from costos_precios.costos_proyecto import calcular_costos_proyecto
+        entrada_cp = type("EntradaCostosProyecto", (), {})()
+        entrada_cp.df_estructuras = df_estructuras
+        entrada_cp.df_cables = salida_entradas.df_cables
+        entrada_cp.df_materiales_costos = resultado_costos.get("df_materiales_costos")
+        entrada_cp.precio_venta_proyecto = precio_total_proyecto
 
-        entrada_costos.df_materiales_costos = resultado_costos.get("df_materiales_costos")
-        entrada_costos.df_precios_estructura = df_precios_estructura
-        entrada_costos.precio_venta_proyecto = precio_venta
-
-        res_costos_proyecto = calcular_costos_proyecto(entrada_costos)
+        res_costos_proyecto = calcular_costos_proyecto(entrada_cp)
 
         # =====================================================
-        # 6. REPORTES
+        # 7. REPORTES
         # =====================================================
         entrada_reportes = EntradaReportes(
             df_estructuras=df_estructuras,
             df_materiales=df_materiales,
             df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
-            costos=res_costos_proyecto,
+            costos={
+                "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
+                "df_precios_estructura": df_precios_estructura,
+                **res_costos_proyecto
+            },
             nombre_proyecto="Proyecto",
             datos_proyecto=salida_entradas.datos_proyecto,
             df_cables=salida_entradas.df_cables
         )
 
         reportes = generar_reportes(entrada_reportes)
-
-        debug_global["REPORTES"] = {
-            "archivos": list(reportes["archivos"].keys()),
-            "errores": reportes["errores"]
-        }
 
         return ResultadoProyecto(
             ok=True,
@@ -281,7 +238,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             materiales=resultado_materiales,
             costos=resultado_costos,
             reportes=reportes,
-            debug=debug_global
+            debug={}
         )
 
     except Exception as e:
