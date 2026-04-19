@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from exportadores.cotizacion import generar_seccion_cotizacion_final
+
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
     Paragraph, Spacer, PageBreak, Table, TableStyle
 )
+
 from reportlab.lib import colors
 
 from exportadores.hoja_info import seccion_hoja_info
