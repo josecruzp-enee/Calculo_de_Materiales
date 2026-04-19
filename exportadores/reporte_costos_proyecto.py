@@ -3,11 +3,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+import math
 
-import math   # 🔥 AGREGA ESTO
 
 # =====================================================
 # 🔥 GANTT POR ACTIVIDADES
@@ -61,7 +58,10 @@ def generar_gantt_actividades(resultado):
     return Table(data)
 
 
-def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
+# =====================================================
+# 🔥 PDF COSTOS PROYECTO COMPLETO
+# =====================================================
+def generar_pdf_costos_proyecto(resultado, df_materiales_costos, ruta="costos_proyecto.pdf"):
 
     doc = SimpleDocTemplate(ruta)
     styles = getSampleStyleSheet()
@@ -84,7 +84,6 @@ def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
         ["Total estructuras", resultado.get("total_estructuras", 0)],
         ["Postes", resultado.get("num_postes", 0)],
         ["Retenidas", resultado.get("num_retenidas", 0)],
-        ["Agujeros", resultado.get("total_agujeros", 0)],
         ["Longitud primaria (m)", resultado.get("longitud_primario", 0)],
         ["Longitud secundaria (m)", resultado.get("longitud_secundario", 0)],
     ]
@@ -99,23 +98,12 @@ def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
     elementos.append(Spacer(1, 12))
 
     # =====================================================
-    # 1. TIEMPO DEL PROYECTO
+    # 1. TIEMPO
     # =====================================================
     elementos.append(Paragraph("1. Tiempo del Proyecto", styles["Heading2"]))
 
-    elementos.append(Paragraph(
-        "Cálculo basado en rendimientos de construcción: "
-        "500 m/día en línea primaria, 300 m/día en secundaria "
-        "y 1 hora por estructura instalada.",
-        styles["Normal"]
-    ))
-    elementos.append(Spacer(1, 8))
-
     data_tiempo = [
         ["Concepto", "Valor"],
-        ["Días primario", resultado.get("dias_primario", 0)],
-        ["Días secundario", resultado.get("dias_secundario", 0)],
-        ["Días estructuras", resultado.get("dias_estructura", 0)],
         ["Días totales", resultado.get("dias_totales", 0)],
     ]
 
@@ -128,15 +116,13 @@ def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
     elementos.append(tabla)
     elementos.append(Spacer(1, 12))
 
-
     # =====================================================
-    # 🔥 GANTT DE OBRA
+    # 🔥 GANTT
     # =====================================================
     elementos.append(Paragraph("Cronograma de Obra (Gantt)", styles["Heading2"]))
     elementos.append(Spacer(1, 8))
 
     tabla_gantt = generar_gantt_actividades(resultado)
-
     tabla_gantt.setStyle(TableStyle([
         ("GRID", (0,0), (-1,-1), 0.5, colors.black),
         ("BACKGROUND", (0,0), (-1,0), colors.grey),
@@ -145,12 +131,36 @@ def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
     elementos.append(tabla_gantt)
     elementos.append(Spacer(1, 12))
 
+    # =====================================================
+    # 🔥 2. MATERIALES CON PRECIO
+    # =====================================================
+    elementos.append(Paragraph("2. Materiales del Proyecto", styles["Heading2"]))
+    elementos.append(Spacer(1, 8))
 
+    data_mat = [["Descripción", "Und", "Cant", "P.U.", "Total"]]
+
+    for _, row in df_materiales_costos.iterrows():
+        data_mat.append([
+            str(row.get("Materiales", "")),
+            str(row.get("Unidad", "")),
+            f"{row.get('Cantidad', 0):,.2f}",
+            f"L {row.get('Costo Unitario', 0):,.2f}",
+            f"L {row.get('Costo Total', 0):,.2f}",
+        ])
+
+    tabla_mat = Table(data_mat)
+    tabla_mat.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+    ]))
+
+    elementos.append(tabla_mat)
+    elementos.append(Spacer(1, 12))
 
     # =====================================================
-    # 2. COSTOS DEL PROYECTO
+    # 3. COSTOS
     # =====================================================
-    elementos.append(Paragraph("2. Costos del Proyecto", styles["Heading2"]))
+    elementos.append(Paragraph("3. Costos del Proyecto", styles["Heading2"]))
 
     data_costos = [
         ["Concepto", "Lempiras"],
@@ -172,9 +182,9 @@ def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
     elementos.append(Spacer(1, 12))
 
     # =====================================================
-    # 3. RESULTADO FINANCIERO
+    # 4. RESULTADO FINANCIERO
     # =====================================================
-    elementos.append(Paragraph("3. Resultado Financiero", styles["Heading2"]))
+    elementos.append(Paragraph("4. Resultado Financiero", styles["Heading2"]))
 
     data_final = [
         ["Concepto", "Valor"],
@@ -194,9 +204,9 @@ def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
     elementos.append(Spacer(1, 12))
 
     # =====================================================
-    # 4. EVALUACIÓN DEL PROYECTO
+    # 5. EVALUACIÓN
     # =====================================================
-    elementos.append(Paragraph("4. Evaluación", styles["Heading2"]))
+    elementos.append(Paragraph("5. Evaluación", styles["Heading2"]))
 
     margen = resultado.get("margen_pct", 0)
 
