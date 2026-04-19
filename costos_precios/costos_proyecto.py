@@ -181,9 +181,7 @@ def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
 
         _validar_materiales(df_materiales_costos)
 
-        df_precios = getattr(entrada, "df_precios_estructura", None)
-
-        precio_total = _safe_sum(df_precios.get("Precio Total", 0)) if df_precios is not None else 0
+        precio_total = getattr(entrada, "precio_venta_proyecto", 0)
 
         resultado = _motor_costos(
             df_materiales_costos,
