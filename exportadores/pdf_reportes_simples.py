@@ -21,7 +21,7 @@ from exportadores.pdf_base import (
     estilo_tabla,
     nombre_proyecto_seguro,
 )
-from exportadores.pdf_base import nombre_proyecto_seguro
+
 
 # ==========================================================
 # PDF: RESUMEN DE MATERIALES (GLOBAL)
@@ -70,7 +70,7 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 # ==========================================================
 # PDF: RESUMEN DE ESTRUCTURAS (GLOBAL)
 # ==========================================================
-def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None):
+def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None, datos_proyecto=None):
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
