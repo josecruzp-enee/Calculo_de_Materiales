@@ -1,21 +1,29 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from exportadores.pdf_base import estilo_tabla
+
+
 # =========================================================
 # HELPERS VISUALES
 # =========================================================
-from reportlab.platypus import Paragraph, Spacer
-from reportlab.lib import colors
-
-
 def _agregar_notas(elems, styles):
 
+    elems.append(Spacer(1, 12))
+
     elems.append(Paragraph("<b>Notas:</b>", styles["Normal"]))
+    elems.append(Spacer(1, 4))
 
     elems.append(Paragraph(
-        "- Los precios incluyen el suministro e instalación de los materiales y equipos descritos.",
+        "- Los precios incluyen el suministro e instalación de los materiales y equipos descritos en el presente documento.",
         styles["Normal"]
     ))
 
     elems.append(Paragraph(
-        "- La gestión de permisos ante ENEE se encuentra incluida dentro del alcance del proyecto.",
+        "- La gestión de permisos ante ENEE está incluida dentro del alcance del proyecto.",
         styles["Normal"]
     ))
 
@@ -26,18 +34,15 @@ def _agregar_notas(elems, styles):
 
 
 def _estilo_cotizacion(tabla):
-    """
-    Ajustes específicos SOLO para cotización
-    (encima de estilo_tabla)
-    """
-
-    from reportlab.platypus import TableStyle
 
     tabla.setStyle(TableStyle([
 
         # 🔹 SUBTOTAL (fila -3)
         ("BACKGROUND", (0, -3), (-1, -3), colors.HexColor("#D9E1F2")),
         ("FONTNAME", (0, -3), (-1, -3), "Helvetica-Bold"),
+
+        # 🔹 ISV (fila -2)
+        ("BACKGROUND", (0, -2), (-1, -2), colors.whitesmoke),
 
         # 🔹 TOTAL FINAL (fila -1)
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#1F4E79")),
@@ -51,19 +56,27 @@ def _estilo_cotizacion(tabla):
 
 
 # =========================================================
-# COTIZACIÓN FINAL (MODULAR)
+# FUNCIÓN PRINCIPAL
 # =========================================================
-from reportlab.platypus import Table
-from exportadores.pdf_base import estilo_tabla
-
-
 def generar_seccion_cotizacion_final(doc, styles, df_precios):
 
     elems = []
 
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
     if df_precios is None or df_precios.empty:
         elems.append(Paragraph("SIN DATOS PARA COTIZACIÓN", styles["Normal"]))
         return elems
+
+    # =====================================================
+    # TÍTULO CENTRADO
+    # =====================================================
+    styleTitulo = styles["Heading1"].clone("titulo_cotizacion")
+    styleTitulo.alignment = TA_CENTER
+
+    elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styleTitulo))
+    elems.append(Spacer(1, 10))
 
     # =====================================================
     # BASE
@@ -93,21 +106,26 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
         ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
     ]
 
+    # =====================================================
+    # TABLA
+    # =====================================================
     tabla = Table(
         data,
         colWidths=[doc.width * 0.7, doc.width * 0.3],
         repeatRows=1
     )
 
-    # 🔥 ESTILO BASE (GLOBAL)
+    # 🔥 ESTILO GLOBAL
     tabla.setStyle(estilo_tabla())
 
-    # 🔥 AJUSTE SOLO PARA COTIZACIÓN
+    # 🔥 AJUSTE LOCAL
     _estilo_cotizacion(tabla)
 
     elems.append(tabla)
 
-    # 🔥 NOTAS
+    # =====================================================
+    # NOTAS
+    # =====================================================
     _agregar_notas(elems, styles)
 
     return elems
