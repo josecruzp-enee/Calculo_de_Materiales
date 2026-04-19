@@ -389,4 +389,3 @@ def seccion_hoja_info(datos_proyecto, df_estructuras, df_mat, doc_width=None):
         df_estructuras=df_estructuras,
         doc_width=doc_width
     )
-    )
