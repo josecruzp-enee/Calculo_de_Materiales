@@ -29,16 +29,20 @@ from exportadores.pdf_base import (
 # ==========================================================
 def _header(titulo, nombre_proy):
 
+    from reportlab.lib.enums import TA_CENTER
+
     styleTitulo = styles["Title"].clone("titulo_center")
     styleTitulo.alignment = TA_CENTER
 
     styleProyecto = styles["Normal"].clone("proyecto_center")
     styleProyecto.alignment = TA_CENTER
+    styleProyecto.fontSize = 11      # 🔥 AJUSTE CLAVE
+    styleProyecto.leading = 13
 
     return [
         Paragraph(titulo, styleTitulo),
         Spacer(1, 6),
-        Paragraph(f"Proyecto: {escape(str(nombre_proy))}", styleProyecto),
+        Paragraph(f"<b>Proyecto:</b> {escape(str(nombre_proy))}", styleProyecto),
         Spacer(1, 12),
     ]
 
