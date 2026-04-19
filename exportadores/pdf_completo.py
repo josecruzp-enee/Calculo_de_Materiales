@@ -5,15 +5,13 @@ from exportadores.cotizacion import generar_seccion_cotizacion_final
 
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
-    Paragraph, Spacer, PageBreak, Table, TableStyle
+    Paragraph, Spacer, PageBreak
 )
-
-from reportlab.lib import colors
 
 from exportadores.hoja_info import seccion_hoja_info
 from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 
-# 🔥 NUEVO (IMPORTANTE)
+# 🔥 IMPORTANTE
 from exportadores.reporte_costos_proyecto import construir_bloque_costos
 
 import pandas as pd
@@ -41,14 +39,10 @@ def generar_pdf_completo(
     df_estructuras,
     df_precios_estructura,
     datos_proyecto,
-    resultado_costos_proyecto=None
+    costos=None   # 🔥 CAMBIO IMPORTANTE
 ):
 
     _log("📄 INICIO PDF COMPLETO")
-
-    _log(f"df_materiales: {None if df_materiales is None else df_materiales.shape}")
-    _log(f"df_estructuras: {None if df_estructuras is None else df_estructuras.shape}")
-    _log(f"df_precios: {None if df_precios_estructura is None else df_precios_estructura}")
 
     buffer = BytesIO()
 
@@ -76,14 +70,13 @@ def generar_pdf_completo(
     # =====================================================
     # 1. HOJA INFO
     # =====================================================
-    bloque_info = seccion_hoja_info(
+    elems.extend(seccion_hoja_info(
         datos_proyecto=datos_proyecto,
         df_estructuras=df_estructuras,
         df_mat=df_materiales,
         doc_width=doc.width
-    )
+    ))
 
-    elems.extend(bloque_info)
     elems.append(PageBreak())
 
     # =====================================================
@@ -92,66 +85,48 @@ def generar_pdf_completo(
     elems.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Heading1"]))
     elems.append(Spacer(1, 10))
 
-    if (
-        df_precios_estructura is None
-        or not isinstance(df_precios_estructura, pd.DataFrame)
-        or df_precios_estructura.empty
-    ):
-        _log("⚠️ NO HAY PRECIOS")
+    if isinstance(df_precios_estructura, pd.DataFrame) and not df_precios_estructura.empty:
 
+        elems.extend(generar_tabla_precios_estructura(
+            df_precios_estructura,
+            df_estructuras
+        ))
+
+    else:
         elems.append(Paragraph(
             "No se dispone de información de precios de estructuras.",
             styles["Normal"]
         ))
-
-    else:
-        bloque_pres = generar_tabla_precios_estructura(
-            df_precios_estructura,
-            df_estructuras
-        )
-        elems.extend(bloque_pres)
 
     elems.append(PageBreak())
 
     # =====================================================
     # 3. COTIZACIÓN
     # =====================================================
-    if (
-        df_precios_estructura is None
-        or not isinstance(df_precios_estructura, pd.DataFrame)
-        or df_precios_estructura.empty
-    ):
+    if isinstance(df_precios_estructura, pd.DataFrame) and not df_precios_estructura.empty:
+
+        df_tmp = df_precios_estructura.copy()
+
+        if "Subtotal" not in df_tmp.columns:
+            df_tmp["Subtotal"] = df_tmp["Precio Unitario"] * df_tmp["Cantidad"]
+
+        elems.extend(generar_seccion_cotizacion_final(doc, styles, df_tmp))
+
+    else:
         elems.append(Paragraph(
             "No se puede generar la cotización por falta de precios.",
             styles["Normal"]
         ))
 
-    else:
-        df_tmp = df_precios_estructura.copy()
-
-        if "Subtotal" not in df_tmp.columns:
-            df_tmp["Subtotal"] = (
-                df_tmp["Precio Unitario"] *
-                df_tmp["Cantidad"]
-            )
-
-        bloque_cot = generar_seccion_cotizacion_final(
-            doc,
-            styles,
-            df_tmp
-        )
-
-        elems.extend(bloque_cot)
-
     # =====================================================
-    # 4. COSTOS DE PROYECTO (INTEGRADO 🔥)
+    # 4. COSTOS DE PROYECTO (CORREGIDO 🔥)
     # =====================================================
     elems.append(PageBreak())
 
     elems.append(Paragraph("COSTOS DE PROYECTO", styles["Heading1"]))
     elems.append(Spacer(1, 10))
 
-    if resultado_costos_proyecto is None:
+    if not costos or not costos.get("ok"):
 
         elems.append(Paragraph(
             "No se dispone del cálculo de costos de proyecto.",
@@ -159,12 +134,12 @@ def generar_pdf_completo(
         ))
 
     else:
-        # 🔥 AQUÍ ESTÁ LA MAGIA
+
         construir_bloque_costos(
             elems,
             styles,
-            resultado_costos_proyecto,
-            resultado_costos_proyecto.get("df_materiales_costos")
+            costos.get("resultado_costos_proyecto"),   # ✔ correcto
+            costos.get("df_materiales_costos")         # 🔥 CLAVE
         )
 
     # =====================================================
