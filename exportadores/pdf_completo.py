@@ -73,7 +73,7 @@ def generar_pdf_completo(
     bloque_info = seccion_hoja_info(
         datos_proyecto=datos_proyecto,
         df_estructuras=df_estructuras,
-        df_mat=df_materiales
+        df_mat=df_materiales,
         doc_width=doc.width
     )
 
