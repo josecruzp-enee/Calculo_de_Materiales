@@ -110,8 +110,7 @@ def generar_pdf_completo(
     # =====================================================
     # 3. COTIZACIÓN
     # =====================================================
-    elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Heading1"]))
-    elems.append(Spacer(1, 10))
+    
 
     if (
         df_precios_estructura is None
