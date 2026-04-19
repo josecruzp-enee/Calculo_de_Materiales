@@ -327,7 +327,7 @@ def _build_tabla(datos, prim, sec, neu, pil, doc_width):
 # =========================================================
 # FUNCIÓN PRINCIPAL
 # =========================================================
-def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
+def hoja_info_proyecto(datos_proyecto, df_estructuras=None, doc_width=None):
 
     styles = getSampleStyleSheet()
     styleN = styles["Normal"]
@@ -337,6 +337,8 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
     styleTitulo.alignment = TA_CENTER
 
     elems = []
+    if doc_width is None:
+        doc_width = 450
 
     elems.append(Paragraph("Hoja de Información del Proyecto", styleTitulo))
     elems.append(Spacer(1, 8))
@@ -346,7 +348,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
 
     prim, sec, neu, pil = extraer_calibres(datos)
 
-    elems.append(_build_tabla(datos, prim, sec, neu, pil, doc.width))
+    elems.append(_build_tabla(datos, prim, sec, neu, pil, doc_width))
     elems.append(Spacer(1, 8))
 
     elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
@@ -381,8 +383,10 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
 # =========================================================
 # WRAPPER
 # =========================================================
-def seccion_hoja_info(datos_proyecto, df_estructuras, df_mat):
+def seccion_hoja_info(datos_proyecto, df_estructuras, df_mat, doc_width=None):
     return hoja_info_proyecto(
         datos_proyecto=datos_proyecto,
-        df_estructuras=df_estructuras
+        df_estructuras=df_estructuras,
+        doc_width=doc_width
+    )
     )
