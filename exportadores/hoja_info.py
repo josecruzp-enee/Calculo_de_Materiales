@@ -277,8 +277,12 @@ def _desc_lineas(cables, tension):
 # =========================================================
 # TABLA
 # =========================================================
-def _build_tabla(datos, prim, sec, neu, pil):
+def _build_tabla(datos, prim, sec, neu, pil, doc_width):
+    col1 = doc_width * 0.4
+    col2 = doc_width * 0.6
 
+    tabla = Table(data, colWidths=[col1, col2])
+    
     data = [
         ["Nombre del Proyecto:", datos.get("nombre_proyecto", "SIN NOMBRE")],
         ["Código / Expediente:", datos.get("codigo_proyecto", "N/A")],
@@ -292,8 +296,7 @@ def _build_tabla(datos, prim, sec, neu, pil):
         ["Empresa:", datos.get("empresa", "N/A")],
     ]
 
-    tabla = Table(data, colWidths=[180, 260])  # 👈 AJUSTE FINO
-
+    
     tabla.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
@@ -325,7 +328,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
 
     prim, sec, neu, pil = extraer_calibres(datos)
 
-    elems.append(_build_tabla(datos, prim, sec, neu, pil))
+    elems.append(_build_tabla(datos, prim, sec, neu, pil, doc.width))
     elems.append(Spacer(1, 8))
 
     elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
