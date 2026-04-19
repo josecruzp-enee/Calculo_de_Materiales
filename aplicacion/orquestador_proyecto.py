@@ -29,7 +29,7 @@ from exportadores.orquestador_reportes import generar_reportes, EntradaReportes
 from entradas.base_datos import obtener_catalogo_materiales
 
 # 🔥 NUEVO
-from costos_proyecto.calcular_costos_proyecto import calcular_costos_proyecto
+from costos_precios.costos_proyecto import calcular_costos_proyecto
 
 
 # =========================================================
