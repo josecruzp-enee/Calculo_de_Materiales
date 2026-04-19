@@ -143,6 +143,10 @@ def generar_pdf_completo(
     # =====================================================
     # 4. 🔥 COSTOS DE PROYECTO (MODELO OBRA)
     # =====================================================
+
+        # =====================================================
+    # 4. 🔥 COSTOS DE PROYECTO (MODELO OBRA)
+    # =====================================================
     elems.append(PageBreak())
 
     elems.append(Paragraph("COSTOS DE PROYECTO", styles["Heading1"]))
@@ -159,6 +163,35 @@ def generar_pdf_completo(
 
         r = resultado_costos_proyecto
 
+        # -------------------------------------------------
+        # 🔹 DATOS DEL PROYECTO (NUEVO - SIN ROMPER NADA)
+        # -------------------------------------------------
+        elems.append(Paragraph("Datos del Proyecto", styles["Heading2"]))
+        elems.append(Spacer(1, 6))
+
+        data_info = [
+            ["Concepto", "Valor"],
+            ["Total estructuras", r.get("total_estructuras", 0)],
+            ["Postes", r.get("num_postes", 0)],
+            ["Retenidas", r.get("num_retenidas", 0)],
+            ["Agujeros", r.get("total_agujeros", 0)],
+            ["Longitud primaria (m)", r.get("longitud_primario", 0)],
+            ["Longitud secundaria (m)", r.get("longitud_secundario", 0)],
+        ]
+
+        tabla_info = Table(data_info)
+
+        tabla_info.setStyle(TableStyle([
+            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+            ("BACKGROUND", (0,0), (-1,0), colors.grey),
+        ]))
+
+        elems.append(tabla_info)
+        elems.append(Spacer(1, 10))
+
+        # -------------------------------------------------
+        # 🔹 COSTOS (TU BLOQUE ORIGINAL)
+        # -------------------------------------------------
         data = [
             ["Concepto", "Valor"],
             ["Días totales", str(r.get("dias_totales", 0))],
@@ -183,6 +216,9 @@ def generar_pdf_completo(
 
         elems.append(tabla)
 
+
+
+   
     # =====================================================
     # BUILD
     # =====================================================
