@@ -131,7 +131,7 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 df_estructuras=entrada.df_estructuras,
                 df_precios_estructura=df_precios_estructura,
                 datos_proyecto=datos_proyecto,
-                resultado_costos_proyecto=resultado_costos_proyecto,
+                costos=resultado_costos_proyecto,
             )),
         ]
 
