@@ -88,7 +88,11 @@ def seccion_exportacion():
         return
 
     # 🔥 obtener datos del proyecto (sin romper nada)
-    datos_proyecto = getattr(resultado, "datos_proyecto", {}) or {}
+    datos_proyecto = (
+        getattr(resultado, "datos_proyecto", None)
+        or getattr(getattr(resultado, "salida_interfaz", None), "datos_proyecto", None)
+        or {}
+    )
 
     # =====================================================
     # UI
