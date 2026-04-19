@@ -39,7 +39,8 @@ def _debug_final(df_estructuras):
 # 🔥 NUEVO HELPER NOMBRE ARCHIVO
 # =========================================================
 def _nombre_archivo(nombre_base: str, datos_proyecto: dict) -> str:
-    nombre_proy = datos_proyecto.get("nombre_proyecto", "Proyecto")
+
+    nombre_proy = datos_proyecto.get("nombre_proyecto")
 
     mapa = {
         "materiales.pdf": "Materiales",
@@ -51,8 +52,11 @@ def _nombre_archivo(nombre_base: str, datos_proyecto: dict) -> str:
 
     tipo = mapa.get(nombre_base, nombre_base.replace(".pdf", ""))
 
-    return f"{tipo} - {nombre_proy}.pdf"
-
+    # 🔥 lógica final
+    if nombre_proy and str(nombre_proy).strip():
+        return f"{tipo} - {nombre_proy}.pdf"
+    else:
+        return f"{tipo}.pdf"
 
 # =========================================================
 # EXPORTACIÓN
