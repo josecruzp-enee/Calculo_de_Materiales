@@ -160,8 +160,8 @@ def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
 
     try:
 
-        # 🔥 USAR PRECIOS ESTRUCTURA SOLO PARA MÉTRICAS
-        df_estructuras_global = getattr(entrada, "df_precios_estructura", None)
+        # 🔥 USAR ESTRUCTURAS REALES (NO precios)
+        df_estructuras_global = getattr(entrada, "df_estructuras", None)
 
         total_estructuras, num_postes, num_retenidas = _extraer_metricas_estructuras(
             df_estructuras_global
