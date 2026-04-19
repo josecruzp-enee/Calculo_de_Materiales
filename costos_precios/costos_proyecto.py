@@ -62,27 +62,26 @@ def _extraer_longitudes(df_cables: pd.DataFrame):
 
     df["Tipo"] = df["Tipo"].astype(str).str.upper()
 
-    # 🔍 detectar columna de longitud automáticamente
-    col_long = None
-    for c in df.columns:
-        c_up = str(c).upper()
-        if "TOTAL" in c_up and "CABLE" in c_up:
-            col_long = c
-            break
-
-    if col_long is None:
+    # 🔥 USAR MISMA LÓGICA QUE PRECIOS
+    if "Total Cable (m)" in df.columns:
+        df["Total Cable (m)"] = pd.to_numeric(df["Total Cable (m)"], errors="coerce").fillna(0)
+        col_long = "Total Cable (m)"
+    elif "Longitud" in df.columns:
+        df["Longitud"] = pd.to_numeric(df["Longitud"], errors="coerce").fillna(0)
+        col_long = "Longitud"
+    else:
         return 0.0, 0.0
 
-    df[col_long] = pd.to_numeric(df[col_long], errors="coerce").fillna(0)
-
+    # 🔹 PRIMARIO
     primario = df[df["Tipo"].str.startswith("MT", na=False)]
+
+    # 🔹 SECUNDARIO
     secundario = df[df["Tipo"].str.startswith("BT", na=False)]
 
-    longitud_primario = _safe_sum(primario[col_long])
-    longitud_secundario = _safe_sum(secundario[col_long])
+    longitud_primario = float(primario[col_long].sum())
+    longitud_secundario = float(secundario[col_long].sum())
 
     return longitud_primario, longitud_secundario
-
 
 # =========================================================
 # 🔥 VALIDAR MATERIALES
