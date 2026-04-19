@@ -199,3 +199,39 @@ def _calibres_por_tipo(cables, tipo_buscar: str):
     calibres = _dedupe_keep_order(calibres)
 
     return ", ".join(calibres)
+
+
+# ==========================================================
+# HELPERS PROYECTO (NUEVO)
+# ==========================================================
+def nombre_proyecto_seguro(nombre_proy=None, datos_proyecto=None):
+    """
+    Garantiza nombre válido del proyecto en todos los PDFs
+    """
+    if nombre_proy and str(nombre_proy).strip() not in ["", "Proyecto"]:
+        return str(nombre_proy).strip()
+
+    if isinstance(datos_proyecto, dict):
+        return str(datos_proyecto.get("nombre_proyecto", "SIN NOMBRE")).strip()
+
+    return "SIN NOMBRE"
+
+
+def formatear_tension(tension):
+    """
+    Normaliza formato de tensión
+    """
+    if not tension:
+        return "N/A"
+
+    t = str(tension).strip()
+
+    if "/" in t:
+        return t
+
+    if t == "34.5":
+        return "19.9/34.5"
+    if t == "13.8":
+        return "7.9/13.8"
+
+    return t
