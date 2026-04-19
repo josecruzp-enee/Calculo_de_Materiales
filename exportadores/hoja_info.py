@@ -10,12 +10,32 @@ from reportlab.lib.styles import getSampleStyleSheet
 # =========================================================
 # HELPERS
 # =========================================================
-def _limpiar(txt: str) -> str:
-    return str(txt).replace("Cable de Aluminio", "").replace("Forrado", "").strip()
-
-
 def _plural(palabra, n):
     return palabra if n == 1 else palabra + "es"
+
+
+def _formatear_calibre(txt: str) -> str:
+    """
+    Convierte:
+    ACSR #1/0 AWG Raven →
+    Cable de Aluminio ACSR #1/0 AWG Raven
+    """
+
+    txt = str(txt).strip()
+
+    if not txt:
+        return ""
+
+    if "Cable de" in txt:
+        return txt
+
+    if "ACSR" in txt:
+        return f"Cable de Aluminio {txt}"
+
+    if "WP" in txt:
+        return f"Cable de Aluminio Forrado {txt}"
+
+    return txt
 
 
 # =========================================================
@@ -28,7 +48,7 @@ def extraer_calibres(datos):
 
     for c in cables:
         tipo = str(c.get("Tipo", "")).upper()
-        calibre = _limpiar(c.get("Calibre", ""))
+        calibre = _formatear_calibre(c.get("Calibre", ""))
 
         if tipo == "MT" and not prim:
             prim = calibre
@@ -50,7 +70,7 @@ def _formato_conductores(cables, tipo_busqueda):
         if str(c.get("Tipo", "")).upper() != tipo_busqueda:
             continue
 
-        calibre = _limpiar(c.get("Calibre", ""))
+        calibre = str(c.get("Calibre", "")).strip()
         fases = int(c.get("Conductores", 1))
 
         grupo[calibre] = grupo.get(calibre, 0) + fases
@@ -68,7 +88,6 @@ def _desc_postes(df):
         return None
 
     resumen = postes.groupby("cod")["Cantidad"].sum().reset_index()
-
     partes = [f'{int(r["Cantidad"])} {r["cod"]}' for _, r in resumen.iterrows()]
     total = int(postes["Cantidad"].sum())
 
@@ -82,7 +101,6 @@ def _desc_transformadores(df):
         return None
 
     resumen = trafos.groupby("cod")["Cantidad"].sum().reset_index()
-
     partes = [f'{int(r["Cantidad"])} x {r["cod"]}' for _, r in resumen.iterrows()]
     total = int(trafos["Cantidad"].sum())
 
@@ -194,11 +212,9 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
 
     prim, sec, neu, pil = extraer_calibres(datos)
 
-    # TABLA
     elems.append(_build_tabla(datos, prim, sec, neu, pil))
     elems.append(Spacer(1, 12))
 
-    # DESCRIPCIÓN
     elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
     elems.append(Spacer(1, 6))
 
