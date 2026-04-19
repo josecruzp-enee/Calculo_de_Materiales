@@ -128,16 +128,11 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         # =====================================================
         # 5. COSTOS POR ESTRUCTURA (PROTEGIDO)
         # =====================================================
-        try:
-            df_costos_estructura = calcular_costos_por_estructura(
-                df_estructuras=entrada.df_estructuras,
-                df_materiales_por_estructura=entrada.df_materiales_por_estructura,
-                df_precios_materiales=df_costos
-            )
-        except Exception as e:
-            print(f"⚠️ COSTOS ESTRUCTURA FALLÓ: {e}")
-            df_costos_estructura = pd.DataFrame()
-
+        df_costos_estructura = calcular_costos_por_estructura(
+            df_estructuras=entrada.df_estructuras,
+            df_materiales_por_estructura=entrada.df_materiales_por_estructura,
+            df_precios_materiales=df_costos
+        )
         # =====================================================
         # 6. MANO DE OBRA
         # =====================================================
