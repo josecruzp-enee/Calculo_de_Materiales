@@ -7,7 +7,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.enums import TA_CENTER
 import re
-
+from exportadores.pdf_base import formatear_tension
 # =========================================================
 # HELPERS
 # =========================================================
@@ -285,7 +285,7 @@ def _build_tabla(datos, prim, sec, neu, pil, doc_width):
     data = [
         ["Nombre del Proyecto:", datos.get("nombre_proyecto", "SIN NOMBRE")],
         ["Código / Expediente:", datos.get("codigo_proyecto", "N/A")],
-        ["Nivel de Tensión (kV):", datos.get("tension", "N/A")],
+        ["Nivel de Tensión (kV):", f"{formatear_tension(datos.get('tension'))} kV"],
         ["Calibre Primario:", prim or "N/A"],
         ["Calibre Secundario:", sec or "N/A"],
         ["Calibre Neutro:", neu or "N/A"],
@@ -365,7 +365,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, doc_width=None):
             if res:
                 lineas.append(res)
 
-    tension = datos.get("tension", "N/A")
+    tension = formatear_tension(datos.get("tension"))
     lineas.extend(_desc_lineas(cables, tension))
 
     if not lineas:
