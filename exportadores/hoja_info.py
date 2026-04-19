@@ -277,12 +277,11 @@ def _desc_lineas(cables, tension):
 # =========================================================
 # TABLA
 # =========================================================
+# =========================================================
+# TABLA
+# =========================================================
 def _build_tabla(datos, prim, sec, neu, pil, doc_width):
-    col1 = doc_width * 0.4
-    col2 = doc_width * 0.6
 
-    tabla = Table(data, colWidths=[col1, col2])
-    
     data = [
         ["Nombre del Proyecto:", datos.get("nombre_proyecto", "SIN NOMBRE")],
         ["Código / Expediente:", datos.get("codigo_proyecto", "N/A")],
@@ -296,11 +295,30 @@ def _build_tabla(datos, prim, sec, neu, pil, doc_width):
         ["Empresa:", datos.get("empresa", "N/A")],
     ]
 
-    
+    # 🔥 ANCHO COMPLETO (clave)
+    col1 = doc_width * 0.38
+    col2 = doc_width * 0.62
+
+    tabla = Table(data, colWidths=[col1, col2])
+
     tabla.setStyle(TableStyle([
+
+        # GRID
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+
+        # COLUMNA IZQUIERDA
         ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+
+        # ALINEACIÓN
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+        # 🔥 PADDING (esto mejora MUCHÍSIMO visual)
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+
     ]))
 
     return tabla
