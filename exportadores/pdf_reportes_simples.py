@@ -19,14 +19,15 @@ from exportadores.pdf_base import (
     fondo_pagina,
     formatear_material,
     estilo_tabla,
+    nombre_proyecto_seguro,
 )
-
+from exportadores.pdf_base import nombre_proyecto_seguro
 
 # ==========================================================
 # PDF: RESUMEN DE MATERIALES (GLOBAL)
 # ==========================================================
 def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
-
+    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -70,7 +71,7 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 # PDF: RESUMEN DE ESTRUCTURAS (GLOBAL)
 # ==========================================================
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None):
-
+    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -161,8 +162,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
 # ==========================================================
 # PDF: ESTRUCTURAS POR PUNTO
 # ==========================================================
-def generar_pdf_estructuras_por_punto(df, nombre_proy):
-
+def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
+    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -220,8 +221,9 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy):
 # ==========================================================
 # PDF: MATERIALES POR PUNTO
 # ==========================================================
-def generar_pdf_materiales_por_punto(df, nombre_proy):
+def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
 
+    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
