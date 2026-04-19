@@ -5,7 +5,6 @@ import pandas as pd
 from typing import Dict, Any
 
 from materiales.calculos.calculo_estructuras import calcular_estructuras_proyecto
-from costos.motor_costos_proyecto import calcular_costos_proyecto
 
 
 # =========================================================
@@ -62,7 +61,6 @@ def _extraer_longitudes(df_cables: pd.DataFrame):
 
     df["Tipo"] = df["Tipo"].astype(str).str.upper()
 
-    # 🔥 USAR MISMA LÓGICA QUE PRECIOS
     if "Total Cable (m)" in df.columns:
         df["Total Cable (m)"] = pd.to_numeric(df["Total Cable (m)"], errors="coerce").fillna(0)
         col_long = "Total Cable (m)"
@@ -72,16 +70,11 @@ def _extraer_longitudes(df_cables: pd.DataFrame):
     else:
         return 0.0, 0.0
 
-    # 🔹 PRIMARIO
     primario = df[df["Tipo"].str.startswith("MT", na=False)]
-
-    # 🔹 SECUNDARIO
     secundario = df[df["Tipo"].str.startswith("BT", na=False)]
 
-    longitud_primario = float(primario[col_long].sum())
-    longitud_secundario = float(secundario[col_long].sum())
+    return float(primario[col_long].sum()), float(secundario[col_long].sum())
 
-    return longitud_primario, longitud_secundario
 
 # =========================================================
 # 🔥 VALIDAR MATERIALES
@@ -92,10 +85,74 @@ def _validar_materiales(df_materiales_costos: pd.DataFrame):
         raise ValueError("No hay materiales con costos")
 
     if "Costo Total" not in df_materiales_costos.columns:
-        raise ValueError(
-            "df_materiales_costos debe tener 'Costo Total'. "
-            "Usa calcular_lista_materiales_con_costos primero."
-        )
+        raise ValueError("df_materiales_costos debe tener 'Costo Total'")
+
+
+# =========================================================
+# 🔥 MOTOR DE COSTOS REAL (YA SIN IMPORTS ROTOS)
+# =========================================================
+def _motor_costos(
+    df_materiales,
+    longitud_primario_m,
+    longitud_secundario_m,
+    total_estructuras,
+    num_postes,
+    num_retenidas,
+    precio_total_proyecto,
+):
+
+    costo_materiales = float(df_materiales["Costo Total"].sum())
+
+    dias_primario = longitud_primario_m / 500 if longitud_primario_m else 0
+    dias_secundario = longitud_secundario_m / 300 if longitud_secundario_m else 0
+    dias_estructura = total_estructuras / 8 if total_estructuras else 0
+
+    dias_totales = dias_primario + dias_secundario + dias_estructura
+
+    costo_cuadrilla = dias_totales * 10000
+
+    total_agujeros = num_postes + num_retenidas
+    costo_agujeros = total_agujeros * 500
+
+    horas_grua = num_postes * 1 + (num_postes // 8) * 2
+    costo_grua = horas_grua * 1500
+
+    costo_enee = 35000
+
+    subtotal = (
+        costo_materiales
+        + costo_cuadrilla
+        + costo_agujeros
+        + costo_grua
+        + costo_enee
+    )
+
+    contingencia = subtotal * 0.05
+
+    costo_total_real = subtotal + contingencia
+
+    utilidad = precio_total_proyecto - costo_total_real
+
+    margen_pct = (utilidad / precio_total_proyecto * 100) if precio_total_proyecto else 0
+
+    return {
+        "costo_materiales": costo_materiales,
+        "costo_cuadrilla": costo_cuadrilla,
+        "costo_agujeros": costo_agujeros,
+        "costo_grua": costo_grua,
+        "costo_enee": costo_enee,
+        "contingencia": contingencia,
+        "costo_total_real": costo_total_real,
+        "precio_venta": precio_total_proyecto,
+        "utilidad": utilidad,
+        "margen_pct": round(margen_pct, 2),
+        "dias_totales": round(dias_totales, 2),
+        "num_postes": num_postes,
+        "num_retenidas": num_retenidas,
+        "total_estructuras": total_estructuras,
+        "longitud_primario": longitud_primario_m,
+        "longitud_secundario": longitud_secundario_m,
+    }
 
 
 # =========================================================
@@ -105,15 +162,10 @@ def calcular_costos_proyecto_integrado(entrada) -> Dict[str, Any]:
 
     try:
 
-        # =====================================================
-        # 1. ESTRUCTURAS (usar si ya vienen)
-        # =====================================================
         res_estructuras = getattr(entrada, "resultado_estructuras", None)
 
         if res_estructuras is None:
-            res_estructuras = calcular_estructuras_proyecto(
-                entrada.df_estructuras
-            )
+            res_estructuras = calcular_estructuras_proyecto(entrada.df_estructuras)
 
         df_estructuras_global = res_estructuras.get("df_estructuras")
 
@@ -121,57 +173,31 @@ def calcular_costos_proyecto_integrado(entrada) -> Dict[str, Any]:
             df_estructuras_global
         )
 
-        # =====================================================
-        # 2. CABLES
-        # =====================================================
         longitud_primario, longitud_secundario = _extraer_longitudes(
             getattr(entrada, "df_cables", None)
         )
 
-        # =====================================================
-        # 3. MATERIALES (YA PROCESADOS)
-        # =====================================================
         df_materiales_costos = getattr(entrada, "df_materiales_costos", None)
 
         _validar_materiales(df_materiales_costos)
 
-        # =====================================================
-        # 4. PRECIO ACTUAL (OPCIONAL)
-        # =====================================================
         df_precios = getattr(entrada, "df_precios_estructura", None)
 
-        if df_precios is not None and not df_precios.empty:
-            precio_total = _safe_sum(df_precios.get("Precio Total", 0))
-        else:
-            precio_total = 0.0
+        precio_total = _safe_sum(df_precios.get("Precio Total", 0)) if df_precios is not None else 0
 
-        # =====================================================
-        # 5. MOTOR DE COSTOS (OBRA REAL)
-        # =====================================================
-        resultado = calcular_costos_proyecto(
-            df_materiales=df_materiales_costos,
-            longitud_primario_m=longitud_primario,
-            longitud_secundario_m=longitud_secundario,
-            total_estructuras=total_estructuras,
-            num_postes=num_postes,
-            num_retenidas=num_retenidas,
-            precio_total_proyecto=precio_total,
+        resultado = _motor_costos(
+            df_materiales_costos,
+            longitud_primario,
+            longitud_secundario,
+            total_estructuras,
+            num_postes,
+            num_retenidas,
+            precio_total,
         )
 
-        # =====================================================
-        # 6. OUTPUT COMPLETO
-        # =====================================================
         return {
             "ok": True,
             "resultado_costos_proyecto": resultado,
-            "metricas": {
-                "total_estructuras": total_estructuras,
-                "num_postes": num_postes,
-                "num_retenidas": num_retenidas,
-                "longitud_primario": longitud_primario,
-                "longitud_secundario": longitud_secundario,
-                "precio_total": precio_total,
-            }
         }
 
     except Exception as e:
