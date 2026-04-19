@@ -158,7 +158,7 @@ def _motor_costos(
 # =========================================================
 # 🔥 FUNCIÓN PRINCIPAL
 # =========================================================
-def calcular_costos_proyecto_integrado(entrada) -> Dict[str, Any]:
+def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
 
     try:
 
