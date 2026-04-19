@@ -250,7 +250,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         from costos_precios.costos_proyecto import calcular_costos_proyecto
 
         # 🔥 USAR EL DF CORRECTO (materiales con precios)
-        entrada_costos.df_materiales_costos = resultado_costos.get("df_materiales_costos")
+        entrada_costos.df_materiales_costos = resultado_costos.get("df_costos_estructura")
 
         # ✔ precios de estructuras (se mantienen)
         entrada_costos.df_precios_estructura = df_precios_estructura
