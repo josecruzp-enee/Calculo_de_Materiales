@@ -38,7 +38,7 @@ def generar_pdf_completo(
     df_estructuras,
     df_precios_estructura,
     datos_proyecto,
-    resultado_costos_proyecto=None   # 🔥 NUEVO
+    resultado_costos_proyecto=None
 ):
 
     _log("📄 INICIO PDF COMPLETO")
@@ -141,11 +141,7 @@ def generar_pdf_completo(
         elems.extend(bloque_cot)
 
     # =====================================================
-    # 4. 🔥 COSTOS DE PROYECTO (MODELO OBRA)
-    # =====================================================
-
-        # =====================================================
-    # 4. 🔥 COSTOS DE PROYECTO (MODELO OBRA)
+    # 4. COSTOS DE PROYECTO (MODELO OBRA)
     # =====================================================
     elems.append(PageBreak())
 
@@ -164,7 +160,7 @@ def generar_pdf_completo(
         r = resultado_costos_proyecto
 
         # -------------------------------------------------
-        # 🔹 DATOS DEL PROYECTO (NUEVO - SIN ROMPER NADA)
+        # 🔹 DATOS DEL PROYECTO (NUEVO)
         # -------------------------------------------------
         elems.append(Paragraph("Datos del Proyecto", styles["Heading2"]))
         elems.append(Spacer(1, 6))
@@ -216,9 +212,6 @@ def generar_pdf_completo(
 
         elems.append(tabla)
 
-
-
-   
     # =====================================================
     # BUILD
     # =====================================================
