@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import pandas as pd
-from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
-from reportlab.lib import colors
+from reportlab.platypus import Table, Paragraph, Spacer
+
+# 🔥 IMPORT CLAVE
+from exportadores.pdf_base import estilo_tabla
 
 
 # =========================================================
@@ -14,12 +16,9 @@ def _fmt(valor: float) -> str:
 
 
 # =========================================================
-# COTIZACIÓN FINAL (ROBUSTA + DEBUG)
+# COTIZACIÓN FINAL (UNIFICADA)
 # =========================================================
 def generar_seccion_cotizacion_final(doc, styles, df_precios):
-
-    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib import colors
 
     elems = []
 
@@ -39,53 +38,33 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
         total_base = float(df_precios["Precio Total"].sum())
 
     # =====================================================
-    # GASTOS DE INGENIERÍA
+    # CÁLCULOS
     # =====================================================
     ingenieria = total_base * 0.15
-
     subtotal = total_base + ingenieria
     isv = subtotal * 0.15
     total_final = subtotal + isv
-
-    # =====================================================
-    # TÍTULO
-    # =====================================================
-    elems.append(Paragraph("<b>COTIZACIÓN DEL PROYECTO</b>", styles["Heading1"]))
-    elems.append(Spacer(1, 12))
 
     # =====================================================
     # TABLA
     # =====================================================
     data = [
         ["Concepto", "Monto (L)"],
-        ["Suministro e instalación", f"L {total_base:,.2f}"],
-        ["Gastos de Ingeniería (15%)", f"L {ingenieria:,.2f}"],
-        ["SUBTOTAL", f"L {subtotal:,.2f}"],
-        ["ISV (15%)", f"L {isv:,.2f}"],
-        ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
+        ["Suministro e instalación", _fmt(total_base)],
+        ["Gastos de Ingeniería (15%)", _fmt(ingenieria)],
+        ["SUBTOTAL", _fmt(subtotal)],
+        ["ISV (15%)", _fmt(isv)],
+        ["TOTAL PROYECTO", _fmt(total_final)],
     ]
 
-    tabla = Table(data, colWidths=[doc.width * 0.7, doc.width * 0.3])
+    tabla = Table(
+        data,
+        colWidths=[doc.width * 0.7, doc.width * 0.3],
+        repeatRows=1
+    )
 
-    tabla.setStyle(TableStyle([
-
-        # HEADER
-        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-
-        # ALIGN
-        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
-
-        # TOTAL FINAL
-        ("BACKGROUND", (0, -1), (-1, -1), colors.darkblue),
-        ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-
-        # GRID
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-
-    ]))
+    # 🔥 ESTILO GLOBAL (CLAVE)
+    tabla.setStyle(estilo_tabla())
 
     elems.append(tabla)
 
