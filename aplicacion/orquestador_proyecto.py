@@ -26,7 +26,6 @@ from costos_precios.orquestador_costos import (
 
 from exportadores.orquestador_reportes import generar_reportes, EntradaReportes
 
-# 🔥 FIX REAL
 from entradas.base_datos import obtener_catalogo_materiales
 
 
@@ -233,7 +232,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         }
 
         # =====================================================
-        # 🔥 PRECIO DE VENTA (DESDE COTIZACIÓN REAL)
+        # 🔥 PRECIO DE VENTA
         # =====================================================
         df_precios_estructura = resultado_costos.get("df_precios_estructura")
 
@@ -245,25 +244,16 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         # =====================================================
-        # 🔥 COSTOS DE PROYECTO (CORREGIDO)
+        # 🔥 COSTOS DE PROYECTO (FIX CORRECTO)
         # =====================================================
         from costos_precios.costos_proyecto import calcular_costos_proyecto
 
-        # 🔥 USAR EL DF CORRECTO (materiales con precios)
-        entrada_costos.df_materiales_costos = resultado_costos.get("df_costos_estructura")
-
-        # ✔ precios de estructuras (se mantienen)
+        entrada_costos.df_materiales_costos = resultado_costos.get("df_materiales_costos")
         entrada_costos.df_precios_estructura = df_precios_estructura
-
-        # ✔ precio real de venta
         entrada_costos.precio_venta_proyecto = precio_venta
 
-        # 🔥 cálculo final
         res_costos_proyecto = calcular_costos_proyecto(entrada_costos)
 
-        # ✔ opcional (debug / uso interno)
-        resumen_financiero = res_costos_proyecto.get("resultado_costos_proyecto")
-        
         # =====================================================
         # 6. REPORTES
         # =====================================================
@@ -271,7 +261,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_estructuras=df_estructuras,
             df_materiales=df_materiales,
             df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
-            costos=res_costos_proyecto, 
+            costos=res_costos_proyecto,
             nombre_proyecto="Proyecto",
             datos_proyecto=salida_entradas.datos_proyecto,
             df_cables=salida_entradas.df_cables
