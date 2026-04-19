@@ -164,7 +164,7 @@ def generar_pdf_completo(
             elems,
             styles,
             resultado_costos_proyecto,
-            df_materiales
+            resultado_costos_proyecto.get("df_materiales_costos")
         )
 
     # =====================================================
