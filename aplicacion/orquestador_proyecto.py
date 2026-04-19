@@ -26,7 +26,7 @@ from costos_precios.orquestador_costos import (
 
 from exportadores.orquestador_reportes import generar_reportes, EntradaReportes
 
-# 🔥 FIX REAL (IMPORT CORRECTO)
+# 🔥 FIX REAL
 from entradas.base_datos import obtener_catalogo_materiales
 
 
@@ -71,9 +71,6 @@ def _adaptar_df_estructuras(df: pd.DataFrame) -> pd.DataFrame:
     raise ValueError(f"df_estructuras inválido: {list(cols)}")
 
 
-# =========================================================
-# NORMALIZADOR TEXTO
-# =========================================================
 def limpiar_columna(texto: str) -> str:
     if texto is None:
         return ""
@@ -214,7 +211,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         }
 
         # =====================================================
-        # 5. COSTOS (FIX REAL)
+        # 5. COSTOS
         # =====================================================
         df_catalogo = obtener_catalogo_materiales(salida_entradas.base_datos)
 
@@ -223,9 +220,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_catalogo=df_catalogo,
             df_estructuras=df_estructuras,
             df_materiales_por_estructura=resultado_materiales.df_materiales_por_estructura,
-            df_cables=salida_interfaz.df_cables,   # 🔥 ESTA ES LA CLAVE
+            df_cables=salida_interfaz.df_cables,
         )
+
         entrada_costos._datos_proyecto = salida_interfaz.datos_proyecto
+
         resultado_costos = ejecutar_costos(entrada_costos)
 
         debug_global["COSTOS"] = {
@@ -234,17 +233,32 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         }
 
         # =====================================================
-        # 🔥 COSTO REAL DEL PROYECTO
+        # 🔥 PRECIO DE VENTA (DESDE COTIZACIÓN REAL)
+        # =====================================================
+        df_precios_estructura = resultado_costos.get("df_precios_estructura")
+
+        precio_venta = (
+            pd.to_numeric(df_precios_estructura.get("Precio Total", 0), errors="coerce")
+            .fillna(0)
+            .sum()
+            if df_precios_estructura is not None else 0
+        )
+
+        # =====================================================
+        # 🔥 COSTOS DE PROYECTO
         # =====================================================
         from costos_precios.costos_proyecto import calcular_costos_proyecto
+
         entrada_costos.df_materiales_costos = resultado_costos.get("df_costos_estructura")
-        entrada_costos.df_precios_estructura = resultado_costos.get("df_precios_estructura")
+        entrada_costos.df_precios_estructura = df_precios_estructura
+
+        # 🔥 CLAVE
+        entrada_costos.precio_venta_proyecto = precio_venta
 
         res_costos_proyecto = calcular_costos_proyecto(entrada_costos)
 
         resumen_financiero = res_costos_proyecto.get("resultado_costos_proyecto")
 
-        
         # =====================================================
         # 6. REPORTES
         # =====================================================
@@ -254,7 +268,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
             costos={
                 "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
-                "df_precios_estructura": resultado_costos.get("df_precios_estructura"),
+                "df_precios_estructura": df_precios_estructura,
                 "resumen_financiero": resumen_financiero,
             },
             nombre_proyecto="Proyecto",
