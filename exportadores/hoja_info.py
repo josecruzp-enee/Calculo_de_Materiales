@@ -152,56 +152,128 @@ def _desc_luminarias(df):
 # =========================================================
 # DESCRIPCIÓN: LÍNEAS
 # =========================================================
+from collections import defaultdict, Counter
+
+
 def _desc_lineas(cables, tension):
 
     lineas = []
 
-    for tipo, nombre in [("MT", "LP"), ("BT", "LS")]:
+    # =========================
+    # SEPARACIÓN
+    # =========================
+    mt = [c for c in cables if str(c.get("Tipo")).upper() == "MT"]
+    bt = [c for c in cables if str(c.get("Tipo")).upper() == "BT"]
+    neutro = [c for c in cables if str(c.get("Tipo")).upper() == "N"]
+    piloto = [c for c in cables if str(c.get("Tipo")).upper() == "HP"]
 
-        grupo = [c for c in cables if str(c.get("Tipo", "")).upper() == tipo]
+    # =========================
+    # NEUTRO (asumimos uno)
+    # =========================
+    n_calib = None
+    if neutro:
+        n_calib = _formato_tecnico_calibre(neutro[0].get("Calibre"))
 
-        if not grupo:
-            continue
+    # =========================
+    # MT → AGRUPAR POR FASES
+    # =========================
+    grupos_mt = defaultdict(list)
 
-        longitud = int(sum(float(c.get("Longitud", 0)) for c in grupo))
-        fases = max(int(c.get("Conductores", 1)) for c in grupo)
+    for c in mt:
+        fases = int(c.get("Conductores", 1))
+        grupos_mt[fases].append(c)
 
-        if tipo == "MT":
-            config = f"{fases}F+N"
-            voltaje = f"{tension} kV"
-        else:
-            tiene_hp = any(str(c.get("Tipo", "")).upper() == "HP" for c in cables)
-            config = f"{fases}F"
-            if tiene_hp:
-                config += "+HP"
-            config += "+N"
-            voltaje = "120/240 V"
+    # 🔥 ORDEN CORRECTO: 3F → 2F → 1F
+    for fases in sorted(grupos_mt.keys(), reverse=True):
 
-        conductores = []
+        items = grupos_mt[fases]
+        longitud = int(sum(float(i.get("Longitud", 0)) for i in items))
 
-        for c in grupo:
-            calib = _formato_tecnico_calibre(c.get("Calibre", ""))
-            n = int(c.get("Conductores", 1))
-            conductores.append(f"{n} x {calib}")
+        conteo = Counter()
+        for c in items:
+            calib = _formato_tecnico_calibre(c.get("Calibre"))
+            conteo[calib] += int(c.get("Conductores", 1))
 
-        for c in cables:
-            if str(c.get("Tipo", "")).upper() == "N":
-                conductores.append(f"1 x {_formato_tecnico_calibre(c.get('Calibre'))}")
+        conductores = [f"{v} x {k}" for k, v in conteo.items()]
 
-        for c in cables:
-            if str(c.get("Tipo", "")).upper() == "HP":
-                conductores.append(f"1 x {_formato_tecnico_calibre(c.get('Calibre'))}")
+        if n_calib:
+            conductores.append(f"1 x {n_calib}")
 
         desc = (
-            f"Construcción de {longitud} m de {nombre}, "
-            f"{voltaje}, {config}, "
+            f"Construcción de {longitud} m de LP, "
+            f"{tension} kV, {fases}F+N, "
             + " + ".join(conductores)
         )
 
         lineas.append(desc)
 
-    return lineas
+    # =========================
+    # BT (UN BLOQUE)
+    # =========================
+    longitud_bt = 0
 
+    if bt:
+
+        longitud_bt = int(sum(float(i.get("Longitud", 0)) for i in bt))
+        fases = max(int(i.get("Conductores", 1)) for i in bt)
+
+        conteo = Counter()
+        for c in bt:
+            calib = _formato_tecnico_calibre(c.get("Calibre"))
+            conteo[calib] += int(c.get("Conductores", 1))
+
+        conductores = [f"{v} x {k}" for k, v in conteo.items()]
+
+        if n_calib:
+            conductores.append(f"1 x {n_calib}")
+
+        if piloto:
+            p_calib = _formato_tecnico_calibre(piloto[0].get("Calibre"))
+            conductores.append(f"1 x {p_calib}")
+
+        config = f"{fases}F"
+        if piloto:
+            config += "+HP"
+        config += "+N"
+
+        desc = (
+            f"Construcción de {longitud_bt} m de LS, "
+            f"120/240 V, {config}, "
+            + " + ".join(conductores)
+        )
+
+        lineas.append(desc)
+
+    # =========================
+    # HP INDEPENDIENTE (SI SOBRA)
+    # =========================
+    longitud_hp = int(sum(float(i.get("Longitud", 0)) for i in piloto))
+
+    if longitud_hp > longitud_bt:
+
+        diferencia = longitud_hp - longitud_bt
+
+        if diferencia > 0:
+
+            p_calib = _formato_tecnico_calibre(piloto[0].get("Calibre")) if piloto else ""
+
+            conductores = []
+
+            if p_calib:
+                conductores.append(f"1 x {p_calib}")
+
+            if n_calib:
+                conductores.append(f"1 x {n_calib}")
+
+            desc = (
+                f"Construcción de {diferencia} m de HP, "
+                f"120 V, 1F+N, "
+                + " + ".join(conductores)
+            )
+
+            lineas.append(desc)
+
+    return lineas
 
 # =========================================================
 # TABLA
