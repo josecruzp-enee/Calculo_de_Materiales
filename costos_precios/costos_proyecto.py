@@ -4,8 +4,6 @@ from __future__ import annotations
 import pandas as pd
 from typing import Dict, Any
 
-from materiales.calculos.calculo_estructuras import calcular_estructuras_proyecto
-
 
 # =========================================================
 # 🔧 UTILIDADES SEGURAS
@@ -162,12 +160,8 @@ def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
 
     try:
 
-        res_estructuras = getattr(entrada, "resultado_estructuras", None)
-
-        if res_estructuras is None:
-            res_estructuras = calcular_estructuras_proyecto(entrada.df_estructuras)
-
-        df_estructuras_global = res_estructuras.get("df_estructuras")
+        # 🔥 USAR PRECIOS ESTRUCTURA SOLO PARA MÉTRICAS
+        df_estructuras_global = getattr(entrada, "df_precios_estructura", None)
 
         total_estructuras, num_postes, num_retenidas = _extraer_metricas_estructuras(
             df_estructuras_global
@@ -196,7 +190,7 @@ def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
         return {
             "ok": True,
             "resultado_costos_proyecto": resultado,
-            "df_materiales_costos": df_materiales_costos,  # 🔥 CLAVE
+            "df_materiales_costos": df_materiales_costos,
         }
 
     except Exception as e:
