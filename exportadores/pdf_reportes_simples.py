@@ -12,6 +12,7 @@ from xml.sax.saxutils import escape
 from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Table
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER
 
 from exportadores.pdf_base import (
     styles,
@@ -24,10 +25,31 @@ from exportadores.pdf_base import (
 
 
 # ==========================================================
+# 🎯 HEADER ESTÁNDAR (NUEVO)
+# ==========================================================
+def _header(titulo, nombre_proy):
+
+    styleTitulo = styles["Title"].clone("titulo_center")
+    styleTitulo.alignment = TA_CENTER
+
+    styleProyecto = styles["Normal"].clone("proyecto_center")
+    styleProyecto.alignment = TA_CENTER
+
+    return [
+        Paragraph(titulo, styleTitulo),
+        Spacer(1, 6),
+        Paragraph(f"Proyecto: {escape(str(nombre_proy))}", styleProyecto),
+        Spacer(1, 12),
+    ]
+
+
+# ==========================================================
 # PDF: RESUMEN DE MATERIALES (GLOBAL)
 # ==========================================================
 def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
+
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
+
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -35,10 +57,7 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
-    elems = [
-        Paragraph(f"<b>Resumen de Materiales - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
-        Spacer(1, 12)
-    ]
+    elems = _header("RESUMEN DE MATERIALES", nombre_proy)
 
     if df_mat is None or df_mat.empty:
         elems.append(Paragraph("No se encontraron materiales.", styleN))
@@ -71,7 +90,9 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 # PDF: RESUMEN DE ESTRUCTURAS (GLOBAL)
 # ==========================================================
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None, datos_proyecto=None):
+
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
+
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -82,10 +103,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     def _safe(texto):
         return escape("" if pd.isna(texto) else str(texto))
 
-    elems = [
-        Paragraph(f"<b>Resumen de Estructuras - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
-        Spacer(1, 10)
-    ]
+    elems = _header("RESUMEN DE ESTRUCTURAS", nombre_proy)
 
     if df_estructuras is None or df_estructuras.empty:
         elems.append(Paragraph("No se encontraron estructuras.", styleN))
@@ -104,7 +122,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         .str.upper()
     )
 
-    # ===== MAPEO DE DESCRIPCIÓN =====
     if base_datos and "indice" in base_datos:
 
         df_indice = base_datos["indice"]
@@ -159,11 +176,10 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 # ==========================================================
 # PDF: ESTRUCTURAS POR PUNTO
 # ==========================================================
-# ==========================================================
-# PDF: ESTRUCTURAS POR PUNTO
-# ==========================================================
 def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
+
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
+
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -171,10 +187,7 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
-    elems = [
-        Paragraph(f"<b>Estructuras por Punto - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
-        Spacer(1, 12)
-    ]
+    elems = _header("ESTRUCTURAS POR PUNTO", nombre_proy)
 
     if df is None or df.empty:
         elems.append(Paragraph("No hay datos.", styleN))
@@ -196,7 +209,6 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
                 escape(str(r.get("Cantidad", ""))),
             ])
 
-        # 🔥 AJUSTE HOMOGÉNEO (ANTES no tenía colWidths)
         tabla = Table(
             data,
             colWidths=[
@@ -224,6 +236,7 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
 def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
+
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
 
@@ -231,10 +244,7 @@ def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
-    elems = [
-        Paragraph(f"<b>Materiales por Punto - Proyecto: {escape(str(nombre_proy))}</b>", styles["Title"]),
-        Spacer(1, 12)
-    ]
+    elems = _header("MATERIALES POR PUNTO", nombre_proy)
 
     if df is None or df.empty:
         elems.append(Paragraph("No hay materiales.", styleN))
@@ -256,7 +266,6 @@ def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
                 f"{float(r['Cantidad']):.2f}",
             ])
 
-        # 🔥 MISMO CRITERIO AQUÍ
         tabla = Table(
             data,
             colWidths=[
