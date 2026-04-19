@@ -158,6 +158,9 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None)
 # ==========================================================
 # PDF: ESTRUCTURAS POR PUNTO
 # ==========================================================
+# ==========================================================
+# PDF: ESTRUCTURAS POR PUNTO
+# ==========================================================
 def generar_pdf_estructuras_por_punto(df, nombre_proy):
 
     buffer = BytesIO()
@@ -192,7 +195,17 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy):
                 escape(str(r.get("Cantidad", ""))),
             ])
 
-        tabla = Table(data, repeatRows=1)
+        # 🔥 AJUSTE HOMOGÉNEO (ANTES no tenía colWidths)
+        tabla = Table(
+            data,
+            colWidths=[
+                doc.width * 0.25,
+                doc.width * 0.55,
+                doc.width * 0.20
+            ],
+            repeatRows=1
+        )
+
         tabla.setStyle(estilo_tabla())
 
         elems.append(tabla)
@@ -241,7 +254,17 @@ def generar_pdf_materiales_por_punto(df, nombre_proy):
                 f"{float(r['Cantidad']):.2f}",
             ])
 
-        tabla = Table(data, repeatRows=1)
+        # 🔥 MISMO CRITERIO AQUÍ
+        tabla = Table(
+            data,
+            colWidths=[
+                doc.width * 0.55,
+                doc.width * 0.20,
+                doc.width * 0.25
+            ],
+            repeatRows=1
+        )
+
         tabla.setStyle(estilo_tabla())
 
         elems.append(tabla)
