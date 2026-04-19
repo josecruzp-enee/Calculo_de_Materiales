@@ -88,7 +88,7 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto")
 
         costos = entrada.costos or {}
-        resultado_costos_proyecto = costos.get("resumen_financiero")
+        resultado_costos_proyecto = costos
 
         df_costos_estructura = costos.get("df_costos_estructura")
         df_precios_estructura = costos.get("df_precios_estructura")
