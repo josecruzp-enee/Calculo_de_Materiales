@@ -3,6 +3,63 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+
+import math   # 🔥 AGREGA ESTO
+
+# =====================================================
+# 🔥 GANTT POR ACTIVIDADES
+# =====================================================
+def generar_gantt_actividades(resultado):
+
+    num_postes = resultado.get("num_postes", 0)
+    num_retenidas = resultado.get("num_retenidas", 0)
+    total_estructuras = resultado.get("total_estructuras", 0)
+    long_prim = resultado.get("longitud_primario", 0)
+    long_sec = resultado.get("longitud_secundario", 0)
+
+    d_levantamiento = 1
+
+    total_agujeros = num_postes + num_retenidas
+    d_agujeros = math.ceil(total_agujeros / 20)
+
+    d_postes = math.ceil(num_postes / 8)
+    d_retenidas = math.ceil(num_retenidas / 8)
+    d_estructuras = math.ceil(total_estructuras / 8)
+
+    d_primario = math.ceil(long_prim / 500) if long_prim > 0 else 0
+    d_secundario = math.ceil(long_sec / 300) if long_sec > 0 else 0
+
+    actividades = [
+        ("Levantamiento", d_levantamiento),
+        ("Apertura de agujeros", d_agujeros),
+        ("Hincado de postes", d_postes),
+        ("Puesta de retenidas", d_retenidas),
+        ("Armado de estructuras", d_estructuras),
+        ("Tendido línea primaria", d_primario),
+        ("Tendido línea secundaria", d_secundario),
+    ]
+
+    data = [["Actividad", "Inicio", "Fin", "Duración"]]
+
+    dia_actual = 0
+
+    for nombre, duracion in actividades:
+
+        if duracion == 0:
+            continue
+
+        inicio = dia_actual
+        fin = inicio + duracion
+
+        data.append([nombre, inicio, fin, duracion])
+
+        dia_actual = fin
+
+    return Table(data)
+
 
 def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
 
@@ -70,6 +127,25 @@ def generar_pdf_costos_proyecto(resultado, ruta="costos_proyecto.pdf"):
 
     elementos.append(tabla)
     elementos.append(Spacer(1, 12))
+
+
+    # =====================================================
+    # 🔥 GANTT DE OBRA
+    # =====================================================
+    elementos.append(Paragraph("Cronograma de Obra (Gantt)", styles["Heading2"]))
+    elementos.append(Spacer(1, 8))
+
+    tabla_gantt = generar_gantt_actividades(resultado)
+
+    tabla_gantt.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.grey),
+    ]))
+
+    elementos.append(tabla_gantt)
+    elementos.append(Spacer(1, 12))
+
+
 
     # =====================================================
     # 2. COSTOS DEL PROYECTO
