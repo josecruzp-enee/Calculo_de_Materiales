@@ -237,7 +237,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # 🔥 COSTO REAL DEL PROYECTO
         # =====================================================
         from costos_precios.costos_proyecto import calcular_costos_proyecto
-        entrada_costos.df_materiales_costos = df_materiales
+        entrada_costos.df_materiales_costos = resultado_costos.get("df_costos_estructura")
         entrada_costos.df_precios_estructura = resultado_costos.get("df_precios_estructura")
 
         res_costos_proyecto = calcular_costos_proyecto(entrada_costos)
