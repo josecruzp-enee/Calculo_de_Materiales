@@ -8,22 +8,22 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 
 # =========================================================
-# LIMPIAR TEXTO CALIBRE
+# HELPERS
 # =========================================================
 def _limpiar(txt: str) -> str:
     return str(txt).replace("Cable de Aluminio", "").replace("Forrado", "").strip()
 
 
+def _plural(palabra, n):
+    return palabra if n == 1 else palabra + "es"
+
+
 # =========================================================
-# EXTRAER CALIBRES
+# CALIBRES
 # =========================================================
 def extraer_calibres(datos):
 
-    prim = ""
-    sec = ""
-    neu = ""
-    pil = ""
-
+    prim = sec = neu = pil = ""
     cables = datos.get("cables_proyecto", [])
 
     for c in cables:
@@ -42,17 +42,12 @@ def extraer_calibres(datos):
     return prim, sec, neu, pil
 
 
-# =========================================================
-# AGRUPAR CABLES
-# =========================================================
 def _formato_conductores(cables, tipo_busqueda):
 
     grupo = {}
 
     for c in cables:
-        tipo = str(c.get("Tipo", "")).upper()
-
-        if tipo != tipo_busqueda:
+        if str(c.get("Tipo", "")).upper() != tipo_busqueda:
             continue
 
         calibre = _limpiar(c.get("Calibre", ""))
@@ -61,6 +56,123 @@ def _formato_conductores(cables, tipo_busqueda):
         grupo[calibre] = grupo.get(calibre, 0) + fases
 
     return " + ".join([f"{v} x {k}" for k, v in grupo.items()])
+
+
+# =========================================================
+# BLOQUES DESCRIPCIÓN
+# =========================================================
+def _desc_postes(df):
+
+    postes = df[df["cod"].str.contains("PC")]
+    if postes.empty:
+        return None
+
+    resumen = postes.groupby("cod")["Cantidad"].sum().reset_index()
+
+    partes = [f'{int(r["Cantidad"])} {r["cod"]}' for _, r in resumen.iterrows()]
+    total = int(postes["Cantidad"].sum())
+
+    return f"Hincado de {', '.join(partes)} (Total: {total} postes)."
+
+
+def _desc_transformadores(df):
+
+    trafos = df[df["cod"].str.contains("TS")]
+    if trafos.empty:
+        return None
+
+    resumen = trafos.groupby("cod")["Cantidad"].sum().reset_index()
+
+    partes = [f'{int(r["Cantidad"])} x {r["cod"]}' for _, r in resumen.iterrows()]
+    total = int(trafos["Cantidad"].sum())
+
+    tipo_txt = _plural("transformador", total)
+
+    return f"Instalación de {total} {tipo_txt} en conexión {', '.join(partes)}."
+
+
+def _desc_luminarias(df):
+
+    lum = df[df["cod"].str.contains("LL")]
+    if lum.empty:
+        return None
+
+    total = int(lum["Cantidad"].sum())
+
+    potencias = []
+    for cod in lum["cod"]:
+        cod = str(cod).upper()
+        if "W" in cod:
+            try:
+                potencias.append(cod.split("-")[-1])
+            except:
+                pass
+
+    potencias = list(dict.fromkeys(potencias))
+
+    if potencias:
+        return f"Instalación de {total} luminarias tipo LED de {' / '.join(potencias)}."
+    else:
+        return f"Instalación de {total} luminarias tipo LED."
+
+
+def _desc_lineas(cables):
+
+    lineas = []
+
+    for tipo, nombre in [("MT", "LP"), ("BT", "LS")]:
+
+        long_total = sum(
+            float(c.get("Longitud", 0))
+            for c in cables
+            if str(c.get("Tipo", "")).upper() == tipo
+        )
+
+        if long_total <= 0:
+            continue
+
+        conductores = _formato_conductores(cables, tipo)
+        neutro = _formato_conductores(cables, "N")
+        piloto = _formato_conductores(cables, "HP")
+
+        extra = " + ".join([x for x in [neutro, piloto] if x])
+
+        desc = f"Construcción de {int(long_total)} m de {nombre}, {conductores}"
+
+        if extra:
+            desc += f" + {extra}"
+
+        lineas.append(desc)
+
+    return lineas
+
+
+# =========================================================
+# TABLA
+# =========================================================
+def _build_tabla(datos, prim, sec, neu, pil):
+
+    data = [
+        ["Nombre del Proyecto:", datos.get("nombre_proyecto", "SIN NOMBRE")],
+        ["Código / Expediente:", datos.get("codigo_proyecto", "N/A")],
+        ["Nivel de Tensión (kV):", datos.get("tension", "N/A")],
+        ["Calibre Primario:", prim or "N/A"],
+        ["Calibre Secundario:", sec or "N/A"],
+        ["Calibre Neutro:", neu or "N/A"],
+        ["Calibre Piloto:", pil or "N/A"],
+        ["Fecha de Informe:", datos.get("fecha_informe", "N/A")],
+        ["Responsable:", datos.get("responsable", "N/A")],
+        ["Empresa:", datos.get("empresa", "N/A")],
+    ]
+
+    tabla = Table(data, colWidths=[200, 320])
+
+    tabla.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+    ]))
+
+    return tabla
 
 
 # =========================================================
@@ -82,35 +194,11 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
 
     prim, sec, neu, pil = extraer_calibres(datos)
 
-    # =====================================================
     # TABLA
-    # =====================================================
-    data = [
-        ["Nombre del Proyecto:", datos.get("nombre_proyecto", "SIN NOMBRE")],
-        ["Código / Expediente:", datos.get("codigo_proyecto", "N/A")],
-        ["Nivel de Tensión (kV):", datos.get("tension", "N/A")],
-        ["Calibre Primario:", prim or "N/A"],
-        ["Calibre Secundario:", sec or "N/A"],
-        ["Calibre Neutro:", neu or "N/A"],
-        ["Calibre Piloto:", pil or "N/A"],
-        ["Fecha de Informe:", datos.get("fecha_informe", "N/A")],
-        ["Responsable:", datos.get("responsable", "N/A")],
-        ["Empresa:", datos.get("empresa", "N/A")],
-    ]
-
-    tabla = Table(data, colWidths=[200, 320])
-
-    tabla.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
-    ]))
-
-    elems.append(tabla)
+    elems.append(_build_tabla(datos, prim, sec, neu, pil))
     elems.append(Spacer(1, 12))
 
-    # =====================================================
     # DESCRIPCIÓN
-    # =====================================================
     elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
     elems.append(Spacer(1, 6))
 
@@ -121,110 +209,12 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
         df = df_estructuras.copy()
         df["cod"] = df["codigodeestructura"].astype(str).str.upper()
 
-        # =================================================
-        # POSTES (MEJORADO)
-        # =================================================
-        postes = df[df["cod"].str.contains("PC")]
-        if not postes.empty:
+        for fn in [_desc_postes, _desc_transformadores, _desc_luminarias]:
+            res = fn(df)
+            if res:
+                lineas.append(res)
 
-            resumen = postes.groupby("cod")["Cantidad"].sum().reset_index()
-
-            partes = [
-                f'{int(r["Cantidad"])} {r["cod"]}'
-                for _, r in resumen.iterrows()
-            ]
-
-            total = int(postes["Cantidad"].sum())
-
-            lineas.append(
-                f"Hincado de {', '.join(partes)} (Total: {total} postes)."
-            )
-
-        # =================================================
-        # TRANSFORMADORES (MEJORADO)
-        # =================================================
-        trafos = df[df["cod"].str.contains("TS")]
-        if not trafos.empty:
-
-            resumen = trafos.groupby("cod")["Cantidad"].sum().reset_index()
-
-            partes = [
-                f'{int(r["Cantidad"])} x {r["cod"]}'
-                for _, r in resumen.iterrows()
-            ]
-
-            total = int(trafos["Cantidad"].sum())
-
-            lineas.append(
-                tipo_txt = "transformador" if total == 1 else "transformadores"
-                lineas.append(
-                    f"Instalación de {total} {tipo_txt} en conexión {', '.join(partes)}.")
-            )
-
-        # =================================================
-        # LUMINARIAS
-        # =================================================
-        lum = df[df["cod"].str.contains("LL")]
-        if not lum.empty:
-
-            total = int(lum["Cantidad"].sum())
-
-            # Detectar potencia desde el código (ej: LL-1-50W → 50W)
-            potencias = []
-
-            for cod in lum["cod"]:
-                cod = str(cod).upper()
-
-                if "W" in cod:
-                    try:
-                        w = cod.split("-")[-1]  # toma "50W"
-                        potencias.append(w)
-                    except:
-                        continue
-
-            # quitar duplicados
-            potencias = list(dict.fromkeys(potencias))
-
-            if potencias:
-                desc_pot = " / ".join(potencias)
-                lineas.append(
-                    f"Instalación de {total} luminarias tipo LED de {desc_pot}."
-            )
-            else:
-                lineas.append(
-                    f"Instalación de {total} luminarias tipo LED."
-            )
-
-
-   
-    # =====================================================
-    # LÍNEAS ELÉCTRICAS
-    # =====================================================
-    if cables:
-
-        for tipo_busqueda, nombre in [("MT", "LP"), ("BT", "LS")]:
-
-            long_total = sum(
-                float(c.get("Longitud", 0))
-                for c in cables
-                if str(c.get("Tipo", "")).upper() == tipo_busqueda
-            )
-
-            if long_total <= 0:
-                continue
-
-            conductores = _formato_conductores(cables, tipo_busqueda)
-            neutro = _formato_conductores(cables, "N")
-            piloto = _formato_conductores(cables, "HP")
-
-            extra = " + ".join([x for x in [neutro, piloto] if x])
-
-            desc = f"Construcción de {int(long_total)} m de {nombre}, {conductores}"
-
-            if extra:
-                desc += f" + {extra}"
-
-            lineas.append(desc)
+    lineas.extend(_desc_lineas(cables))
 
     if not lineas:
         lineas.append("No se cuenta con información suficiente.")
