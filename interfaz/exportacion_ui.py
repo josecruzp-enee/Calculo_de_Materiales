@@ -36,6 +36,25 @@ def _debug_final(df_estructuras):
 
 
 # =========================================================
+# 🔥 NUEVO HELPER NOMBRE ARCHIVO
+# =========================================================
+def _nombre_archivo(nombre_base: str, datos_proyecto: dict) -> str:
+    nombre_proy = datos_proyecto.get("nombre_proyecto", "Proyecto")
+
+    mapa = {
+        "materiales.pdf": "Materiales",
+        "estructuras_global.pdf": "Estructuras Global",
+        "estructuras_por_punto.pdf": "Estructuras por Punto",
+        "materiales_por_punto.pdf": "Materiales por Punto",
+        "reporte_completo.pdf": "Reporte Completo",
+    }
+
+    tipo = mapa.get(nombre_base, nombre_base.replace(".pdf", ""))
+
+    return f"{tipo} - {nombre_proy}.pdf"
+
+
+# =========================================================
 # EXPORTACIÓN
 # =========================================================
 def seccion_exportacion():
@@ -68,6 +87,9 @@ def seccion_exportacion():
         st.warning("No se generaron archivos")
         return
 
+    # 🔥 obtener datos del proyecto (sin romper nada)
+    datos_proyecto = getattr(resultado, "datos_proyecto", {}) or {}
+
     # =====================================================
     # UI
     # =====================================================
@@ -86,9 +108,12 @@ def seccion_exportacion():
             st.error(f"{nombre} tipo inválido: {type(archivo)}")
             continue
 
+        # 🔥 nombre profesional
+        nombre_final = _nombre_archivo(nombre, datos_proyecto)
+
         st.download_button(
-            label=f"Descargar {nombre}",
+            label=f"Descargar {nombre_final.replace('.pdf','')}",
             data=archivo,
-            file_name=nombre,
-            mime="application/octet-stream"
+            file_name=nombre_final,
+            mime="application/pdf"
         )
