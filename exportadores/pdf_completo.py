@@ -13,6 +13,9 @@ from reportlab.lib import colors
 from exportadores.hoja_info import seccion_hoja_info
 from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 
+# 🔥 NUEVO (IMPORTANTE)
+from exportadores.reporte_costos_proyecto import construir_bloque_costos
+
 import pandas as pd
 from io import BytesIO
 from reportlab.lib.pagesizes import letter
@@ -141,7 +144,7 @@ def generar_pdf_completo(
         elems.extend(bloque_cot)
 
     # =====================================================
-    # 4. COSTOS DE PROYECTO (MODELO OBRA)
+    # 4. COSTOS DE PROYECTO (INTEGRADO 🔥)
     # =====================================================
     elems.append(PageBreak())
 
@@ -156,61 +159,13 @@ def generar_pdf_completo(
         ))
 
     else:
-
-        r = resultado_costos_proyecto
-
-        # -------------------------------------------------
-        # 🔹 DATOS DEL PROYECTO (NUEVO)
-        # -------------------------------------------------
-        elems.append(Paragraph("Datos del Proyecto", styles["Heading2"]))
-        elems.append(Spacer(1, 6))
-
-        data_info = [
-            ["Concepto", "Valor"],
-            ["Total estructuras", r.get("total_estructuras", 0)],
-            ["Postes", r.get("num_postes", 0)],
-            ["Retenidas", r.get("num_retenidas", 0)],
-            ["Agujeros", r.get("total_agujeros", 0)],
-            ["Longitud primaria (m)", r.get("longitud_primario", 0)],
-            ["Longitud secundaria (m)", r.get("longitud_secundario", 0)],
-        ]
-
-        tabla_info = Table(data_info)
-
-        tabla_info.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-            ("BACKGROUND", (0,0), (-1,0), colors.grey),
-        ]))
-
-        elems.append(tabla_info)
-        elems.append(Spacer(1, 10))
-
-        # -------------------------------------------------
-        # 🔹 COSTOS (TU BLOQUE ORIGINAL)
-        # -------------------------------------------------
-        data = [
-            ["Concepto", "Valor"],
-            ["Días totales", str(r.get("dias_totales", 0))],
-            ["Costo materiales", f"L {r.get('costo_materiales',0):,.2f}"],
-            ["Costo cuadrilla", f"L {r.get('costo_cuadrilla',0):,.2f}"],
-            ["Costo agujeros", f"L {r.get('costo_agujeros',0):,.2f}"],
-            ["Costo grúa", f"L {r.get('costo_grua',0):,.2f}"],
-            ["ENEE", f"L {r.get('costo_enee',0):,.2f}"],
-            ["Contingencia", f"L {r.get('contingencia',0):,.2f}"],
-            ["Costo total real", f"L {r.get('costo_total_real',0):,.2f}"],
-            ["Precio venta", f"L {r.get('precio_venta',0):,.2f}"],
-            ["Utilidad", f"L {r.get('utilidad',0):,.2f}"],
-            ["Margen (%)", f"{r.get('margen_pct',0)} %"],
-        ]
-
-        tabla = Table(data, repeatRows=1)
-
-        tabla.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-            ("BACKGROUND", (0,0), (-1,0), colors.grey),
-        ]))
-
-        elems.append(tabla)
+        # 🔥 AQUÍ ESTÁ LA MAGIA
+        construir_bloque_costos(
+            elems,
+            styles,
+            resultado_costos_proyecto,
+            df_materiales
+        )
 
     # =====================================================
     # BUILD
