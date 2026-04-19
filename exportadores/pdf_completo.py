@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from exportadores.cotizacion import generar_seccion_cotizacion_final
-
 from reportlab.platypus import (
     BaseDocTemplate, PageTemplate, Frame,
-    Paragraph, Spacer, PageBreak
+    Paragraph, Spacer, PageBreak, Table, TableStyle
 )
+from reportlab.lib import colors
 
 from exportadores.hoja_info import seccion_hoja_info
 from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
@@ -36,6 +36,7 @@ def generar_pdf_completo(
     df_estructuras,
     df_precios_estructura,
     datos_proyecto,
+    resultado_costos_proyecto=None   # 🔥 NUEVO
 ):
 
     _log("📄 INICIO PDF COMPLETO")
@@ -110,8 +111,6 @@ def generar_pdf_completo(
     # =====================================================
     # 3. COTIZACIÓN
     # =====================================================
-    
-
     if (
         df_precios_estructura is None
         or not isinstance(df_precios_estructura, pd.DataFrame)
@@ -123,7 +122,6 @@ def generar_pdf_completo(
         ))
 
     else:
-        # 🔥 COPIA SEGURA (NO MUTAR ORIGINAL)
         df_tmp = df_precios_estructura.copy()
 
         if "Subtotal" not in df_tmp.columns:
@@ -139,6 +137,49 @@ def generar_pdf_completo(
         )
 
         elems.extend(bloque_cot)
+
+    # =====================================================
+    # 4. 🔥 COSTOS DE PROYECTO (MODELO OBRA)
+    # =====================================================
+    elems.append(PageBreak())
+
+    elems.append(Paragraph("COSTOS DE PROYECTO", styles["Heading1"]))
+    elems.append(Spacer(1, 10))
+
+    if resultado_costos_proyecto is None:
+
+        elems.append(Paragraph(
+            "No se dispone del cálculo de costos de proyecto.",
+            styles["Normal"]
+        ))
+
+    else:
+
+        r = resultado_costos_proyecto
+
+        data = [
+            ["Concepto", "Valor"],
+            ["Días totales", str(r.get("dias_totales", 0))],
+            ["Costo materiales", f"L {r.get('costo_materiales',0):,.2f}"],
+            ["Costo cuadrilla", f"L {r.get('costo_cuadrilla',0):,.2f}"],
+            ["Costo agujeros", f"L {r.get('costo_agujeros',0):,.2f}"],
+            ["Costo grúa", f"L {r.get('costo_grua',0):,.2f}"],
+            ["ENEE", f"L {r.get('costo_enee',0):,.2f}"],
+            ["Contingencia", f"L {r.get('contingencia',0):,.2f}"],
+            ["Costo total real", f"L {r.get('costo_total_real',0):,.2f}"],
+            ["Precio venta", f"L {r.get('precio_venta',0):,.2f}"],
+            ["Utilidad", f"L {r.get('utilidad',0):,.2f}"],
+            ["Margen (%)", f"{r.get('margen_pct',0)} %"],
+        ]
+
+        tabla = Table(data, repeatRows=1)
+
+        tabla.setStyle(TableStyle([
+            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+            ("BACKGROUND", (0,0), (-1,0), colors.grey),
+        ]))
+
+        elems.append(tabla)
 
     # =====================================================
     # BUILD
