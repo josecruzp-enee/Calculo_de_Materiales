@@ -89,7 +89,7 @@ def _validar_materiales(df_materiales_costos: pd.DataFrame):
 
 
 # =========================================================
-# 🔥 MOTOR DE COSTOS REAL (YA SIN IMPORTS ROTOS)
+# 🔥 MOTOR DE COSTOS REAL
 # =========================================================
 def _motor_costos(
     df_materiales,
@@ -196,6 +196,7 @@ def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
         return {
             "ok": True,
             "resultado_costos_proyecto": resultado,
+            "df_materiales_costos": df_materiales_costos,  # 🔥 CLAVE
         }
 
     except Exception as e:
