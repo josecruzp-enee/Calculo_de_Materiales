@@ -74,6 +74,7 @@ def generar_pdf_completo(
         datos_proyecto=datos_proyecto,
         df_estructuras=df_estructuras,
         df_mat=df_materiales
+        doc_width=doc.width
     )
 
     elems.extend(bloque_info)
