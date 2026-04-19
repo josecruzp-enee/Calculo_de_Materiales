@@ -216,9 +216,9 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
         tabla = Table(
             data,
             colWidths=[
-                doc.width * 0.25,
-                doc.width * 0.55,
-                doc.width * 0.20
+                doc.width * 0.18,
+                doc.width * 0.67,
+                doc.width * 0.15
             ],
             repeatRows=1
         )
