@@ -245,20 +245,25 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         # =====================================================
-        # 🔥 COSTOS DE PROYECTO
+        # 🔥 COSTOS DE PROYECTO (CORREGIDO)
         # =====================================================
         from costos_precios.costos_proyecto import calcular_costos_proyecto
 
-        entrada_costos.df_materiales_costos = resultado_costos.get("df_costos_estructura")
+        # 🔥 USAR EL DF CORRECTO (materiales con precios)
+        entrada_costos.df_materiales_costos = resultado_costos.get("df_materiales_costos")
+
+        # ✔ precios de estructuras (se mantienen)
         entrada_costos.df_precios_estructura = df_precios_estructura
 
-        # 🔥 CLAVE
+        # ✔ precio real de venta
         entrada_costos.precio_venta_proyecto = precio_venta
 
+        # 🔥 cálculo final
         res_costos_proyecto = calcular_costos_proyecto(entrada_costos)
 
+        # ✔ opcional (debug / uso interno)
         resumen_financiero = res_costos_proyecto.get("resultado_costos_proyecto")
-
+        
         # =====================================================
         # 6. REPORTES
         # =====================================================
@@ -266,11 +271,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_estructuras=df_estructuras,
             df_materiales=df_materiales,
             df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
-            costos={
-                "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
-                "df_precios_estructura": df_precios_estructura,
-                "resumen_financiero": resumen_financiero,
-            },
+            costos=res_costos_proyecto, 
             nombre_proyecto="Proyecto",
             datos_proyecto=salida_entradas.datos_proyecto,
             df_cables=salida_entradas.df_cables
