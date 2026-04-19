@@ -237,16 +237,12 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # 🔥 COSTO REAL DEL PROYECTO
         # =====================================================
         from costos_precios.costos_proyecto import calcular_costos_proyecto
+        entrada_costos.df_materiales_costos = df_materiales
+        entrada_costos.df_precios_estructura = resultado_costos.get("df_precios_estructura")
 
-        resumen_financiero = calcular_costos_proyecto(
-            df_materiales=df_materiales,
-            longitud_primario_m=(salida_entradas.datos_proyecto or {}).get("longitud_primario_m", 0),
-            longitud_secundario_m=(salida_entradas.datos_proyecto or {}).get("longitud_secundario_m", 0),
-            total_estructuras=len(df_estructuras),
-            num_postes=df_estructuras["Estructura"].str.startswith("PC").sum(),
-            num_retenidas=df_estructuras["Estructura"].str.startswith("R-").sum(),
-            precio_total_proyecto=resultado_costos.get("df_precios_estructura", pd.DataFrame()).get("Precio Total", pd.Series()).sum(),
-        )
+        res_costos_proyecto = calcular_costos_proyecto(entrada_costos)
+
+        resumen_financiero = res_costos_proyecto.get("resultado_costos_proyecto")
 
         
         # =====================================================
