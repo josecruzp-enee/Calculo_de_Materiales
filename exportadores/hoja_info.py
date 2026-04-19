@@ -5,6 +5,7 @@ import pandas as pd
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.enums import TA_CENTER
 
 
 # =========================================================
@@ -14,13 +15,10 @@ def _plural(palabra, n):
     return palabra if n == 1 else palabra + "es"
 
 
-def _formatear_calibre(txt: str) -> str:
-    """
-    Convierte:
-    ACSR #1/0 AWG Raven →
-    Cable de Aluminio ACSR #1/0 AWG Raven
-    """
-
+# =========================================================
+# FORMATO TABLA (CATÁLOGO)
+# =========================================================
+def _formatear_calibre_catalogo(txt: str) -> str:
     txt = str(txt).strip()
 
     if not txt:
@@ -39,7 +37,34 @@ def _formatear_calibre(txt: str) -> str:
 
 
 # =========================================================
-# CALIBRES
+# FORMATO TÉCNICO (DESCRIPCIÓN)
+# =========================================================
+def _formato_tecnico_calibre(txt: str):
+
+    txt = str(txt).upper()
+    txt = txt.replace("CABLE DE ALUMINIO", "")
+    txt = txt.replace("FORRADO", "")
+    txt = txt.strip()
+
+    if "ACSR" in txt:
+        mat = "ACSR"
+    elif "WP" in txt:
+        mat = "WP"
+    else:
+        mat = ""
+
+    calibre = ""
+    for p in txt.split():
+        if "#" in p:
+            calibre = p.replace("#", "")
+        elif "AWG" in p:
+            calibre += " AWG"
+
+    return f"# {calibre.strip()} {mat}".strip()
+
+
+# =========================================================
+# CALIBRES TABLA
 # =========================================================
 def extraer_calibres(datos):
 
@@ -48,7 +73,7 @@ def extraer_calibres(datos):
 
     for c in cables:
         tipo = str(c.get("Tipo", "")).upper()
-        calibre = _formatear_calibre(c.get("Calibre", ""))
+        calibre = _formatear_calibre_catalogo(c.get("Calibre", ""))
 
         if tipo == "MT" and not prim:
             prim = calibre
@@ -62,24 +87,8 @@ def extraer_calibres(datos):
     return prim, sec, neu, pil
 
 
-def _formato_conductores(cables, tipo_busqueda):
-
-    grupo = {}
-
-    for c in cables:
-        if str(c.get("Tipo", "")).upper() != tipo_busqueda:
-            continue
-
-        calibre = str(c.get("Calibre", "")).strip()
-        fases = int(c.get("Conductores", 1))
-
-        grupo[calibre] = grupo.get(calibre, 0) + fases
-
-    return " + ".join([f"{v} x {k}" for k, v in grupo.items()])
-
-
 # =========================================================
-# BLOQUES DESCRIPCIÓN
+# DESCRIPCIÓN: POSTES
 # =========================================================
 def _desc_postes(df):
 
@@ -94,6 +103,9 @@ def _desc_postes(df):
     return f"Hincado de {', '.join(partes)} (Total: {total} postes)."
 
 
+# =========================================================
+# DESCRIPCIÓN: TRANSFORMADORES
+# =========================================================
 def _desc_transformadores(df):
 
     trafos = df[df["cod"].str.contains("TS")]
@@ -109,6 +121,9 @@ def _desc_transformadores(df):
     return f"Instalación de {total} {tipo_txt} en conexión {', '.join(partes)}."
 
 
+# =========================================================
+# DESCRIPCIÓN: LUMINARIAS
+# =========================================================
 def _desc_luminarias(df):
 
     lum = df[df["cod"].str.contains("LL")]
@@ -134,31 +149,54 @@ def _desc_luminarias(df):
         return f"Instalación de {total} luminarias tipo LED."
 
 
-def _desc_lineas(cables):
+# =========================================================
+# DESCRIPCIÓN: LÍNEAS
+# =========================================================
+def _desc_lineas(cables, tension):
 
     lineas = []
 
     for tipo, nombre in [("MT", "LP"), ("BT", "LS")]:
 
-        long_total = sum(
-            float(c.get("Longitud", 0))
-            for c in cables
-            if str(c.get("Tipo", "")).upper() == tipo
-        )
+        grupo = [c for c in cables if str(c.get("Tipo", "")).upper() == tipo]
 
-        if long_total <= 0:
+        if not grupo:
             continue
 
-        conductores = _formato_conductores(cables, tipo)
-        neutro = _formato_conductores(cables, "N")
-        piloto = _formato_conductores(cables, "HP")
+        longitud = int(sum(float(c.get("Longitud", 0)) for c in grupo))
+        fases = max(int(c.get("Conductores", 1)) for c in grupo)
 
-        extra = " + ".join([x for x in [neutro, piloto] if x])
+        if tipo == "MT":
+            config = f"{fases}F+N"
+            voltaje = f"{tension} kV"
+        else:
+            tiene_hp = any(str(c.get("Tipo", "")).upper() == "HP" for c in cables)
+            config = f"{fases}F"
+            if tiene_hp:
+                config += "+HP"
+            config += "+N"
+            voltaje = "120/240 V"
 
-        desc = f"Construcción de {int(long_total)} m de {nombre}, {conductores}"
+        conductores = []
 
-        if extra:
-            desc += f" + {extra}"
+        for c in grupo:
+            calib = _formato_tecnico_calibre(c.get("Calibre", ""))
+            n = int(c.get("Conductores", 1))
+            conductores.append(f"{n} x {calib}")
+
+        for c in cables:
+            if str(c.get("Tipo", "")).upper() == "N":
+                conductores.append(f"1 x {_formato_tecnico_calibre(c.get('Calibre'))}")
+
+        for c in cables:
+            if str(c.get("Tipo", "")).upper() == "HP":
+                conductores.append(f"1 x {_formato_tecnico_calibre(c.get('Calibre'))}")
+
+        desc = (
+            f"Construcción de {longitud} m de {nombre}, "
+            f"{voltaje}, {config}, "
+            + " + ".join(conductores)
+        )
 
         lineas.append(desc)
 
@@ -183,11 +221,12 @@ def _build_tabla(datos, prim, sec, neu, pil):
         ["Empresa:", datos.get("empresa", "N/A")],
     ]
 
-    tabla = Table(data, colWidths=[200, 320])
+    tabla = Table(data, colWidths=[180, 260])  # 👈 AJUSTE FINO
 
     tabla.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
 
     return tabla
@@ -200,12 +239,15 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
 
     styles = getSampleStyleSheet()
     styleN = styles["Normal"]
-    styleH = styles["Heading1"]
+
+    # 🔥 TÍTULO CENTRADO
+    styleTitulo = styles["Heading1"].clone("titulo_centrado")
+    styleTitulo.alignment = TA_CENTER
 
     elems = []
 
-    elems.append(Paragraph("Hoja de Información del Proyecto", styleH))
-    elems.append(Spacer(1, 12))
+    elems.append(Paragraph("Hoja de Información del Proyecto", styleTitulo))
+    elems.append(Spacer(1, 8))
 
     datos = datos_proyecto or {}
     cables = datos.get("cables_proyecto", [])
@@ -213,7 +255,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
     prim, sec, neu, pil = extraer_calibres(datos)
 
     elems.append(_build_tabla(datos, prim, sec, neu, pil))
-    elems.append(Spacer(1, 12))
+    elems.append(Spacer(1, 8))
 
     elems.append(Paragraph("<b>Descripción general del Proyecto:</b>", styleN))
     elems.append(Spacer(1, 6))
@@ -221,7 +263,6 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
     lineas = []
 
     if isinstance(df_estructuras, pd.DataFrame) and not df_estructuras.empty:
-
         df = df_estructuras.copy()
         df["cod"] = df["codigodeestructura"].astype(str).str.upper()
 
@@ -230,7 +271,8 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
             if res:
                 lineas.append(res)
 
-    lineas.extend(_desc_lineas(cables))
+    tension = datos.get("tension", "N/A")
+    lineas.extend(_desc_lineas(cables, tension))
 
     if not lineas:
         lineas.append("No se cuenta con información suficiente.")
@@ -239,7 +281,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None):
         elems.append(Paragraph(f"{i+1}. {l}", styleN))
         elems.append(Spacer(1, 4))
 
-    elems.append(Spacer(1, 12))
+    elems.append(Spacer(1, 10))
 
     return elems
 
