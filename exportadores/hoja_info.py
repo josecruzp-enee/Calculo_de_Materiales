@@ -6,7 +6,7 @@ from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.enums import TA_CENTER
-
+import re
 
 # =========================================================
 # HELPERS
@@ -39,13 +39,13 @@ def _formatear_calibre_catalogo(txt: str) -> str:
 # =========================================================
 # FORMATO TÉCNICO (DESCRIPCIÓN)
 # =========================================================
+
+
 def _formato_tecnico_calibre(txt: str):
 
     txt = str(txt).upper()
-    txt = txt.replace("CABLE DE ALUMINIO", "")
-    txt = txt.replace("FORRADO", "")
-    txt = txt.strip()
 
+    # Detectar material
     if "ACSR" in txt:
         mat = "ACSR"
     elif "WP" in txt:
@@ -53,16 +53,15 @@ def _formato_tecnico_calibre(txt: str):
     else:
         mat = ""
 
-    calibre = ""
-    for p in txt.split():
-        if "#" in p:
-            calibre = p.replace("#", "")
-        elif "AWG" in p:
-            calibre += " AWG"
+    # 🔥 EXTRAER CALIBRE CORRECTO
+    match = re.search(r"#\s*([\d/]+)\s*AWG", txt)
 
-    return f"# {calibre.strip()} {mat}".strip()
+    if match:
+        calibre = match.group(1)
+        return f"# {calibre} AWG {mat}".strip()
 
-
+    # fallback (por si algo raro viene)
+    return txt
 # =========================================================
 # CALIBRES TABLA
 # =========================================================
