@@ -145,7 +145,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
             mapa_desc = dict(zip(
                 df_indice["codigodeestructura"],
-                df_indice["descripcion"]   # ✔ minúscula correcta
+                df_indice["Descripcion"]   
             ))
 
             df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
@@ -230,7 +230,7 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, base_datos=None, datos_pr
 
             mapa_desc = dict(zip(
                 df_indice["codigodeestructura"],
-                df_indice["descripcion"]
+                df_indice["Descripcion"]
             ))
 
             df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
