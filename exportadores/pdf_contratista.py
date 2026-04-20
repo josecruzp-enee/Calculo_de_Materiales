@@ -296,8 +296,8 @@ def generar_pdf_contratista(entrada):
 
     doc.build(
         elementos,
-        onFirstPage=fondo_contratista,
-        onLaterPages=fondo_contratista,
+        onFirstPage=fondo_pagina,
+        onLaterPages=fondo_pagina
     )
 
   
