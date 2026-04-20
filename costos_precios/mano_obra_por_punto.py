@@ -79,6 +79,11 @@ def _precio_estructura(estructura: str) -> float:
     if estructura.startswith("CT"):
         return 500
 
+    if estructura.startswith("CA-32"):
+        return 800
+     if estructura.startswith("CS-2"):
+        return 1200
+         
     if estructura.startswith("TS"):
 
         PRECIOS_TRANSFORMADOR = {
@@ -121,19 +126,20 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         if longitud <= 0:
             continue
 
+        # 🔥 CLAVE: NOMBRE COMO ESTRUCTURA
         if tipo.startswith("MT"):
+            nombre = f"Conductor MT {calibre}"
             precio = 120
-            nombre = f"Instalación conductor MT {calibre}"
 
         elif tipo.startswith("BT"):
+            nombre = f"Conductor BT {calibre}"
             precio = 80
-            nombre = f"Instalación conductor BT {calibre}"
 
         else:
             continue
 
         filas.append({
-            "Punto": "GENERAL",   # 🔥 importante
+            "Punto": "PRESUPUESTO",  # 🔥 IMPORTANTE PERO NO AFECTA
             "Estructura": nombre,
             "Cantidad": longitud,
             "Precio": precio,
@@ -145,8 +151,8 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
 
     df_cable = pd.DataFrame(filas)
 
+    # 🔥 AQUÍ ESTÁ LA MAGIA
     return pd.concat([df_detalle, df_cable], ignore_index=True)
-
 
 # ==========================================================
 # DETALLE POR PUNTO
