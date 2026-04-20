@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-
+from reportlab.platypus import Table, Paragraph
+from reportlab.lib.styles import ParagraphStyle
 import pandas as pd
 
 
@@ -28,6 +29,78 @@ FACTOR_COMPLEJIDAD = {
     "REMATE": 1.6,
 }
 
+
+def generar_tabla_presupuesto_desde_detalle(df_detalle: pd.DataFrame):
+
+    if df_detalle is None or df_detalle.empty:
+        raise ValueError("df_detalle vacío")
+
+    style_small = ParagraphStyle(
+        name="Small",
+        fontName="Helvetica",
+        fontSize=8,
+        leading=9
+    )
+
+    # =====================================================
+    # AGRUPAR POR ESTRUCTURA
+    # =====================================================
+    df_resumen = (
+        df_detalle
+        .groupby("Estructura", as_index=False)
+        .agg({
+            "Cantidad": "sum",
+            "Precio": "first",
+            "Subtotal": "sum"
+        })
+        .sort_values("Estructura")
+    )
+
+    # =====================================================
+    # TABLA
+    # =====================================================
+    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
+
+    total_general = 0
+
+    for _, r in df_resumen.iterrows():
+
+        estructura = r["Estructura"]
+        cantidad = int(r["Cantidad"])
+        pu = float(r["Precio"])
+        total = float(r["Subtotal"])
+
+        descripcion = Paragraph(
+            f"Suministro e instalación de estructura tipo {estructura}",
+            style_small
+        )
+
+        total_general += total
+
+        data.append([
+            descripcion,
+            f"L {pu:,.2f}",
+            f"{cantidad}",
+            f"L {total:,.2f}",
+        ])
+
+    # TOTAL FINAL
+    data.append([
+        "",
+        "",
+        "TOTAL",
+        f"L {total_general:,.2f}"
+    ])
+
+    tabla = Table(
+        data,
+        colWidths=[320, 80, 60, 90],
+        repeatRows=1
+    )
+
+    tabla.setStyle(estilo_tabla())
+
+    return [tabla]
 
 # ==========================================================
 # PRECIO POR ESTRUCTURA
