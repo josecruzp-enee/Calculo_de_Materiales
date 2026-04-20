@@ -155,7 +155,36 @@ def _agregar_detalle_puntos(elementos, styles, df_detalle, df_totales):
 
         elementos.append(Spacer(1, 14))
 
+def _agregar_cotizacion_final(elementos, styles, doc, df_detalle):
 
+    total_base = float(df_detalle["Subtotal"].sum())
+
+    ingenieria = total_base * 0.15
+    subtotal = total_base + ingenieria
+    isv = subtotal * 0.15
+    total_final = subtotal + isv
+
+    elementos.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Title"]))
+    elementos.append(Spacer(1, 12))
+
+    data = [
+        ["Concepto", "Monto (L)"],
+        ["Instalación de estructuras", f"L {total_base:,.2f}"],
+        ["Gastos de Ingeniería (15%)", f"L {ingenieria:,.2f}"],
+        ["SUBTOTAL", f"L {subtotal:,.2f}"],
+        ["ISV (15%)", f"L {isv:,.2f}"],
+        ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
+    ]
+
+    tabla = Table(
+        data,
+        colWidths=[doc.width * 0.65, doc.width * 0.35],
+        repeatRows=1
+    )
+
+    tabla.setStyle(estilo_tabla())
+
+    elementos.append(tabla) 
 # ======================================================
 # 🚀 FUNCIÓN PRINCIPAL
 # ======================================================
@@ -196,7 +225,13 @@ def generar_pdf_contratista(df_estructuras: pd.DataFrame):
     _agregar_resumen(elementos, styles, df_totales)
 
     # ======================================================
-    # 🔥 3. DETALLE
+    # 🔥 3. Cotización
+    # ======================================================
+    elementos.append(PageBreak())
+    _agregar_cotizacion_final(elementos, styles, doc, df_detalle)
+    
+    # ======================================================
+    # 🔥 4. DETALLE
     # ======================================================
     _agregar_detalle_puntos(elementos, styles, df_detalle, df_totales)
 
