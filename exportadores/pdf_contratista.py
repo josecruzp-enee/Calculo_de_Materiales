@@ -5,21 +5,8 @@ from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 import pandas as pd
 
-from materiales.calculos.calculo_estructuras import calcular_estructuras_por_punto
-from tu_ruta.mano_obra import calcular_mano_obra_proyecto  # ← AJUSTA
 
-
-def generar_pdf_contratista(df_estructuras: pd.DataFrame):
-
-    # ======================================================
-    # DATOS
-    # ======================================================
-    df_puntos = calcular_estructuras_por_punto(df_estructuras)
-
-    resultado = calcular_mano_obra_proyecto(df_puntos)
-
-    df_detalle = resultado["df_detalle"]
-    df_totales = resultado["df_totales"]
+def generar_pdf_contratista(df_detalle, df_totales):
 
     # ======================================================
     # PDF
@@ -70,7 +57,7 @@ def generar_pdf_contratista(df_estructuras: pd.DataFrame):
         elementos.append(Spacer(1, 6))
 
         # =========================
-        # TOTAL
+        # TOTAL POR PUNTO
         # =========================
         elementos.append(
             Paragraph(
