@@ -100,13 +100,19 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 # ==========================================================
 # 📄 ESTRUCTURAS GLOBAL
 # ==========================================================
+
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None, datos_proyecto=None):
+
+    import streamlit as st
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
     doc, buffer = _crear_doc()
 
     elems = _header("RESUMEN DE ESTRUCTURAS", nombre_proy)
 
+    # ----------------------------------------------------------
+    # VALIDACIÓN
+    # ----------------------------------------------------------
     if df_estructuras is None or df_estructuras.empty:
         elems.append(Paragraph("No se encontraron estructuras.", styleN))
         doc.build(elems)
@@ -124,75 +130,56 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         .str.upper()
     )
 
-    # ==========================================================
-    # 🔥 DESCRIPCIÓN DESDE BASE DE DATOS (VERSIÓN ROBUSTA)
-    # ==========================================================
-    df_indice = None
+    # ----------------------------------------------------------
+    # 🔥 INDICE (ÚNICA FUENTE)
+    # ----------------------------------------------------------
+    df_indice = base_datos.get("INDICE") if base_datos else None
 
-    if base_datos:
-        df_indice = (
-            base_datos.get("indice")
-            or base_datos.get("INDICE")
-            or base_datos.get("Indice")
-        )
+    # ----------------------------------------------------------
+    # DEBUG CLARO
+    # ----------------------------------------------------------
+    st.write("DEBUG base_datos:", base_datos is not None)
+    st.write("DEBUG tiene INDICE:", isinstance(df_indice, pd.DataFrame))
 
-    # 🔍 DEBUG
-    debug_info = []
-
-    if base_datos is None:
-        debug_info.append("base_datos = None")
-
-    if df_indice is None:
-        debug_info.append("df_indice = None")
-
-    elif isinstance(df_indice, pd.DataFrame):
-        debug_info.append(f"columnas_indice: {list(df_indice.columns)}")
-        debug_info.append(f"ejemplo_codigo_indice: {df_indice.iloc[0].to_dict()}")
-
-    debug_info.append(f"codigos_estructuras: {df[col_codigo].unique()[:10]}")
-
-
-
-
-
-    
+    # ----------------------------------------------------------
+    # MAPEO
+    # ----------------------------------------------------------
     if isinstance(df_indice, pd.DataFrame):
 
-        # Normalizar nombres de columnas
-        df_indice.columns = [c.strip().upper() for c in df_indice.columns]
+        df_idx = df_indice.copy()
+        df_idx.columns = [c.strip().upper() for c in df_idx.columns]
 
-        col_codigo_idx = None
-        col_desc_idx = None
+        col_cod_idx = next((c for c in df_idx.columns if "CODIGO" in c), None)
+        col_desc_idx = next((c for c in df_idx.columns if "DESCRIP" in c), None)
 
-        for c in df_indice.columns:
-            if "CODIGO" in c and "ESTRUCTURA" in c:
-                col_codigo_idx = c
-            if "DESCRIP" in c:
-                col_desc_idx = c
+        st.write("DEBUG col_cod_idx:", col_cod_idx)
+        st.write("DEBUG col_desc_idx:", col_desc_idx)
 
-        if col_codigo_idx and col_desc_idx:
+        if col_cod_idx and col_desc_idx:
 
-            mapa_desc = dict(zip(
-                df_indice[col_codigo_idx].astype(str).str.strip().str.upper(),
-                df_indice[col_desc_idx].astype(str).str.strip()
+            mapa = dict(zip(
+                df_idx[col_cod_idx].astype(str).str.strip().str.upper(),
+                df_idx[col_desc_idx].astype(str).str.strip()
             ))
+
+            # 🔍 prueba directa
+            codigo_test = df[col_codigo].iloc[0]
+            st.write("DEBUG codigo_test:", codigo_test)
+            st.write("DEBUG descripcion_en_mapa:", mapa.get(codigo_test))
 
             df["Descripcion"] = (
                 df[col_codigo]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-                .map(mapa_desc)
+                .map(mapa)
                 .fillna("")
             )
         else:
             df["Descripcion"] = ""
     else:
-        df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
+        df["Descripcion"] = ""
 
-    # ==========================================================
+    # ----------------------------------------------------------
     # AGRUPACIÓN
-    # ==========================================================
+    # ----------------------------------------------------------
     if "Cantidad" not in df.columns:
         df["Cantidad"] = 1
 
@@ -201,9 +188,9 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         "Descripcion": "first"
     })
 
-    # ==========================================================
+    # ----------------------------------------------------------
     # TABLA
-    # ==========================================================
+    # ----------------------------------------------------------
     data = [["Estructura", "Descripción", "Cantidad"]]
 
     for _, r in df.iterrows():
@@ -213,16 +200,29 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
             Paragraph(str(int(r["Cantidad"])), styleN),
         ])
 
-    tabla = Table(data, colWidths=[2 * inch, 3.5 * inch, 1 * inch], repeatRows=1)
+    tabla = Table(
+        data,
+        colWidths=[2 * inch, 3.5 * inch, 1 * inch],
+        repeatRows=1
+    )
     tabla.setStyle(estilo_tabla())
-    import streamlit as st
-    st.write("DEBUG base_datos:", base_datos is not None)
+
     elems.append(tabla)
     doc.build(elems)
 
     pdf_bytes = buffer.getvalue()
     buffer.close()
+
     return pdf_bytes
+
+
+
+
+
+
+
+
+
 # ==========================================================
 # 📄 ESTRUCTURAS POR PUNTO
 # ==========================================================
