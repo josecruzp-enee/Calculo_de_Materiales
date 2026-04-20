@@ -127,6 +127,9 @@ def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame):
     df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto)
     df_totales = calcular_totales_por_punto(df_detalle)
 
+    df_detalle = df_detalle.sort_values(["Punto", "Estructura"])
+    df_totales = df_totales.sort_values("Punto")
+
     return {
         "df_detalle": df_detalle,
         "df_totales": df_totales,
