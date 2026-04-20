@@ -10,7 +10,7 @@ COSTOS_BASE = {
     "poste": 2000,
     "primario": 1500,
     "secundario": 1000,
-    "luminaria": 7500,
+    "luminaria": 750,
     "retenida": 800,
 }
 
