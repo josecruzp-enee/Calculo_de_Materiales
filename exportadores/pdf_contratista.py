@@ -16,7 +16,30 @@ from costos_precios.mano_obra_por_punto import calcular_mano_obra_proyecto
 # 🔥 BASE PDF (asegúrate de subir el logo ahí)
 from exportadores.pdf_base import fondo_pagina
 
+from reportlab.lib.units import cm
 
+def fondo_contratista(canvas, doc):
+
+    canvas.saveState()
+
+    # 🔥 LOGO MÁS ARRIBA SOLO AQUÍ
+    x = 40
+    y = doc.pagesize[1] - 60   # ⬅️ MÁS ARRIBA
+
+    width = 120
+    height = 50
+
+    canvas.drawImage(
+        "ruta/a/tu/logo.png",  # usa tu misma ruta
+        x,
+        y,
+        width=width,
+        height=height,
+        preserveAspectRatio=True,
+        mask='auto'
+    )
+
+    canvas.restoreState() 
 # ======================================================
 # 🎨 ESTILO TABLAS
 # ======================================================
@@ -277,6 +300,7 @@ def generar_pdf_contratista(entrada):
         onLaterPages=fondo_pagina
     )
 
+  
     pdf_bytes = buffer.getvalue()
     buffer.close()
 
