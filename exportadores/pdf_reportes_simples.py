@@ -136,6 +136,26 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
             or base_datos.get("Indice")
         )
 
+    # 🔍 DEBUG
+    debug_info = []
+
+    if base_datos is None:
+        debug_info.append("base_datos = None")
+
+    if df_indice is None:
+        debug_info.append("df_indice = None")
+
+    elif isinstance(df_indice, pd.DataFrame):
+        debug_info.append(f"columnas_indice: {list(df_indice.columns)}")
+        debug_info.append(f"ejemplo_codigo_indice: {df_indice.iloc[0].to_dict()}")
+
+    debug_info.append(f"codigos_estructuras: {df[col_codigo].unique()[:10]}")
+
+
+
+
+
+    
     if isinstance(df_indice, pd.DataFrame):
 
         # Normalizar nombres de columnas
