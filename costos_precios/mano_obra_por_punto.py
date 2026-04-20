@@ -34,11 +34,15 @@ FACTOR_COMPLEJIDAD = {
 # ==========================================================
 def _precio_estructura(estructura: str) -> float:
 
+    # =========================
     # POSTE
+    # =========================
     if estructura.startswith("PC"):
         return COSTOS_BASE["poste"]
 
+    # =========================
     # PRIMARIO
+    # =========================
     if estructura.startswith("A-"):
 
         if estructura.startswith("A-III"):
@@ -57,21 +61,50 @@ def _precio_estructura(estructura: str) -> float:
 
         return COSTOS_BASE["primario"] * f_fase * f_comp
 
+    # =========================
     # SECUNDARIO
+    # =========================
     if estructura.startswith("B-"):
         return COSTOS_BASE["secundario"]
 
+    # =========================
     # LUMINARIA
+    # =========================
     if estructura.startswith("LL"):
         return COSTOS_BASE["luminaria"]
 
+    # =========================
     # RETENIDAS
+    # =========================
     if estructura.startswith("R-"):
         return COSTOS_BASE["retenida"]
 
-    # OTROS
-    return 0
+    # =========================
+    # 🔥 TIERRA (CT-N)
+    # =========================
+    if estructura.startswith("CT"):
+        return 500  # ajustable
 
+    # =========================
+    # 🔥 TRANSFORMADOR (TS)
+    # =========================
+    if estructura.startswith("TS"):
+
+        PRECIOS_TRANSFORMADOR = {
+            "TS-25KVA": 8000,
+            "TS-37.5KVA": 12000,
+            "TS-50KVA": 15000,
+        }
+
+        if estructura in PRECIOS_TRANSFORMADOR:
+            return PRECIOS_TRANSFORMADOR[estructura] * 0.5
+
+        return 2000  # fallback si no está en diccionario
+
+    # =========================
+    # OTROS
+    # =========================
+    return 0
 
 # ==========================================================
 # DETALLE POR PUNTO
