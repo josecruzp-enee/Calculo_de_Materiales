@@ -114,7 +114,7 @@ def tabla_presupuesto(df_detalle):
 def pagina_resumen(elementos, styles, df_totales):
 
     elementos.append(Paragraph("RESUMEN DE PAGO POR PUNTO", styles["Title"]))
-    elementos.append(Spacer(1, 16))
+    elementos.append(Spacer(1, 12))
 
     data = [["Punto", "Total (L)"]]
 
