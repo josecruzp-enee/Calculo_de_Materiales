@@ -2,13 +2,10 @@
 """
 exportadores/pdf_reportes_simples.py
 Reportes PDF unitarios: materiales/estructuras global y por punto.
-FIX: normalización fuerte de códigos + mapping consistente
+ESTILO ORIGINAL RESTAURADO
 """
 
-from __future__ import annotations
-
 import pandas as pd
-import re
 from io import BytesIO
 from xml.sax.saxutils import escape
 
@@ -28,20 +25,7 @@ from exportadores.pdf_base import (
 
 
 # ==========================================================
-# 🔥 NORMALIZACIÓN FUERTE (CLAVE DEL FIX)
-# ==========================================================
-def limpiar_codigo_fuerte(x):
-    if pd.isna(x):
-        return ""
-    x = str(x).upper().strip()
-    x = re.sub(r"\(.*?\)", "", x)   # elimina (P), (E), etc
-    x = x.replace("■", "")
-    x = x.replace("\n", "").replace("\r", "")
-    return x.strip()
-
-
-# ==========================================================
-# HEADER
+# 🎯 HEADER ESTÁNDAR (TU ESTILO ORIGINAL)
 # ==========================================================
 def _header(titulo, nombre_proy):
 
@@ -62,11 +46,9 @@ def _header(titulo, nombre_proy):
 
 
 # ==========================================================
-# PDF: MATERIALES GLOBAL
+# 🔧 DOC BASE
 # ==========================================================
-def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
-
-    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
+def _crear_doc():
 
     buffer = BytesIO()
     doc = BaseDocTemplate(buffer, pagesize=letter)
@@ -75,6 +57,17 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
+    return doc, buffer
+
+
+# ==========================================================
+# 📄 MATERIALES GLOBAL
+# ==========================================================
+def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
+
+    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
+    doc, buffer = _crear_doc()
+
     elems = _header("RESUMEN DE MATERIALES", nombre_proy)
 
     if df_mat is None or df_mat.empty:
@@ -82,15 +75,15 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
         doc.build(elems)
         return buffer.getvalue()
 
-    df_agrupado = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+    df_agr = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
     data = [["Material", "Unidad", "Cantidad"]]
 
-    for _, row in df_agrupado.iterrows():
+    for _, r in df_agr.iterrows():
         data.append([
-            Paragraph(formatear_material(row["Materiales"]), styleN),
-            escape(str(row["Unidad"])),
-            f"{float(row['Cantidad']):.2f}"
+            Paragraph(formatear_material(r["Materiales"]), styleN),
+            escape(str(r["Unidad"])),
+            f"{float(r['Cantidad']):.2f}"
         ])
 
     tabla = Table(data, colWidths=[4 * inch, 1 * inch, 1 * inch], repeatRows=1)
@@ -105,18 +98,12 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 
 
 # ==========================================================
-# PDF: ESTRUCTURAS GLOBAL
+# 📄 ESTRUCTURAS GLOBAL
 # ==========================================================
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None, datos_proyecto=None):
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
-
-    buffer = BytesIO()
-    doc = BaseDocTemplate(buffer, pagesize=letter)
-
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
-    template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
-    doc.addPageTemplates([template])
+    doc, buffer = _crear_doc()
 
     elems = _header("RESUMEN DE ESTRUCTURAS", nombre_proy)
 
@@ -129,25 +116,37 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
-    df[col_codigo] = df[col_codigo].apply(limpiar_codigo_fuerte)
+    df[col_codigo] = (
+        df[col_codigo]
+        .astype(str)
+        .str.replace("■", "")
+        .str.strip()
+        .str.upper()
+    )
 
-    # =========================
-    # MAPEO CORRECTO
-    # =========================
+    # 🔥 DESCRIPCIÓN DESDE BASE DE DATOS (TU LÓGICA ORIGINAL)
     if base_datos and "indice" in base_datos:
 
-        df_indice = base_datos["indice"].copy()
+        df_indice = base_datos["indice"]
 
-        df_indice["codigodeestructura"] = df_indice["codigodeestructura"].apply(limpiar_codigo_fuerte)
+        if isinstance(df_indice, pd.DataFrame):
 
-        mapa_desc = dict(zip(
-            df_indice["codigodeestructura"],
-            df_indice["Descripcion"]
-        ))
+            df_indice["Código de Estructura"] = (
+                df_indice["Código de Estructura"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
 
-        df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
+            mapa_desc = dict(zip(
+                df_indice["Código de Estructura"],
+                df_indice["Descripción"]
+            ))
+
+            df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
+
     else:
-        df["Descripcion"] = ""
+        df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
 
     if "Cantidad" not in df.columns:
         df["Cantidad"] = 1
@@ -178,18 +177,12 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
 
 # ==========================================================
-# PDF: ESTRUCTURAS POR PUNTO
+# 📄 ESTRUCTURAS POR PUNTO
 # ==========================================================
-def generar_pdf_estructuras_por_punto(df, nombre_proy, base_datos=None, datos_proyecto=None):
+def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
-
-    buffer = BytesIO()
-    doc = BaseDocTemplate(buffer, pagesize=letter)
-
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
-    template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
-    doc.addPageTemplates([template])
+    doc, buffer = _crear_doc()
 
     elems = _header("ESTRUCTURAS POR PUNTO", nombre_proy)
 
@@ -198,29 +191,11 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, base_datos=None, datos_pr
         doc.build(elems)
         return buffer.getvalue()
 
-    df = df.copy()
-
     col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
-
-    df[col_codigo] = df[col_codigo].apply(limpiar_codigo_fuerte)
-
-    if base_datos and "indice" in base_datos:
-
-        df_indice = base_datos["indice"].copy()
-        df_indice["codigodeestructura"] = df_indice["codigodeestructura"].apply(limpiar_codigo_fuerte)
-
-        mapa_desc = dict(zip(
-            df_indice["codigodeestructura"],
-            df_indice["Descripcion"]
-        ))
-
-        df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
-    else:
-        df["Descripcion"] = ""
 
     for punto, df_p in df.groupby("Punto"):
 
-        elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
+        elems.append(Paragraph(f"<b>{escape(str(punto))}</b>", styles["Heading2"]))
 
         data = [["Estructura", "Descripción", "Cantidad"]]
 
@@ -233,11 +208,7 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, base_datos=None, datos_pr
 
         tabla = Table(
             data,
-            colWidths=[
-                doc.width * 0.18,
-                doc.width * 0.67,
-                doc.width * 0.15
-            ],
+            colWidths=[doc.width * 0.18, doc.width * 0.67, doc.width * 0.15],
             repeatRows=1
         )
 
@@ -247,24 +218,19 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, base_datos=None, datos_pr
         elems.append(Spacer(1, 10))
 
     doc.build(elems)
+
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
 
 
 # ==========================================================
-# PDF: MATERIALES POR PUNTO
+# 📄 MATERIALES POR PUNTO
 # ==========================================================
 def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
-
-    buffer = BytesIO()
-    doc = BaseDocTemplate(buffer, pagesize=letter)
-
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
-    template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
-    doc.addPageTemplates([template])
+    doc, buffer = _crear_doc()
 
     elems = _header("MATERIALES POR PUNTO", nombre_proy)
 
@@ -275,7 +241,7 @@ def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
 
     for punto, df_p in df.groupby("Punto"):
 
-        elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
+        elems.append(Paragraph(f"<b>{escape(str(punto))}</b>", styles["Heading2"]))
 
         df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
 
@@ -290,11 +256,7 @@ def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
 
         tabla = Table(
             data,
-            colWidths=[
-                doc.width * 0.55,
-                doc.width * 0.20,
-                doc.width * 0.25
-            ],
+            colWidths=[doc.width * 0.55, doc.width * 0.20, doc.width * 0.25],
             repeatRows=1
         )
 
@@ -304,6 +266,7 @@ def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
         elems.append(Spacer(1, 10))
 
     doc.build(elems)
+
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
