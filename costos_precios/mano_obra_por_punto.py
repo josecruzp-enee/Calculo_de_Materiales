@@ -81,7 +81,8 @@ def _precio_estructura(estructura: str) -> float:
 
     if estructura.startswith("CA-32"):
         return 800
-     if estructura.startswith("CS-2"):
+        
+    if estructura.startswith("CS-2"):
         return 1200
          
     if estructura.startswith("TS"):
