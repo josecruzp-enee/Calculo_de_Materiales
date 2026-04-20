@@ -269,7 +269,7 @@ def generar_pdf_contratista(entrada):
 
     doc = SimpleDocTemplate(
         buffer,
-        topMargin=20,  # 🔥 LOGO MÁS ARRIBA
+        topMargin=10,  # 🔥 LOGO MÁS ARRIBA
         leftMargin=40,
         rightMargin=40
     )
@@ -296,8 +296,8 @@ def generar_pdf_contratista(entrada):
 
     doc.build(
         elementos,
-        onFirstPage=fondo_pagina,
-        onLaterPages=fondo_pagina
+        onFirstPage=fondo_contratista,
+        onLaterPages=fondo_contratista,
     )
 
   
