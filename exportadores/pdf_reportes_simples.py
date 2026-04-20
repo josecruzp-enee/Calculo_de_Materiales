@@ -140,8 +140,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
             )
 
             mapa_desc = dict(zip(
-                df_indice["Código de Estructura"],
-                df_indice["Descripción"]
+                df_indice["codigodeestructura"],
+                df_indice["Descripcion"]
             ))
 
             df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
