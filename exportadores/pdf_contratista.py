@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
-    Table, TableStyle, PageBreak
+    Table, PageBreak
 )
-from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 import pandas as pd
 
+# 🔥 TU SISTEMA
 from materiales.calculos.calculo_estructuras import calcular_estructuras_por_punto
 from costos_precios.mano_obra_por_punto import calcular_mano_obra_proyecto
+
+# 🔥 BASE PROFESIONAL
+from exportadores.pdf_base import estilo_tabla, fondo_pagina
 
 
 # ======================================================
@@ -28,14 +31,8 @@ def _agregar_resumen(elementos, styles, df_totales):
             f"{row['TOTAL_PUNTO']:,.2f}"
         ])
 
-    tabla = Table(data, colWidths=[120, 120])
-
-    tabla.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-    ]))
+    tabla = Table(data, colWidths=[200, 150])
+    tabla.setStyle(estilo_tabla())
 
     elementos.append(tabla)
     elementos.append(Spacer(1, 12))
@@ -77,18 +74,8 @@ def _agregar_detalle_puntos(elementos, styles, df_detalle, df_totales):
                 f"{row['Subtotal']:,.2f}",
             ])
 
-        tabla = Table(data, colWidths=[120, 80, 100, 100])
-
-        tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-
-            ("ALIGN", (0, 1), (0, -1), "LEFT"),
-            ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
-
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-        ]))
+        tabla = Table(data, colWidths=[140, 80, 110, 110])
+        tabla.setStyle(estilo_tabla())
 
         elementos.append(tabla)
         elementos.append(Spacer(1, 8))
@@ -146,7 +133,12 @@ def generar_pdf_contratista(df_estructuras: pd.DataFrame):
     _agregar_detalle_puntos(elementos, styles, df_detalle, df_totales)
     _agregar_total_general(elementos, styles, df_totales)
 
-    doc.build(elementos)
+    # 🔥 CLAVE: APLICAR MEMBRETE / LOGO
+    doc.build(
+        elementos,
+        onFirstPage=fondo_pagina,
+        onLaterPages=fondo_pagina
+    )
 
     pdf_bytes = buffer.getvalue()
     buffer.close()
