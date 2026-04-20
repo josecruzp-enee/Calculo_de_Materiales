@@ -125,9 +125,6 @@ def pagina_resumen_global(elementos, styles, df_detalle):
 
     total = subtotal_estructuras + subtotal_conductores
 
-    elementos.append(Paragraph("RESUMEN GLOBAL DEL PROYECTO", styles["Title"]))
-    elementos.append(Spacer(1, 16))
-
     data = [
         ["Concepto", "Monto (L)"],
         ["Subtotal estructuras", f"L {subtotal_estructuras:,.2f}"],
@@ -139,8 +136,6 @@ def pagina_resumen_global(elementos, styles, df_detalle):
     tabla.setStyle(estilo_tabla())
 
     elementos.append(tabla)
-    elementos.append(PageBreak())
-
 
 # ======================================================
 # 💰 COTIZACIÓN
