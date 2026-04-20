@@ -127,7 +127,6 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         if longitud <= 0:
             continue
 
-        # 🔥 CLAVE: NOMBRE COMO ESTRUCTURA
         if tipo.startswith("MT"):
             nombre = f"Conductor MT {calibre}"
             precio = 120
@@ -140,7 +139,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
             continue
 
         filas.append({
-            "Punto": "PRESUPUESTO",  # 🔥 IMPORTANTE PERO NO AFECTA
+            "Punto": None,  # 🔥 CLAVE (ANTES TENÍAS PRESUPUESTO)
             "Estructura": nombre,
             "Cantidad": longitud,
             "Precio": precio,
@@ -150,10 +149,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
     if not filas:
         return df_detalle
 
-    df_cable = pd.DataFrame(filas)
-
-    # 🔥 AQUÍ ESTÁ LA MAGIA
-    return pd.concat([df_detalle, df_cable], ignore_index=True)
+    return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
 
 # ==========================================================
 # DETALLE POR PUNTO
@@ -204,17 +200,14 @@ def calcular_totales_por_punto(df_detalle: pd.DataFrame) -> pd.DataFrame:
 # ==========================================================
 # FUNCIÓN PRINCIPAL (ACTUALIZADA)
 # ==========================================================
-def calcular_mano_obra_proyecto(
-    df_estructuras_por_punto: pd.DataFrame,
-    df_cables: pd.DataFrame | None = None
-):
+def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None):
 
     df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto)
 
-    # 🔥 integrar cable aquí (correcto)
+    # 🔥 INTEGRAR CABLE
     df_detalle = _agregar_cable_resumen(df_detalle, df_cables)
 
-    df_totales = calcular_totales_por_punto(df_detalle)
+    df_totales = calcular_totales_por_punto(df_detalle[df_detalle["Punto"].notna()])
 
     df_detalle = df_detalle.sort_values(["Punto", "Estructura"])
     df_totales = df_totales.sort_values("Punto")
