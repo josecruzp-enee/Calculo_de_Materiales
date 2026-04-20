@@ -5,13 +5,14 @@ import pandas as pd
 
 
 # ==========================================================
-# CONFIGURACIÓN BASE (BIBLIOTECA)
+# CONFIGURACIÓN BASE (BIBLIOTECA DE EJECUCIÓN)
 # ==========================================================
 COSTOS_BASE = {
     "poste": 2000,
     "primario": 1500,
     "secundario": 1000,
     "luminaria": 500,
+    "retenida": 800,
 }
 
 FACTOR_FASES = {
@@ -29,107 +30,104 @@ FACTOR_COMPLEJIDAD = {
 
 
 # ==========================================================
-# DETECTORES
+# PRECIO POR ESTRUCTURA
 # ==========================================================
-def _detectar_componentes(estructuras: list[str]) -> dict:
+def _precio_estructura(estructura: str) -> float:
 
-    return {
-        "poste": any(e.startswith("PC") for e in estructuras),
-        "primario": any(e.startswith("A-") for e in estructuras),
-        "secundario": any(e.startswith("B-") for e in estructuras),
-        "luminaria": any(e.startswith("LL") for e in estructuras),
-        "transformador": [e for e in estructuras if e.startswith("TS")],
-    }
+    # POSTE
+    if estructura.startswith("PC"):
+        return COSTOS_BASE["poste"]
 
+    # PRIMARIO
+    if estructura.startswith("A-"):
 
-def _detectar_fases(estructuras: list[str]) -> float:
+        if estructura.startswith("A-III"):
+            f_fase = FACTOR_FASES["A-III"]
+        elif estructura.startswith("A-II"):
+            f_fase = FACTOR_FASES["A-II"]
+        else:
+            f_fase = FACTOR_FASES["A-I"]
 
-    for e in estructuras:
-        if e.startswith("A-III"):
-            return FACTOR_FASES["A-III"]
-        if e.startswith("A-II"):
-            return FACTOR_FASES["A-II"]
+        if "REM" in estructura:
+            f_comp = FACTOR_COMPLEJIDAD["REMATE"]
+        elif "DOB" in estructura:
+            f_comp = FACTOR_COMPLEJIDAD["DOBLE"]
+        else:
+            f_comp = FACTOR_COMPLEJIDAD["PASO"]
 
-    return FACTOR_FASES["A-I"]
+        return COSTOS_BASE["primario"] * f_fase * f_comp
 
+    # SECUNDARIO
+    if estructura.startswith("B-"):
+        return COSTOS_BASE["secundario"]
 
-def _detectar_complejidad(estructuras: list[str]) -> float:
-    """
-    Placeholder simple.
-    Aquí luego puedes integrar tu lógica de ángulos.
-    """
+    # LUMINARIA
+    if estructura.startswith("LL"):
+        return COSTOS_BASE["luminaria"]
 
-    for e in estructuras:
-        if "REM" in e:
-            return FACTOR_COMPLEJIDAD["REMATE"]
-        if "DOB" in e:
-            return FACTOR_COMPLEJIDAD["DOBLE"]
+    # RETENIDAS
+    if estructura.startswith("R-"):
+        return COSTOS_BASE["retenida"]
 
-    return FACTOR_COMPLEJIDAD["PASO"]
-
-
-# ==========================================================
-# TRANSFORMADOR
-# ==========================================================
-def _costo_transformador(estructuras: list[str], precios_transformador: dict) -> float:
-
-    total = 0
-
-    for e in estructuras:
-        if e in precios_transformador:
-            total += precios_transformador[e] * 0.5
-
-    return total
+    # OTROS
+    return 0
 
 
 # ==========================================================
-# CÁLCULO POR PUNTO
+# DETALLE POR PUNTO
 # ==========================================================
-def calcular_mano_obra_punto(
-    df_estructuras_por_punto: pd.DataFrame,
-    precios_transformador: dict,
-) -> pd.DataFrame:
+def calcular_detalle_mano_obra(df_estructuras_por_punto: pd.DataFrame) -> pd.DataFrame:
 
     if df_estructuras_por_punto is None or df_estructuras_por_punto.empty:
-        return pd.DataFrame(columns=["Punto", "MANO_OBRA"])
+        return pd.DataFrame(columns=["Punto", "Estructura", "Cantidad", "Precio", "Subtotal"])
 
-    resultados = []
+    filas = []
 
-    for punto in sorted(df_estructuras_por_punto["Punto"].unique()):
+    for _, row in df_estructuras_por_punto.iterrows():
 
-        df_p = df_estructuras_por_punto[df_estructuras_por_punto["Punto"] == punto]
+        punto = row["Punto"]
+        estructura = row["Estructura"]
+        cantidad = int(row["Cantidad"])
 
-        estructuras = df_p["Estructura"].tolist()
+        precio = _precio_estructura(estructura)
+        subtotal = precio * cantidad
 
-        comp = _detectar_componentes(estructuras)
-
-        fases = _detectar_fases(estructuras)
-        complejidad = _detectar_complejidad(estructuras)
-
-        total = 0
-
-        # Poste
-        if comp["poste"]:
-            total += COSTOS_BASE["poste"]
-
-        # Primario
-        if comp["primario"]:
-            total += COSTOS_BASE["primario"] * fases * complejidad
-
-        # Secundario
-        if comp["secundario"]:
-            total += COSTOS_BASE["secundario"] * complejidad
-
-        # Luminaria
-        if comp["luminaria"]:
-            total += COSTOS_BASE["luminaria"]
-
-        # Transformador
-        total += _costo_transformador(estructuras, precios_transformador)
-
-        resultados.append({
+        filas.append({
             "Punto": punto,
-            "MANO_OBRA": round(total, 2)
+            "Estructura": estructura,
+            "Cantidad": cantidad,
+            "Precio": round(precio, 2),
+            "Subtotal": round(subtotal, 2),
         })
 
-    return pd.DataFrame(resultados)
+    return pd.DataFrame(filas)
+
+
+# ==========================================================
+# TOTAL POR PUNTO
+# ==========================================================
+def calcular_totales_por_punto(df_detalle: pd.DataFrame) -> pd.DataFrame:
+
+    if df_detalle is None or df_detalle.empty:
+        return pd.DataFrame(columns=["Punto", "TOTAL_PUNTO"])
+
+    return (
+        df_detalle
+        .groupby("Punto", as_index=False)["Subtotal"]
+        .sum()
+        .rename(columns={"Subtotal": "TOTAL_PUNTO"})
+    )
+
+
+# ==========================================================
+# FUNCIÓN PRINCIPAL (INTEGRADA)
+# ==========================================================
+def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame):
+
+    df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto)
+    df_totales = calcular_totales_por_punto(df_detalle)
+
+    return {
+        "df_detalle": df_detalle,
+        "df_totales": df_totales,
+    }
