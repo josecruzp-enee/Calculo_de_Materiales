@@ -124,30 +124,55 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         .str.upper()
     )
 
-    # 🔥 DESCRIPCIÓN DESDE BASE DE DATOS (TU LÓGICA ORIGINAL)
-    if base_datos and "indice" in base_datos:
+    # ==========================================================
+    # 🔥 DESCRIPCIÓN DESDE BASE DE DATOS (VERSIÓN ROBUSTA)
+    # ==========================================================
+    df_indice = None
 
-        df_indice = base_datos["indice"]
+    if base_datos:
+        df_indice = (
+            base_datos.get("indice")
+            or base_datos.get("INDICE")
+            or base_datos.get("Indice")
+        )
 
-        if isinstance(df_indice, pd.DataFrame):
+    if isinstance(df_indice, pd.DataFrame):
 
-            df_indice["Código de Estructura"] = (
-                df_indice["Código de Estructura"]
+        # Normalizar nombres de columnas
+        df_indice.columns = [c.strip().upper() for c in df_indice.columns]
+
+        col_codigo_idx = None
+        col_desc_idx = None
+
+        for c in df_indice.columns:
+            if "CODIGO" in c and "ESTRUCTURA" in c:
+                col_codigo_idx = c
+            if "DESCRIP" in c:
+                col_desc_idx = c
+
+        if col_codigo_idx and col_desc_idx:
+
+            mapa_desc = dict(zip(
+                df_indice[col_codigo_idx].astype(str).str.strip().str.upper(),
+                df_indice[col_desc_idx].astype(str).str.strip()
+            ))
+
+            df["Descripcion"] = (
+                df[col_codigo]
                 .astype(str)
                 .str.strip()
                 .str.upper()
+                .map(mapa_desc)
+                .fillna("")
             )
-
-            mapa_desc = dict(zip(
-                df_indice["Código de Estructura"],
-                df_indice["Descripción"]
-            ))
-
-            df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
-
+        else:
+            df["Descripcion"] = ""
     else:
         df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
 
+    # ==========================================================
+    # AGRUPACIÓN
+    # ==========================================================
     if "Cantidad" not in df.columns:
         df["Cantidad"] = 1
 
@@ -156,6 +181,9 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         "Descripcion": "first"
     })
 
+    # ==========================================================
+    # TABLA
+    # ==========================================================
     data = [["Estructura", "Descripción", "Cantidad"]]
 
     for _, r in df.iterrows():
@@ -174,8 +202,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-
 # ==========================================================
 # 📄 ESTRUCTURAS POR PUNTO
 # ==========================================================
