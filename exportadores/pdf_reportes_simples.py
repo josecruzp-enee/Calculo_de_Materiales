@@ -215,7 +215,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     tabla = Table(data, colWidths=[2 * inch, 3.5 * inch, 1 * inch], repeatRows=1)
     tabla.setStyle(estilo_tabla())
-
+    import streamlit as st
+    st.write("DEBUG base_datos:", base_datos is not None)
     elems.append(tabla)
     doc.build(elems)
 
