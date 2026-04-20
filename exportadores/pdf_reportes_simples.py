@@ -126,14 +126,18 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         .str.upper()
     )
 
+    # =========================
+    # 🔥 FIX AQUÍ
+    # =========================
     if base_datos and "indice" in base_datos:
 
         df_indice = base_datos["indice"]
 
         if isinstance(df_indice, pd.DataFrame):
 
-            df_indice["Código de Estructura"] = (
-                df_indice["Código de Estructura"]
+            # ✔ usar columnas ya normalizadas del sistema
+            df_indice["codigodeestructura"] = (
+                df_indice["codigodeestructura"]
                 .astype(str)
                 .str.strip()
                 .str.upper()
@@ -141,7 +145,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
             mapa_desc = dict(zip(
                 df_indice["codigodeestructura"],
-                df_indice["Descripcion"]
+                df_indice["descripcion"]   # ✔ minúscula correcta
             ))
 
             df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
@@ -176,11 +180,10 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     buffer.close()
     return pdf_bytes
 
-
 # ==========================================================
 # PDF: ESTRUCTURAS POR PUNTO
 # ==========================================================
-def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
+def generar_pdf_estructuras_por_punto(df, nombre_proy, base_datos=None, datos_proyecto=None):
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
 
@@ -198,8 +201,45 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
         doc.build(elems)
         return buffer.getvalue()
 
+    df = df.copy()
+
     col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
+    df[col_codigo] = (
+        df[col_codigo]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    # =========================
+    # 🔥 AGREGAR DESCRIPCIÓN
+    # =========================
+    if base_datos and "indice" in base_datos:
+
+        df_indice = base_datos["indice"]
+
+        if isinstance(df_indice, pd.DataFrame):
+
+            df_indice["codigodeestructura"] = (
+                df_indice["codigodeestructura"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            mapa_desc = dict(zip(
+                df_indice["codigodeestructura"],
+                df_indice["descripcion"]
+            ))
+
+            df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
+    else:
+        df["Descripcion"] = ""
+
+    # =========================
+    # PDF
+    # =========================
     for punto, df_p in df.groupby("Punto"):
 
         elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
@@ -232,8 +272,6 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-
 # ==========================================================
 # PDF: MATERIALES POR PUNTO
 # ==========================================================
