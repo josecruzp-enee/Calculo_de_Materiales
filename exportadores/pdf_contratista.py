@@ -41,7 +41,7 @@ def estilo_tabla():
 
 
 # ======================================================
-# 📄 TABLA PRESUPUESTO (PÁGINA 1)
+# 📄 TABLA PRESUPUESTO
 # ======================================================
 def tabla_presupuesto(df_detalle):
 
@@ -60,7 +60,6 @@ def tabla_presupuesto(df_detalle):
     )
 
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
-
     total = 0
 
     for _, r in df.iterrows():
@@ -88,7 +87,7 @@ def tabla_presupuesto(df_detalle):
 
 
 # ======================================================
-# 📊 RESUMEN POR PUNTO (PÁGINA 2)
+# 📊 RESUMEN
 # ======================================================
 def pagina_resumen(elementos, styles, df_totales):
 
@@ -108,7 +107,7 @@ def pagina_resumen(elementos, styles, df_totales):
 
 
 # ======================================================
-# 💰 COTIZACIÓN (PÁGINA 3)
+# 💰 COTIZACIÓN
 # ======================================================
 def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
@@ -139,7 +138,7 @@ def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
 
 # ======================================================
-# 📄 DETALLE POR PUNTO (PÁGINA 4+)
+# 📄 DETALLE
 # ======================================================
 def pagina_detalle(elementos, styles, df_detalle, df_totales):
 
@@ -150,10 +149,10 @@ def pagina_detalle(elementos, styles, df_detalle, df_totales):
 
         df_p = df_detalle[df_detalle["Punto"] == punto]
 
-        total = df_totales[df_totales["Punto"] == punto]["TOTAL_PUNTO"].values[0]
+        row = df_totales[df_totales["Punto"] == punto]
+        total = row["TOTAL_PUNTO"].values[0] if not row.empty else 0
 
         data = [[f"PUNTO: {punto}", "", "", ""]]
-
         data.append(["Estructura", "Cant", "Precio", "Subtotal"])
 
         for _, r in df_p.iterrows():
@@ -178,15 +177,23 @@ def pagina_detalle(elementos, styles, df_detalle, df_totales):
 # ======================================================
 def generar_pdf_contratista(entrada):
 
-    if entrada is None or entrada.df_estructuras is None:
-        raise ValueError("Entrada inválida")
+    # 🔥 SOPORTE FLEXIBLE
+    if isinstance(entrada, pd.DataFrame):
+        df_estructuras = entrada
+        df_cables = None
+    else:
+        df_estructuras = getattr(entrada, "df_estructuras", None)
+        df_cables = getattr(entrada, "df_cables", None)
+
+    if df_estructuras is None:
+        raise ValueError("No hay estructuras para generar el PDF")
 
     # 🔧 CÁLCULO
-    df_puntos = calcular_estructuras_por_punto(entrada.df_estructuras)
+    df_puntos = calcular_estructuras_por_punto(df_estructuras)
 
     resultado = calcular_mano_obra_proyecto(
         df_puntos,
-        getattr(entrada, "df_cables", None)
+        df_cables
     )
 
     df_detalle = resultado["df_detalle"]
