@@ -79,6 +79,19 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         nombre = entrada.nombre_proyecto
         datos_proyecto = entrada.datos_proyecto or {}
 
+        import streamlit as st
+
+        st.write("DEBUG ORQUESTADOR")
+        st.write("base_datos:", entrada.base_datos is not None)
+
+        if entrada.base_datos:
+            st.write("keys:", list(entrada.base_datos.keys()))
+        else:
+            st.write("base_datos es None")
+
+
+
+        
         tasks = [
 
             ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(
