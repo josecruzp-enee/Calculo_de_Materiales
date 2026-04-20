@@ -318,4 +318,4 @@ def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
 
     doc.build(elems)
 
-    return buffer.getvalue()
+    return bytes
