@@ -16,7 +16,73 @@ from exportadores.pdf_base import estilo_tabla, fondo_pagina
 
 
 # ======================================================
-# 📊 RESUMEN (PÁGINA 1)
+# 📄 TABLA DE INSTALACIÓN (PRIMERA PÁGINA)
+# ======================================================
+def generar_tabla_presupuesto_desde_detalle(df_detalle: pd.DataFrame):
+
+    if df_detalle is None or df_detalle.empty:
+        raise ValueError("df_detalle vacío")
+
+    style_small = ParagraphStyle(
+        name="Small",
+        fontName="Helvetica",
+        fontSize=8,
+        leading=9
+    )
+
+    # 🔥 AGRUPAR Y ORDENAR POR IMPACTO ECONÓMICO
+    df_resumen = (
+        df_detalle
+        .groupby("Estructura", as_index=False)
+        .agg({
+            "Cantidad": "sum",
+            "Precio": "first",
+            "Subtotal": "sum"
+        })
+        .sort_values("Subtotal", ascending=False)
+    )
+
+    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
+
+    total_general = 0
+
+    for _, r in df_resumen.iterrows():
+
+        estructura = r["Estructura"]
+        cantidad = int(r["Cantidad"])
+        pu = float(r["Precio"])
+        total = float(r["Subtotal"])
+
+        descripcion = Paragraph(
+            f"Instalación de estructura tipo {estructura}",
+            style_small
+        )
+
+        total_general += total
+
+        data.append([
+            descripcion,
+            f"L {pu:,.2f}",
+            f"{cantidad}",
+            f"L {total:,.2f}",
+        ])
+
+    # TOTAL
+    data.append(["", "", "TOTAL", f"L {total_general:,.2f}"])
+
+    tabla = Table(
+        data,
+        colWidths=[320, 80, 60, 90],
+        repeatRows=1
+    )
+
+    tabla.setStyle(estilo_tabla())
+
+    return [tabla]
+
+
+# ======================================================
+# 📊 RESUMEN POR PUNTO
 # ======================================================
 def _agregar_resumen(elementos, styles, df_totales):
 
@@ -47,71 +113,7 @@ def _agregar_resumen(elementos, styles, df_totales):
 
 
 # ======================================================
-# 📄 TABLA DE ESTRUCTURAS (CLIENTE)
-# ======================================================
-def generar_tabla_presupuesto_desde_detalle(df_detalle: pd.DataFrame):
-
-    if df_detalle is None or df_detalle.empty:
-        raise ValueError("df_detalle vacío")
-
-    style_small = ParagraphStyle(
-        name="Small",
-        fontName="Helvetica",
-        fontSize=8,
-        leading=9
-    )
-
-    df_resumen = (
-        df_detalle
-        .groupby("Estructura", as_index=False)
-        .agg({
-            "Cantidad": "sum",
-            "Precio": "first",
-            "Subtotal": "sum"
-        })
-        .sort_values("Subtotal", ascending=False)  # 🔥 importante
-    )
-
-    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
-
-    total_general = 0
-
-    for _, r in df_resumen.iterrows():
-
-        estructura = r["Estructura"]
-        cantidad = int(r["Cantidad"])
-        pu = float(r["Precio"])
-        total = float(r["Subtotal"])
-
-        descripcion = Paragraph(
-            f"Instalación de estructura tipo {estructura}",
-            style_small
-        )
-
-        total_general += total
-
-        data.append([
-            descripcion,
-            f"L {pu:,.2f}",
-            f"{cantidad}",
-            f"L {total:,.2f}",
-        ])
-
-    data.append(["", "", "TOTAL", f"L {total_general:,.2f}"])
-
-    tabla = Table(
-        data,
-        colWidths=[320, 80, 60, 90],
-        repeatRows=1
-    )
-
-    tabla.setStyle(estilo_tabla())
-
-    return [tabla]
-
-
-# ======================================================
-# 📄 DETALLE POR PUNTO (CONTRATISTA)
+# 📄 DETALLE POR PUNTO
 # ======================================================
 def _agregar_detalle_puntos(elementos, styles, df_detalle, df_totales):
 
@@ -155,45 +157,6 @@ def _agregar_detalle_puntos(elementos, styles, df_detalle, df_totales):
 
 
 # ======================================================
-# 💰 COTIZACIÓN FINAL
-# ======================================================
-def generar_cotizacion_final(doc, styles, df_detalle):
-
-    elems = []
-
-    total_base = float(df_detalle["Subtotal"].sum())
-
-    ingenieria = total_base * 0.15
-    subtotal = total_base + ingenieria
-    isv = subtotal * 0.15
-    total_final = subtotal + isv
-
-    elems.append(Paragraph("<b>COTIZACIÓN DEL PROYECTO</b>", styles["Heading1"]))
-    elems.append(Spacer(1, 12))
-
-    data = [
-        ["Concepto", "Monto (L)"],
-        ["Instalación de estructuras", f"L {total_base:,.2f}"],
-        ["Gastos de Ingeniería (15%)", f"L {ingenieria:,.2f}"],
-        ["SUBTOTAL", f"L {subtotal:,.2f}"],
-        ["ISV (15%)", f"L {isv:,.2f}"],
-        ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
-    ]
-
-    tabla = Table(
-        data,
-        colWidths=[doc.width * 0.7, doc.width * 0.3],
-        repeatRows=1
-    )
-
-    tabla.setStyle(estilo_tabla())
-
-    elems.append(tabla)
-
-    return elems
-
-
-# ======================================================
 # 🚀 FUNCIÓN PRINCIPAL
 # ======================================================
 def generar_pdf_contratista(df_estructuras: pd.DataFrame):
@@ -201,7 +164,7 @@ def generar_pdf_contratista(df_estructuras: pd.DataFrame):
     if df_estructuras is None or df_estructuras.empty:
         raise ValueError("df_estructuras inválido")
 
-    # 🔧 cálculo
+    # 🔧 CÁLCULO
     df_puntos = calcular_estructuras_por_punto(df_estructuras)
     resultado = calcular_mano_obra_proyecto(df_puntos)
 
@@ -215,21 +178,27 @@ def generar_pdf_contratista(df_estructuras: pd.DataFrame):
 
     elementos = []
 
-    # 🔥 1. RESUMEN
+    # ======================================================
+    # 🔥 1. TABLA DE INSTALACIÓN (PRIMERA)
+    # ======================================================
+    elementos.append(Paragraph("PRESUPUESTO DE INSTALACIÓN", styles["Title"]))
+    elementos.append(Spacer(1, 12))
+
+    elementos.extend(
+        generar_tabla_presupuesto_desde_detalle(df_detalle)
+    )
+
+    elementos.append(PageBreak())
+
+    # ======================================================
+    # 🔥 2. RESUMEN
+    # ======================================================
     _agregar_resumen(elementos, styles, df_totales)
 
-    # 🔥 2. TABLA CLIENTE
-    elementos.append(Paragraph("PRESUPUESTO DE ESTRUCTURAS", styles["Title"]))
-    elementos.append(Spacer(1, 12))
-    elementos.extend(generar_tabla_presupuesto_desde_detalle(df_detalle))
-    elementos.append(PageBreak())
-
-    # 🔥 3. DETALLE CONTRATISTA
+    # ======================================================
+    # 🔥 3. DETALLE
+    # ======================================================
     _agregar_detalle_puntos(elementos, styles, df_detalle, df_totales)
-
-    # 🔥 4. COTIZACIÓN FINAL
-    elementos.append(PageBreak())
-    elementos.extend(generar_cotizacion_final(doc, styles, df_detalle))
 
     # 🔥 MEMBRETE
     doc.build(
