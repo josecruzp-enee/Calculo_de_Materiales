@@ -6,19 +6,19 @@ from io import BytesIO
 import pandas as pd
 
 
-def generar_pdf_contratista(df_detalle, df_totales):
+def generar_pdf_contratista(df_detalle: pd.DataFrame, df_totales: pd.DataFrame):
 
-    # ======================================================
-    # PDF
-    # ======================================================
     buffer = BytesIO()
     styles = getSampleStyleSheet()
     doc = SimpleDocTemplate(buffer)
 
     elementos = []
 
+    # ======================================================
+    # TÍTULO
+    # ======================================================
     elementos.append(Paragraph("CUADRO DE PAGO POR PUNTO", styles["Title"]))
-    elementos.append(Spacer(1, 10))
+    elementos.append(Spacer(1, 12))
 
     # ======================================================
     # POR PUNTO
@@ -26,7 +26,9 @@ def generar_pdf_contratista(df_detalle, df_totales):
     for punto in sorted(df_detalle["Punto"].unique()):
 
         df_p = df_detalle[df_detalle["Punto"] == punto]
-        total_punto = df_totales[df_totales["Punto"] == punto]["TOTAL_PUNTO"].values[0]
+
+        total_row = df_totales[df_totales["Punto"] == punto]
+        total_punto = total_row["TOTAL_PUNTO"].values[0] if not total_row.empty else 0
 
         elementos.append(Paragraph(f"<b>PUNTO: {punto}</b>", styles["Heading2"]))
         elementos.append(Spacer(1, 6))
@@ -34,27 +36,34 @@ def generar_pdf_contratista(df_detalle, df_totales):
         # =========================
         # TABLA
         # =========================
-        data = [["Estructura", "Cant", "Precio", "Subtotal"]]
+        data = [["Estructura", "Cantidad", "Precio (L)", "Subtotal (L)"]]
 
         for _, row in df_p.iterrows():
             data.append([
                 row["Estructura"],
                 int(row["Cantidad"]),
-                f"L {row['Precio']:,.2f}",
-                f"L {row['Subtotal']:,.2f}",
+                f"{row['Precio']:,.2f}",
+                f"{row['Subtotal']:,.2f}",
             ])
 
-        tabla = Table(data)
+        tabla = Table(data, colWidths=[120, 80, 100, 100])
 
         tabla.setStyle(TableStyle([
+            # encabezado
             ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+
+            # contenido
+            ("ALIGN", (0, 1), (0, -1), "LEFT"),
             ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+
+            # bordes
             ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ]))
 
         elementos.append(tabla)
-        elementos.append(Spacer(1, 6))
+        elementos.append(Spacer(1, 8))
 
         # =========================
         # TOTAL POR PUNTO
@@ -66,7 +75,7 @@ def generar_pdf_contratista(df_detalle, df_totales):
             )
         )
 
-        elementos.append(Spacer(1, 12))
+        elementos.append(Spacer(1, 14))
 
     # ======================================================
     # TOTAL GENERAL
