@@ -8,10 +8,10 @@ import pandas as pd
 # ==========================================================
 COSTOS_BASE = {
     "poste": 2000,
-    "primario": 1500,
-    "secundario": 1000,
+    "primario": 2000,
+    "secundario": 800,
     "luminaria": 750,
-    "retenida": 800,
+    "retenida": 2100,
 }
 
 FACTOR_FASES = {
@@ -90,8 +90,8 @@ def _precio_estructura(estructura: str) -> float:
         PRECIOS_TRANSFORMADOR = {
             "TS-15KVA": 15000,
             "TS-25KVA": 20000,
-            "TS-37.5KVA": 30000,
-            "TS-50KVA": 35000,
+            "TS-37.5KVA": 13000,
+            "TS-50KVA": 15000,
             "TS-75KVA": 45000,
             "TS-100KVA": 60000,
         }
@@ -129,11 +129,11 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
 
         if tipo.startswith("MT"):
             nombre = f"Conductor MT {calibre}"
-            precio = 120
+            precio = 30
 
         elif tipo.startswith("BT"):
             nombre = f"Conductor BT {calibre}"
-            precio = 80
+            precio = 35
 
         else:
             continue
