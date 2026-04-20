@@ -2,14 +2,20 @@
 from __future__ import annotations
 
 import pandas as pd
+from typing import Tuple
+
+# 🔥 IMPORT DIRECTO DE TU BIBLIOTECA
 from costos_precios.precios_estructura import PRECIOS_BIBLIOTECA
 
 
+# =========================================================
+# FUNCIÓN PRINCIPAL
+# =========================================================
 def calcular_precios_por_punto(
     df_estructuras_por_punto: pd.DataFrame,
-):
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Calcula PRECIOS por punto usando biblioteca de estructuras.
+    Calcula el PRECIO por punto basado en la biblioteca de precios.
 
     Retorna:
     - df_detalle
@@ -26,13 +32,13 @@ def calcular_precios_por_punto(
     if not required.issubset(df_estructuras_por_punto.columns):
         raise ValueError(f"df_estructuras_por_punto debe tener {required}")
 
-    df = df_estructuras_por_punto.copy()
-
     # =====================================================
     # NORMALIZACIÓN
     # =====================================================
-    df["codigodeestructura"] = df["codigodeestructura"].astype(str).str.strip().str.upper()
+    df = df_estructuras_por_punto.copy()
+
     df["Punto"] = df["Punto"].astype(str).str.strip()
+    df["codigodeestructura"] = df["codigodeestructura"].astype(str).str.strip().str.upper()
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
 
     df = df[df["Cantidad"] > 0]
@@ -41,14 +47,20 @@ def calcular_precios_por_punto(
         raise ValueError("No hay estructuras con cantidad válida")
 
     # =====================================================
-    # MAPEO DE PRECIOS (BIBLIOTECA)
+    # VALIDACIÓN DE BIBLIOTECA
     # =====================================================
-    def obtener_precio(estructura: str) -> float:
-        if estructura not in PRECIOS_BIBLIOTECA:
-            raise ValueError(f"Estructura sin precio en biblioteca: {estructura}")
-        return PRECIOS_BIBLIOTECA[estructura]
+    estructuras_unicas = set(df["codigodeestructura"])
+    estructuras_catalogo = set(PRECIOS_BIBLIOTECA.keys())
 
-    df["Precio Unitario"] = df["codigodeestructura"].apply(obtener_precio)
+    faltantes = estructuras_unicas - estructuras_catalogo
+
+    if faltantes:
+        raise ValueError(f"Estructuras sin precio en biblioteca: {sorted(faltantes)}")
+
+    # =====================================================
+    # ASIGNACIÓN DE PRECIOS
+    # =====================================================
+    df["Precio Unitario"] = df["codigodeestructura"].map(PRECIOS_BIBLIOTECA)
 
     # =====================================================
     # CÁLCULOS
@@ -68,7 +80,9 @@ def calcular_precios_por_punto(
         ]
     ].copy()
 
-    df_detalle = df_detalle.sort_values(["Punto", "codigodeestructura"]).reset_index(drop=True)
+    df_detalle = df_detalle.sort_values(
+        ["Punto", "codigodeestructura"]
+    ).reset_index(drop=True)
 
     # =====================================================
     # RESUMEN POR PUNTO
