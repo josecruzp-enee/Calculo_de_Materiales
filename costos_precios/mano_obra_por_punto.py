@@ -28,21 +28,27 @@ FACTOR_COMPLEJIDAD = {
 }
 
 
+# ==========================================================
+# LIMPIEZA CALIBRE (PARA CABLE)
+# ==========================================================
+def limpiar_calibre(txt):
+    txt = str(txt).upper().strip()
+    txt = txt.replace("CABLE DE ALUMINIO", "")
+    txt = txt.replace("FORRADO", "")
+    txt = txt.replace("ACSR", "")
+    txt = txt.replace("#", "")
+    txt = txt.replace("  ", " ")
+    return txt.strip()
+
 
 # ==========================================================
 # PRECIO POR ESTRUCTURA
 # ==========================================================
 def _precio_estructura(estructura: str) -> float:
 
-    # =========================
-    # POSTE
-    # =========================
     if estructura.startswith("PC"):
         return COSTOS_BASE["poste"]
 
-    # =========================
-    # PRIMARIO
-    # =========================
     if estructura.startswith("A-"):
 
         if estructura.startswith("A-III"):
@@ -61,33 +67,18 @@ def _precio_estructura(estructura: str) -> float:
 
         return COSTOS_BASE["primario"] * f_fase * f_comp
 
-    # =========================
-    # SECUNDARIO
-    # =========================
     if estructura.startswith("B-"):
         return COSTOS_BASE["secundario"]
 
-    # =========================
-    # LUMINARIA
-    # =========================
     if estructura.startswith("LL"):
         return COSTOS_BASE["luminaria"]
 
-    # =========================
-    # RETENIDAS
-    # =========================
     if estructura.startswith("R-"):
         return COSTOS_BASE["retenida"]
 
-    # =========================
-    # 🔥 TIERRA (CT-N)
-    # =========================
     if estructura.startswith("CT"):
-        return 500  # ajustable
+        return 500
 
-    # =========================
-    # 🔥 TRANSFORMADOR (TS)
-    # =========================
     if estructura.startswith("TS"):
 
         PRECIOS_TRANSFORMADOR = {
@@ -104,10 +95,58 @@ def _precio_estructura(estructura: str) -> float:
 
         return PRECIOS_TRANSFORMADOR[estructura]
 
-    # =========================
-    # OTROS
-    # =========================
     return 0
+
+
+# ==========================================================
+# 🔥 CABLE CONSOLIDADO (NUEVO)
+# ==========================================================
+def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | None):
+
+    if df_cables is None or df_cables.empty:
+        return df_detalle
+
+    filas = []
+
+    for _, c in df_cables.iterrows():
+
+        tipo = str(c.get("Tipo", "")).upper()
+        calibre = limpiar_calibre(c.get("Calibre", ""))
+
+        try:
+            longitud = float(c.get("Total Cable (m)", 0))
+        except:
+            continue
+
+        if longitud <= 0:
+            continue
+
+        if tipo.startswith("MT"):
+            precio = 120
+            nombre = f"Instalación conductor MT {calibre}"
+
+        elif tipo.startswith("BT"):
+            precio = 80
+            nombre = f"Instalación conductor BT {calibre}"
+
+        else:
+            continue
+
+        filas.append({
+            "Punto": "GENERAL",   # 🔥 importante
+            "Estructura": nombre,
+            "Cantidad": longitud,
+            "Precio": precio,
+            "Subtotal": round(longitud * precio, 2),
+        })
+
+    if not filas:
+        return df_detalle
+
+    df_cable = pd.DataFrame(filas)
+
+    return pd.concat([df_detalle, df_cable], ignore_index=True)
+
 
 # ==========================================================
 # DETALLE POR PUNTO
@@ -156,11 +195,18 @@ def calcular_totales_por_punto(df_detalle: pd.DataFrame) -> pd.DataFrame:
 
 
 # ==========================================================
-# FUNCIÓN PRINCIPAL (INTEGRADA)
+# FUNCIÓN PRINCIPAL (ACTUALIZADA)
 # ==========================================================
-def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame):
+def calcular_mano_obra_proyecto(
+    df_estructuras_por_punto: pd.DataFrame,
+    df_cables: pd.DataFrame | None = None
+):
 
     df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto)
+
+    # 🔥 integrar cable aquí (correcto)
+    df_detalle = _agregar_cable_resumen(df_detalle, df_cables)
+
     df_totales = calcular_totales_por_punto(df_detalle)
 
     df_detalle = df_detalle.sort_values(["Punto", "Estructura"])
