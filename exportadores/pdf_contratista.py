@@ -5,9 +5,32 @@ from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 import pandas as pd
 
+# 🔥 TODO encapsulado aquí
+from materiales.calculos.calculo_estructuras import calcular_estructuras_por_punto
+from costos_precios.mano_obra_por_punto import calcular_mano_obra_proyecto
 
-def generar_pdf_contratista(df_detalle: pd.DataFrame, df_totales: pd.DataFrame):
 
+def generar_pdf_contratista(df_estructuras: pd.DataFrame):
+
+    # ======================================================
+    # VALIDACIÓN BÁSICA
+    # ======================================================
+    if df_estructuras is None or not isinstance(df_estructuras, pd.DataFrame) or df_estructuras.empty:
+        raise ValueError("df_estructuras inválido para generar PDF contratista")
+
+    # ======================================================
+    # 🔧 CÁLCULO (ENCAPSULADO)
+    # ======================================================
+    df_puntos = calcular_estructuras_por_punto(df_estructuras)
+
+    resultado = calcular_mano_obra_proyecto(df_puntos)
+
+    df_detalle = resultado["df_detalle"]
+    df_totales = resultado["df_totales"]
+
+    # ======================================================
+    # 📄 PDF
+    # ======================================================
     buffer = BytesIO()
     styles = getSampleStyleSheet()
     doc = SimpleDocTemplate(buffer)
