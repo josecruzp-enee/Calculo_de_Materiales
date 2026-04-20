@@ -122,9 +122,10 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
             )),
 
             ("materiales_por_punto.pdf", lambda: generar_pdf_materiales_por_punto(
-                entrada.df_materiales_por_punto,
+                entrada.df_estructuras,   # ✔ usa este
                 nombre,
-                entrada.datos_proyecto
+                base_datos=entrada.base_datos,
+                datos_proyecto=entrada.datos_proyectoo
             )),
 
             ("cuadro_contratista.pdf", lambda: generar_pdf_contratista(entrada)),
