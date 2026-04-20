@@ -269,7 +269,7 @@ def generar_pdf_contratista(entrada):
 
     doc = SimpleDocTemplate(
         buffer,
-        topMargin=10,  # 🔥 LOGO MÁS ARRIBA
+        topMargin=90,  # 🔥 LOGO MÁS ARRIBA
         leftMargin=40,
         rightMargin=40
     )
