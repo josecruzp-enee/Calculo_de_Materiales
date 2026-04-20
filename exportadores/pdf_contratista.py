@@ -24,7 +24,7 @@ def fondo_contratista(canvas, doc):
 
     # 🔥 LOGO MÁS ARRIBA SOLO AQUÍ
     x = 40
-    y = doc.pagesize[1] - 60   # ⬅️ MÁS ARRIBA
+    y = doc.pagesize[1] - 40   # ⬅️ MÁS ARRIBA
 
     width = 120
     height = 50
@@ -269,7 +269,7 @@ def generar_pdf_contratista(entrada):
 
     doc = SimpleDocTemplate(
         buffer,
-        topMargin=40,  # 🔥 LOGO MÁS ARRIBA
+        topMargin=20,  # 🔥 LOGO MÁS ARRIBA
         leftMargin=40,
         rightMargin=40
     )
