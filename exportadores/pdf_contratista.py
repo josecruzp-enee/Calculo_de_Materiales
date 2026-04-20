@@ -1,22 +1,29 @@
 # -*- coding: utf-8 -*-
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+from io import BytesIO
 import pandas as pd
 
-# 🔥 TU BIBLIOTECA
 from costos_precios.precios_estructura import PRECIOS_BIBLIOTECA
 
+# 🔥 AJUSTA ESTE IMPORT
+from entradas.tu_archivo import calcular_estructuras_por_punto
 
-# ==========================================================
-# GENERAR PDF CONTRATISTA
-# ==========================================================
-def generar_pdf_contratista(
-    df_estructuras_por_punto: pd.DataFrame,
-    ruta_pdf: str = "reporte_contratista.pdf"
-):
+
+def generar_pdf_contratista(df_estructuras: pd.DataFrame):
+
+    # ======================================================
+    # CONVERTIR A POR PUNTO
+    # ======================================================
+    df_estructuras_por_punto = calcular_estructuras_por_punto(df_estructuras)
+
+    # ======================================================
+    # BUFFER (CLAVE PARA ORQUESTADOR)
+    # ======================================================
+    buffer = BytesIO()
 
     styles = getSampleStyleSheet()
-    doc = SimpleDocTemplate(ruta_pdf)
+    doc = SimpleDocTemplate(buffer)
 
     elementos = []
 
@@ -42,10 +49,7 @@ def generar_pdf_contratista(
             estructura = row["Estructura"]
             cantidad = int(row["Cantidad"])
 
-            if estructura not in PRECIOS_BIBLIOTECA:
-                precio_unit = 0
-            else:
-                precio_unit = PRECIOS_BIBLIOTECA[estructura]
+            precio_unit = PRECIOS_BIBLIOTECA.get(estructura, 0)
 
             subtotal = precio_unit * cantidad
             total_punto += subtotal
@@ -73,8 +77,7 @@ def generar_pdf_contratista(
         estructura = row["Estructura"]
         cantidad = int(row["Cantidad"])
 
-        if estructura in PRECIOS_BIBLIOTECA:
-            total_general += PRECIOS_BIBLIOTECA[estructura] * cantidad
+        total_general += PRECIOS_BIBLIOTECA.get(estructura, 0) * cantidad
 
     elementos.append(Spacer(1, 10))
     elementos.append(
@@ -84,6 +87,12 @@ def generar_pdf_contratista(
         )
     )
 
+    # ======================================================
+    # BUILD
+    # ======================================================
     doc.build(elementos)
 
-    return ruta_pdf
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
