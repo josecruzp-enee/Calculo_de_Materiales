@@ -91,15 +91,18 @@ def _precio_estructura(estructura: str) -> float:
     if estructura.startswith("TS"):
 
         PRECIOS_TRANSFORMADOR = {
-            "TS-25KVA": 8000,
-            "TS-37.5KVA": 12000,
-            "TS-50KVA": 15000,
+            "TS-15KVA": 15000,
+            "TS-25KVA": 20000,
+            "TS-37.5KVA": 30000,
+            "TS-50KVA": 35000,
+            "TS-75KVA": 45000,
+            "TS-100KVA": 60000,
         }
 
-        if estructura in PRECIOS_TRANSFORMADOR:
-            return PRECIOS_TRANSFORMADOR[estructura] * 0.5
+        if estructura not in PRECIOS_TRANSFORMADOR:
+            raise ValueError(f"Transformador sin precio definido: {estructura}")
 
-        return 2000  # fallback si no está en diccionario
+        return PRECIOS_TRANSFORMADOR[estructura]
 
     # =========================
     # OTROS
