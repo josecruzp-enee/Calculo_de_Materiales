@@ -1,27 +1,30 @@
 # -*- coding: utf-8 -*-
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 import pandas as pd
 
-from costos_precios.precios_estructura import PRECIOS_BIBLIOTECA
-
-# 🔥 AJUSTA ESTE IMPORT
-from entradas.tu_archivo import calcular_estructuras_por_punto
+from materiales.calculos.calculo_estructuras import calcular_estructuras_por_punto
+from tu_ruta.mano_obra import calcular_mano_obra_proyecto  # ← AJUSTA
 
 
 def generar_pdf_contratista(df_estructuras: pd.DataFrame):
 
     # ======================================================
-    # CONVERTIR A POR PUNTO
+    # DATOS
     # ======================================================
-    df_estructuras_por_punto = calcular_estructuras_por_punto(df_estructuras)
+    df_puntos = calcular_estructuras_por_punto(df_estructuras)
+
+    resultado = calcular_mano_obra_proyecto(df_puntos)
+
+    df_detalle = resultado["df_detalle"]
+    df_totales = resultado["df_totales"]
 
     # ======================================================
-    # BUFFER (CLAVE PARA ORQUESTADOR)
+    # PDF
     # ======================================================
     buffer = BytesIO()
-
     styles = getSampleStyleSheet()
     doc = SimpleDocTemplate(buffer)
 
@@ -31,34 +34,44 @@ def generar_pdf_contratista(df_estructuras: pd.DataFrame):
     elementos.append(Spacer(1, 10))
 
     # ======================================================
-    # PROCESO POR PUNTO
+    # POR PUNTO
     # ======================================================
-    for punto in sorted(df_estructuras_por_punto["Punto"].unique()):
+    for punto in sorted(df_detalle["Punto"].unique()):
 
-        df_p = df_estructuras_por_punto[
-            df_estructuras_por_punto["Punto"] == punto
-        ]
+        df_p = df_detalle[df_detalle["Punto"] == punto]
+        total_punto = df_totales[df_totales["Punto"] == punto]["TOTAL_PUNTO"].values[0]
 
         elementos.append(Paragraph(f"<b>PUNTO: {punto}</b>", styles["Heading2"]))
         elementos.append(Spacer(1, 6))
 
-        total_punto = 0
+        # =========================
+        # TABLA
+        # =========================
+        data = [["Estructura", "Cant", "Precio", "Subtotal"]]
 
         for _, row in df_p.iterrows():
+            data.append([
+                row["Estructura"],
+                int(row["Cantidad"]),
+                f"L {row['Precio']:,.2f}",
+                f"L {row['Subtotal']:,.2f}",
+            ])
 
-            estructura = row["Estructura"]
-            cantidad = int(row["Cantidad"])
+        tabla = Table(data)
 
-            precio_unit = PRECIOS_BIBLIOTECA.get(estructura, 0)
+        tabla.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ]))
 
-            subtotal = precio_unit * cantidad
-            total_punto += subtotal
-
-            texto = f"{estructura} ({cantidad}) .......... L {subtotal:,.2f}"
-            elementos.append(Paragraph(texto, styles["Normal"]))
-
+        elementos.append(tabla)
         elementos.append(Spacer(1, 6))
 
+        # =========================
+        # TOTAL
+        # =========================
         elementos.append(
             Paragraph(
                 f"<b>TOTAL PUNTO: L {total_punto:,.2f}</b>",
@@ -71,13 +84,7 @@ def generar_pdf_contratista(df_estructuras: pd.DataFrame):
     # ======================================================
     # TOTAL GENERAL
     # ======================================================
-    total_general = 0
-
-    for _, row in df_estructuras_por_punto.iterrows():
-        estructura = row["Estructura"]
-        cantidad = int(row["Cantidad"])
-
-        total_general += PRECIOS_BIBLIOTECA.get(estructura, 0) * cantidad
+    total_general = df_totales["TOTAL_PUNTO"].sum()
 
     elementos.append(Spacer(1, 10))
     elementos.append(
