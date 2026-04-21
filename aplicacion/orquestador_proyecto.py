@@ -106,7 +106,7 @@ def adaptar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 def construir_mapa_indice(base: dict, debug: dict) -> dict:
 
-    df_indice = base.get("INDICE") or base.get("indice")
+    df_indice = base.get("INDICE") 
 
     if df_indice is None or not isinstance(df_indice, pd.DataFrame):
         dbg(debug, "INDICE", "NO_ENCONTRADO")
