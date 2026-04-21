@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 import pandas as pd
 import traceback
 from exportadores.pdf_contratista import generar_pdf_contratista
-
+from exportadores.pdf_costo_materiales import generar_pdf_lista_materiales
 # =========================================================
 # 📦 CONTRATO
 # =========================================================
@@ -135,6 +135,8 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
             )),
 
             ("contratista.pdf", lambda: generar_pdf_contratista(entrada)),
+
+            ("lista_materiales.pdf", lambda: generar_pdf_costo_materiales(entrada.df_costos_materiales,nombre)),
         ]
 
         # =====================================================
