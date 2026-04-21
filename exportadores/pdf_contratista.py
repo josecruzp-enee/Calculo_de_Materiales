@@ -121,7 +121,7 @@ def tabla_presupuesto(df_detalle):
     tabla = Table(data, colWidths=[320, 80, 60, 90])
     tabla.setStyle(estilo_tabla())
 
-    return tablarn tabla
+    return tabla
 
 
 # ======================================================
@@ -146,7 +146,7 @@ def pagina_resumen(elementos, styles, df_totales):
     tabla.setStyle(estilo_tabla())
 
     elementos.append(tabla)
-    elementos.append(PageBreak())
+   
 
 
 # ======================================================
@@ -189,6 +189,8 @@ def pagina_resumen_global(elementos, styles, df_detalle):
 
     # 🔹 Agregar al PDF
     elementos.append(tabla)
+    elementos.append(tabla)
+    elementos.append(PageBreak())
 # ======================================================
 # 💰 COTIZACIÓN
 # ======================================================
