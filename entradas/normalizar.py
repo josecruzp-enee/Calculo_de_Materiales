@@ -128,7 +128,6 @@ def _convertir(df: pd.DataFrame):
 
             registros.append({
                 "Punto": punto,
-                "codigodeestructura": est,
                 "Estructura": est,
                 "Cantidad": 1
             })
@@ -146,12 +145,11 @@ def _convertir(df: pd.DataFrame):
     return (
         df_out
         .groupby(
-            ["Punto", "codigodeestructura", "Estructura"],
+            ["Punto", "Estructura"],
             as_index=False
         )["Cantidad"]
         .sum()
     )
-
 
 
 # =========================================================
