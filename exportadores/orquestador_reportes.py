@@ -15,7 +15,7 @@ class EntradaReportes:
     df_estructuras: pd.DataFrame
     df_materiales: pd.DataFrame
     df_materiales_por_punto: pd.DataFrame
-
+    df_estructuras_por_punto: Optional[pd.DataFrame] = None
     base_datos: Optional[Dict[str, Any]] = None
 
     costos: Optional[Dict[str, Any]] = None
