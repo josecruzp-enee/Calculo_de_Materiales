@@ -163,55 +163,9 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         .str.upper()
     )
 
-    # ======================================================
-    # INDICE
-    # ======================================================
-    _debug_indice(base_datos)
-
-    df["Descripcion"] = ""  # default seguro
-
-    if base_datos:
-        df_indice = base_datos.get("INDICE")
-
-        if isinstance(df_indice, pd.DataFrame):
-
-            df_indice = df_indice.copy()
-            df_indice.columns = [str(c).strip().upper() for c in df_indice.columns]
-
-            # VALIDACIÓN FUERTE
-            if "CODIGO" in df_indice.columns and "DESCRIPCION" in df_indice.columns:
-
-                df_indice["CODIGO"] = (
-                    df_indice["CODIGO"]
-                    .astype(str)
-                    .str.replace(r"\s+", "", regex=True)
-                    .str.strip()
-                    .str.upper()
-                )
-
-                # ======================================================
-                # MAPEO
-                # ======================================================
-                mapa_desc = dict(zip(
-                    df_indice["CODIGO"],
-                    df_indice["DESCRIPCION"].astype(str)
-                ))
-
-                df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
-
-                # ======================================================
-                # DEBUG REAL
-                # ======================================================
-                faltantes = df[df["Descripcion"] == ""][col_codigo].unique()
-
-                debug_guardar("PDF", "TOTAL_REGISTROS", len(df))
-                debug_guardar("PDF", "TOTAL_MATCH", int((df["Descripcion"] != "").sum()))
-                debug_guardar("PDF", "TOTAL_SIN_MATCH", len(faltantes))
-                debug_guardar("PDF", "SIN_MATCH_CODIGOS", list(faltantes)[:20])
-
-            else:
-                debug_guardar("PDF", "ERROR", "INDICE_SIN_COLUMNAS_ESPERADAS", list(df_indice.columns))
-
+    if "Descripcion" not in df.columns:
+        df["Descripcion"] = ""
+    
     # ======================================================
     # CANTIDAD
     # ======================================================
