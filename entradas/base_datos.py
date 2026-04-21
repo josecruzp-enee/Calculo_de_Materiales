@@ -212,21 +212,31 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
 def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
 
     if not data:
+        debug_guardar("INDICE_DEBUG", "data vacío")
         return {}
 
     from ayuda.debug import debug_guardar
 
+    debug_guardar("INDICE_KEYS", list(data.keys()))
+
     for nombre, df in data.items():
 
-        if df is None or df.empty:
+        debug_guardar("INDICE_EVALUANDO_HOJA", nombre)
+
+        if df is None:
+            debug_guardar(f"INDICE_{nombre}_SKIP", "None")
+            continue
+
+        if df.empty:
+            debug_guardar(f"INDICE_{nombre}_SKIP", "empty")
             continue
 
         df = df.copy()
         df.columns = [_norm_col(c) for c in df.columns]
 
-        debug_guardar(f"REVISION_HOJA_{nombre}", df.columns.tolist())
+        debug_guardar(f"INDICE_{nombre}_COLUMNAS", df.columns.tolist())
 
-        # 🔥 DETECCIÓN FLEXIBLE (CLAVE)
+        # 🔥 DETECCIÓN DE COLUMNAS
         col_codigo = None
         col_desc = None
 
@@ -239,33 +249,30 @@ def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
             if "desc" in c_lower:
                 col_desc = c
 
-        debug_guardar("col_codigo_detectado", col_codigo)
-        debug_guardar("col_desc_detectado", col_desc)
+        debug_guardar(f"INDICE_{nombre}_COL_CODIGO", col_codigo)
+        debug_guardar(f"INDICE_{nombre}_COL_DESC", col_desc)
 
-        # Si no cumple, no es índice
         if not col_codigo or not col_desc:
+            debug_guardar(f"INDICE_{nombre}_NO_VALIDO", True)
             continue
 
-        # 🔥 CONSTRUIR MAPA
+        # 🔥 CONSTRUCCIÓN MAPA
         mapa = {}
 
         for _, r in df.iterrows():
 
             codigo = str(r.get(col_codigo, "")).strip().upper()
-
-            if not codigo or codigo == "NAN":
-                continue
-
             desc = str(r.get(col_desc, "")).strip()
 
-            mapa[codigo] = desc
+            if codigo and codigo != "NAN":
+                mapa[codigo] = desc
 
-        debug_guardar("mapa_len", len(mapa))
-        debug_guardar("mapa_sample", list(mapa.items())[:5])
-        debug_guardar("HOJA_INDICE_DETECTADA", nombre)
+        debug_guardar("MAPA_LEN", len(mapa))
+        debug_guardar("MAPA_SAMPLE", list(mapa.items())[:5])
+        debug_guardar("INDICE_USADO", nombre)
 
         return mapa
 
-    debug_guardar("ERROR_INDICE", "No se encontró hoja índice válida")
+    debug_guardar("INDICE_ERROR_FINAL", "NO SE DETECTÓ NINGUNA HOJA VÁLIDA")
 
     return {}
