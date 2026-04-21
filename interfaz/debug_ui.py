@@ -1,69 +1,163 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
 
+# =========================================================
+# 🔷 CONFIG
+# =========================================================
+DEBUG_ACTIVO = True
+
+
+# =========================================================
+# 🔷 INIT
+# =========================================================
+def _init_debug():
+    if "debug_pipeline" not in st.session_state:
+        st.session_state["debug_pipeline"] = []
+
+
+# =========================================================
+# 🔷 DEBUG PRINCIPAL (ULTRA FLEXIBLE)
+# =========================================================
+def debug_guardar(*args):
+    """
+    SOPORTA:
+    ✔ debug_guardar(clave, valor)
+    ✔ debug_guardar(etapa, clave, valor)
+    ✔ debug_guardar(dominio, etapa, clave, valor)
+    """
+
+    if not DEBUG_ACTIVO:
+        return
+
+    _init_debug()
+
+    timestamp = datetime.now().strftime("%H:%M:%S")
+
+    # =====================================================
+    # PARSEO INTELIGENTE
+    # =====================================================
+    dominio = "GENERAL"
+    etapa = "INFO"
+    clave = "VALOR"
+    valor = None
+
+    if len(args) == 2:
+        clave, valor = args
+
+    elif len(args) == 3:
+        etapa, clave, valor = args
+
+    elif len(args) == 4:
+        dominio, etapa, clave, valor = args
+
+    else:
+        clave = "DEBUG_ERROR"
+        valor = f"Argumentos inválidos: {args}"
+
+    # =====================================================
+    # GUARDAR
+    # =====================================================
+    registro = {
+        "time": timestamp,
+        "dominio": dominio,
+        "etapa": etapa,
+        "clave": clave,
+        "valor": valor,
+    }
+
+    st.session_state["debug_pipeline"].append(registro)
+
+    # =====================================================
+    # PRINT CONSOLA (🔥 CLAVE)
+    # =====================================================
+    try:
+        print(f"[{timestamp}] [{dominio}] [{etapa}] {clave} -> {str(valor)[:200]}")
+    except:
+        print(f"[{timestamp}] [{dominio}] [{etapa}] {clave} -> (valor no imprimible)")
+
+
+# =========================================================
+# 🔷 LIMPIAR
+# =========================================================
+def debug_limpiar():
+    st.session_state["debug_pipeline"] = []
+
+
+# =========================================================
+# 🔷 VISOR PRO
+# =========================================================
 def seccion_debug():
 
     st.subheader("🧠 Debug del sistema")
 
-    debug_data = st.session_state.get("debug_pipeline", {})
+    data = st.session_state.get("debug_pipeline", [])
 
-    if not debug_data:
-        st.info("No hay información de debug aún")
+    if not data:
+        st.info("No hay debug aún")
         return
 
-    for etapa, data in debug_data.items():
+    df = pd.DataFrame(data)
 
-        st.markdown(f"### 🔍 {etapa}")
+    # =====================================================
+    # FILTROS
+    # =====================================================
+    col1, col2 = st.columns(2)
 
-        # =====================================================
-        # 🔥 SI ES DICCIONARIO → ITERAR
-        # =====================================================
-        if isinstance(data, dict):
+    with col1:
+        dominios = ["Todos"] + sorted(df["dominio"].unique())
+        dom_sel = st.selectbox("Dominio", dominios)
 
-            for k, v in data.items():
+    with col2:
+        etapas = ["Todos"] + sorted(df["etapa"].unique())
+        etapa_sel = st.selectbox("Etapa", etapas)
 
-                st.markdown(f"#### {k}")
+    df_filtrado = df.copy()
 
-                # 🔥 CASO 1: DataFrame directo
-                if isinstance(v, pd.DataFrame):
-                    st.dataframe(v, use_container_width=True)
+    if dom_sel != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["dominio"] == dom_sel]
 
-                # 🔥 CASO 2: dict → convertir a tabla
-                elif isinstance(v, dict):
-                    try:
-                        df = pd.DataFrame(v)
+    if etapa_sel != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["etapa"] == etapa_sel]
 
-                        # evitar tablas vacías feas
-                        if not df.empty:
-                            st.dataframe(df, use_container_width=True)
-                        else:
-                            st.write(v)
+    # =====================================================
+    # TABLA PRINCIPAL
+    # =====================================================
+    st.dataframe(df_filtrado, use_container_width=True)
 
-                    except:
-                        st.write(v)
+    # =====================================================
+    # DETALLE EXPANDIBLE
+    # =====================================================
+    st.markdown("### 🔍 Detalle")
 
-                # 🔥 CASO 3: lista → tabla
-                elif isinstance(v, list):
-                    try:
-                        df = pd.DataFrame(v)
-                        st.dataframe(df, use_container_width=True)
-                    except:
-                        st.write(v)
+    for i, row in df_filtrado.iterrows():
 
-                # 🔥 OTROS
-                else:
-                    st.write(v)
+        with st.expander(f"{row['time']} | {row['clave']}"):
 
-        # =====================================================
-        # 🔥 SI ES DATAFRAME DIRECTO
-        # =====================================================
-        elif isinstance(data, pd.DataFrame):
-            st.dataframe(data, use_container_width=True)
+            val = row["valor"]
 
-        # =====================================================
-        # 🔥 FALLBACK
-        # =====================================================
-        else:
-            st.write(data)
+            if isinstance(val, pd.DataFrame):
+                st.dataframe(val)
+
+            elif isinstance(val, (dict, list)):
+                st.json(val)
+
+            else:
+                st.write(val)
+
+    # =====================================================
+    # BOTONES
+    # =====================================================
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("🧹 Limpiar debug"):
+            debug_limpiar()
+            st.success("Debug limpiado")
+
+    with col2:
+        if st.button("📥 Exportar CSV"):
+            csv = df.to_csv(index=False).encode("utf-8")
+            st.download_button("Descargar", csv, "debug.csv", "text/csv")
