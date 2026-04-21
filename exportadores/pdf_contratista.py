@@ -167,7 +167,7 @@ def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
     total_base = df_detalle["Subtotal"].sum()
 
-    ingenieria = total_base * 0.15
+    ingenieria = 25000
     subtotal = total_base + ingenieria
     isv = subtotal * 0.15
     total_final = subtotal + isv
