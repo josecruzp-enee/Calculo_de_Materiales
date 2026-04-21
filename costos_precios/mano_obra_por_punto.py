@@ -95,7 +95,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
     for _, c in df_cables.iterrows():
 
         tipo = str(c.get("Tipo", "")).upper()
-        calibre = limpiar_calibre(c.get("Calibre", ""))
+        descripcion = str(c.get("Descripcion", "")).upper()
 
         try:
             longitud = float(c.get("Total Cable (m)", 0))
@@ -105,30 +105,67 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         if longitud <= 0:
             continue
 
-        if tipo.startswith("MT"):
-            nombre = f"Conductor MT {calibre}"
-            precio = 30
+        # ===============================
+        # MT
+        # ===============================
+        if tipo == "MT":
 
-        elif tipo.startswith("BT"):
-            nombre = f"Conductor BT {calibre}"
-            precio = 35
+            filas.append({
+                "Punto": None,
+                "Estructura": f"Conductor MT",
+                "Cantidad": longitud,
+                "Precio": 30,
+                "Subtotal": round(longitud * 30, 2),
+            })
+
+        # ===============================
+        # BT (FASES)
+        # ===============================
+        elif tipo == "BT":
+
+            fases = 2  # ya viene como 2F en tu tabla
+
+            filas.append({
+                "Punto": None,
+                "Estructura": f"Fases BT",
+                "Cantidad": longitud,
+                "Precio": 35,
+                "Subtotal": round(fases * longitud * 35, 2),
+            })
+
+        # ===============================
+        # HILO PILOTO
+        # ===============================
+        elif tipo == "HP":
+
+            filas.append({
+                "Punto": None,
+                "Estructura": f"Hilo Piloto",
+                "Cantidad": longitud,
+                "Precio": 28,
+                "Subtotal": round(longitud * 28, 2),
+            })
+
+        # ===============================
+        # NEUTRO
+        # ===============================
+        elif tipo == "N":
+
+            filas.append({
+                "Punto": None,
+                "Estructura": f"Neutro",
+                "Cantidad": longitud,
+                "Precio": 28,
+                "Subtotal": round(longitud * 28, 2),
+            })
 
         else:
             continue
-
-        filas.append({
-            "Punto": None,
-            "Estructura": nombre,
-            "Cantidad": longitud,
-            "Precio": precio,
-            "Subtotal": round(longitud * precio, 2),
-        })
 
     if not filas:
         return df_detalle
 
     return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
-
 
 # ==========================================================
 # DETALLE POR PUNTO
