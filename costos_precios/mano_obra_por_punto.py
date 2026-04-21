@@ -8,7 +8,7 @@ import pandas as pd
 # ==========================================================
 COSTOS_BASE = {
     "poste": 2000,
-    "primario": 2000,
+    "primario": 1300,
     "secundario": 800,
     "luminaria": 750,
     "retenida": 2100,
