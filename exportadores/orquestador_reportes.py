@@ -22,7 +22,7 @@ class EntradaReportes:
     nombre_proyecto: str = "Proyecto"
     datos_proyecto: Optional[Dict[str, Any]] = None
     df_cables: Optional[pd.DataFrame] = None
-
+    df_costos_materiales: Optional[pd.DataFrame] = None
 
 # =========================================================
 # 📄 IMPORTS
