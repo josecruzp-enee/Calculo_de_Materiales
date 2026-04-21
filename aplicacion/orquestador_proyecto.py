@@ -132,8 +132,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
                     df_indice[col_desc].astype(str).str.strip()
                 ))
 
-        
-        
         df_estructuras["Estructura"] = (
             df_estructuras["Estructura"]
             .astype(str)
@@ -146,10 +144,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             .map(mapa)
             .fillna("")
         )
-        from ayuda.debug import debug_guardar
 
-        debug_guardar("mapa_len", len(mapa))
-        debug_guardar("mapa_sample", list(mapa.items())[:10])
         # =====================================================
         # 3. PROYECTO
         # =====================================================
@@ -224,7 +219,6 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_estructuras=df_estructuras,
             df_materiales=df_materiales,
             df_materiales_por_punto=resultado_materiales.df_materiales_por_punto,
-            base_datos=salida_entradas.base_datos,
             costos={
                 "df_costos_estructura": resultado_costos.get("df_costos_estructura"),
                 "df_precios_estructura": df_precios_estructura,
