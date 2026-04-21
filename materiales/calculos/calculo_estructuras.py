@@ -11,6 +11,12 @@ from ayuda.debug import debug_guardar
 # NORMALIZACIÓN
 # ==========================================================
 def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    SALIDA:
+    -------
+    DataFrame normalizado:
+        - columnas limpias (strip)
+    """
 
     if df is None or df.empty:
         debug_guardar("ESTRUCTURAS", "INPUT", "DF_VACIO", True)
@@ -25,6 +31,11 @@ def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _obtener_columna(df, opciones):
+    """
+    SALIDA:
+    -------
+    Nombre real de columna encontrada en el DataFrame
+    """
 
     cols_norm = {
         c.lower().replace(" ", ""): c
@@ -43,6 +54,14 @@ def _obtener_columna(df, opciones):
 # EXTRACCIÓN BASE
 # ==========================================================
 def _extraer_datos(df_estructuras):
+    """
+    SALIDA:
+    -------
+    List[dict] con:
+        - Punto
+        - Estructura
+        - Cantidad
+    """
 
     df = _normalizar_df(df_estructuras)
 
@@ -94,6 +113,14 @@ def _extraer_datos(df_estructuras):
 # GLOBAL
 # ==========================================================
 def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
+    """
+    SALIDA:
+    -------
+    DataFrame:
+        - Estructura
+        - Cantidad
+        - Descripcion
+    """
 
     df = _normalizar_df(df_estructuras)
 
@@ -143,6 +170,14 @@ def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
 # POR PUNTO
 # ==========================================================
 def calcular_estructuras_por_punto(df_estructuras) -> pd.DataFrame:
+    """
+    SALIDA:
+    -------
+    DataFrame:
+        - Punto
+        - Estructura
+        - Cantidad
+    """
 
     registros = _extraer_datos(df_estructuras)
 
@@ -166,6 +201,13 @@ def calcular_estructuras_por_punto(df_estructuras) -> pd.DataFrame:
 # DESCRIPCIÓN
 # ==========================================================
 def generar_descripcion_estructuras(df_estructuras) -> dict:
+    """
+    SALIDA:
+    -------
+    dict:
+        clave → Punto
+        valor → descripción string
+    """
 
     df = calcular_estructuras_por_punto(df_estructuras)
 
@@ -194,6 +236,14 @@ def generar_descripcion_estructuras(df_estructuras) -> dict:
 # FUNCIÓN PRINCIPAL
 # ==========================================================
 def calcular_estructuras_proyecto(df_estructuras):
+    """
+    SALIDA:
+    -------
+    dict:
+        - df_estructuras
+        - df_estructuras_por_punto
+        - descripcion_estructuras
+    """
 
     resultado = {
         "df_estructuras": calcular_estructuras_global(df_estructuras),
@@ -202,5 +252,7 @@ def calcular_estructuras_proyecto(df_estructuras):
     }
 
     debug_guardar("PROYECTO", "SALIDA", "CLAVES", list(resultado.keys()))
+    debug_guardar("PROYECTO", "SALIDA", "df_estructuras_shape", resultado["df_estructuras"].shape)
+    debug_guardar("PROYECTO", "SALIDA", "df_por_punto_shape", resultado["df_estructuras_por_punto"].shape)
 
     return resultado
