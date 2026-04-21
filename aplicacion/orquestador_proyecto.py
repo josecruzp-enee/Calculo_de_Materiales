@@ -195,12 +195,14 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         salida = ejecutar_entradas(salida_interfaz)
 
+        from interfaz.contratos import ResultadoProyecto
+
         if not salida.ok:
-            return {
-            "ok": False,
-            "errores": salida.errores,  # 🔥 mostrar error real
-            "warnings": salida.warnings
-        }
+            return ResultadoProyecto(
+            ok=False,
+            errores=salida.errores,
+            warnings=salida.warnings
+        )
 
         df_estructuras = adaptar_estructuras(salida.df_estructuras)
 
