@@ -211,37 +211,45 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
 # ==========================================================
 def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
     """
-    CARGA FIJA DESDE HOJA 'indice'
-    SIN DETECCIÓN, SIN HEURÍSTICA, SIN BÚSQUEDA
+    CARGA FIJA DEL ÍNDICE DE ESTRUCTURAS (SIN ADIVINAR NADA)
     """
 
     import pandas as pd
     from ayuda.debug import debug_guardar
 
-    # 🔥 1. ACCESO DIRECTO A LA HOJA
-    df = data.get("indice")
+    df = data.get("INDICE") or data.get("indice")
 
     if df is None or not isinstance(df, pd.DataFrame):
-        debug_guardar("INDICE_ERROR", "NO EXISTE HOJA 'indice'")
+        debug_guardar("INDICE_ERROR", "NO EXISTE HOJA INDICE")
         return {}
 
-    # 🔥 2. NORMALIZACIÓN FIJA
+    # 🔥 NORMALIZAR COLUMNAS
     df.columns = [str(c).strip().upper() for c in df.columns]
 
-    # 🔥 3. VALIDACIÓN ESTRICTA
-    if "CODIGO DE ESTRUCTURA" not in df.columns or "DESCRIPCION" not in df.columns:
-        debug_guardar("INDICE_ERROR", "COLUMNAS REQUERIDAS NO EXISTEN")
+    # 🔥 BUSCAR COLUMNAS REALES (SIN SUPOSICIONES)
+    col_codigo = "CODIGO DE ESTRUCTURA"
+
+    # aceptar ambas variantes de descripción
+    if "DESCRIPCION" in df.columns:
+        col_desc = "DESCRIPCION"
+    elif "DESCRIPCIÓN" in df.columns:
+        col_desc = "DESCRIPCIÓN"
+    else:
+        debug_guardar("INDICE_ERROR", "NO EXISTE DESCRIPCION")
         return {}
 
-    # 🔥 4. MAPA DIRECTO
+    # 🔥 VALIDACIÓN FINAL
+    if col_codigo not in df.columns:
+        debug_guardar("INDICE_ERROR", "NO EXISTE CODIGO DE ESTRUCTURA")
+        return {}
+
+    # 🔥 MAPA FINAL
     mapa = dict(zip(
-        df["CODIGO DE ESTRUCTURA"].astype(str).str.strip().str.upper(),
-        df["DESCRIPCION"].astype(str).str.strip()
+        df[col_codigo].astype(str).str.strip().str.upper(),
+        df[col_desc].astype(str).str.strip()
     ))
 
-    # 🔥 5. DEBUG FINAL
-    debug_guardar("INDICE_USADO", "indice")
+    debug_guardar("INDICE_OK", True)
     debug_guardar("MAPA_LEN", len(mapa))
-    debug_guardar("MAPA_SAMPLE", list(mapa.items())[:5])
 
     return mapa
