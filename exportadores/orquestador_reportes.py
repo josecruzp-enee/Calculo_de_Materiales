@@ -136,7 +136,7 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
             ("contratista.pdf", lambda: generar_pdf_contratista(entrada)),
 
-            ("lista_materiales.pdf", lambda: generar_pdf_costo_materiales(entrada.df_costos_materiales,nombre)),
+            ("lista_materiales.pdf", lambda: generar_pdf_lista_materiales(entrada.df_costos_materiales,nombre)),
         ]
 
         # =====================================================
