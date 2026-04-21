@@ -89,10 +89,9 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
     # =====================================================
     # CÁLCULOS
     # =====================================================
-    ingenieria = total_base * 0.15
+    ingenieria = 25,000
     subtotal = total_base + ingenieria
-    isv = subtotal * 0.15
-    total_final = subtotal + isv
+    total_final = subtotal
 
     # =====================================================
     # DATA
@@ -101,8 +100,6 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
         ["Concepto", "Monto (L)"],
         ["Suministro e instalación", f"L {total_base:,.2f}"],
         ["Gastos de Ingeniería (15%)", f"L {ingenieria:,.2f}"],
-        ["SUBTOTAL", f"L {subtotal:,.2f}"],
-        ["ISV (15%)", f"L {isv:,.2f}"],
         ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
     ]
 
