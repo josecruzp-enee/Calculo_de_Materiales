@@ -69,9 +69,7 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
     archivos = {}
 
     try:
-        # =====================================================
         # VALIDACIONES
-        # =====================================================
         _validar_df(entrada.df_estructuras, "df_estructuras")
         _validar_df(entrada.df_materiales, "df_materiales")
         _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto")
@@ -83,11 +81,11 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         datos_proyecto = entrada.datos_proyecto or {}
 
         # =====================================================
-        # 📄 TASKS (CORREGIDOS)
+        # TASKS CORREGIDOS
         # =====================================================
         tasks = [
 
-            # ✅ ESTRUCTURAS GLOBAL
+            # ESTRUCTURAS GLOBAL
             ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(
                 entrada.df_estructuras,
                 nombre,
@@ -95,28 +93,29 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 datos_proyecto
             )),
 
-            # ✅ ESTRUCTURAS POR PUNTO (CORREGIDO)
+            # ESTRUCTURAS POR PUNTO (CORRECTO)
             ("estructuras_por_punto.pdf", lambda: generar_pdf_estructuras_por_punto(
                 entrada.df_materiales_por_punto,
                 nombre,
+                entrada.base_datos,
                 datos_proyecto
             )),
 
-            # ✅ MATERIALES GLOBAL
+            # MATERIALES GLOBAL
             ("materiales.pdf", lambda: generar_pdf_materiales(
                 entrada.df_materiales,
                 nombre,
                 datos_proyecto
             )),
 
-            # ✅ MATERIALES POR PUNTO (CORREGIDO)
+            # MATERIALES POR PUNTO (CORRECTO)
             ("materiales_por_punto.pdf", lambda: generar_pdf_materiales_por_punto(
                 entrada.df_materiales_por_punto,
                 nombre,
                 datos_proyecto
             )),
 
-            # ✅ REPORTE COMPLETO
+            # REPORTE COMPLETO
             ("reporte_completo.pdf", lambda: generar_pdf_completo(
                 df_materiales=entrada.df_materiales,
                 df_estructuras=entrada.df_estructuras,
@@ -126,9 +125,7 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
             )),
         ]
 
-        # =====================================================
         # EJECUCIÓN
-        # =====================================================
         for nombre_archivo, fn in tasks:
 
             contenido, err = _safe_exec(nombre_archivo, fn)
@@ -139,15 +136,6 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
             if contenido:
                 _add_file(archivos, errores_lista, nombre_archivo, contenido)
-            else:
-                errores_lista.append(f"{nombre_archivo}: contenido vacío")
-
-        # =====================================================
-        # DEBUG
-        # =====================================================
-        if not archivos:
-            debug["error_general"] = "No se generó ningún archivo"
-            debug["cantidad_errores"] = len(errores_lista)
 
         return {
             "archivos": archivos,
