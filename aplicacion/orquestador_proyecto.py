@@ -258,6 +258,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         res_mat = ejecutar_materiales(entrada_mat)
         df_materiales = res_mat.df_materiales
+        df_estructuras_pp = res_mat.df_estructuras_por_punto.copy()
+        df_estructuras_pp = aplicar_descripciones(df_estructuras_pp, mapa, debug)
 
         dbg(debug, "MATERIALES_ROWS", len(df_materiales))
 
@@ -306,7 +308,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         entrada_rep = EntradaReportes(
             df_estructuras=df_estructuras,
-            df_estructuras_por_punto=res_mat.df_estructuras_por_punto,
+            df_estructuras_por_punto=df_estructuras_pp,
             df_materiales=df_materiales,
             df_materiales_por_punto=res_mat.df_materiales_por_punto,
             base_datos=salida.base_datos,
