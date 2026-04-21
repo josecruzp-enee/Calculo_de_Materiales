@@ -26,7 +26,8 @@ from exportadores.pdf_base import (
 def _debug_indice(base_datos):
     import streamlit as st
     import pandas as pd
-
+    import streamlit as st
+    st.write("HOJAS CARGADAS:", list(base_datos.keys()))
     st.write("DEBUG ▶ base_datos keys:", list(base_datos.keys()) if base_datos else "None")
     st.write("DEBUG ▶ primeras keys reales:", list(base_datos.keys())[:20])  # 🔥 ESTA LÍNEA NUEVA
 
