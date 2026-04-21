@@ -52,10 +52,60 @@ def tabla_presupuesto(df_detalle):
     df = (
         df_detalle
         .groupby("Estructura", as_index=False)
-        .agg({"Cantidad": "sum", "Precio": "first", "Subtotal": "sum"})
-        .sort_values("Subtotal", ascending=False)
+        .agg({
+            "Cantidad": "sum",
+            "Precio": "first",
+            "Subtotal": "sum"
+        })
     )
 
+    # ======================================================
+    # 🔥 ORDEN JERÁRQUICO (SIN SEPARAR)
+    # ======================================================
+    def _orden(nombre):
+
+        n = str(nombre).upper()
+
+        if "TS-" in n:
+            return 1  # Transformadores
+
+        elif "PC-" in n:
+            return 2  # Postes
+
+        elif (
+            "CONDUCTOR MT" in n
+            or "FASES BT" in n
+            or "NEUTRO" in n
+            or "HILO PILOTO" in n
+        ):
+            return 3  # Conductores
+
+        elif n.startswith("A-"):
+            return 4  # Primarios
+
+        elif n.startswith("B-"):
+            return 5  # Secundarios
+
+        elif "LL-" in n:
+            return 6  # Luminarias
+
+        elif n.startswith("R-"):
+            return 7  # Retenidas
+
+        elif "CA-" in n or "CS-" in n:
+            return 8  # Aterrizajes
+
+        else:
+            return 9  # Otros
+
+    df["orden"] = df["Estructura"].apply(_orden)
+
+    # 🔥 Orden final
+    df = df.sort_values(["orden", "Subtotal"], ascending=[True, False])
+
+    # ======================================================
+    # 📄 TABLA
+    # ======================================================
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
     total = 0
 
@@ -65,10 +115,11 @@ def tabla_presupuesto(df_detalle):
         cantidad = r["Cantidad"]
         precio = r["Precio"]
 
-        # 🔥 NO DUPLICAR AQUÍ (ya viene del cálculo)
+        # 🔥 Limpiar texto duplicado
         texto = str(r["Estructura"]).replace("BT BT", "BT")
         texto = f"Instalación de {texto}"
 
+        # 🔥 Aclaración técnica
         if "FASES BT" in descripcion_txt:
             texto += " (2 Fases)"
 
@@ -89,7 +140,6 @@ def tabla_presupuesto(df_detalle):
     tabla.setStyle(estilo_tabla())
 
     return tabla
-
 
 # ======================================================
 # 📊 RESUMEN POR PUNTO
