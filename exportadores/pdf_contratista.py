@@ -154,6 +154,7 @@ def pagina_resumen(elementos, styles, df_totales):
 # ======================================================
 def pagina_resumen_global(elementos, styles, df_detalle):
 
+    # 🔹 Separación correcta
     subtotal_estructuras = df_detalle[
         df_detalle["Punto"].notna()
     ]["Subtotal"].sum()
@@ -162,34 +163,54 @@ def pagina_resumen_global(elementos, styles, df_detalle):
         df_detalle["Punto"].isna()
     ]["Subtotal"].sum()
 
-    
-    
-    grua= 18000
-    rastra= 25000
-    total = subtotal_estructuras + subtotal_conductores+grua+rastra
+    # 🔹 Costos fijos de logística
+    grua = 18000
+    rastra = 25000
+
+    # 🔹 Totales
+    total_mano_obra = subtotal_estructuras + subtotal_conductores
+    total_logistica = grua + rastra
+    total_general = total_mano_obra + total_logistica
+
+    # 🔹 Tabla
     data = [
         ["Concepto", "Monto (L)"],
-        ["Subtotal estructuras", f"L {subtotal_estructuras:,.2f}"],
-        ["Subtotal conductores", f"L {subtotal_conductores:,.2f}"],
+        ["Mano de Obra (Estructuras)", f"L {subtotal_estructuras:,.2f}"],
+        ["Mano de Obra (Conductores)", f"L {subtotal_conductores:,.2f}"],
+        ["TOTAL MANO DE OBRA", f"L {total_mano_obra:,.2f}"],
         ["Equipo Grúa", f"L {grua:,.2f}"],
         ["Flete de Postes", f"L {rastra:,.2f}"],
-        ["TOTAL GENERAL", f"L {total:,.2f}"],
+        ["TOTAL LOGÍSTICA", f"L {total_logistica:,.2f}"],
+        ["TOTAL GENERAL", f"L {total_general:,.2f}"],
     ]
 
     tabla = Table(data, colWidths=[250, 150])
     tabla.setStyle(estilo_tabla())
 
+    # 🔹 Agregar al PDF
     elementos.append(tabla)
-
 # ======================================================
 # 💰 COTIZACIÓN
 # ======================================================
 def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
-    total_base = df_detalle["Subtotal"].sum()
+    subtotal_estructuras = df_detalle[
+        df_detalle["Punto"].notna()
+    ]["Subtotal"].sum()
+
+    subtotal_conductores = df_detalle[
+        df_detalle["Punto"].isna()
+    ]["Subtotal"].sum()
+
+    mano_obra = subtotal_estructuras + subtotal_conductores
+
+    grua = 18000
+    rastra = 25000
+    logistica = grua + rastra
 
     ingenieria = 25000
-    subtotal = total_base + ingenieria
+
+    subtotal = mano_obra + logistica + ingenieria
     isv = subtotal * 0.15
     total_final = subtotal + isv
 
@@ -198,9 +219,11 @@ def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
     data = [
         ["Concepto", "Monto (L)"],
-        ["Instalación", f"L {total_base:,.2f}"],
-        ["Ingeniería (15%)", f"L {ingenieria:,.2f}"],
+        ["Mano de Obra", f"L {mano_obra:,.2f}"],
+        ["Logística", f"L {logistica:,.2f}"],
+        ["Ingeniería", f"L {ingenieria:,.2f}"],
         ["Subtotal", f"L {subtotal:,.2f}"],
+        ["ISV (15%)", f"L {isv:,.2f}"],
         ["TOTAL", f"L {total_final:,.2f}"],
     ]
 
@@ -209,7 +232,6 @@ def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
     elementos.append(tabla)
     elementos.append(PageBreak())
-
 
 # ======================================================
 # 📄 DETALLE POR PUNTO
