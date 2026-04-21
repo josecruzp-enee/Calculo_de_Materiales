@@ -4,27 +4,48 @@ import pandas as pd
 
 
 # ==========================================================
-# CONFIGURACIÓN BASE (BIBLIOTECA DE EJECUCIÓN)
+# 🔥 PRECIOS FIJOS REALES (MODELO COMERCIAL)
 # ==========================================================
-COSTOS_BASE = {
-    "poste": 2000,
-    "primario": 1300,
-    "secundario": 800,
-    "luminaria": 750,
-    "retenida": 2100,
-}
+PRECIOS_FIJOS = {
 
-FACTOR_FASES = {
-    "A-I": 1.0,
-    "A-II": 1.3,
-    "A-III": 1.6,
-}
+    # TRANSFORMADORES
+    "TS-37.5KVA": 13000,
+    "TS-50KVA": 15000,
 
-FACTOR_COMPLEJIDAD = {
-    "PASO": 1.0,
-    "ANGULO": 1.2,
-    "DOBLE": 1.4,
-    "REMATE": 1.6,
+    # CONDUCTORES (referencia directa)
+    "CONDUCTOR MT 1/0 AWG RAVEN": 30,
+    "CONDUCTOR BT WP 3/0 AWG FIG": 35,
+
+    # RETENIDAS
+    "R-1": 2100,
+    "R-3V": 2100,
+    "R-4": 2100,
+    "R-5T": 2100,
+
+    # POSTES
+    "PC-30": 2000,
+    "PC-40": 2000,
+
+    # LUMINARIAS
+    "LL-1-50W": 750,
+
+    # PRIMARIO
+    "A-I-1": 1300,
+    "A-I-1V": 1500,
+    "A-I-4": 1700,
+    "A-I-4V": 1800,
+    "A-I-6": 2000,
+
+    # SECUNDARIO
+    "B-I-4D": 500,
+    "B-III-1": 600,
+    "B-III-4": 700,
+    "B-III-6": 800,
+
+    # OTROS
+    "CT-N": 500,
+    "CA-32": 800,
+    "CS-2": 1200,
 }
 
 
@@ -42,70 +63,27 @@ def limpiar_calibre(txt):
 
 
 # ==========================================================
-# PRECIO POR ESTRUCTURA
+# 🔥 NUEVO PRECIO POR ESTRUCTURA (100% FIJO)
 # ==========================================================
 def _precio_estructura(estructura: str) -> float:
 
-    if estructura.startswith("PC"):
-        return COSTOS_BASE["poste"]
+    estructura = str(estructura).upper().strip()
 
-    if estructura.startswith("A-"):
+    # ✔ EXACTO
+    if estructura in PRECIOS_FIJOS:
+        return PRECIOS_FIJOS[estructura]
 
-        if estructura.startswith("A-III"):
-            f_fase = FACTOR_FASES["A-III"]
-        elif estructura.startswith("A-II"):
-            f_fase = FACTOR_FASES["A-II"]
-        else:
-            f_fase = FACTOR_FASES["A-I"]
+    # ✔ MATCH FLEXIBLE (ej: A-I-1V, variantes)
+    for key in PRECIOS_FIJOS:
+        if estructura.startswith(key):
+            return PRECIOS_FIJOS[key]
 
-        if "REM" in estructura:
-            f_comp = FACTOR_COMPLEJIDAD["REMATE"]
-        elif "DOB" in estructura:
-            f_comp = FACTOR_COMPLEJIDAD["DOBLE"]
-        else:
-            f_comp = FACTOR_COMPLEJIDAD["PASO"]
-
-        return COSTOS_BASE["primario"] * f_fase * f_comp
-
-    if estructura.startswith("B-"):
-        return COSTOS_BASE["secundario"]
-
-    if estructura.startswith("LL"):
-        return COSTOS_BASE["luminaria"]
-
-    if estructura.startswith("R-"):
-        return COSTOS_BASE["retenida"]
-
-    if estructura.startswith("CT"):
-        return 500
-
-    if estructura.startswith("CA-32"):
-        return 800
-        
-    if estructura.startswith("CS-2"):
-        return 1200
-         
-    if estructura.startswith("TS"):
-
-        PRECIOS_TRANSFORMADOR = {
-            "TS-15KVA": 15000,
-            "TS-25KVA": 20000,
-            "TS-37.5KVA": 13000,
-            "TS-50KVA": 15000,
-            "TS-75KVA": 45000,
-            "TS-100KVA": 60000,
-        }
-
-        if estructura not in PRECIOS_TRANSFORMADOR:
-            raise ValueError(f"Transformador sin precio definido: {estructura}")
-
-        return PRECIOS_TRANSFORMADOR[estructura]
-
+    # ⚠️ NO DEFINIDO
     return 0
 
 
 # ==========================================================
-# 🔥 CABLE CONSOLIDADO (NUEVO)
+# 🔥 CABLE CONSOLIDADO (SE MANTIENE)
 # ==========================================================
 def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | None):
 
@@ -139,7 +117,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
             continue
 
         filas.append({
-            "Punto": None,  # 🔥 CLAVE (ANTES TENÍAS PRESUPUESTO)
+            "Punto": None,
             "Estructura": nombre,
             "Cantidad": longitud,
             "Precio": precio,
@@ -150,6 +128,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         return df_detalle
 
     return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
+
 
 # ==========================================================
 # DETALLE POR PUNTO
@@ -198,13 +177,13 @@ def calcular_totales_por_punto(df_detalle: pd.DataFrame) -> pd.DataFrame:
 
 
 # ==========================================================
-# FUNCIÓN PRINCIPAL (ACTUALIZADA)
+# FUNCIÓN PRINCIPAL
 # ==========================================================
 def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None):
 
     df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto)
 
-    # 🔥 INTEGRAR CABLE
+    # 🔥 integrar cable
     df_detalle = _agregar_cable_resumen(df_detalle, df_cables)
 
     df_totales = calcular_totales_por_punto(df_detalle[df_detalle["Punto"].notna()])
