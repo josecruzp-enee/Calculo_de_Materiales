@@ -4,6 +4,7 @@ from __future__ import annotations
 import pandas as pd
 from collections import Counter
 from entradas.normalizar import limpiar_codigo
+from ayuda.debug import debug_guardar
 
 
 # ==========================================================
@@ -12,20 +13,28 @@ from entradas.normalizar import limpiar_codigo
 def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 
     if df is None or df.empty:
+        debug_guardar("ESTRUCTURAS", "INPUT", "DF_VACIO", True)
         return pd.DataFrame()
 
     df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
+
+    debug_guardar("ESTRUCTURAS", "INPUT", "COLUMNAS", list(df.columns))
 
     return df
 
 
 def _obtener_columna(df, opciones):
 
-    for col in df.columns:
-        c = col.lower().replace(" ", "")
-        if any(op in c for op in opciones):
-            return col
+    cols_norm = {
+        c.lower().replace(" ", ""): c
+        for c in df.columns
+    }
+
+    for op in opciones:
+        op_norm = op.lower().replace(" ", "")
+        if op_norm in cols_norm:
+            return cols_norm[op_norm]
 
     return None
 
@@ -40,9 +49,13 @@ def _extraer_datos(df_estructuras):
     if df.empty:
         return []
 
-    col_est = _obtener_columna(df, ["codigoestructura", "estructura"])
+    col_est = _obtener_columna(df, ["codigo", "estructura"])
     col_punto = _obtener_columna(df, ["punto"])
     col_cant = _obtener_columna(df, ["cantidad", "cant"])
+
+    debug_guardar("ESTRUCTURAS", "COLUMNAS_DETECTADAS", "col_est", col_est)
+    debug_guardar("ESTRUCTURAS", "COLUMNAS_DETECTADAS", "col_punto", col_punto)
+    debug_guardar("ESTRUCTURAS", "COLUMNAS_DETECTADAS", "col_cant", col_cant)
 
     if col_est is None:
         raise ValueError(f"No se encontró columna de estructuras: {list(df.columns)}")
@@ -72,6 +85,8 @@ def _extraer_datos(df_estructuras):
             "Cantidad": cantidad
         })
 
+    debug_guardar("ESTRUCTURAS", "PROCESO", "REGISTROS_EXTRAIDOS", len(registros))
+
     return registros
 
 
@@ -85,11 +100,13 @@ def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Estructura", "Cantidad", "Descripcion"])
 
-    col_est = _obtener_columna(df, ["codigoestructura", "estructura"])
+    col_est = _obtener_columna(df, ["codigo", "estructura"])
     col_cant = _obtener_columna(df, ["cantidad", "cant"])
-
-    # 🔥 NUEVO: detectar descripcion
     col_desc = _obtener_columna(df, ["descripcion"])
+
+    debug_guardar("GLOBAL", "COLUMNAS", "col_est", col_est)
+    debug_guardar("GLOBAL", "COLUMNAS", "col_cant", col_cant)
+    debug_guardar("GLOBAL", "COLUMNAS", "col_desc", col_desc)
 
     if col_est is None:
         raise ValueError(f"No se encontró columna de estructuras: {list(df.columns)}")
@@ -107,7 +124,6 @@ def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
     else:
         df_tmp["Descripcion"] = ""
 
-    # 🔥 AGRUPAR SIN PERDER DESCRIPCION
     df_out = (
         df_tmp
         .groupby("Estructura", as_index=False)
@@ -117,7 +133,11 @@ def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
         })
     )
 
+    debug_guardar("GLOBAL", "RESULTADO", "FILAS", len(df_out))
+    debug_guardar("GLOBAL", "RESULTADO", "PREVIEW", df_out.head(10))
+
     return df_out
+
 
 # ==========================================================
 # POR PUNTO
@@ -131,11 +151,15 @@ def calcular_estructuras_por_punto(df_estructuras) -> pd.DataFrame:
 
     df = pd.DataFrame(registros)
 
-    return (
+    df_out = (
         df
         .groupby(["Punto", "Estructura"], as_index=False)["Cantidad"]
         .sum()
     )
+
+    debug_guardar("POR_PUNTO", "RESULTADO", "FILAS", len(df_out))
+
+    return df_out
 
 
 # ==========================================================
@@ -161,6 +185,8 @@ def generar_descripcion_estructuras(df_estructuras) -> dict:
 
         resultado[punto] = ", ".join(partes)
 
+    debug_guardar("DESCRIPCION", "RESULTADO", "TOTAL_PUNTOS", len(resultado))
+
     return resultado
 
 
@@ -169,8 +195,12 @@ def generar_descripcion_estructuras(df_estructuras) -> dict:
 # ==========================================================
 def calcular_estructuras_proyecto(df_estructuras):
 
-    return {
+    resultado = {
         "df_estructuras": calcular_estructuras_global(df_estructuras),
         "df_estructuras_por_punto": calcular_estructuras_por_punto(df_estructuras),
         "descripcion_estructuras": generar_descripcion_estructuras(df_estructuras),
     }
+
+    debug_guardar("PROYECTO", "SALIDA", "CLAVES", list(resultado.keys()))
+
+    return resultado
