@@ -104,18 +104,21 @@ def _agrupar_por_codigo(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 def _leer_indice(archivo_materiales: str) -> Tuple[Dict, Dict]:
     df_indice = pd.read_excel(archivo_materiales, sheet_name="indice")
-    df_indice.columns = [str(c).strip() for c in df_indice.columns]
+    df_indice.columns = [str(c).strip().upper() for c in df_indice.columns]
 
-    if "Código de Estructura" not in df_indice.columns:
-        raise ValueError("Falta 'Código de Estructura'")
-    if "Precio" not in df_indice.columns:
-        raise ValueError("Falta 'Precio'")
+    # 🔥 YA NO EXISTE "Código de Estructura"
+    if "CODIGO" not in df_indice.columns:
+        raise ValueError("Falta columna CODIGO")
 
-    if "Descripción" not in df_indice.columns:
-        df_indice["Descripción"] = ""
+    if "PRECIO" not in df_indice.columns:
+        raise ValueError("Falta columna PRECIO")
 
+    if "DESCRIPCION" not in df_indice.columns:
+        df_indice["DESCRIPCION"] = ""
+
+    # 🔥 NORMALIZACIÓN ÚNICA
     df_indice["CODIGO"] = (
-        df_indice["Código de Estructura"]
+        df_indice["CODIGO"]
         .astype(str)
         .str.strip()
         .str.upper()
@@ -123,17 +126,15 @@ def _leer_indice(archivo_materiales: str) -> Tuple[Dict, Dict]:
 
     precio_map = dict(zip(
         df_indice["CODIGO"],
-        pd.to_numeric(df_indice["Precio"], errors="coerce").fillna(0.0)
+        pd.to_numeric(df_indice["PRECIO"], errors="coerce").fillna(0.0)
     ))
 
     desc_map = dict(zip(
         df_indice["CODIGO"],
-        df_indice["Descripción"].astype(str)
+        df_indice["DESCRIPCION"].astype(str)
     ))
 
     return precio_map, desc_map
-
-
 # =========================================================
 # CÁLCULO POR FILA
 # =========================================================
