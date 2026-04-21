@@ -100,7 +100,6 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 # ==========================================================
 # 📄 ESTRUCTURAS GLOBAL
 # ==========================================================
-
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None, datos_proyecto=None):
 
     from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
@@ -110,9 +109,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     elems = _header("RESUMEN DE ESTRUCTURAS", nombre_proy)
 
-    # ----------------------------------------------------------
-    # VALIDACIÓN
-    # ----------------------------------------------------------
     if df_estructuras is None or df_estructuras.empty:
         elems.append(Paragraph("No se encontraron estructuras.", styleN))
         doc.build(elems)
@@ -130,26 +126,15 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         .str.upper()
     )
 
-    # ----------------------------------------------------------
-    # 🔥 MAPA DESDE BASE DE DATOS (ROBUSTO)
-    # ----------------------------------------------------------
-    mapa = {}
+    # 🔥 MAPA CORRECTO
+    mapa = cargar_catalogo_estructuras_desde_indice(base_datos or {})
 
-    if base_datos:
-        mapa = cargar_catalogo_estructuras_desde_indice(base_datos)
-
-    # ----------------------------------------------------------
-    # APLICAR DESCRIPCIÓN
-    # ----------------------------------------------------------
     df["Descripcion"] = (
         df[col_codigo]
         .map(mapa)
         .fillna("")
     )
 
-    # ----------------------------------------------------------
-    # AGRUPACIÓN
-    # ----------------------------------------------------------
     if "Cantidad" not in df.columns:
         df["Cantidad"] = 1
 
@@ -158,9 +143,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         "Descripcion": "first"
     })
 
-    # ----------------------------------------------------------
-    # TABLA
-    # ----------------------------------------------------------
     data = [["Estructura", "Descripción", "Cantidad"]]
 
     for _, r in df.iterrows():
@@ -170,11 +152,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
             Paragraph(str(int(r["Cantidad"])), styleN),
         ])
 
-    tabla = Table(
-        data,
-        colWidths=[2 * inch, 3.5 * inch, 1 * inch],
-        repeatRows=1
-    )
+    tabla = Table(data, colWidths=[2 * inch, 3.5 * inch, 1 * inch], repeatRows=1)
     tabla.setStyle(estilo_tabla())
 
     elems.append(tabla)
@@ -182,10 +160,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     pdf_bytes = buffer.getvalue()
     buffer.close()
-
     return pdf_bytes
-
-
 
 
 
@@ -193,7 +168,9 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 # ==========================================================
 # 📄 ESTRUCTURAS POR PUNTO
 # ==========================================================
-def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
+def generar_pdf_estructuras_por_punto(df, nombre_proy, base_datos=None, datos_proyecto=None):
+
+    from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
     doc, buffer = _crear_doc()
@@ -205,7 +182,25 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
         doc.build(elems)
         return buffer.getvalue()
 
+    df = df.copy()
+
     col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
+
+    df[col_codigo] = (
+        df[col_codigo]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    # 🔥 IMPORTANTE: aplicar descripción aquí también
+    mapa = cargar_catalogo_estructuras_desde_indice(base_datos or {})
+
+    df["Descripcion"] = (
+        df[col_codigo]
+        .map(mapa)
+        .fillna("")
+    )
 
     for punto, df_p in df.groupby("Punto"):
 
@@ -236,7 +231,6 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
 
 # ==========================================================
 # 📄 MATERIALES POR PUNTO
