@@ -72,6 +72,7 @@ PATRON = re.compile(
 def _convertir(df: pd.DataFrame):
 
     registros = []
+    punto_actual = None  # 🔥 estado del punto
 
     for idx, row in df.iterrows():
 
@@ -84,50 +85,55 @@ def _convertir(df: pd.DataFrame):
         texto_upper = texto.upper()
 
         # =====================================================
-        # DETECTAR PUNTO
+        # 🔥 DETECTAR PUNTO
         # =====================================================
-        m = re.search(r"P[-\s]?(\d+)", texto_upper)
-        punto = f"P-{m.group(1)}" if m else f"P-{idx+1}"
+        m_punto = re.search(r"\bP[-\s]?(\d+)\b", texto_upper)
+        if m_punto:
+            punto_actual = f"P-{m_punto.group(1)}"
+            continue  # esta fila solo define el punto
 
         # =====================================================
-        # 🔥 TOKENIZAR (CLAVE - IDEA DEL CÓDIGO VIEJO)
+        # ⚠ FALLBACK CONTROLADO
+        # =====================================================
+        if not punto_actual:
+            punto_actual = f"SIN_PUNTO_{idx+1}"
+
+            # 🔥 DEBUG DE ADVERTENCIA
+            try:
+                debug_guardar("WARNING_SIN_PUNTO", {
+                    "fila": idx,
+                    "texto": texto_upper
+                })
+            except:
+                pass
+
+        # =====================================================
+        # TOKENIZAR
         # =====================================================
         tokens = re.findall(r'\S+(?:\s*\([EPDR]\))?', texto_upper)
 
         for token in tokens:
 
-            # =====================================================
-            # DETECTAR TIPO (P, D, E, R)
-            # =====================================================
             m_tipo = re.search(r'\((P|D|E|R)\)', token)
 
             if not m_tipo:
                 continue
 
-            tipo = m_tipo.group(1)
-
-            # 🔥 SOLO PROYECTADO
-            if tipo != "P":
+            # SOLO PROYECTADO
+            if m_tipo.group(1) != "P":
                 continue
 
-            # =====================================================
-            # LIMPIAR TOKEN → QUITAR (P)
-            # =====================================================
             est_raw = re.sub(r'\s*\([EPDR]\)', '', token)
-
             est = limpiar_codigo(est_raw)
 
             if not est:
                 continue
 
-            # =====================================================
-            # FILTRO FINAL: SOLO ESTRUCTURAS VÁLIDAS
-            # =====================================================
             if not PATRON.match(est):
                 continue
 
             registros.append({
-                "Punto": punto,
+                "Punto": punto_actual,
                 "Estructura": est,
                 "Cantidad": 1
             })
@@ -135,22 +141,13 @@ def _convertir(df: pd.DataFrame):
     df_out = pd.DataFrame(registros)
 
     if df_out.empty:
-        return pd.DataFrame(columns=[
-            "Punto",
-            "codigodeestructura",
-            "Estructura",
-            "Cantidad"
-        ])
+        return pd.DataFrame(columns=["Punto", "Estructura", "Cantidad"])
 
     return (
         df_out
-        .groupby(
-            ["Punto", "Estructura"],
-            as_index=False
-        )["Cantidad"]
+        .groupby(["Punto", "Estructura"], as_index=False)["Cantidad"]
         .sum()
     )
-
 
 # =========================================================
 # API
