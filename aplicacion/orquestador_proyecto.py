@@ -196,7 +196,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         salida = ejecutar_entradas(salida_interfaz)
 
         if not salida.ok:
-            return _fail("Error en entradas", debug)
+            return {
+            "ok": False,
+            "errores": salida.errores,  # 🔥 mostrar error real
+            "warnings": salida.warnings
+        }
 
         df_estructuras = adaptar_estructuras(salida.df_estructuras)
 
