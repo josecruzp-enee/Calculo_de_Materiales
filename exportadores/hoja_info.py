@@ -358,7 +358,7 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, doc_width=None):
 
     if isinstance(df_estructuras, pd.DataFrame) and not df_estructuras.empty:
         df = df_estructuras.copy()
-        df["cod"] = df["codigodeestructura"].astype(str).str.upper()
+        df["cod"] = df["Estructura"].astype(str).str.upper()
 
         for fn in [_desc_postes, _desc_transformadores, _desc_luminarias]:
             res = fn(df)
