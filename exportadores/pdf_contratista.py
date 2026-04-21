@@ -9,37 +9,11 @@ from reportlab.lib import colors
 from io import BytesIO
 import pandas as pd
 
-# 🔥 TU SISTEMA
 from materiales.calculos.calculo_estructuras import calcular_estructuras_por_punto
 from costos_precios.mano_obra_por_punto import calcular_mano_obra_proyecto
-
-# 🔥 BASE PDF (asegúrate de subir el logo ahí)
 from exportadores.pdf_base import fondo_pagina
 
-from reportlab.lib.units import cm
 
-def fondo_contratista(canvas, doc):
-
-    canvas.saveState()
-
-    # 🔥 LOGO MÁS ARRIBA SOLO AQUÍ
-    x = 40
-    y = doc.pagesize[1] - 40   # ⬅️ MÁS ARRIBA
-
-    width = 120
-    height = 50
-
-    canvas.drawImage(
-        "ruta/a/tu/logo.png",  # usa tu misma ruta
-        x,
-        y,
-        width=width,
-        height=height,
-        preserveAspectRatio=True,
-        mask='auto'
-    )
-
-    canvas.restoreState() 
 # ======================================================
 # 🎨 ESTILO TABLAS
 # ======================================================
@@ -64,7 +38,7 @@ def estilo_tabla():
 
 
 # ======================================================
-# 📄 PRESUPUESTO (PÁGINA 1)
+# 📄 PRESUPUESTO
 # ======================================================
 def tabla_presupuesto(df_detalle):
 
@@ -78,11 +52,7 @@ def tabla_presupuesto(df_detalle):
     df = (
         df_detalle
         .groupby("Estructura", as_index=False)
-        .agg({
-            "Cantidad": "sum",
-            "Precio": "first",
-            "Subtotal": "sum"
-        })
+        .agg({"Cantidad": "sum", "Precio": "first", "Subtotal": "sum"})
         .sort_values("Subtotal", ascending=False)
     )
 
@@ -92,16 +62,13 @@ def tabla_presupuesto(df_detalle):
     for _, r in df.iterrows():
 
         descripcion_txt = str(r["Estructura"]).upper()
-
         cantidad = r["Cantidad"]
         precio = r["Precio"]
 
-        # 🔥 DUPLICAR METROS SOLO PARA FASES BT
-        if "FASES BT" in descripcion_txt:
-            cantidad = cantidad * 2
+        # 🔥 NO DUPLICAR AQUÍ (ya viene del cálculo)
+        texto = str(r["Estructura"]).replace("BT BT", "BT")
+        texto = f"Instalación de {texto}"
 
-        # 🔥 TEXTO MÁS CLARO
-        texto = f"Instalación de {r['Estructura']}"
         if "FASES BT" in descripcion_txt:
             texto += " (2 Fases)"
 
@@ -125,7 +92,7 @@ def tabla_presupuesto(df_detalle):
 
 
 # ======================================================
-# 📊 RESUMEN POR PUNTO (SIN CABLE)
+# 📊 RESUMEN POR PUNTO
 # ======================================================
 def pagina_resumen(elementos, styles, df_totales):
 
@@ -133,7 +100,6 @@ def pagina_resumen(elementos, styles, df_totales):
     elementos.append(Spacer(1, 12))
 
     data = [["Punto", "Total (L)"]]
-
     total_general = 0
 
     for _, r in df_totales.iterrows():
@@ -146,33 +112,24 @@ def pagina_resumen(elementos, styles, df_totales):
     tabla.setStyle(estilo_tabla())
 
     elementos.append(tabla)
-   
+    elementos.append(PageBreak())
 
 
 # ======================================================
-# 💰 RESUMEN GLOBAL (ESTRUCTURAS vs CABLE)
+# 💰 RESUMEN GLOBAL
 # ======================================================
 def pagina_resumen_global(elementos, styles, df_detalle):
 
-    # 🔹 Separación correcta
-    subtotal_estructuras = df_detalle[
-        df_detalle["Punto"].notna()
-    ]["Subtotal"].sum()
+    subtotal_estructuras = df_detalle[df_detalle["Punto"].notna()]["Subtotal"].sum()
+    subtotal_conductores = df_detalle[df_detalle["Punto"].isna()]["Subtotal"].sum()
 
-    subtotal_conductores = df_detalle[
-        df_detalle["Punto"].isna()
-    ]["Subtotal"].sum()
-
-    # 🔹 Costos fijos de logística
     grua = 18000
     rastra = 25000
 
-    # 🔹 Totales
     total_mano_obra = subtotal_estructuras + subtotal_conductores
     total_logistica = grua + rastra
     total_general = total_mano_obra + total_logistica
 
-    # 🔹 Tabla
     data = [
         ["Concepto", "Monto (L)"],
         ["Mano de Obra (Estructuras)", f"L {subtotal_estructuras:,.2f}"],
@@ -187,22 +144,23 @@ def pagina_resumen_global(elementos, styles, df_detalle):
     tabla = Table(data, colWidths=[250, 150])
     tabla.setStyle(estilo_tabla())
 
-    # 🔹 Agregar al PDF
-    elementos.append(tabla)
+    # 🔥 Resaltar subtotales
+    tabla.setStyle([
+        ("BACKGROUND", (0, 3), (-1, 3), colors.lightgrey),
+        ("BACKGROUND", (0, 6), (-1, 6), colors.lightgrey),
+    ])
+
     elementos.append(tabla)
     elementos.append(PageBreak())
+
+
 # ======================================================
 # 💰 COTIZACIÓN
 # ======================================================
 def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
-    subtotal_estructuras = df_detalle[
-        df_detalle["Punto"].notna()
-    ]["Subtotal"].sum()
-
-    subtotal_conductores = df_detalle[
-        df_detalle["Punto"].isna()
-    ]["Subtotal"].sum()
+    subtotal_estructuras = df_detalle[df_detalle["Punto"].notna()]["Subtotal"].sum()
+    subtotal_conductores = df_detalle[df_detalle["Punto"].isna()]["Subtotal"].sum()
 
     mano_obra = subtotal_estructuras + subtotal_conductores
 
@@ -235,6 +193,7 @@ def pagina_cotizacion(elementos, styles, doc, df_detalle):
     elementos.append(tabla)
     elementos.append(PageBreak())
 
+
 # ======================================================
 # 📄 DETALLE POR PUNTO
 # ======================================================
@@ -246,9 +205,7 @@ def pagina_detalle(elementos, styles, df_detalle, df_totales):
     for punto in sorted(df_detalle["Punto"].dropna().unique()):
 
         df_p = df_detalle[df_detalle["Punto"] == punto]
-
-        row = df_totales[df_totales["Punto"] == punto]
-        total = row["TOTAL_PUNTO"].values[0] if not row.empty else 0
+        total = df_totales[df_totales["Punto"] == punto]["TOTAL_PUNTO"].values[0]
 
         data = [[f"PUNTO: {punto}", "", "", ""]]
         data.append(["Estructura", "Cant", "Precio", "Subtotal"])
@@ -261,16 +218,10 @@ def pagina_detalle(elementos, styles, df_detalle, df_totales):
                 f"{r['Subtotal']:,.2f}",
             ])
 
-        data.append([
-            f"SUBTOTAL PUNTO {punto}",
-            "",
-            "",
-            f"L {total:,.2f}"
-        ])
+        data.append([f"SUBTOTAL PUNTO {punto}", "", "", f"L {total:,.2f}"])
 
         tabla = Table(data, colWidths=[200, 60, 80, 100])
         tabla.setStyle(estilo_tabla())
-
         tabla.setStyle([
             ("SPAN", (0, -1), (2, -1)),
             ("ALIGN", (0, -1), (-1, -1), "RIGHT"),
@@ -281,11 +232,10 @@ def pagina_detalle(elementos, styles, df_detalle, df_totales):
 
 
 # ======================================================
-# 🚀 FUNCIÓN PRINCIPAL
+# 🚀 GENERADOR PDF
 # ======================================================
 def generar_pdf_contratista(entrada):
 
-    # 🔥 SOPORTE FLEXIBLE
     if isinstance(entrada, pd.DataFrame):
         df_estructuras = entrada
         df_cables = None
@@ -294,56 +244,34 @@ def generar_pdf_contratista(entrada):
         df_cables = getattr(entrada, "df_cables", None)
 
     if df_estructuras is None:
-        raise ValueError("No hay estructuras para generar el PDF")
+        raise ValueError("No hay estructuras")
 
-    # 🔧 CÁLCULO
     df_puntos = calcular_estructuras_por_punto(df_estructuras)
 
-    resultado = calcular_mano_obra_proyecto(
-        df_puntos,
-        df_cables
-    )
+    resultado = calcular_mano_obra_proyecto(df_puntos, df_cables)
 
     df_detalle = resultado["df_detalle"]
     df_totales = resultado["df_totales"]
 
-    # 📄 PDF
     buffer = BytesIO()
     styles = getSampleStyleSheet()
 
-    doc = SimpleDocTemplate(
-        buffer,
-        topMargin=120,  # 🔥 LOGO MÁS ARRIBA
-        leftMargin=40,
-        rightMargin=40
-    )
+    doc = SimpleDocTemplate(buffer, topMargin=120, leftMargin=40, rightMargin=40)
 
     elementos = []
 
-    # Página 1
     elementos.append(Paragraph("PRESUPUESTO DE INSTALACIÓN", styles["Title"]))
     elementos.append(Spacer(1, 16))
     elementos.append(tabla_presupuesto(df_detalle))
     elementos.append(PageBreak())
 
-    # Página 2
     pagina_resumen(elementos, styles, df_totales)
-
-    # Página 3 🔥
     pagina_resumen_global(elementos, styles, df_detalle)
-
-    # Página 4
     pagina_cotizacion(elementos, styles, doc, df_detalle)
-
-    # Página 5+
     pagina_detalle(elementos, styles, df_detalle, df_totales)
 
-    doc.build(
-        elementos,
-        onFirstPage=fondo_pagina,
-        onLaterPages=fondo_pagina
-    )
+    doc.build(elementos, onFirstPage=fondo_pagina, onLaterPages=fondo_pagina)
 
-    pdf_bytes = buffer.getvalue()
+    pdf = buffer.getvalue()
     buffer.close()
-    return pdf_bytes
+    return pdf
