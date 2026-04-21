@@ -131,7 +131,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
                 "Estructura": f"Fases BT {descripcion}",
                 "Cantidad": longitud,
                 "Precio": 35,
-                "Subtotal": round(FASES_BT * longitud * 35, 2),
+                "Subtotal": round(longitud * 35, 2),
             })
 
         # ===============================
