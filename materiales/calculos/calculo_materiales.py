@@ -86,15 +86,33 @@ def _normalizar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
 def _normalizar_df_materiales(df: pd.DataFrame) -> pd.DataFrame:
 
+    import re
+
     df = df.copy()
 
-    df["Materiales"] = df["Materiales"].astype(str).str.strip()
-    df["Unidad"] = df["Unidad"].astype(str).str.strip()
+    # 🔥 NORMALIZAR MATERIAL (CLAVE)
+    df["Materiales"] = (
+        df["Materiales"]
+        .astype(str)
+        .str.upper()
+        .str.replace(r'\s+', ' ', regex=True)   # elimina espacios dobles
+        .str.replace('"', '')                  # elimina comillas
+        .str.replace(r'\s*#\s*', '#', regex=True)  # normaliza "# 3/0"
+        .str.strip()
+    )
+
+    # 🔧 UNIDAD
+    df["Unidad"] = (
+        df["Unidad"]
+        .astype(str)
+        .str.upper()
+        .str.strip()
+    )
+
+    # 🔧 CANTIDAD
     df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
 
     return df
-
-
 # =========================================================
 # VALIDAR MATCH CONTRA BASE
 # =========================================================
@@ -204,6 +222,12 @@ def calcular_materiales_proyecto(
         df_detalle = pd.concat(
             [df_detalle, df_cables_mat],
             ignore_index=True
+        )
+
+        df_detalle = (
+            df_detalle
+            .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+            .sum()
         )
 
         debug_guardar("CALCULO::cables_integrados", {
