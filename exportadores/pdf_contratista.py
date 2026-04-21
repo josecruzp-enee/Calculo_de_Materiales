@@ -118,8 +118,8 @@ def tabla_presupuesto_general(df_detalle):
     # ======================================================
 
     # Grúa
-    horas_grua = 12
-    precio_hora = 1500
+    horas_grua = 36
+    precio_hora = 1700
     total_grua = horas_grua * precio_hora
 
     data.append([
