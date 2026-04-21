@@ -67,24 +67,30 @@ def _extraer_tension(datos: Dict[str, Any]) -> float:
 # DF ESTRUCTURAS
 # =========================================================
 def adaptar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
+
     if df is None:
         raise ValueError("df_estructuras None")
 
     df = df.copy()
 
-    # 🔹 Normalizar nombres
-    df.columns = [str(c).strip().upper() for c in df.columns]
+    # 🔹 Normalizar nombres (SIN upper)
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # 🔹 VALIDAR QUE EXISTE PUNTO (CRÍTICO)
+    if "Punto" not in df.columns:
+        raise ValueError(f"DF sin columna Punto: {list(df.columns)}")
 
     # 🔹 Definir CLAVE (SIEMPRE CODIGO)
-    if "CODIGODEESTRUCTURA" in df.columns:
-        df["Estructura"] = df["CODIGODEESTRUCTURA"]
+    if "codigodeestructura" in df.columns:
+        df["Estructura"] = df["codigodeestructura"]
     elif "CODIGO" in df.columns:
         df["Estructura"] = df["CODIGO"]
+    elif "Estructura" in df.columns:
+        df["Estructura"] = df["Estructura"]
     elif "ESTRUCTURA" in df.columns:
-        # ⚠️ solo válido si viene del DXF (códigos tipo A-I-1)
         df["Estructura"] = df["ESTRUCTURA"]
     else:
-        raise ValueError("No se encontró columna válida de estructura")
+        raise ValueError(f"No se encontró columna válida de estructura: {list(df.columns)}")
 
     # 🔹 Forzar serie
     col = df["Estructura"]
@@ -98,8 +104,11 @@ def adaptar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
            .str.strip()
     )
 
-    return df
+    # 🔹 ASEGURAR CANTIDAD
+    if "Cantidad" not in df.columns:
+        df["Cantidad"] = 1
 
+    return df
 
 # =========================================================
 # MAPA INDICE (DESCRIPCIONES)
