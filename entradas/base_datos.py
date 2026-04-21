@@ -263,9 +263,10 @@ def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
             mapa[codigo] = desc
 
         # DEBUG (opcional, puedes quitarlo luego)
-        print(f"[DEBUG] Hoja índice detectada: {nombre}")
-        print(f"[DEBUG] Columnas: {df.columns.tolist()}")
-        print(f"[DEBUG] Muestra mapa: {list(mapa.items())[:5]}")
+        from ayuda.debug import debug_guardar
+        debug_guardar("columnas_detectadas", df.columns.tolist())
+        debug_guardar("col_codigo_detectado", col_codigo)
+        debug_guardar("col_desc_detectado", col_desc)
 
         return mapa
 
