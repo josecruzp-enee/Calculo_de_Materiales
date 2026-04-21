@@ -125,15 +125,37 @@ def aplicar_descripciones(df: pd.DataFrame, mapa: dict, debug: dict) -> pd.DataF
 
     df = df.copy()
 
+    # 1. Generas la descripción
     df["Descripcion"] = df["Estructura"].map(mapa).fillna("")
 
+    # 2. Detectas cuáles NO tienen match
     sin_desc = df[df["Descripcion"] == ""]["Estructura"].unique()
 
+    # 3. Métricas actuales (YA LAS TIENES)
     dbg(debug, "MATCH_OK", int((df["Descripcion"] != "").sum()))
     dbg(debug, "SIN_MATCH", list(sin_desc)[:15])
 
-    return df
+    # =====================================================
+    # 🔥 AQUÍ VA TU AVISO (JUSTO AQUÍ)
+    # =====================================================
 
+    total = len(df)
+    sin = len(sin_desc)
+
+    if total > 0:
+        porcentaje = round((sin / total) * 100, 2)
+    else:
+        porcentaje = 0
+
+    dbg(debug, "AVISO_DESCRIPCION", {
+        "sin_descripcion": sin,
+        "total": total,
+        "porcentaje": porcentaje,
+        "ejemplos": list(sin_desc)[:10]
+    })
+
+    # 4. retornas normal
+    return df
 
 # =========================================================
 # ORQUESTADOR PRINCIPAL
