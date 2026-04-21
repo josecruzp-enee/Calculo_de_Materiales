@@ -227,6 +227,8 @@ def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
         # ==========================================
         df = df.copy()
         df.columns = [_norm_col(c) for c in df.columns]
+        from ayuda.debug import debug_guardar
+        debug_guardar("columnas_normalizadas", df.columns.tolist())
 
         # ==========================================
         # DETECCIÓN FLEXIBLE DE COLUMNAS
