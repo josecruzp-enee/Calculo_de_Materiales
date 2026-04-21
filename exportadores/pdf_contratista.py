@@ -113,26 +113,54 @@ def tabla_presupuesto_general(df_detalle):
 
         total += r["Subtotal"]
 
-    # 🔥 ESPACIO VISUAL
-    data.append(["", "", "", ""])
-
     # ======================================================
-    # 🔥 COSTOS ADICIONALES (SIEMPRE AL FINAL)
+    # 🔥 COSTOS ADICIONALES CON CANTIDAD
     # ======================================================
-    grua = 18000
-    rastra = 25000
-    ingenieria = 25000
 
-    data.append(["Equipo Grúa", "", "", f"L {grua:,.2f}"])
-    data.append(["Flete de Postes", "", "", f"L {rastra:,.2f}"])
-    data.append(["Ingeniería", "", "", f"L {ingenieria:,.2f}"])
+    # Grúa
+    horas_grua = 12
+    precio_hora = 1500
+    total_grua = horas_grua * precio_hora
+
+    data.append([
+        "Equipo Grúa",
+        f"L {precio_hora:,.2f}",
+        horas_grua,
+        f"L {total_grua:,.2f}"
+    ])
+
+    # Flete
+    flete_unit = 25000
+    data.append([
+        "Flete de Postes",
+        f"L {flete_unit:,.2f}",
+        1,
+        f"L {flete_unit:,.2f}"
+    ])
+
+    # Ingeniería
+    ingenieria_unit = 25000
+    data.append([
+        "Ingeniería",
+        f"L {ingenieria_unit:,.2f}",
+        1,
+        f"L {ingenieria_unit:,.2f}"
+    ])
 
     # ======================================================
     # 🔥 TOTAL GENERAL ÚNICO
     # ======================================================
-    total_general = total + grua + rastra + ingenieria
+    total_general = total + total_grua + flete_unit + ingenieria_unit
 
-    data.append(["", "", "TOTAL GENERAL", f"L {total_general:,.2f}"])
+    # espacio solo antes del total (correcto visualmente)
+    data.append(["", "", "", ""])
+
+    data.append([
+        "",
+        "",
+        "TOTAL GENERAL",
+        f"L {total_general:,.2f}"
+    ])
 
     tabla = Table(data, colWidths=[320, 80, 60, 90])
     tabla.setStyle(estilo_tabla())
