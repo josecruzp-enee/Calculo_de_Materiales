@@ -220,6 +220,8 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
     bytes (PDF)
     """
 
+    from ayuda.debug import debug_guardar
+
     debug_guardar("PDF", "ESTRUCTURAS_POR_PUNTO_IN", df.shape if isinstance(df, pd.DataFrame) else None)
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
@@ -233,14 +235,44 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
 
     elems = _header("ESTRUCTURAS POR PUNTO", nombre_proy)
 
-    if df is None or df.empty:
+    # =====================================================
+    # VALIDACIÓN
+    # =====================================================
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         elems.append(Paragraph("No hay datos.", styleN))
         doc.build(elems)
         return buffer.getvalue()
 
-    col_codigo = "CODIGO" if "CODIGO" in df.columns else "Estructura"
+    # 🔥 DEBUG CLAVE
+    debug_guardar("PDF_ESTRUCTURAS_COLUMNAS", list(df.columns))
 
+    # =====================================================
+    # ASEGURAR COLUMNA PUNTO
+    # =====================================================
+    if "Punto" not in df.columns:
+        debug_guardar("WARNING", {
+            "mensaje": "No existe columna Punto, se usará GLOBAL",
+            "columnas": list(df.columns)
+        })
+        df = df.copy()
+        df["Punto"] = "GLOBAL"
+
+    # =====================================================
+    # ASEGURAR COLUMNA ESTRUCTURA
+    # =====================================================
+    if "Estructura" not in df.columns:
+        raise ValueError(f"Falta columna 'Estructura'. Columnas: {list(df.columns)}")
+
+    # =====================================================
+    # DEFINIR COLUMNA CÓDIGO
+    # =====================================================
+    col_codigo = "Estructura"
+
+    # =====================================================
+    # AGRUPAR POR PUNTO
+    # =====================================================
     for punto, df_p in df.groupby("Punto"):
+
         elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
 
         data = [["Estructura", "Descripción", "Cantidad"]]
@@ -252,7 +284,12 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
                 escape(str(r.get("Cantidad", ""))),
             ])
 
-        tabla = Table(data, colWidths=[doc.width*0.18, doc.width*0.67, doc.width*0.15], repeatRows=1)
+        tabla = Table(
+            data,
+            colWidths=[doc.width * 0.18, doc.width * 0.67, doc.width * 0.15],
+            repeatRows=1
+        )
+
         tabla.setStyle(estilo_tabla())
 
         elems.append(tabla)
@@ -261,7 +298,6 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
     doc.build(elems)
 
     return buffer.getvalue()
-
 
 # ==========================================================
 # PDF: MATERIALES POR PUNTO (FALTANTE)
