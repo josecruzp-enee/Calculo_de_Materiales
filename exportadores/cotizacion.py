@@ -89,7 +89,7 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
     # =====================================================
     # CÁLCULOS
     # =====================================================
-    ingenieria = 25,000
+    ingenieria = 25000
     subtotal = total_base + ingenieria
     total_final = subtotal
 
