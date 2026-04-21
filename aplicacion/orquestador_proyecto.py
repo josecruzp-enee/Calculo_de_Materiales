@@ -291,6 +291,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         entrada_rep = EntradaReportes(
             df_estructuras=df_estructuras,
+            df_estructuras=res_mat.df_estructuras_por_punto,
             df_materiales=df_materiales,
             df_materiales_por_punto=res_mat.df_materiales_por_punto,
             base_datos=salida.base_datos,
