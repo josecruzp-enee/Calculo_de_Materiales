@@ -285,6 +285,13 @@ def pagina_detalle(elementos, styles, df_detalle, df_totales):
 # ======================================================
 def generar_pdf_contratista(entrada):
 
+    from io import BytesIO
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet
+
+    # ======================================================
+    # 📥 ENTRADAS
+    # ======================================================
     if isinstance(entrada, pd.DataFrame):
         df_estructuras = entrada
         df_cables = None
@@ -295,6 +302,9 @@ def generar_pdf_contratista(entrada):
     if df_estructuras is None:
         raise ValueError("No hay estructuras")
 
+    # ======================================================
+    # ⚙️ CÁLCULO
+    # ======================================================
     df_puntos = calcular_estructuras_por_punto(df_estructuras)
 
     resultado = calcular_mano_obra_proyecto(df_puntos, df_cables)
@@ -302,25 +312,67 @@ def generar_pdf_contratista(entrada):
     df_detalle = resultado["df_detalle"]
     df_totales = resultado["df_totales"]
 
+    # ======================================================
+    # 📄 PDF
+    # ======================================================
     buffer = BytesIO()
     styles = getSampleStyleSheet()
 
-    doc = SimpleDocTemplate(buffer, topMargin=120, leftMargin=40, rightMargin=40)
+    doc = SimpleDocTemplate(
+        buffer,
+        topMargin=120,
+        leftMargin=40,
+        rightMargin=40
+    )
 
     elementos = []
 
+    # ======================================================
+    # 🔥 1. TABLA GENERAL (NUEVA - PRIMERA)
+    # ======================================================
+    elementos.append(Paragraph("CUADRO GENERAL DE PRECIOS", styles["Title"]))
+    elementos.append(Spacer(1, 16))
+    elementos.append(tabla_presupuesto_general(df_detalle))
+    elementos.append(PageBreak())
+
+    # ======================================================
+    # 🔹 2. TABLA ORIGINAL (SE MANTIENE)
+    # ======================================================
     elementos.append(Paragraph("PRESUPUESTO DE INSTALACIÓN", styles["Title"]))
     elementos.append(Spacer(1, 16))
     elementos.append(tabla_presupuesto(df_detalle))
     elementos.append(PageBreak())
 
+    # ======================================================
+    # 🔹 3. RESUMEN POR PUNTO
+    # ======================================================
     pagina_resumen(elementos, styles, df_totales)
+
+    # ======================================================
+    # 🔹 4. RESUMEN GLOBAL
+    # ======================================================
     pagina_resumen_global(elementos, styles, df_detalle)
+
+    # ======================================================
+    # 🔹 5. COTIZACIÓN
+    # ======================================================
     pagina_cotizacion(elementos, styles, doc, df_detalle)
+
+    # ======================================================
+    # 🔹 6. DETALLE POR PUNTO
+    # ======================================================
     pagina_detalle(elementos, styles, df_detalle, df_totales)
 
-    doc.build(elementos, onFirstPage=fondo_pagina, onLaterPages=fondo_pagina)
+    # ======================================================
+    # 🧱 BUILD
+    # ======================================================
+    doc.build(
+        elementos,
+        onFirstPage=fondo_pagina,
+        onLaterPages=fondo_pagina
+    )
 
     pdf = buffer.getvalue()
     buffer.close()
+
     return pdf
