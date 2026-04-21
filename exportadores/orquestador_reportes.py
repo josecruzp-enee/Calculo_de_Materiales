@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import pandas as pd
 import traceback
-
+from exportadores.pdf_contratista import generar_pdf_contratista
 
 # =========================================================
 # 📦 CONTRATO
@@ -133,6 +133,8 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 datos_proyecto=datos_proyecto,
                 costos=resultado_costos_proyecto,
             )),
+
+            ("contratista.pdf", lambda: generar_pdf_contratista(entrada)),
         ]
 
         # =====================================================
