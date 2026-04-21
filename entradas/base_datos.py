@@ -246,7 +246,7 @@ def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
             if "cod" in c_lower:
                 col_codigo = c
 
-            if "desc" in c_lower:
+            if "descrip" in c_lower or "material" in c_lower:
                 col_desc = c
 
         debug_guardar(f"INDICE_{nombre}_COL_CODIGO", col_codigo)
