@@ -23,6 +23,42 @@ from exportadores.pdf_base import (
     nombre_proyecto_seguro,
 )
 
+def _debug_indice(base_datos):
+    import streamlit as st
+    import pandas as pd
+
+    st.write("DEBUG ▶ base_datos keys:", list(base_datos.keys()) if base_datos else "None")
+
+    df_indice = None
+    if base_datos:
+        df_indice = base_datos.get("indice") or base_datos.get("INDICE")
+
+    st.write("DEBUG ▶ df_indice tipo:", type(df_indice))
+
+    if isinstance(df_indice, pd.DataFrame):
+        st.write("DEBUG ▶ columnas indice:", list(df_indice.columns))
+        st.write("DEBUG ▶ muestra indice:", df_indice.head(3))
+
+        df_idx = df_indice.copy()
+        df_idx.columns = [str(c).strip().lower() for c in df_idx.columns]
+
+        st.write("DEBUG ▶ columnas normalizadas:", df_idx.columns.tolist())
+
+        col_codigo = next((c for c in df_idx.columns if "codigo" in c), None)
+        col_desc   = next((c for c in df_idx.columns if "descrip" in c), None)
+
+        st.write("DEBUG ▶ col_codigo:", col_codigo)
+        st.write("DEBUG ▶ col_desc:", col_desc)
+
+        if col_codigo and col_desc:
+            mapa_desc = dict(zip(
+                df_idx[col_codigo].astype(str).str.strip().str.upper(),
+                df_idx[col_desc].astype(str).str.strip()
+            ))
+
+            st.write("DEBUG ▶ mapa_len:", len(mapa_desc))
+            st.write("DEBUG ▶ sample mapa:", list(mapa_desc.items())[:5])
+
 
 # ==========================================================
 # 🎯 HEADER ESTÁNDAR (NUEVO)
@@ -126,6 +162,9 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
         .str.upper()
     )
 
+    _debug_indice(base_datos)
+
+    
     if base_datos and "indice" in base_datos:
 
         df_indice = base_datos["indice"]
