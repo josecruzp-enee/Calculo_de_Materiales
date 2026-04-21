@@ -23,57 +23,36 @@ from exportadores.pdf_base import (
     nombre_proyecto_seguro,
 )
 
+from ayuda.debug import debug_guardar
+
+
+# ==========================================================
+# DEBUG INDICE
+# ==========================================================
 def _debug_indice(base_datos):
-    import streamlit as st
-    import pandas as pd
-    import streamlit as st
-    st.write("HOJAS CARGADAS:", list(base_datos.keys()))
-    st.write("DEBUG ▶ base_datos keys:", list(base_datos.keys()) if base_datos else "None")
-    st.write("DEBUG ▶ primeras keys reales:", list(base_datos.keys())[:20])  # 🔥 ESTA LÍNEA NUEVA
 
     df_indice = None
     if base_datos:
-        df_indice = base_datos.get("indice") or base_datos.get("INDICE")
+        df_indice = base_datos.get("INDICE") or base_datos.get("indice")
 
-    st.write("DEBUG ▶ df_indice tipo:", type(df_indice))
+    debug_guardar("PDF", "INDICE", "existe", df_indice is not None)
 
     if isinstance(df_indice, pd.DataFrame):
-        st.write("DEBUG ▶ columnas indice:", list(df_indice.columns))
-        st.write("DEBUG ▶ muestra indice:", df_indice.head(3))
+        debug_guardar("PDF", "INDICE", "columnas", list(df_indice.columns))
+        debug_guardar("PDF", "INDICE", "preview", df_indice.head(3))
 
-        df_idx = df_indice.copy()
-        df_idx.columns = [str(c).strip().lower() for c in df_idx.columns]
-
-        st.write("DEBUG ▶ columnas normalizadas:", df_idx.columns.tolist())
-
-        col_codigo = next((c for c in df_idx.columns if "codigo" in c), None)
-        col_desc   = next((c for c in df_idx.columns if "descrip" in c), None)
-
-        st.write("DEBUG ▶ col_codigo:", col_codigo)
-        st.write("DEBUG ▶ col_desc:", col_desc)
-
-        if col_codigo and col_desc:
-            mapa_desc = dict(zip(
-                df_idx[col_codigo].astype(str).str.strip().str.upper(),
-                df_idx[col_desc].astype(str).str.strip()
-            ))
-
-            st.write("DEBUG ▶ mapa_len:", len(mapa_desc))
-            st.write("DEBUG ▶ sample mapa:", list(mapa_desc.items())[:5])
 
 # ==========================================================
-# 🎯 HEADER ESTÁNDAR (NUEVO)
+# HEADER
 # ==========================================================
 def _header(titulo, nombre_proy):
-
-    from reportlab.lib.enums import TA_CENTER
 
     styleTitulo = styles["Title"].clone("titulo_center")
     styleTitulo.alignment = TA_CENTER
 
     styleProyecto = styles["Normal"].clone("proyecto_center")
     styleProyecto.alignment = TA_CENTER
-    styleProyecto.fontSize = 11      # 🔥 AJUSTE CLAVE
+    styleProyecto.fontSize = 11
     styleProyecto.leading = 13
 
     return [
@@ -85,7 +64,7 @@ def _header(titulo, nombre_proy):
 
 
 # ==========================================================
-# PDF: RESUMEN DE MATERIALES (GLOBAL)
+# PDF: MATERIALES GLOBAL
 # ==========================================================
 def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 
@@ -122,13 +101,11 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     elems.append(tabla)
     doc.build(elems)
 
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
+    return buffer.getvalue()
 
 
 # ==========================================================
-# PDF: RESUMEN DE ESTRUCTURAS (GLOBAL)
+# PDF: ESTRUCTURAS GLOBAL
 # ==========================================================
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None, datos_proyecto=None):
 
@@ -153,7 +130,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     df = df_estructuras.copy()
 
-    col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
+    # 🔥 USO NUEVO
+    col_codigo = "CODIGO" if "CODIGO" in df.columns else "Estructura"
 
     df[col_codigo] = (
         df[col_codigo]
@@ -165,26 +143,35 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     _debug_indice(base_datos)
 
-    
-    if base_datos and "indice" in base_datos:
+    # ======================================================
+    # MAPA DESCRIPCIÓN
+    # ======================================================
+    if base_datos and ("INDICE" in base_datos or "indice" in base_datos):
 
-        df_indice = base_datos["indice"]
+        df_indice = base_datos.get("INDICE") or base_datos.get("indice")
 
         if isinstance(df_indice, pd.DataFrame):
 
-            df_indice["Código de Estructura"] = (
-                df_indice["Código de Estructura"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-            )
+            df_indice = df_indice.copy()
+            df_indice.columns = [str(c).strip().upper() for c in df_indice.columns]
 
-            mapa_desc = dict(zip(
-                df_indice["Código de Estructura"],
-                df_indice["Descripción"]
-            ))
+            if "CODIGO" in df_indice.columns:
 
-            df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
+                df_indice["CODIGO"] = (
+                    df_indice["CODIGO"]
+                    .astype(str)
+                    .str.strip()
+                    .str.upper()
+                )
+
+                mapa_desc = dict(zip(
+                    df_indice["CODIGO"],
+                    df_indice.get("DESCRIPCION", "")
+                ))
+
+                debug_guardar("PDF", "MAPA", "tamaño", len(mapa_desc))
+
+                df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
 
     else:
         df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
@@ -212,9 +199,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     elems.append(tabla)
     doc.build(elems)
 
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
+    return buffer.getvalue()
 
 
 # ==========================================================
@@ -238,7 +223,7 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
         doc.build(elems)
         return buffer.getvalue()
 
-    col_codigo = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
+    col_codigo = "CODIGO" if "CODIGO" in df.columns else "Estructura"
 
     for punto, df_p in df.groupby("Punto"):
 
@@ -269,63 +254,4 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
         elems.append(Spacer(1, 10))
 
     doc.build(elems)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
-
-
-# ==========================================================
-# PDF: MATERIALES POR PUNTO
-# ==========================================================
-def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
-
-    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
-
-    buffer = BytesIO()
-    doc = BaseDocTemplate(buffer, pagesize=letter)
-
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
-    template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
-    doc.addPageTemplates([template])
-
-    elems = _header("MATERIALES POR PUNTO", nombre_proy)
-
-    if df is None or df.empty:
-        elems.append(Paragraph("No hay materiales.", styleN))
-        doc.build(elems)
-        return buffer.getvalue()
-
-    for punto, df_p in df.groupby("Punto"):
-
-        elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
-
-        df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
-
-        data = [["Material", "Unidad", "Cantidad"]]
-
-        for _, r in df_agr.iterrows():
-            data.append([
-                Paragraph(formatear_material(r["Materiales"]), styleN),
-                escape(str(r["Unidad"])),
-                f"{float(r['Cantidad']):.2f}",
-            ])
-
-        tabla = Table(
-            data,
-            colWidths=[
-                doc.width * 0.55,
-                doc.width * 0.20,
-                doc.width * 0.25
-            ],
-            repeatRows=1
-        )
-
-        tabla.setStyle(estilo_tabla())
-
-        elems.append(tabla)
-        elems.append(Spacer(1, 10))
-
-    doc.build(elems)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
+    return buffer.getvalue()
