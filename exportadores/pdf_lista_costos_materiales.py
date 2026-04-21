@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# pdf_lista_costos_materiales.py
 from __future__ import annotations
 
 from io import BytesIO
@@ -12,39 +11,50 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 
 # =========================================================
-# PDF LISTA DE MATERIALES
+# 🔧 VALIDACIÓN
 # =========================================================
-def generar_pdf_lista_materiales(df: pd.DataFrame, nombre_proyecto: str = "Proyecto") -> bytes:
+def _validar_df(df: pd.DataFrame):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        raise ValueError("DataFrame inválido o vacío")
 
-    if df is None or df.empty:
-        raise ValueError("No hay datos para generar PDF")
+    columnas = {"Materiales", "Unidad", "Cantidad", "Costo Unitario", "Costo Total"}
+    if not columnas.issubset(df.columns):
+        raise ValueError(f"Columnas inválidas: {list(df.columns)}")
 
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
 
-    styles = getSampleStyleSheet()
-    elementos = []
+# =========================================================
+# 🎨 ESTILOS
+# =========================================================
+def _get_styles():
+    return getSampleStyleSheet()
 
-    # =====================================================
-    # TÍTULO
-    # =====================================================
-    elementos.append(Paragraph(f"<b>LISTA DE MATERIALES</b>", styles["Title"]))
+
+# =========================================================
+# 🧾 HEADER
+# =========================================================
+def _build_header(elementos, styles, nombre_proyecto):
+    elementos.append(Paragraph("<b>LISTA DE MATERIALES</b>", styles["Title"]))
     elementos.append(Paragraph(f"Proyecto: {nombre_proyecto}", styles["Normal"]))
-    elementos.append(Spacer(1, 10))
+    elementos.append(Spacer(1, 12))
 
-    # =====================================================
-    # TABLA
-    # =====================================================
+
+# =========================================================
+# 📊 DATA TABLA
+# =========================================================
+def _build_data(df: pd.DataFrame):
+
     data = [["Material", "Unidad", "Cantidad", "P.U.", "Total"]]
-
-    total_general = 0
+    total_general = 0.0
 
     for _, row in df.iterrows():
-        material = str(row["Materiales"])
-        unidad = str(row["Unidad"])
-        cantidad = float(row["Cantidad"])
-        pu = float(row["Costo Unitario"])
-        total = float(row["Costo Total"])
+        try:
+            material = str(row["Materiales"])
+            unidad = str(row["Unidad"])
+            cantidad = float(row["Cantidad"])
+            pu = float(row["Costo Unitario"])
+            total = float(row["Costo Total"])
+        except Exception:
+            continue
 
         total_general += total
 
@@ -56,12 +66,18 @@ def generar_pdf_lista_materiales(df: pd.DataFrame, nombre_proyecto: str = "Proye
             f"L {total:,.2f}",
         ])
 
-    # =====================================================
-    # TOTAL FINAL
-    # =====================================================
+    return data, total_general
+
+
+# =========================================================
+# 📐 TABLA
+# =========================================================
+def _build_table(data, total_general):
+
+    # total final
     data.append(["", "", "", "<b>TOTAL</b>", f"<b>L {total_general:,.2f}</b>"])
 
-    tabla = Table(data, colWidths=[220, 60, 80, 80, 90])
+    tabla = Table(data, colWidths=[230, 60, 80, 80, 90], repeatRows=1)
 
     tabla.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
@@ -77,14 +93,54 @@ def generar_pdf_lista_materiales(df: pd.DataFrame, nombre_proyecto: str = "Proye
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
     ]))
 
-    elementos.append(tabla)
+    return tabla
 
-    # =====================================================
-    # BUILD
-    # =====================================================
+
+# =========================================================
+# 🏗 BUILD PDF
+# =========================================================
+def _build_pdf(elementos):
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+
     doc.build(elementos)
 
     pdf = buffer.getvalue()
     buffer.close()
 
+    if not pdf or len(pdf) < 100:
+        raise ValueError("PDF generado vacío")
+
     return pdf
+
+
+# =========================================================
+# 🚀 MOTOR PRINCIPAL
+# =========================================================
+def generar_pdf_lista_materiales(
+    df: pd.DataFrame,
+    nombre_proyecto: str = "Proyecto"
+) -> bytes:
+
+    # 1. validar
+    _validar_df(df)
+
+    # 2. estilos
+    styles = _get_styles()
+
+    # 3. contenedor
+    elementos = []
+
+    # 4. header
+    _build_header(elementos, styles, nombre_proyecto)
+
+    # 5. datos
+    data, total = _build_data(df)
+
+    # 6. tabla
+    tabla = _build_table(data, total)
+    elementos.append(tabla)
+
+    # 7. build
+    return _build_pdf(elementos)
