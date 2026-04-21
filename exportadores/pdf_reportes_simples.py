@@ -251,6 +251,64 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
         tabla.setStyle(estilo_tabla())
 
         elems.append(tabla)
+
+
+        elems.append(Spacer(1, 10))
+
+    doc.build(elems)
+    return buffer.getvalue()
+
+
+
+# ==========================================================
+# PDF: MATERIALES POR PUNTO
+# ==========================================================
+def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
+
+    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
+
+    buffer = BytesIO()
+    doc = BaseDocTemplate(buffer, pagesize=letter)
+
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
+    template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
+    doc.addPageTemplates([template])
+
+    elems = _header("MATERIALES POR PUNTO", nombre_proy)
+
+    if df is None or df.empty:
+        elems.append(Paragraph("No hay materiales.", styleN))
+        doc.build(elems)
+        return buffer.getvalue()
+
+    for punto, df_p in df.groupby("Punto"):
+
+        elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
+
+        df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+
+        data = [["Material", "Unidad", "Cantidad"]]
+
+        for _, r in df_agr.iterrows():
+            data.append([
+                Paragraph(formatear_material(r["Materiales"]), styleN),
+                escape(str(r["Unidad"])),
+                f"{float(r['Cantidad']):.2f}",
+            ])
+
+        tabla = Table(
+            data,
+            colWidths=[
+                doc.width * 0.55,
+                doc.width * 0.20,
+                doc.width * 0.25
+            ],
+            repeatRows=1
+        )
+
+        tabla.setStyle(estilo_tabla())
+
+        elems.append(tabla)
         elems.append(Spacer(1, 10))
 
     doc.build(elems)
