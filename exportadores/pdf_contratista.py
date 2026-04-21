@@ -183,7 +183,6 @@ def pagina_cotizacion(elementos, styles, doc, df_detalle):
         ["Logística", f"L {logistica:,.2f}"],
         ["Ingeniería", f"L {ingenieria:,.2f}"],
         ["Subtotal", f"L {subtotal:,.2f}"],
-        ["ISV (15%)", f"L {isv:,.2f}"],
         ["TOTAL", f"L {total_final:,.2f}"],
     ]
 
