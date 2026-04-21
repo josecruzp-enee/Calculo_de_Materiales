@@ -303,6 +303,15 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         res_cp = calcular_costos_proyecto(entrada_cp)
         df_costos_materiales = res_costos.get("df_materiales_costos")
+
+        # =====================================================
+        # 🔥 FIX MATERIALES POR PUNTO (AQUÍ VA)
+        # =====================================================
+        df_mat_pp = res_mat.df_materiales_por_punto.copy()
+
+        if "Punto" not in df_mat_pp.columns:
+            df_mat_pp["Punto"] = "GLOBAL"
+        
         # =====================================================
         # 7. REPORTES
         # =====================================================
