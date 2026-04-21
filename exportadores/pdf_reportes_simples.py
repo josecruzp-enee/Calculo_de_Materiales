@@ -157,7 +157,7 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     _debug_indice(base_datos)
 
     if base_datos:
-        df_indice = base_datos.get("INDICE") or base_datos.get("indice")
+        df_indice = base_datos.get("INDICE")
 
         if isinstance(df_indice, pd.DataFrame):
 
