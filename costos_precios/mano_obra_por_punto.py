@@ -92,6 +92,9 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
 
     filas = []
 
+    # 🔹 constante clara de negocio
+    FASES_BT = 2
+
     for _, c in df_cables.iterrows():
 
         tipo = str(c.get("Tipo", "")).upper()
@@ -112,7 +115,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
 
             filas.append({
                 "Punto": None,
-                "Estructura": f"Conductor MT",
+                "Estructura": f"Conductor MT {descripcion}",
                 "Cantidad": longitud,
                 "Precio": 30,
                 "Subtotal": round(longitud * 30, 2),
@@ -123,14 +126,12 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         # ===============================
         elif tipo == "BT":
 
-            fases = 2  # ya viene como 2F en tu tabla
-
             filas.append({
                 "Punto": None,
-                "Estructura": f"Fases BT",
+                "Estructura": f"Fases BT {descripcion}",
                 "Cantidad": longitud,
                 "Precio": 35,
-                "Subtotal": round(fases * longitud * 35, 2),
+                "Subtotal": round(FASES_BT * longitud * 35, 2),
             })
 
         # ===============================
@@ -140,7 +141,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
 
             filas.append({
                 "Punto": None,
-                "Estructura": f"Hilo Piloto",
+                "Estructura": f"Hilo Piloto {descripcion}",
                 "Cantidad": longitud,
                 "Precio": 28,
                 "Subtotal": round(longitud * 28, 2),
@@ -153,7 +154,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
 
             filas.append({
                 "Punto": None,
-                "Estructura": f"Neutro",
+                "Estructura": f"Neutro {descripcion}",
                 "Cantidad": longitud,
                 "Precio": 28,
                 "Subtotal": round(longitud * 28, 2),
@@ -166,7 +167,6 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         return df_detalle
 
     return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
-
 # ==========================================================
 # DETALLE POR PUNTO
 # ==========================================================
