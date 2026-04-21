@@ -36,7 +36,109 @@ def estilo_tabla():
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
     ]
 
+def tabla_presupuesto_general(df_detalle):
 
+    style_small = ParagraphStyle(
+        name="Small",
+        fontName="Helvetica",
+        fontSize=8,
+        leading=9
+    )
+
+    df = (
+        df_detalle
+        .groupby("Estructura", as_index=False)
+        .agg({
+            "Cantidad": "sum",
+            "Precio": "first",
+            "Subtotal": "sum"
+        })
+    )
+
+    # ======================================================
+    # 🔥 ORDEN JERÁRQUICO
+    # ======================================================
+    def _orden(nombre):
+
+        n = str(nombre).upper()
+
+        if "TS-" in n:
+            return 1
+        elif "PC-" in n:
+            return 2
+        elif (
+            "CONDUCTOR MT" in n
+            or "FASES BT" in n
+            or "NEUTRO" in n
+            or "HILO PILOTO" in n
+        ):
+            return 3
+        elif n.startswith("A-"):
+            return 4
+        elif n.startswith("B-"):
+            return 5
+        elif "LL-" in n:
+            return 6
+        elif n.startswith("R-"):
+            return 7
+        elif "CA-" in n or "CS-" in n:
+            return 8
+        else:
+            return 9
+
+    df["orden"] = df["Estructura"].apply(_orden)
+    df = df.sort_values(["orden", "Subtotal"], ascending=[True, False])
+
+    # ======================================================
+    # 📄 TABLA
+    # ======================================================
+    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
+    total = 0
+
+    for _, r in df.iterrows():
+
+        descripcion_txt = str(r["Estructura"]).upper()
+        texto = str(r["Estructura"]).replace("BT BT", "BT")
+        texto = f"Instalación de {texto}"
+
+        if "FASES BT" in descripcion_txt:
+            texto += " (2 Fases)"
+
+        data.append([
+            Paragraph(texto, style_small),
+            f"L {r['Precio']:,.2f}",
+            int(r["Cantidad"]),
+            f"L {r['Subtotal']:,.2f}",
+        ])
+
+        total += r["Subtotal"]
+
+    # 🔥 ESPACIO VISUAL
+    data.append(["", "", "", ""])
+
+    # ======================================================
+    # 🔥 COSTOS ADICIONALES (SIEMPRE AL FINAL)
+    # ======================================================
+    grua = 18000
+    rastra = 25000
+    ingenieria = 25000
+
+    data.append(["Equipo Grúa", "", "", f"L {grua:,.2f}"])
+    data.append(["Flete de Postes", "", "", f"L {rastra:,.2f}"])
+    data.append(["Ingeniería", "", "", f"L {ingenieria:,.2f}"])
+
+    # ======================================================
+    # 🔥 TOTAL GENERAL ÚNICO
+    # ======================================================
+    total_general = total + grua + rastra + ingenieria
+
+    data.append(["", "", "TOTAL GENERAL", f"L {total_general:,.2f}"])
+
+    tabla = Table(data, colWidths=[320, 80, 60, 90])
+    tabla.setStyle(estilo_tabla())
+
+    return tabla
+    
 # ======================================================
 # 📄 PRESUPUESTO
 # ======================================================
@@ -103,6 +205,9 @@ def tabla_presupuesto(df_detalle):
     # 🔥 Orden final
     df = df.sort_values(["orden", "Subtotal"], ascending=[True, False])
 
+
+
+    
     # ======================================================
     # 📄 TABLA
     # ======================================================
