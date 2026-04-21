@@ -205,72 +205,62 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
 # CATÁLOGO DE ESTRUCTURAS DESDE HOJA ÍNDICE (ROBUSTO)
 # ==========================================================
 def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
-    """
-    Busca en todas las hojas del Excel una tabla tipo índice con:
-    - Código de estructura
-    - Descripción
-
-    Devuelve:
-        {codigo_estructura: descripcion}
-    """
 
     if not data:
         return {}
+
+    from ayuda.debug import debug_guardar
 
     for nombre, df in data.items():
 
         if df is None or df.empty:
             continue
 
-        # ==========================================
-        # NORMALIZAR COLUMNAS
-        # ==========================================
         df = df.copy()
         df.columns = [_norm_col(c) for c in df.columns]
-        from ayuda.debug import debug_guardar
-        debug_guardar("columnas_normalizadas", df.columns.tolist())
 
-        # ==========================================
-        # DETECCIÓN FLEXIBLE DE COLUMNAS
-        # ==========================================
-        col_codigo = next(
-            (c for c in df.columns if "CODIGO" in c and "ESTRUCT" in c),
-            None
-        )
+        debug_guardar(f"REVISION_HOJA_{nombre}", df.columns.tolist())
 
-        col_desc = next(
-            (c for c in df.columns if "DESCRIP" in c),
-            None
-        )
+        # 🔥 DETECCIÓN FLEXIBLE (CLAVE)
+        col_codigo = None
+        col_desc = None
 
-        # Si no cumple, no es hoja índice
+        for c in df.columns:
+            c_lower = c.lower()
+
+            if "cod" in c_lower:
+                col_codigo = c
+
+            if "desc" in c_lower:
+                col_desc = c
+
+        debug_guardar("col_codigo_detectado", col_codigo)
+        debug_guardar("col_desc_detectado", col_desc)
+
+        # Si no cumple, no es índice
         if not col_codigo or not col_desc:
             continue
 
-        # ==========================================
-        # CONSTRUIR MAPA
-        # ==========================================
+        # 🔥 CONSTRUIR MAPA
         mapa = {}
 
         for _, r in df.iterrows():
 
-            codigo = str(r.get(col_codigo, "")).strip()
-            if not codigo or codigo.lower() == "nan":
+            codigo = str(r.get(col_codigo, "")).strip().upper()
+
+            if not codigo or codigo == "NAN":
                 continue
 
             desc = str(r.get(col_desc, "")).strip()
 
             mapa[codigo] = desc
 
-        # DEBUG (opcional, puedes quitarlo luego)
-        from ayuda.debug import debug_guardar
-        debug_guardar("columnas_detectadas", df.columns.tolist())
-        debug_guardar("col_codigo_detectado", col_codigo)
-        debug_guardar("col_desc_detectado", col_desc)
+        debug_guardar("mapa_len", len(mapa))
+        debug_guardar("mapa_sample", list(mapa.items())[:5])
+        debug_guardar("HOJA_INDICE_DETECTADA", nombre)
 
         return mapa
 
-    # Si no encontró nada
-    print("[DEBUG] No se encontró hoja índice de estructuras")
+    debug_guardar("ERROR_INDICE", "No se encontró hoja índice válida")
 
     return {}
