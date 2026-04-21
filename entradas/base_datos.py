@@ -128,7 +128,12 @@ def cargar_base_datos(ruta: Path | None = None) -> dict[str, pd.DataFrame]:
             # ==========================================================
             # 🔥 INCLUSIÓN DE HOJAS
             # ==========================================================
-            if _es_hoja_estructura(df) or nombre == "MATERIALES" or es_indice:
+            if (
+                _es_hoja_estructura(df)
+                or nombre == "MATERIALES"
+                or es_indice
+                or "INDICE" in nombre   # 🔥 FORZAR ENTRADA DE LA HOJA INDICE
+            ):
                 hojas[nombre] = df
 
         except Exception as e:
