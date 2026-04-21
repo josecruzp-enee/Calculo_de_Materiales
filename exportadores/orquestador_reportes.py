@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 import pandas as pd
 import traceback
 from exportadores.pdf_contratista import generar_pdf_contratista
-from exportadores.pdf_costo_materiales import generar_pdf_lista_materiales
+from exportadores.pdf_lista_costos_materiales import generar_pdf_lista_materiales
 # =========================================================
 # 📦 CONTRATO
 # =========================================================
