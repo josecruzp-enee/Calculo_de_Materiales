@@ -146,7 +146,8 @@ def pagina_resumen_global(elementos, styles, df_detalle):
         df_detalle["Punto"].isna()
     ]["Subtotal"].sum()
 
-    total = subtotal_estructuras + subtotal_conductores
+    
+    total = subtotal_estructuras + subtotal_conductores+grua+rastra
     grua= 18000
     rastra= 25000
     data = [
