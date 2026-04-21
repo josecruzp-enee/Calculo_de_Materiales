@@ -170,21 +170,20 @@ def calcular_estructuras_global(df_estructuras) -> pd.DataFrame:
 # POR PUNTO
 # ==========================================================
 def calcular_estructuras_por_punto(df_estructuras) -> pd.DataFrame:
-    """
-    SALIDA:
-    -------
-    DataFrame:
-        - Punto
-        - Estructura
-        - Cantidad
-    """
 
-    registros = _extraer_datos(df_estructuras)
-
-    if not registros:
+    if df_estructuras is None or df_estructuras.empty:
         return pd.DataFrame(columns=["Punto", "Estructura", "Cantidad"])
 
-    df = pd.DataFrame(registros)
+    df = df_estructuras.copy()
+
+    if "Punto" not in df.columns:
+        raise ValueError(f"DF sin columna Punto: {list(df.columns)}")
+
+    if "Estructura" not in df.columns:
+        raise ValueError(f"DF sin columna Estructura: {list(df.columns)}")
+
+    if "Cantidad" not in df.columns:
+        df["Cantidad"] = 1
 
     df_out = (
         df
@@ -193,9 +192,9 @@ def calcular_estructuras_por_punto(df_estructuras) -> pd.DataFrame:
     )
 
     debug_guardar("POR_PUNTO", "RESULTADO", "FILAS", len(df_out))
+    debug_guardar("POR_PUNTO", "PUNTOS", df_out["Punto"].unique().tolist())
 
     return df_out
-
 
 # ==========================================================
 # DESCRIPCIÓN
