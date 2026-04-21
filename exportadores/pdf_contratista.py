@@ -78,7 +78,11 @@ def tabla_presupuesto(df_detalle):
     df = (
         df_detalle
         .groupby("Estructura", as_index=False)
-        .agg({"Cantidad": "sum", "Precio": "first", "Subtotal": "sum"})
+        .agg({
+            "Cantidad": "sum",
+            "Precio": "first",
+            "Subtotal": "sum"
+        })
         .sort_values("Subtotal", ascending=False)
     )
 
@@ -86,15 +90,27 @@ def tabla_presupuesto(df_detalle):
     total = 0
 
     for _, r in df.iterrows():
-        descripcion = Paragraph(
-            f"Instalación de {r['Estructura']}",
-            style_small
-        )
+
+        descripcion_txt = str(r["Estructura"]).upper()
+
+        cantidad = r["Cantidad"]
+        precio = r["Precio"]
+
+        # 🔥 DUPLICAR METROS SOLO PARA FASES BT
+        if "FASES BT" in descripcion_txt:
+            cantidad = cantidad * 2
+
+        # 🔥 TEXTO MÁS CLARO
+        texto = f"Instalación de {r['Estructura']}"
+        if "FASES BT" in descripcion_txt:
+            texto += " (2 Fases)"
+
+        descripcion = Paragraph(texto, style_small)
 
         data.append([
             descripcion,
-            f"L {r['Precio']:,.2f}",
-            int(r["Cantidad"]),
+            f"L {precio:,.2f}",
+            int(cantidad),
             f"L {r['Subtotal']:,.2f}",
         ])
 
@@ -105,7 +121,7 @@ def tabla_presupuesto(df_detalle):
     tabla = Table(data, colWidths=[320, 80, 60, 90])
     tabla.setStyle(estilo_tabla())
 
-    return tabla
+    return tablarn tabla
 
 
 # ======================================================
