@@ -30,23 +30,32 @@ from ayuda.debug import debug_guardar
 # DEBUG INDICE
 # ==========================================================
 def _debug_indice(base_datos):
-
+    """
+    DEBUG:
+    -------
+    - Verifica si existe la hoja INDICE
+    - Muestra columnas y preview
+    """
     df_indice = None
     if base_datos:
         df_indice = base_datos.get("INDICE") or base_datos.get("indice")
 
-    debug_guardar("PDF", "INDICE", "existe", df_indice is not None)
+    debug_guardar("PDF", "INDICE_EXISTE", df_indice is not None)
 
     if isinstance(df_indice, pd.DataFrame):
-        debug_guardar("PDF", "INDICE", "columnas", list(df_indice.columns))
-        debug_guardar("PDF", "INDICE", "preview", df_indice.head(3))
+        debug_guardar("PDF", "INDICE_COLUMNAS", list(df_indice.columns))
+        debug_guardar("PDF", "INDICE_PREVIEW", df_indice.head(3))
 
 
 # ==========================================================
 # HEADER
 # ==========================================================
 def _header(titulo, nombre_proy):
-
+    """
+    SALIDA:
+    -------
+    Lista de elementos PDF (Paragraph + Spacer)
+    """
     styleTitulo = styles["Title"].clone("titulo_center")
     styleTitulo.alignment = TA_CENTER
 
@@ -67,6 +76,13 @@ def _header(titulo, nombre_proy):
 # PDF: MATERIALES GLOBAL
 # ==========================================================
 def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
+    """
+    SALIDA:
+    -------
+    bytes (PDF)
+    """
+
+    debug_guardar("PDF", "MATERIALES_GLOBAL_IN", df_mat.shape if isinstance(df_mat, pd.DataFrame) else None)
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
 
@@ -101,6 +117,8 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
     elems.append(tabla)
     doc.build(elems)
 
+    debug_guardar("PDF", "MATERIALES_GLOBAL_OUT_FILAS", len(df_agrupado))
+
     return buffer.getvalue()
 
 
@@ -108,6 +126,13 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 # PDF: ESTRUCTURAS GLOBAL
 # ==========================================================
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None, datos_proyecto=None):
+    """
+    SALIDA:
+    -------
+    bytes (PDF)
+    """
+
+    debug_guardar("PDF", "ESTRUCTURAS_GLOBAL_IN", df_estructuras.shape if isinstance(df_estructuras, pd.DataFrame) else None)
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
 
@@ -118,9 +143,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
     doc.addPageTemplates([template])
 
-    def _safe(texto):
-        return escape("" if pd.isna(texto) else str(texto))
-
     elems = _header("RESUMEN DE ESTRUCTURAS", nombre_proy)
 
     if df_estructuras is None or df_estructuras.empty:
@@ -130,24 +152,13 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     df = df_estructuras.copy()
 
-    # 🔥 USO NUEVO
     col_codigo = "CODIGO" if "CODIGO" in df.columns else "Estructura"
 
-    df[col_codigo] = (
-        df[col_codigo]
-        .astype(str)
-        .str.replace("■", "")
-        .str.strip()
-        .str.upper()
-    )
+    df[col_codigo] = df[col_codigo].astype(str).str.strip().str.upper()
 
     _debug_indice(base_datos)
 
-    # ======================================================
-    # MAPA DESCRIPCIÓN
-    # ======================================================
-    if base_datos and ("INDICE" in base_datos or "indice" in base_datos):
-
+    if base_datos:
         df_indice = base_datos.get("INDICE") or base_datos.get("indice")
 
         if isinstance(df_indice, pd.DataFrame):
@@ -157,24 +168,14 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
             if "CODIGO" in df_indice.columns:
 
-                df_indice["CODIGO"] = (
-                    df_indice["CODIGO"]
-                    .astype(str)
-                    .str.strip()
-                    .str.upper()
-                )
+                df_indice["CODIGO"] = df_indice["CODIGO"].astype(str).str.strip().str.upper()
 
                 mapa_desc = dict(zip(
                     df_indice["CODIGO"],
                     df_indice.get("DESCRIPCION", "")
                 ))
 
-                debug_guardar("PDF", "MAPA", "tamaño", len(mapa_desc))
-
                 df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
-
-    else:
-        df["Descripcion"] = df.get("Descripcion", "").fillna("").astype(str)
 
     if "Cantidad" not in df.columns:
         df["Cantidad"] = 1
@@ -188,8 +189,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     for _, r in df.iterrows():
         data.append([
-            Paragraph(_safe(r[col_codigo]), styleN),
-            Paragraph(_safe(r["Descripcion"]), styleN),
+            Paragraph(escape(str(r[col_codigo])), styleN),
+            Paragraph(escape(str(r["Descripcion"])), styleN),
             Paragraph(str(int(r["Cantidad"])), styleN),
         ])
 
@@ -199,6 +200,8 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     elems.append(tabla)
     doc.build(elems)
 
+    debug_guardar("PDF", "ESTRUCTURAS_GLOBAL_OUT_FILAS", len(df))
+
     return buffer.getvalue()
 
 
@@ -206,6 +209,13 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 # PDF: ESTRUCTURAS POR PUNTO
 # ==========================================================
 def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
+    """
+    SALIDA:
+    -------
+    bytes (PDF)
+    """
+
+    debug_guardar("PDF", "ESTRUCTURAS_POR_PUNTO_IN", df.shape if isinstance(df, pd.DataFrame) else None)
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
 
@@ -226,7 +236,6 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
     col_codigo = "CODIGO" if "CODIGO" in df.columns else "Estructura"
 
     for punto, df_p in df.groupby("Punto"):
-
         elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
 
         data = [["Estructura", "Descripción", "Cantidad"]]
@@ -238,32 +247,28 @@ def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
                 escape(str(r.get("Cantidad", ""))),
             ])
 
-        tabla = Table(
-            data,
-            colWidths=[
-                doc.width * 0.18,
-                doc.width * 0.67,
-                doc.width * 0.15
-            ],
-            repeatRows=1
-        )
-
+        tabla = Table(data, colWidths=[doc.width*0.18, doc.width*0.67, doc.width*0.15], repeatRows=1)
         tabla.setStyle(estilo_tabla())
 
         elems.append(tabla)
-
-
         elems.append(Spacer(1, 10))
 
     doc.build(elems)
+
     return buffer.getvalue()
 
 
-
 # ==========================================================
-# PDF: MATERIALES POR PUNTO
+# PDF: MATERIALES POR PUNTO (FALTANTE)
 # ==========================================================
 def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
+    """
+    SALIDA:
+    -------
+    bytes (PDF)
+    """
+
+    debug_guardar("PDF", "MATERIALES_POR_PUNTO_IN", df.shape if isinstance(df, pd.DataFrame) else None)
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
 
@@ -296,20 +301,12 @@ def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
                 f"{float(r['Cantidad']):.2f}",
             ])
 
-        tabla = Table(
-            data,
-            colWidths=[
-                doc.width * 0.55,
-                doc.width * 0.20,
-                doc.width * 0.25
-            ],
-            repeatRows=1
-        )
-
+        tabla = Table(data, colWidths=[doc.width*0.55, doc.width*0.20, doc.width*0.25], repeatRows=1)
         tabla.setStyle(estilo_tabla())
 
         elems.append(tabla)
         elems.append(Spacer(1, 10))
 
     doc.build(elems)
+
     return buffer.getvalue()
