@@ -103,7 +103,7 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
 
 def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None, datos_proyecto=None):
 
-    import streamlit as st
+    from entradas.base_datos import cargar_catalogo_estructuras_desde_indice
 
     nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
     doc, buffer = _crear_doc()
@@ -131,51 +131,21 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     )
 
     # ----------------------------------------------------------
-    # 🔥 INDICE (ÚNICA FUENTE)
+    # 🔥 MAPA DESDE BASE DE DATOS (ROBUSTO)
     # ----------------------------------------------------------
-    df_indice = base_datos.get("INDICE") if base_datos else None
+    mapa = {}
 
-    # ----------------------------------------------------------
-    # DEBUG CLARO
-    # ----------------------------------------------------------
-    st.write("DEBUG base_datos:", base_datos is not None)
-    st.write("DEBUG tiene INDICE:", isinstance(df_indice, pd.DataFrame))
+    if base_datos:
+        mapa = cargar_catalogo_estructuras_desde_indice(base_datos)
 
     # ----------------------------------------------------------
-    # MAPEO
+    # APLICAR DESCRIPCIÓN
     # ----------------------------------------------------------
-    if isinstance(df_indice, pd.DataFrame):
-
-        df_idx = df_indice.copy()
-        df_idx.columns = [c.strip().upper() for c in df_idx.columns]
-
-        col_cod_idx = next((c for c in df_idx.columns if "CODIGO" in c), None)
-        col_desc_idx = next((c for c in df_idx.columns if "DESCRIP" in c), None)
-
-        st.write("DEBUG col_cod_idx:", col_cod_idx)
-        st.write("DEBUG col_desc_idx:", col_desc_idx)
-
-        if col_cod_idx and col_desc_idx:
-
-            mapa = dict(zip(
-                df_idx[col_cod_idx].astype(str).str.strip().str.upper(),
-                df_idx[col_desc_idx].astype(str).str.strip()
-            ))
-
-            # 🔍 prueba directa
-            codigo_test = df[col_codigo].iloc[0]
-            st.write("DEBUG codigo_test:", codigo_test)
-            st.write("DEBUG descripcion_en_mapa:", mapa.get(codigo_test))
-
-            df["Descripcion"] = (
-                df[col_codigo]
-                .map(mapa)
-                .fillna("")
-            )
-        else:
-            df["Descripcion"] = ""
-    else:
-        df["Descripcion"] = ""
+    df["Descripcion"] = (
+        df[col_codigo]
+        .map(mapa)
+        .fillna("")
+    )
 
     # ----------------------------------------------------------
     # AGRUPACIÓN
@@ -214,9 +184,6 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     buffer.close()
 
     return pdf_bytes
-
-
-
 
 
 
