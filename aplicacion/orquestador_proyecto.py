@@ -109,7 +109,10 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # 2. DESCRIPCIONES
         # =====================================================
         base = salida_entradas.base_datos or {}
-        df_indice = base.get("INDICE") or base.get("indice")
+        df_indice = base.get("INDICE")
+
+        if df_indice is None:
+            df_indice = base.get("indice")
 
         mapa = {}
 
