@@ -299,9 +299,6 @@ def generar_pdf_contratista(entrada):
         onLaterPages=fondo_pagina
     )
 
-  
-    
-    doc.build(elems)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
