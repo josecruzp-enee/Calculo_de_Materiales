@@ -120,10 +120,11 @@ def construir_mapa_indice(base: dict, debug: dict) -> dict:
     col_codigo = None
     col_desc = None
 
+    # 🔥 CORRECCIÓN AQUÍ
     for c in df_indice.columns:
         if "CODIGO" in c:
             col_codigo = c
-        if "DESCRIP" in c:
+        if "DESCRIP" in c or "ESTRUCTURA" in c:
             col_desc = c
 
     if not col_codigo or not col_desc:
