@@ -90,7 +90,7 @@ def _convertir(df: pd.DataFrame):
         m_punto = re.search(r"\bP[-\s]?(\d+)\b", texto_upper)
         if m_punto:
             punto_actual = f"P-{m_punto.group(1)}"
-            continue  # esta fila solo define el punto
+            
 
         # =====================================================
         # ⚠ FALLBACK CONTROLADO
