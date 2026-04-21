@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 import pandas as pd
 import traceback
 
+
 # =========================================================
 # 📦 CONTRATO
 # =========================================================
@@ -16,6 +17,7 @@ class EntradaReportes:
     df_materiales_por_punto: pd.DataFrame
 
     base_datos: Optional[Dict[str, Any]] = None
+
     costos: Optional[Dict[str, Any]] = None
     nombre_proyecto: str = "Proyecto"
     datos_proyecto: Optional[Dict[str, Any]] = None
@@ -38,6 +40,14 @@ from exportadores.pdf_completo import generar_pdf_completo
 # =========================================================
 # 🧩 HELPERS
 # =========================================================
+def _fail(msg: str, debug: Optional[dict] = None):
+    return {
+        "archivos": {},
+        "errores": [msg],
+        "debug": debug or {},
+    }
+
+
 def _safe_exec(nombre, fn):
     try:
         return fn(), None
@@ -55,6 +65,7 @@ def _add_file(archivos, errores, nombre, contenido):
 def _validar_df(df, nombre):
     if df is None or not isinstance(df, pd.DataFrame):
         raise ValueError(f"{nombre} inválido")
+
     if df.empty:
         raise ValueError(f"{nombre} vacío")
 
@@ -69,63 +80,64 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
     archivos = {}
 
     try:
+        # =====================================================
         # VALIDACIONES
+        # =====================================================
         _validar_df(entrada.df_estructuras, "df_estructuras")
         _validar_df(entrada.df_materiales, "df_materiales")
         _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto")
 
         costos = entrada.costos or {}
+        resultado_costos_proyecto = costos
+
+        df_costos_estructura = costos.get("df_costos_estructura")
         df_precios_estructura = costos.get("df_precios_estructura")
 
         nombre = entrada.nombre_proyecto
         datos_proyecto = entrada.datos_proyecto or {}
 
         # =====================================================
-        # TASKS CORREGIDOS
+        # 📄 TASKS
         # =====================================================
         tasks = [
 
-            # ESTRUCTURAS GLOBAL
             ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(
                 entrada.df_estructuras,
                 nombre,
                 entrada.base_datos,
-                datos_proyecto
+                entrada.datos_proyecto
             )),
 
-            # ESTRUCTURAS POR PUNTO (CORRECTO)
             ("estructuras_por_punto.pdf", lambda: generar_pdf_estructuras_por_punto(
-                entrada.df_materiales_por_punto,
+                entrada.df_estructuras,
                 nombre,
-                entrada.base_datos,
-                datos_proyecto
+                entrada.datos_proyecto
             )),
 
-            # MATERIALES GLOBAL
             ("materiales.pdf", lambda: generar_pdf_materiales(
                 entrada.df_materiales,
                 nombre,
-                datos_proyecto
+                entrada.datos_proyecto
             )),
 
-            # MATERIALES POR PUNTO (CORRECTO)
             ("materiales_por_punto.pdf", lambda: generar_pdf_materiales_por_punto(
                 entrada.df_materiales_por_punto,
                 nombre,
-                datos_proyecto
+                entrada.datos_proyecto
             )),
 
-            # REPORTE COMPLETO
             ("reporte_completo.pdf", lambda: generar_pdf_completo(
                 df_materiales=entrada.df_materiales,
                 df_estructuras=entrada.df_estructuras,
                 df_precios_estructura=df_precios_estructura,
                 datos_proyecto=datos_proyecto,
-                costos=costos
+                costos=resultado_costos_proyecto,
             )),
         ]
 
+        # =====================================================
         # EJECUCIÓN
+        # =====================================================
         for nombre_archivo, fn in tasks:
 
             contenido, err = _safe_exec(nombre_archivo, fn)
@@ -136,7 +148,19 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
 
             if contenido:
                 _add_file(archivos, errores_lista, nombre_archivo, contenido)
+            else:
+                errores_lista.append(f"{nombre_archivo}: contenido vacío")
 
+        # =====================================================
+        # DEBUG SI TODO FALLA
+        # =====================================================
+        if not archivos:
+            debug["error_general"] = "No se generó ningún archivo"
+            debug["cantidad_errores"] = len(errores_lista)
+
+        # =====================================================
+        # SALIDA
+        # =====================================================
         return {
             "archivos": archivos,
             "errores": errores_lista,
@@ -144,8 +168,6 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        return {
-            "archivos": {},
-            "errores": [str(e)],
-            "debug": {"traceback": traceback.format_exc()},
-        }
+        return _fail(str(e), {
+            "traceback": traceback.format_exc()
+        })
