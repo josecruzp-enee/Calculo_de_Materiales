@@ -28,6 +28,7 @@ def _debug_indice(base_datos):
     import pandas as pd
 
     st.write("DEBUG ▶ base_datos keys:", list(base_datos.keys()) if base_datos else "None")
+    st.write("DEBUG ▶ primeras keys reales:", list(base_datos.keys())[:20])  # 🔥 ESTA LÍNEA NUEVA
 
     df_indice = None
     if base_datos:
@@ -58,7 +59,6 @@ def _debug_indice(base_datos):
 
             st.write("DEBUG ▶ mapa_len:", len(mapa_desc))
             st.write("DEBUG ▶ sample mapa:", list(mapa_desc.items())[:5])
-
 
 # ==========================================================
 # 🎯 HEADER ESTÁNDAR (NUEVO)
