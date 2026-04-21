@@ -36,9 +36,7 @@ def _debug_indice(base_datos):
     - Verifica si existe la hoja INDICE
     - Muestra columnas y preview
     """
-    df_indice = None
-    if base_datos:
-        df_indice = base_datos.get("INDICE") or base_datos.get("indice")
+    df_indice = base_datos.get("INDICE")
 
     debug_guardar("PDF", "INDICE_EXISTE", df_indice is not None)
 
