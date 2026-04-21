@@ -150,11 +150,25 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 
     df = df_estructuras.copy()
 
+    # ======================================================
+    # CODIGO
+    # ======================================================
     col_codigo = "CODIGO" if "CODIGO" in df.columns else "Estructura"
 
-    df[col_codigo] = df[col_codigo].astype(str).str.strip().str.upper()
+    df[col_codigo] = (
+        df[col_codigo]
+        .astype(str)
+        .str.replace(r"\s+", "", regex=True)
+        .str.strip()
+        .str.upper()
+    )
 
+    # ======================================================
+    # INDICE
+    # ======================================================
     _debug_indice(base_datos)
+
+    df["Descripcion"] = ""  # default seguro
 
     if base_datos:
         df_indice = base_datos.get("INDICE")
@@ -164,25 +178,57 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
             df_indice = df_indice.copy()
             df_indice.columns = [str(c).strip().upper() for c in df_indice.columns]
 
-            if "CODIGO" in df_indice.columns:
+            # VALIDACIÓN FUERTE
+            if "CODIGO" in df_indice.columns and "DESCRIPCION" in df_indice.columns:
 
-                df_indice["CODIGO"] = df_indice["CODIGO"].astype(str).str.strip().str.upper()
+                df_indice["CODIGO"] = (
+                    df_indice["CODIGO"]
+                    .astype(str)
+                    .str.replace(r"\s+", "", regex=True)
+                    .str.strip()
+                    .str.upper()
+                )
 
+                # ======================================================
+                # MAPEO
+                # ======================================================
                 mapa_desc = dict(zip(
                     df_indice["CODIGO"],
-                    df_indice.get("DESCRIPCION", "")
+                    df_indice["DESCRIPCION"].astype(str)
                 ))
 
                 df["Descripcion"] = df[col_codigo].map(mapa_desc).fillna("")
 
+                # ======================================================
+                # DEBUG REAL
+                # ======================================================
+                faltantes = df[df["Descripcion"] == ""][col_codigo].unique()
+
+                debug_guardar("PDF", "TOTAL_REGISTROS", len(df))
+                debug_guardar("PDF", "TOTAL_MATCH", int((df["Descripcion"] != "").sum()))
+                debug_guardar("PDF", "TOTAL_SIN_MATCH", len(faltantes))
+                debug_guardar("PDF", "SIN_MATCH_CODIGOS", list(faltantes)[:20])
+
+            else:
+                debug_guardar("PDF", "ERROR", "INDICE_SIN_COLUMNAS_ESPERADAS", list(df_indice.columns))
+
+    # ======================================================
+    # CANTIDAD
+    # ======================================================
     if "Cantidad" not in df.columns:
         df["Cantidad"] = 1
 
+    # ======================================================
+    # AGRUPACIÓN
+    # ======================================================
     df = df.groupby(col_codigo, as_index=False).agg({
         "Cantidad": "sum",
         "Descripcion": "first"
     })
 
+    # ======================================================
+    # TABLA
+    # ======================================================
     data = [["Estructura", "Descripción", "Cantidad"]]
 
     for _, r in df.iterrows():
@@ -196,12 +242,19 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
     tabla.setStyle(estilo_tabla())
 
     elems.append(tabla)
+
+    # ======================================================
+    # BUILD PDF
+    # ======================================================
     doc.build(elems)
 
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
     debug_guardar("PDF", "ESTRUCTURAS_GLOBAL_OUT_FILAS", len(df))
+    debug_guardar("PDF", "PDF_SIZE_BYTES", len(pdf_bytes))
 
-    return buffer.getvalue()
-
+    return pdf_bytes
 
 # ==========================================================
 # PDF: ESTRUCTURAS POR PUNTO
