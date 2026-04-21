@@ -200,7 +200,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         if not salida.ok:
             return ResultadoProyecto(
             ok=False,
-            errores=salida.errores,
+            errores=["No se generaron estructuras desde entradas"],
             warnings=salida.warnings
         )
 
