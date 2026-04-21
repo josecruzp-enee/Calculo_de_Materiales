@@ -302,7 +302,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         entrada_cp.precio_venta_proyecto = total
 
         res_cp = calcular_costos_proyecto(entrada_cp)
-
+        df_costos_materiales = res_costos.get("df_materiales_costos")
         # =====================================================
         # 7. REPORTES
         # =====================================================
