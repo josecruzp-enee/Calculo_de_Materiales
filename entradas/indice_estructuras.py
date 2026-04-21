@@ -11,10 +11,6 @@ from entradas.leer_excel import leer_indice_materiales
 # ==========================================================
 # HELPERS
 # ==========================================================
-def _norm_col(s: str) -> str:
-    return str(s).strip().upper().replace("Á", "A")
-
-
 def _norm_codigo(x) -> str:
     if x is None:
         return ""
@@ -25,6 +21,13 @@ def _norm_codigo(x) -> str:
 # CARGA ÍNDICE NORMALIZADO
 # ==========================================================
 def cargar_indice_normalizado(ruta: str | Path) -> pd.DataFrame:
+    """
+    SALIDA:
+    -------
+    DataFrame con columnas:
+        - CODIGO        → identificador único de la estructura
+        - Descripcion   → descripción textual de la estructura
+    """
 
     df = leer_indice_materiales(ruta)
 
@@ -32,48 +35,25 @@ def cargar_indice_normalizado(ruta: str | Path) -> pd.DataFrame:
         raise ValueError("El índice de estructuras está vacío")
 
     df = df.copy()
+    df.columns = [str(c).strip().upper() for c in df.columns]
 
-    # =========================
-    # NORMALIZAR COLUMNAS
-    # =========================
-    cols = {_norm_col(c): c for c in df.columns}
+    # ======================================================
+    # VALIDACIÓN SIMPLE
+    # ======================================================
+    if "CODIGO" not in df.columns:
+        raise ValueError("No existe columna CODIGO")
 
-    col_codigo = None
+    if "DESCRIPCION" not in df.columns:
+        df["DESCRIPCION"] = ""
 
-    for key in cols:
-        if "CODIGO" in key and "ESTRUCTURA" in key:
-            col_codigo = cols[key]
-            break
-
-    if not col_codigo:
-        raise ValueError("No se encontró columna de código de estructura")
-
-    col_desc = None
-    for key in cols:
-        if "DESCRIP" in key:
-            col_desc = cols[key]
-            break
-
-    # =========================
-    # CONSTRUIR DATAFRAME
-    # =========================
+    # ======================================================
+    # CONSTRUIR DATAFRAME LIMPIO
+    # ======================================================
     df_out = pd.DataFrame()
 
-    df_out["codigodeestructura"] = (
-        df[col_codigo]
-        .astype(str)
-        .map(_norm_codigo)
-    )
+    df_out["CODIGO"] = df["CODIGO"].map(_norm_codigo)
+    df_out = df_out[df_out["CODIGO"] != ""]
 
-    df_out = df_out[df_out["codigodeestructura"] != ""]
-
-    if col_desc:
-        df_out["Descripcion"] = (
-            df[col_desc]
-            .fillna("")
-            .astype(str)
-        )
-    else:
-        df_out["Descripcion"] = ""
+    df_out["Descripcion"] = df["DESCRIPCION"].fillna("").astype(str)
 
     return df_out.reset_index(drop=True)
