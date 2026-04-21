@@ -7,17 +7,58 @@ import re
 
 
 # =========================================================
-# 🔷 FUNCIÓN COMPATIBLE (NO ROMPE IMPORTS)
+# 🔷 DEBUG GUARDAR (COMPATIBLE + MULTI-DOMINIO)
 # =========================================================
-def debug_guardar(clave, valor):
+def debug_guardar(*args):
+    """
+    MODOS:
+    ✔ debug_guardar(clave, valor)
+    ✔ debug_guardar(dominio, etapa, clave, valor)
+    """
 
     if "debug_pipeline" not in st.session_state:
         st.session_state["debug_pipeline"] = {}
 
-    try:
-        st.session_state["debug_pipeline"][clave] = valor
-    except:
-        st.session_state["debug_pipeline"][clave] = str(valor)
+    dbg = st.session_state["debug_pipeline"]
+
+    # =========================
+    # MODO SIMPLE (LEGACY)
+    # =========================
+    if len(args) == 2:
+        clave, valor = args
+
+        try:
+            dbg[clave] = valor
+        except:
+            dbg[clave] = str(valor)
+
+        return
+
+    # =========================
+    # MODO PROFESIONAL
+    # =========================
+    if len(args) == 4:
+        dominio, etapa, clave, valor = args
+
+        if dominio not in dbg:
+            dbg[dominio] = {}
+
+        if etapa not in dbg[dominio]:
+            dbg[dominio][etapa] = {}
+
+        try:
+            dbg[dominio][etapa][clave] = valor
+        except:
+            dbg[dominio][etapa][clave] = str(valor)
+
+        return
+
+
+# =========================================================
+# 🔷 LIMPIAR DEBUG
+# =========================================================
+def debug_limpiar():
+    st.session_state["debug_pipeline"] = {}
 
 
 # =========================================================
@@ -26,7 +67,9 @@ def debug_guardar(clave, valor):
 def _buscar_df_estructuras():
 
     for key, val in st.session_state.items():
+
         if isinstance(val, pd.DataFrame):
+
             cols = [c.lower() for c in val.columns]
 
             if "punto" in cols and (
@@ -38,7 +81,7 @@ def _buscar_df_estructuras():
 
 
 # =========================================================
-# 🔷 NORMALIZACIÓN
+# 🔷 NORMALIZACIÓN DF
 # =========================================================
 def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 
@@ -67,7 +110,7 @@ def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =========================================================
-# 🔷 DEBUG BÁSICO (ESTABLE)
+# 🔷 VISOR DEBUG (MEJORADO)
 # =========================================================
 def seccion_debug():
 
@@ -76,18 +119,54 @@ def seccion_debug():
     debug = st.session_state.get("debug_pipeline", {})
 
     if debug:
+
         st.markdown("### 📊 Variables capturadas")
 
+        # =========================
+        # VISOR INTELIGENTE
+        # =========================
         for k, v in debug.items():
-            st.markdown(f"#### 🔹 {k}")
 
-            # 🔥 FIX DEFINITIVO JSON
-            if isinstance(v, (dict, list)):
-                st.json(v)
+            # 🔥 MODO NUEVO (DOMINIOS)
+            if isinstance(v, dict) and any(isinstance(i, dict) for i in v.values()):
+
+                st.markdown(f"# 🔷 {k}")
+
+                for etapa, contenido in v.items():
+
+                    st.markdown(f"## 🔹 {etapa}")
+
+                    for sub_k, sub_v in contenido.items():
+
+                        st.markdown(f"### {sub_k}")
+
+                        if isinstance(sub_v, (dict, list)):
+                            st.json(sub_v)
+                        elif hasattr(sub_v, "head"):
+                            st.dataframe(sub_v)
+                        else:
+                            st.write(sub_v)
+
             else:
-                st.write(v)
+                # 🔥 MODO ANTIGUO
+                st.markdown(f"#### 🔹 {k}")
+
+                if isinstance(v, (dict, list)):
+                    st.json(v)
+                elif hasattr(v, "head"):
+                    st.dataframe(v)
+                else:
+                    st.write(v)
+
     else:
         st.info("No hay debug aún")
+
+    # =====================================================
+    # BOTÓN LIMPIAR
+    # =====================================================
+    if st.button("🧹 Limpiar debug"):
+        debug_limpiar()
+        st.success("Debug limpiado")
 
     # =====================================================
     # BUSCAR DF
@@ -118,7 +197,7 @@ def seccion_debug():
 
 
 # =========================================================
-# 🔷 DEBUG COMPLETO (ANÁLISIS REAL)
+# 🔷 DEBUG COMPLETO (ANÁLISIS)
 # =========================================================
 def ejecutar_debug_completo():
 
@@ -131,14 +210,10 @@ def ejecutar_debug_completo():
         st.write(list(st.session_state.keys()))
         return
 
-    # 🔥 normalizar
     df = _normalizar_df(df)
 
     col = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
-    # =====================================================
-    # INFO
-    # =====================================================
     st.success("✔ DF detectado correctamente")
     st.write("Shape:", df.shape)
     st.write("Columnas:", list(df.columns))
@@ -159,14 +234,14 @@ def ejecutar_debug_completo():
     st.dataframe(conteo)
 
     # =====================================================
-    # PC-30
+    # VALIDACIÓN PC-30
     # =====================================================
     st.markdown("### ⚠️ Validación PC-30")
 
     df_pc30 = df[df[col].str.contains("PC-30", na=False)]
 
     st.write("Total registros PC-30:", len(df_pc30))
-    st.write("Puntos únicos con PC-30:", df_pc30["Punto"].nunique())
+    st.write("Puntos únicos:", df_pc30["Punto"].nunique())
     st.write("Lista de puntos:", sorted(df_pc30["Punto"].unique()))
 
     # =====================================================
