@@ -147,9 +147,10 @@ def pagina_resumen_global(elementos, styles, df_detalle):
     ]["Subtotal"].sum()
 
     
-    total = subtotal_estructuras + subtotal_conductores+grua+rastra
+    
     grua= 18000
     rastra= 25000
+    total = subtotal_estructuras + subtotal_conductores+grua+rastra
     data = [
         ["Concepto", "Monto (L)"],
         ["Subtotal estructuras", f"L {subtotal_estructuras:,.2f}"],
