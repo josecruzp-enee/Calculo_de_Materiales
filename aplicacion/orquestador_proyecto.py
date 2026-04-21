@@ -148,8 +148,8 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
         from ayuda.debug import debug_guardar
 
-        debug_guardar("mapa_len", len(mapa_desc))
-        debug_guardar("mapa_sample", list(mapa_desc.items())[:10])
+        debug_guardar("mapa_len", len(mapa))
+        debug_guardar("mapa_sample", list(mapa.items())[:10])
         # =====================================================
         # 3. PROYECTO
         # =====================================================
