@@ -210,69 +210,38 @@ def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
 # CATÁLOGO DE ESTRUCTURAS DESDE HOJA ÍNDICE (ROBUSTO)
 # ==========================================================
 def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict:
+    """
+    CARGA FIJA DESDE HOJA 'indice'
+    SIN DETECCIÓN, SIN HEURÍSTICA, SIN BÚSQUEDA
+    """
 
-    if not data:
-        debug_guardar("INDICE_DEBUG", "data vacío")
-        return {}
-
+    import pandas as pd
     from ayuda.debug import debug_guardar
 
-    debug_guardar("INDICE_KEYS", list(data.keys()))
+    # 🔥 1. ACCESO DIRECTO A LA HOJA
+    df = data.get("indice")
 
-    for nombre, df in data.items():
+    if df is None or not isinstance(df, pd.DataFrame):
+        debug_guardar("INDICE_ERROR", "NO EXISTE HOJA 'indice'")
+        return {}
 
-        debug_guardar("INDICE_EVALUANDO_HOJA", nombre)
+    # 🔥 2. NORMALIZACIÓN FIJA
+    df.columns = [str(c).strip().upper() for c in df.columns]
 
-        if df is None:
-            debug_guardar(f"INDICE_{nombre}_SKIP", "None")
-            continue
+    # 🔥 3. VALIDACIÓN ESTRICTA
+    if "CODIGO DE ESTRUCTURA" not in df.columns or "DESCRIPCION" not in df.columns:
+        debug_guardar("INDICE_ERROR", "COLUMNAS REQUERIDAS NO EXISTEN")
+        return {}
 
-        if df.empty:
-            debug_guardar(f"INDICE_{nombre}_SKIP", "empty")
-            continue
+    # 🔥 4. MAPA DIRECTO
+    mapa = dict(zip(
+        df["CODIGO DE ESTRUCTURA"].astype(str).str.strip().str.upper(),
+        df["DESCRIPCION"].astype(str).str.strip()
+    ))
 
-        df = df.copy()
-        df.columns = [_norm_col(c) for c in df.columns]
+    # 🔥 5. DEBUG FINAL
+    debug_guardar("INDICE_USADO", "indice")
+    debug_guardar("MAPA_LEN", len(mapa))
+    debug_guardar("MAPA_SAMPLE", list(mapa.items())[:5])
 
-        debug_guardar(f"INDICE_{nombre}_COLUMNAS", df.columns.tolist())
-
-        # 🔥 DETECCIÓN DE COLUMNAS
-        col_codigo = None
-        col_desc = None
-
-        for c in df.columns:
-            c_lower = c.lower()
-
-            if "cod" in c_lower:
-                col_codigo = c
-
-            if "descrip" in c_lower or "material" in c_lower:
-                col_desc = c
-
-        debug_guardar(f"INDICE_{nombre}_COL_CODIGO", col_codigo)
-        debug_guardar(f"INDICE_{nombre}_COL_DESC", col_desc)
-
-        if not col_codigo or not col_desc:
-            debug_guardar(f"INDICE_{nombre}_NO_VALIDO", True)
-            continue
-
-        # 🔥 CONSTRUCCIÓN MAPA
-        mapa = {}
-
-        for _, r in df.iterrows():
-
-            codigo = str(r.get(col_codigo, "")).strip().upper()
-            desc = str(r.get(col_desc, "")).strip()
-
-            if codigo and codigo != "NAN":
-                mapa[codigo] = desc
-
-        debug_guardar("MAPA_LEN", len(mapa))
-        debug_guardar("MAPA_SAMPLE", list(mapa.items())[:5])
-        debug_guardar("INDICE_USADO", nombre)
-
-        return mapa
-
-    debug_guardar("INDICE_ERROR_FINAL", "NO SE DETECTÓ NINGUNA HOJA VÁLIDA")
-
-    return {}
+    return mapa
