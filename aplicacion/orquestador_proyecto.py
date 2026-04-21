@@ -72,10 +72,32 @@ def adaptar_estructuras(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
 
-    if "codigodeestructura" in df.columns:
-        df = df.rename(columns={"codigodeestructura": "Estructura"})
+    # 🔹 Normalizar nombres
+    df.columns = [str(c).strip().upper() for c in df.columns]
 
-    df["Estructura"] = df["Estructura"].astype(str).str.upper().str.strip()
+    # 🔹 Definir CLAVE (SIEMPRE CODIGO)
+    if "CODIGODEESTRUCTURA" in df.columns:
+        df["Estructura"] = df["CODIGODEESTRUCTURA"]
+    elif "CODIGO" in df.columns:
+        df["Estructura"] = df["CODIGO"]
+    elif "ESTRUCTURA" in df.columns:
+        # ⚠️ solo válido si viene del DXF (códigos tipo A-I-1)
+        df["Estructura"] = df["ESTRUCTURA"]
+    else:
+        raise ValueError("No se encontró columna válida de estructura")
+
+    # 🔹 Forzar serie
+    col = df["Estructura"]
+    if isinstance(col, pd.DataFrame):
+        col = col.iloc[:, 0]
+
+    # 🔹 Limpieza
+    df["Estructura"] = (
+        col.astype(str)
+           .str.upper()
+           .str.strip()
+    )
+
     return df
 
 
