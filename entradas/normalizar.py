@@ -54,6 +54,7 @@ PATRON = re.compile(
     r"""
     \b(A-[IVX]+-\d+[A-Z]?)\b|
     \b(B-[IVX]+-\d+[A-Z]?)\b|
+    \b(ER-[IVX]+-\d+[A-Z]?)\b|
     \b(CS-\d+)\b|      
     \b(CA-\d+)\b|  
     \b(P[CMT][A-Z]?-\d+)\b|
