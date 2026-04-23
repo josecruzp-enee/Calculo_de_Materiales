@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
@@ -36,6 +35,10 @@ def estilo_tabla():
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
     ]
 
+
+# ======================================================
+# 🔥 TABLA GENERAL
+# ======================================================
 def tabla_presupuesto_general(df_detalle):
 
     style_small = ParagraphStyle(
@@ -55,54 +58,27 @@ def tabla_presupuesto_general(df_detalle):
         })
     )
 
-    # ======================================================
-    # 🔥 ORDEN JERÁRQUICO
-    # ======================================================
     def _orden(nombre):
-
         n = str(nombre).upper()
 
-        if "TS-" in n:
-            return 1
-        elif "PC-" in n:
-            return 2
-        elif (
-            "CONDUCTOR MT" in n
-            or "FASES BT" in n
-            or "NEUTRO" in n
-            or "HILO PILOTO" in n
-        ):
-            return 3
-        elif n.startswith("A-"):
-            return 4
-        elif n.startswith("B-"):
-            return 5
-        elif "LL-" in n:
-            return 6
-        elif n.startswith("R-"):
-            return 7
-        elif "CA-" in n or "CS-" in n:
-            return 8
-        else:
-            return 9
+        if "TS-" in n: return 1
+        elif "PC-" in n: return 2
+        elif "CONDUCTOR" in n: return 3
+        elif n.startswith("A-"): return 4
+        elif n.startswith("B-"): return 5
+        elif "LL-" in n: return 6
+        elif n.startswith("R-"): return 7
+        elif "CA-" in n or "CS-" in n: return 8
+        else: return 9
 
     df["orden"] = df["Estructura"].apply(_orden)
     df = df.sort_values(["orden", "Subtotal"], ascending=[True, False])
 
-    # ======================================================
-    # 📄 TABLA
-    # ======================================================
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
     total = 0
 
     for _, r in df.iterrows():
-
-        descripcion_txt = str(r["Estructura"]).upper()
-        texto = str(r["Estructura"]).replace("BT BT", "BT")
-        texto = f"Instalación de {texto}"
-
-        if "FASES BT" in descripcion_txt:
-            texto += " (2 Fases)"
+        texto = f"Instalación de {str(r['Estructura']).upper()}"
 
         data.append([
             Paragraph(texto, style_small),
@@ -113,204 +89,43 @@ def tabla_presupuesto_general(df_detalle):
 
         total += r["Subtotal"]
 
-    # ======================================================
-    # 🔥 COSTOS ADICIONALES CON CANTIDAD
-    # ======================================================
-
-    # Grúa
+    # COSTOS
     horas_grua = 123
     precio_hora = 1700
     total_grua = horas_grua * precio_hora
 
-    data.append([
-        "Equipo Grúa (Horas)",
-        f"L {precio_hora:,.2f}",
-        horas_grua,
-        f"L {total_grua:,.2f}"
-    ])
-
-    # Flete
     flete_unit = 24000
-    cantidad = 3
-    flete_total = flete_unit * cantidad
+    viajes = 3
+    flete_total = flete_unit * viajes
 
-    data.append([
-        "Flete de Postes (Viajes)",
-        f"L {flete_unit:,.2f}",
-        f"{cantidad}",
-        f"L {flete_total:,.2f}"
-    ])
+    ingenieria = 25000
 
-    # Ingeniería
-    ingenieria_unit = 25000
-    data.append([
-        "Ingeniería",
-        f"L {ingenieria_unit:,.2f}",
-        1,
-        f"L {ingenieria_unit:,.2f}"
-    ])
+    data.append(["Equipo Grúa (Horas)", f"L {precio_hora:,.2f}", horas_grua, f"L {total_grua:,.2f}"])
+    data.append(["Flete de Postes (Viajes)", f"L {flete_unit:,.2f}", viajes, f"L {flete_total:,.2f}"])
+    data.append(["Ingeniería", f"L {ingenieria:,.2f}", 1, f"L {ingenieria:,.2f}"])
 
-    # ======================================================
-    # 🔥 TOTAL GENERAL ÚNICO
-    # ======================================================
-    total_general = total + total_grua + flete_total + ingenieria_unit
+    total_general = total + total_grua + flete_total + ingenieria
 
-    # espacio solo antes del total (correcto visualmente)
     data.append(["", "", "", ""])
-
-    data.append([
-        "",
-        "",
-        "TOTAL GENERAL",
-        f"L {total_general:,.2f}"
-    ])
-
-    tabla = Table(data, colWidths=[320, 80, 60, 90])
-    tabla.setStyle(estilo_tabla())
-
-    return tabla
-    
-# ======================================================
-# 📄 PRESUPUESTO
-# ======================================================
-def tabla_presupuesto(df_detalle):
-
-    style_small = ParagraphStyle(
-        name="Small",
-        fontName="Helvetica",
-        fontSize=8,
-        leading=9
-    )
-
-    df = (
-        df_detalle
-        .groupby("Estructura", as_index=False)
-        .agg({
-            "Cantidad": "sum",
-            "Precio": "first",
-            "Subtotal": "sum"
-        })
-    )
-
-    # ======================================================
-    # 🔥 ORDEN JERÁRQUICO (SIN SEPARAR)
-    # ======================================================
-    def _orden(nombre):
-
-        n = str(nombre).upper()
-
-        if "TS-" in n:
-            return 1  # Transformadores
-
-        elif "PC-" in n:
-            return 2  # Postes
-
-        elif (
-            "CONDUCTOR MT" in n
-            or "FASES BT" in n
-            or "NEUTRO" in n
-            or "HILO PILOTO" in n
-        ):
-            return 3  # Conductores
-
-        elif n.startswith("A-"):
-            return 4  # Primarios
-
-        elif n.startswith("B-"):
-            return 5  # Secundarios
-
-        elif "LL-" in n:
-            return 6  # Luminarias
-
-        elif n.startswith("R-"):
-            return 7  # Retenidas
-
-        elif "CA-" in n or "CS-" in n:
-            return 8  # Aterrizajes
-
-        else:
-            return 9  # Otros
-
-    df["orden"] = df["Estructura"].apply(_orden)
-
-    # 🔥 Orden final
-    df = df.sort_values(["orden", "Subtotal"], ascending=[True, False])
-
-
-
-    
-    # ======================================================
-    # 📄 TABLA
-    # ======================================================
-    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
-    total = 0
-
-    for _, r in df.iterrows():
-
-        descripcion_txt = str(r["Estructura"]).upper()
-        cantidad = r["Cantidad"]
-        precio = r["Precio"]
-
-        # 🔥 Limpiar texto duplicado
-        texto = str(r["Estructura"]).replace("BT BT", "BT")
-        texto = f"Instalación de {texto}"
-
-        # 🔥 Aclaración técnica
-        if "FASES BT" in descripcion_txt:
-            texto += " (2 Fases)"
-
-        descripcion = Paragraph(texto, style_small)
-
-        data.append([
-            descripcion,
-            f"L {precio:,.2f}",
-            int(cantidad),
-            f"L {r['Subtotal']:,.2f}",
-        ])
-
-        total += r["Subtotal"]
-
-    data.append(["", "", "TOTAL", f"L {total:,.2f}"])
+    data.append(["", "", "TOTAL GENERAL", f"L {total_general:,.2f}"])
 
     tabla = Table(data, colWidths=[320, 80, 60, 90])
     tabla.setStyle(estilo_tabla())
 
     return tabla
 
-# ======================================================
-# 📊 RESUMEN POR PUNTO
-# ======================================================
-def pagina_resumen(elementos, styles, df_totales):
-
-    elementos.append(Paragraph("RESUMEN DE PAGO POR PUNTO", styles["Title"]))
-    elementos.append(Spacer(1, 12))
-
-    data = [["Punto", "Total (L)"]]
-    total_general = 0
-
-    for _, r in df_totales.iterrows():
-        data.append([r["Punto"], f"{r['TOTAL_PUNTO']:,.2f}"])
-        total_general += r["TOTAL_PUNTO"]
-
-    data.append(["TOTAL GENERAL", f"L {total_general:,.2f}"])
-
-    tabla = Table(data, colWidths=[200, 150])
-    tabla.setStyle(estilo_tabla())
-
-    elementos.append(tabla)
-    elementos.append(PageBreak())
-
 
 # ======================================================
-# 💰 RESUMEN GLOBAL
+# 💰 RESUMEN GLOBAL (CORREGIDO)
 # ======================================================
 def pagina_resumen_global(elementos, styles, df_detalle):
 
     subtotal_estructuras = df_detalle[df_detalle["Punto"].notna()]["Subtotal"].sum()
     subtotal_conductores = df_detalle[df_detalle["Punto"].isna()]["Subtotal"].sum()
 
-    grua = 18000
-    rastra = 24000
+    # 🔥 CORRECCIÓN
+    grua = 123 * 1700
+    rastra = 3 * 24000
 
     total_mano_obra = subtotal_estructuras + subtotal_conductores
     total_logistica = grua + rastra
@@ -330,18 +145,12 @@ def pagina_resumen_global(elementos, styles, df_detalle):
     tabla = Table(data, colWidths=[250, 150])
     tabla.setStyle(estilo_tabla())
 
-    # 🔥 Resaltar subtotales
-    tabla.setStyle([
-        ("BACKGROUND", (0, 3), (-1, 3), colors.lightgrey),
-        ("BACKGROUND", (0, 6), (-1, 6), colors.lightgrey),
-    ])
-
     elementos.append(tabla)
     elementos.append(PageBreak())
 
 
 # ======================================================
-# 💰 COTIZACIÓN
+# 💰 COTIZACIÓN (CORREGIDO)
 # ======================================================
 def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
@@ -350,10 +159,11 @@ def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
     mano_obra = subtotal_estructuras + subtotal_conductores
 
-    grua = 18000
-    rastra = 25000
-    logistica = grua + rastra
+    # 🔥 CORRECCIÓN
+    grua = 123 * 1700
+    rastra = 3 * 24000
 
+    logistica = grua + rastra
     ingenieria = 25000
 
     subtotal = mano_obra + logistica + ingenieria
@@ -377,7 +187,6 @@ def pagina_cotizacion(elementos, styles, doc, df_detalle):
 
     elementos.append(tabla)
     elementos.append(PageBreak())
-
 
 # ======================================================
 # 📄 DETALLE POR PUNTO
