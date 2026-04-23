@@ -130,12 +130,15 @@ def tabla_presupuesto_general(df_detalle):
     ])
 
     # Flete
-    flete_unit = 24000*3
+    flete_unit = 24000
+    cantidad = 3
+    flete_total = flete_unit * cantidad
+
     data.append([
-        "Flete de Postes (3 Viajes)",
+        "Flete de Postes",
         f"L {flete_unit:,.2f}",
-        1,
-        f"L {flete_unit:,.2f}"
+        f"{cantidad} viajes",
+        f"L {flete_total:,.2f}"
     ])
 
     # Ingeniería
