@@ -189,7 +189,25 @@ def tabla_presupuesto(df_detalle):
 
     return tabla
 
+def pagina_resumen(elementos, styles, df_totales):
 
+    elementos.append(Paragraph("RESUMEN DE PAGO POR PUNTO", styles["Title"]))
+    elementos.append(Spacer(1, 12))
+
+    data = [["Punto", "Total (L)"]]
+    total_general = 0
+
+    for _, r in df_totales.iterrows():
+        data.append([r["Punto"], f"{r['TOTAL_PUNTO']:,.2f}"])
+        total_general += r["TOTAL_PUNTO"]
+
+    data.append(["TOTAL GENERAL", f"L {total_general:,.2f}"])
+
+    tabla = Table(data, colWidths=[200, 150])
+    tabla.setStyle(estilo_tabla())
+
+    elementos.append(tabla)
+    elementos.append(PageBreak())
 
 # ======================================================
 # 💰 RESUMEN GLOBAL (CORREGIDO)
