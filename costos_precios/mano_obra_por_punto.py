@@ -78,6 +78,10 @@ PRECIOS_FIJOS_2 = {
     "A-II-1V": 2200,
     "A-II-4": 2700,
     "A-II-5": 3200,
+    "A-III-1V": 2500,
+    "A-III-1V": 2800,
+    "A-III-5V": 3500,
+    "A-III-4V": 3000,
     "A-I-4": 1600,
     "A-I-4V": 1500,
     "A-I-6": 1800,
@@ -230,7 +234,7 @@ def calcular_totales_por_punto(df_detalle: pd.DataFrame):
 # ==========================================================
 # FUNCIÓN PRINCIPAL
 # ==========================================================
-def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None, contratista="C1"):
+def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None, contratista="C2"):
 
     lista_precios = obtener_lista_precios(contratista)
 
