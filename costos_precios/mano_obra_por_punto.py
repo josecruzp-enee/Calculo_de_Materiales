@@ -141,52 +141,113 @@ def _precio_estructura(estructura: str, lista_precios=None) -> float:
 # ==========================================================
 # CABLE CONSOLIDADO
 # ==========================================================
-def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | None, lista_precios=None):
+def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | None, lista_precios=None, contratista="C1"):
 
     if df_cables is None or df_cables.empty:
         return df_detalle
 
     filas = []
 
-    for _, c in df_cables.iterrows():
+    # ======================================================
+    # 🟢 C1 → DETALLADO
+    # ======================================================
+    if contratista == "C1":
 
-        tipo = str(c.get("Tipo", "")).upper()
-        descripcion = str(c.get("Descripcion", "")).upper()
+        for _, c in df_cables.iterrows():
 
-        try:
-            longitud = float(c.get("Total Cable (m)", 0))
-        except:
-            continue
+            tipo = str(c.get("Tipo", "")).upper()
+            descripcion = str(c.get("Descripcion", "")).upper()
 
-        if longitud <= 0:
-            continue
+            try:
+                longitud = float(c.get("Total Cable (m)", 0))
+            except:
+                continue
 
-        # 🔥 CLAVE: generar nombre que coincida con diccionario
-        if tipo == "MT":
-            nombre = f"CONDUCTOR MT {descripcion}"
+            if longitud <= 0:
+                continue
 
-        elif tipo == "BT":
-            nombre = f"CONDUCTOR BT {descripcion}"
+            # 🔥 NORMALIZACIÓN
+            desc = descripcion
+            desc = desc.replace("CABLE DE ALUMINIO", "")
+            desc = desc.replace("ACSR", "")
+            desc = desc.replace("FORRADO", "")
+            desc = desc.replace("#", "")
+            desc = desc.replace("  ", " ")
+            desc = desc.strip()
 
-        elif tipo == "HP":
-            nombre = f"HILO PILOTO {descripcion}"
+            palabras = desc.split()
+            desc = " ".join(dict.fromkeys(palabras))
 
-        elif tipo == "N":
-            nombre = f"NEUTRO {descripcion}"
+            if tipo == "MT":
+                nombre = f"CONDUCTOR MT {desc}"
+            elif tipo == "BT":
+                nombre = f"CONDUCTOR BT {desc}"
+            elif tipo == "HP":
+                nombre = f"HILO PILOTO {desc}"
+            elif tipo == "N":
+                nombre = f"NEUTRO {desc}"
+            else:
+                continue
 
-        else:
-            continue
+            precio = _precio_estructura(nombre, lista_precios)
 
-        # 🔥 USAR SISTEMA DE PRECIOS
-        precio = _precio_estructura(nombre, lista_precios)
+            filas.append({
+                "Punto": None,
+                "Estructura": nombre,
+                "Cantidad": longitud,
+                "Precio": precio,
+                "Subtotal": round(longitud * precio, 2),
+            })
 
-        filas.append({
-            "Punto": None,
-            "Estructura": nombre,
-            "Cantidad": longitud,
-            "Precio": precio,
-            "Subtotal": round(longitud * precio, 2),
-        })
+    # ======================================================
+    # 🔵 C2 → GLOBAL
+    # ======================================================
+    elif contratista == "C2":
+
+        total_bt = 0
+        total_mt = 0
+
+        for _, c in df_cables.iterrows():
+
+            tipo = str(c.get("Tipo", "")).upper()
+
+            try:
+                longitud = float(c.get("Total Cable (m)", 0))
+            except:
+                continue
+
+            if longitud <= 0:
+                continue
+
+            if tipo in ["BT", "HP", "N"]:
+                total_bt += longitud
+
+            elif tipo == "MT":
+                total_mt += longitud
+
+        if total_bt > 0:
+            nombre = "CONDUCTOR BT GLOBAL"
+            precio = lista_precios.get(nombre, 0)
+
+            filas.append({
+                "Punto": None,
+                "Estructura": nombre,
+                "Cantidad": total_bt,
+                "Precio": precio,
+                "Subtotal": round(total_bt * precio, 2),
+            })
+
+        if total_mt > 0:
+            nombre = "CONDUCTOR MT GLOBAL"
+            precio = lista_precios.get(nombre, 0)
+
+            filas.append({
+                "Punto": None,
+                "Estructura": nombre,
+                "Cantidad": total_mt,
+                "Precio": precio,
+                "Subtotal": round(total_mt * precio, 2),
+            })
 
     return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
 # ==========================================================
@@ -244,7 +305,7 @@ def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cable
 
     df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto, lista_precios)
 
-    df_detalle = _agregar_cable_resumen(df_detalle, df_cables, lista_precios)
+    df_detalle = _agregar_cable_resumen(df_detalle, df_cables, lista_precios, contratista)
 
     df_totales = calcular_totales_por_punto(df_detalle[df_detalle["Punto"].notna()])
 
