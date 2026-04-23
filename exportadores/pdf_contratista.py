@@ -153,7 +153,7 @@ def tabla_presupuesto_general(df_detalle):
     # ======================================================
     # 🔥 TOTAL GENERAL ÚNICO
     # ======================================================
-    total_general = total + total_grua + flete_unit + ingenieria_unit
+    total_general = total + total_grua + flete_total + ingenieria_unit
 
     # espacio solo antes del total (correcto visualmente)
     data.append(["", "", "", ""])
