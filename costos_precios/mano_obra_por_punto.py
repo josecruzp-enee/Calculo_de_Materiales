@@ -141,7 +141,7 @@ def _precio_estructura(estructura: str, lista_precios=None) -> float:
 # ==========================================================
 # CABLE CONSOLIDADO
 # ==========================================================
-def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | None):
+def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | None, lista_precios=None):
 
     if df_cables is None or df_cables.empty:
         return df_detalle
@@ -161,24 +161,24 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         if longitud <= 0:
             continue
 
+        # 🔥 CLAVE: generar nombre que coincida con diccionario
         if tipo == "MT":
-            precio = 30
-            nombre = f"Conductor MT {descripcion}"
+            nombre = f"CONDUCTOR MT {descripcion}"
 
         elif tipo == "BT":
-            precio = 35
-            nombre = f"Fases BT {descripcion}"
+            nombre = f"CONDUCTOR BT {descripcion}"
 
         elif tipo == "HP":
-            precio = 28
-            nombre = f"Hilo Piloto {descripcion}"
+            nombre = f"HILO PILOTO {descripcion}"
 
         elif tipo == "N":
-            precio = 28
-            nombre = f"Neutro {descripcion}"
+            nombre = f"NEUTRO {descripcion}"
 
         else:
             continue
+
+        # 🔥 USAR SISTEMA DE PRECIOS
+        precio = _precio_estructura(nombre, lista_precios)
 
         filas.append({
             "Punto": None,
@@ -189,8 +189,6 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         })
 
     return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
-
-
 # ==========================================================
 # DETALLE
 # ==========================================================
@@ -246,7 +244,7 @@ def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cable
 
     df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto, lista_precios)
 
-    df_detalle = _agregar_cable_resumen(df_detalle, df_cables)
+    df_detalle = _agregar_cable_resumen(df_detalle, df_cables, lista_precios)
 
     df_totales = calcular_totales_por_punto(df_detalle[df_detalle["Punto"].notna()])
 
