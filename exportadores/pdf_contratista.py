@@ -118,7 +118,7 @@ def tabla_presupuesto_general(df_detalle):
     # ======================================================
 
     # Grúa
-    horas_grua = 36
+    horas_grua = 123
     precio_hora = 1700
     total_grua = horas_grua * precio_hora
 
@@ -130,9 +130,9 @@ def tabla_presupuesto_general(df_detalle):
     ])
 
     # Flete
-    flete_unit = 25000
+    flete_unit = 24000*3
     data.append([
-        "Flete de Postes (Viaje)",
+        "Flete de Postes (3 Viajes)",
         f"L {flete_unit:,.2f}",
         1,
         f"L {flete_unit:,.2f}"
