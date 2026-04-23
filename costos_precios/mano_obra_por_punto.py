@@ -50,6 +50,7 @@ PRECIOS_FIJOS = {
     "B-III-5": 750,
     "B-III-6": 800,
     "B-III-7A": 750,
+    "B-III-7": 750,
 
     # OTROS
     "CT-N": 500,
