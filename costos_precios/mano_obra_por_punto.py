@@ -222,7 +222,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
             if longitud <= 0:
                 continue
 
-            if tipo in ["BT", "HP", "N"]:
+            if tipo == "BT":
                 total_bt += longitud
 
             elif tipo == "MT":
