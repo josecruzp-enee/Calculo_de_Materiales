@@ -115,6 +115,82 @@ def tabla_presupuesto_general(df_detalle):
     return tabla
 
 
+def tabla_presupuesto(df_detalle):
+
+    from reportlab.platypus import Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+
+    style_small = ParagraphStyle(
+        name="Small",
+        fontName="Helvetica",
+        fontSize=8,
+        leading=9
+    )
+
+    df = (
+        df_detalle
+        .groupby("Estructura", as_index=False)
+        .agg({
+            "Cantidad": "sum",
+            "Precio": "first",
+            "Subtotal": "sum"
+        })
+    )
+
+    def _orden(nombre):
+        n = str(nombre).upper()
+
+        if "TS-" in n:
+            return 1
+        elif "PC-" in n:
+            return 2
+        elif "CONDUCTOR" in n:
+            return 3
+        elif n.startswith("A-"):
+            return 4
+        elif n.startswith("B-"):
+            return 5
+        elif "LL-" in n:
+            return 6
+        elif n.startswith("R-"):
+            return 7
+        elif "CA-" in n or "CS-" in n:
+            return 8
+        else:
+            return 9
+
+    df["orden"] = df["Estructura"].apply(_orden)
+    df = df.sort_values(["orden", "Subtotal"], ascending=[True, False])
+
+    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
+    total = 0
+
+    for _, r in df.iterrows():
+
+        texto = str(r["Estructura"]).replace("BT BT", "BT")
+        texto = f"Instalación de {texto}"
+
+        descripcion = Paragraph(texto, style_small)
+
+        data.append([
+            descripcion,
+            f"L {r['Precio']:,.2f}",
+            int(r["Cantidad"]),
+            f"L {r['Subtotal']:,.2f}",
+        ])
+
+        total += r["Subtotal"]
+
+    data.append(["", "", "TOTAL", f"L {total:,.2f}"])
+
+    from reportlab.platypus import Table
+    tabla = Table(data, colWidths=[320, 80, 60, 90])
+    tabla.setStyle(estilo_tabla())
+
+    return tabla
+
+
+
 # ======================================================
 # 💰 RESUMEN GLOBAL (CORREGIDO)
 # ======================================================
