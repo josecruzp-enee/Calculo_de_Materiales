@@ -135,9 +135,9 @@ def tabla_presupuesto_general(df_detalle):
     flete_total = flete_unit * cantidad
 
     data.append([
-        "Flete de Postes",
+        "Flete de Postes (Viajes)",
         f"L {flete_unit:,.2f}",
-        f"{cantidad} viajes",
+        f"{cantidad}",
         f"L {flete_total:,.2f}"
     ])
 
@@ -310,7 +310,7 @@ def pagina_resumen_global(elementos, styles, df_detalle):
     subtotal_conductores = df_detalle[df_detalle["Punto"].isna()]["Subtotal"].sum()
 
     grua = 18000
-    rastra = 25000
+    rastra = 24000
 
     total_mano_obra = subtotal_estructuras + subtotal_conductores
     total_logistica = grua + rastra
@@ -322,7 +322,7 @@ def pagina_resumen_global(elementos, styles, df_detalle):
         ["Mano de Obra (Conductores)", f"L {subtotal_conductores:,.2f}"],
         ["TOTAL MANO DE OBRA", f"L {total_mano_obra:,.2f}"],
         ["Equipo Grúa", f"L {grua:,.2f}"],
-        ["Flete de Postes", f"L {rastra:,.2f}"],
+        ["Flete de Postes (Viajes)", f"L {rastra:,.2f}"],
         ["TOTAL LOGÍSTICA", f"L {total_logistica:,.2f}"],
         ["TOTAL GENERAL", f"L {total_general:,.2f}"],
     ]
