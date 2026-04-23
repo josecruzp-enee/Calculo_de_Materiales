@@ -4,33 +4,27 @@ import pandas as pd
 
 
 # ==========================================================
-# 🔥 PRECIOS FIJOS REALES (MODELO COMERCIAL)
+# 🔥 PRECIOS CONTRATISTA 1 (ORIGINAL)
 # ==========================================================
 PRECIOS_FIJOS = {
 
-    # TRANSFORMADORES
     "TS-37.5KVA": 13000,
     "TS-50KVA": 15000,
 
-    # CONDUCTORES (referencia directa)
     "CONDUCTOR MT 1/0 AWG RAVEN": 30,
     "CONDUCTOR BT WP 3/0 AWG FIG": 35,
 
-    # RETENIDAS
     "R-1": 2100,
     "R-2": 2100,
     "R-3V": 2100,
     "R-4": 2100,
     "R-5T": 2100,
 
-    # POSTES
     "PC-30": 2000,
     "PC-40": 2000,
 
-    # LUMINARIAS
     "LL-1-50W": 750,
 
-    # PRIMARIO
     "A-I-1": 1300,
     "A-I-1V": 1500,
     "A-II-1V": 2000,
@@ -40,7 +34,6 @@ PRECIOS_FIJOS = {
     "A-I-4V": 1700,
     "A-I-6": 1800,
 
-    # SECUNDARIO
     "B-I-1": 400,
     "B-I-4D": 500,
     "B-I-7A": 500,
@@ -52,7 +45,6 @@ PRECIOS_FIJOS = {
     "B-III-7A": 750,
     "B-III-7": 750,
 
-    # OTROS
     "CT-N": 500,
     "CA-32": 800,
     "CS-2": 1200,
@@ -60,40 +52,84 @@ PRECIOS_FIJOS = {
 
 
 # ==========================================================
-# LIMPIEZA CALIBRE (PARA CABLE)
+# 🔥 PRECIOS CONTRATISTA 2
 # ==========================================================
-def limpiar_calibre(txt):
-    txt = str(txt).upper().strip()
-    txt = txt.replace("CABLE DE ALUMINIO", "")
-    txt = txt.replace("FORRADO", "")
-    txt = txt.replace("ACSR", "")
-    txt = txt.replace("#", "")
-    txt = txt.replace("  ", " ")
-    return txt.strip()
+PRECIOS_FIJOS_2 = {
+
+    "TS-37.5KVA": 25000,
+    "TS-50KVA": 30000,
+
+    "CONDUCTOR MT 1/0 AWG RAVEN": 120,
+    "CONDUCTOR BT WP 3/0 AWG FIG": 150,
+
+    "R-1": 2300,
+    "R-2": 2300,
+    "R-3V": 2300,
+    "R-4": 2300,
+    "R-5T": 2300,
+
+    "PC-30": 2000,
+    "PC-40": 3000,
+
+    "LL-1-50W": 1000,
+
+    "A-I-1": 1300,
+    "A-I-1V": 1500,
+    "A-II-1V": 2200,
+    "A-II-4": 2700,
+    "A-II-5": 3200,
+    "A-I-4": 1600,
+    "A-I-4V": 1500,
+    "A-I-6": 1800,
+
+    "B-I-1": 400,
+    "B-I-4D": 500,
+    "B-I-7A": 500,
+    "B-III-1": 1200,
+    "B-III-2": 600,
+    "B-III-4": 1400,
+    "B-III-5": 750,
+    "B-III-6": 1600,
+    "B-III-7A": 750,
+    "B-III-7": 750,
+
+    "CT-N": 1500,
+    "CA-32": 2500,
+    "CS-2": 1200,
+}
 
 
 # ==========================================================
-# 🔥 NUEVO PRECIO POR ESTRUCTURA (100% FIJO)
+# 🔥 SELECTOR DE LISTA (CAMBIAS AQUÍ)
 # ==========================================================
-def _precio_estructura(estructura: str) -> float:
+def obtener_lista_precios(nombre="C1"):
+    if nombre == "C2":
+        return PRECIOS_FIJOS_2
+    return PRECIOS_FIJOS
+
+
+# ==========================================================
+# PRECIO POR ESTRUCTURA (NO ROMPE NADA)
+# ==========================================================
+def _precio_estructura(estructura: str, lista_precios=None) -> float:
+
+    if lista_precios is None:
+        lista_precios = PRECIOS_FIJOS
 
     estructura = str(estructura).upper().strip()
 
-    # ✔ EXACTO
-    if estructura in PRECIOS_FIJOS:
-        return PRECIOS_FIJOS[estructura]
+    if estructura in lista_precios:
+        return lista_precios[estructura]
 
-    # ✔ MATCH FLEXIBLE (ej: A-I-1V, variantes)
-    for key in PRECIOS_FIJOS:
+    for key in lista_precios:
         if estructura.startswith(key):
-            return PRECIOS_FIJOS[key]
+            return lista_precios[key]
 
-    # ⚠️ NO DEFINIDO
     return 0
 
 
 # ==========================================================
-# 🔥 CABLE CONSOLIDADO (SE MANTIENE)
+# CABLE CONSOLIDADO
 # ==========================================================
 def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | None):
 
@@ -101,9 +137,6 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         return df_detalle
 
     filas = []
-
-    # 🔹 constante clara de negocio
-    FASES_BT = 2
 
     for _, c in df_cables.iterrows():
 
@@ -118,69 +151,40 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
         if longitud <= 0:
             continue
 
-        # ===============================
-        # MT
-        # ===============================
         if tipo == "MT":
+            precio = 30
+            nombre = f"Conductor MT {descripcion}"
 
-            filas.append({
-                "Punto": None,
-                "Estructura": f"Conductor MT {descripcion}",
-                "Cantidad": longitud,
-                "Precio": 30,
-                "Subtotal": round(longitud * 30, 2),
-            })
-
-        # ===============================
-        # BT (FASES)
-        # ===============================
         elif tipo == "BT":
+            precio = 35
+            nombre = f"Fases BT {descripcion}"
 
-            filas.append({
-                "Punto": None,
-                "Estructura": f"Fases BT {descripcion}",
-                "Cantidad": longitud,
-                "Precio": 35,
-                "Subtotal": round(longitud * 35, 2),
-            })
-
-        # ===============================
-        # HILO PILOTO
-        # ===============================
         elif tipo == "HP":
+            precio = 28
+            nombre = f"Hilo Piloto {descripcion}"
 
-            filas.append({
-                "Punto": None,
-                "Estructura": f"Hilo Piloto {descripcion}",
-                "Cantidad": longitud,
-                "Precio": 28,
-                "Subtotal": round(longitud * 28, 2),
-            })
-
-        # ===============================
-        # NEUTRO
-        # ===============================
         elif tipo == "N":
-
-            filas.append({
-                "Punto": None,
-                "Estructura": f"Neutro {descripcion}",
-                "Cantidad": longitud,
-                "Precio": 28,
-                "Subtotal": round(longitud * 28, 2),
-            })
+            precio = 28
+            nombre = f"Neutro {descripcion}"
 
         else:
             continue
 
-    if not filas:
-        return df_detalle
+        filas.append({
+            "Punto": None,
+            "Estructura": nombre,
+            "Cantidad": longitud,
+            "Precio": precio,
+            "Subtotal": round(longitud * precio, 2),
+        })
 
     return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
+
+
 # ==========================================================
-# DETALLE POR PUNTO
+# DETALLE
 # ==========================================================
-def calcular_detalle_mano_obra(df_estructuras_por_punto: pd.DataFrame) -> pd.DataFrame:
+def calcular_detalle_mano_obra(df_estructuras_por_punto: pd.DataFrame, lista_precios):
 
     if df_estructuras_por_punto is None or df_estructuras_por_punto.empty:
         return pd.DataFrame(columns=["Punto", "Estructura", "Cantidad", "Precio", "Subtotal"])
@@ -193,7 +197,7 @@ def calcular_detalle_mano_obra(df_estructuras_por_punto: pd.DataFrame) -> pd.Dat
         estructura = row["Estructura"]
         cantidad = int(row["Cantidad"])
 
-        precio = _precio_estructura(estructura)
+        precio = _precio_estructura(estructura, lista_precios)
         subtotal = precio * cantidad
 
         filas.append({
@@ -208,9 +212,9 @@ def calcular_detalle_mano_obra(df_estructuras_por_punto: pd.DataFrame) -> pd.Dat
 
 
 # ==========================================================
-# TOTAL POR PUNTO
+# TOTALES
 # ==========================================================
-def calcular_totales_por_punto(df_detalle: pd.DataFrame) -> pd.DataFrame:
+def calcular_totales_por_punto(df_detalle: pd.DataFrame):
 
     if df_detalle is None or df_detalle.empty:
         return pd.DataFrame(columns=["Punto", "TOTAL_PUNTO"])
@@ -226,11 +230,12 @@ def calcular_totales_por_punto(df_detalle: pd.DataFrame) -> pd.DataFrame:
 # ==========================================================
 # FUNCIÓN PRINCIPAL
 # ==========================================================
-def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None):
+def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None, contratista="C1"):
 
-    df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto)
+    lista_precios = obtener_lista_precios(contratista)
 
-    # 🔥 integrar cable
+    df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto, lista_precios)
+
     df_detalle = _agregar_cable_resumen(df_detalle, df_cables)
 
     df_totales = calcular_totales_por_punto(df_detalle[df_detalle["Punto"].notna()])
