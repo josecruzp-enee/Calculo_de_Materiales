@@ -302,8 +302,8 @@ def calcular_totales_por_punto(df_detalle: pd.DataFrame):
 # ==========================================================
 # FUNCIÓN PRINCIPAL
 # ==========================================================
-def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None, contratista="C2"):
 
+def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None, contratista="C1"):
     lista_precios = obtener_lista_precios(contratista)
 
     df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto, lista_precios)
