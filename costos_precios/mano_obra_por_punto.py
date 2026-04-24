@@ -185,8 +185,10 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
             desc = " ".join(dict.fromkeys(palabras))
 
             if tipo == "MT":
+                desc = desc.replace("MT", "").strip()
                 nombre = f"CONDUCTOR MT {desc}"
             elif tipo == "BT":
+                desc = desc.replace("BT", "").strip()
                 nombre = f"CONDUCTOR BT {desc}"
             elif tipo == "HP":
                 nombre = f"HILO PILOTO {desc}"
