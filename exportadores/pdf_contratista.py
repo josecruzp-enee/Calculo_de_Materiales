@@ -90,12 +90,12 @@ def tabla_presupuesto_general(df_detalle):
         total += r["Subtotal"]
 
     # COSTOS
-    horas_grua = 147
+    horas_grua = 84
     precio_hora = 1700
     total_grua = horas_grua * precio_hora
 
     flete_unit = 25000
-    viajes = 4
+    viajes = 2
     flete_total = flete_unit * viajes
 
     ingenieria = 25000
