@@ -77,6 +77,7 @@ def tabla_presupuesto_general(df_detalle):
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
     total = 0
 
+    total = df_detalle["Subtotal"].sum()
     for _, r in df.iterrows():
         texto = f"Instalación de {str(r['Estructura']).upper()}"
 
@@ -87,7 +88,7 @@ def tabla_presupuesto_general(df_detalle):
             f"L {r['Subtotal']:,.2f}",
         ])
 
-        total += r["Subtotal"]
+    
 
     # COSTOS
     horas_grua = 84
