@@ -276,7 +276,14 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_cables=salida.df_cables,
         )
 
-        res_costos = ejecutar_costos(entrada_costos)
+        import streamlit as st  # si no está arriba
+
+        contratista = st.session_state.get("contratista", "C1")
+
+        res_costos = ejecutar_costos(
+            entrada_costos,
+            contratista=contratista
+        )
 
         df_precios = res_costos.get("df_precios_estructura")
 
