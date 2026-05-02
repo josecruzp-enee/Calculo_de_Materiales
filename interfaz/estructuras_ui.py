@@ -16,13 +16,12 @@ from entradas.estructuras import (
     crear_nuevo_punto,
 )
 
-# =========================================================
-# DATA (CATÁLOGO)
-# =========================================================
-
 from entradas.base_datos import cargar_base_datos
 
 
+# =========================================================
+# CATÁLOGO
+# =========================================================
 def _obtener_opciones_desde_orquestador() -> dict:
 
     try:
@@ -43,7 +42,7 @@ def _obtener_opciones_desde_orquestador() -> dict:
         elif c.startswith("A-"): return "Primario"
         elif c.startswith("B-"): return "Secundario"
         elif c.startswith("R-"): return "Retenidas"
-        elif c.startswith("CA") or c.startswith("CS") or c.startswith("CT"): return "Conexiones a tierra"
+        elif c.startswith(("CA", "CS", "CT")): return "Conexiones a tierra"
         elif c.startswith("TS"): return "Transformadores"
         elif c.startswith("LL"): return "Luminarias"
         return "Otros"
@@ -65,54 +64,8 @@ def _obtener_opciones_desde_orquestador() -> dict:
 
 
 # =========================================================
-# UI HELPERS
-# =========================================================
-
-def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
-
-    st.markdown(f"**{cat_key}**")
-
-    c1, c2, c3 = st.columns([7, 1.2, 2])
-
-    with c1:
-        sel = st.selectbox(
-            "",
-            valores if valores else [""],
-            index=0,
-            key=f"{key_prefix}_{cat_key}_sel",
-            label_visibility="collapsed",
-            format_func=lambda x: f"{x} - {etiquetas.get(x, '')}",
-        )
-
-        # 🔥 mostrar selección actual
-        if sel:
-            st.caption(f"Seleccionado: {sel}")
-
-    with c2:
-        qty = st.number_input(
-            "",
-            min_value=1,
-            max_value=99,
-            step=1,
-            value=1,
-            key=f"{key_prefix}_{cat_key}_qty",
-            label_visibility="collapsed",
-        )
-
-    with c3:
-        if st.button("➕", key=f"{key_prefix}_{cat_key}_add"):
-            if sel:
-                punto = st.session_state.get("punto_en_edicion", "P-01")
-
-                for _ in range(qty):
-                    agregar_item_estructura(punto, sel)
-
-                st.success(f"✔ {sel} agregado a {punto}")
-
-# =========================================================
 # UI PRINCIPAL
 # =========================================================
-
 def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
 
     inicializar_estado_estructuras()
@@ -158,12 +111,65 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     punto = st.session_state.get("punto_en_edicion", "P-01")
     st.markdown(f"### {punto}")
 
-    # =====================================================
-    # 🔥 ESTRUCTURAS DEL PUNTO ACTUAL
-    # =====================================================
-    df_punto = df_hist[df_hist["Punto"] == punto]
-
     st.divider()
+
+    # =====================================================
+    # FORM (🔥 CLAVE PARA EVITAR RERUN MOLESTO)
+    # =====================================================
+    categorias = [
+        "Poste",
+        "Primario",
+        "Secundario",
+        "Retenidas",
+        "Conexiones a tierra",
+        "Transformadores",
+        "Luminarias",
+    ]
+
+    kp = f"kp_{punto}"
+
+    with st.form(key=f"form_{punto}"):
+
+        seleccion_temp = []
+
+        for cat in categorias:
+
+            valores = opciones.get(cat, {}).get("valores", [])
+            etiquetas = opciones.get(cat, {}).get("etiquetas", {})
+
+            sel = st.selectbox(
+                cat,
+                valores if valores else [""],
+                key=f"{kp}_{cat}",
+                format_func=lambda x: f"{x} - {etiquetas.get(x, '')}"
+            )
+
+            qty = st.number_input(
+                f"Cantidad {cat}",
+                min_value=1,
+                max_value=99,
+                value=1,
+                key=f"{kp}_{cat}_qty"
+            )
+
+            if sel:
+                for _ in range(qty):
+                    seleccion_temp.append(sel)
+
+        guardar_punto = st.form_submit_button("💾 Guardar punto")
+
+        if guardar_punto:
+
+            for est in seleccion_temp:
+                agregar_item_estructura(punto, est)
+
+            st.success(f"✅ {punto} guardado correctamente")
+
+    # =====================================================
+    # VISUALIZACIÓN
+    # =====================================================
+    df_hist = st.session_state.get("df_puntos", pd.DataFrame())
+    df_punto = df_hist[df_hist["Punto"] == punto]
 
     if not df_punto.empty:
         st.markdown("### 📌 Estructuras en este punto")
@@ -172,7 +178,7 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
         st.info("Este punto aún no tiene estructuras")
 
     # =====================================================
-    # 🔥 RESUMEN DEL PUNTO
+    # RESUMEN
     # =====================================================
     fila_actual = consolidar_punto(punto)
 
@@ -186,7 +192,7 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
         st.dataframe(df_sel, use_container_width=True, hide_index=True)
 
     # =====================================================
-    # 🔥 HISTÓRICO DE PUNTOS
+    # HISTÓRICO
     # =====================================================
     if not df_hist.empty:
 
@@ -207,54 +213,11 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
         st.dataframe(df_hist_temp, use_container_width=True, hide_index=True)
 
     # =====================================================
-    # CATEGORÍAS
+    # SALIDA FINAL
     # =====================================================
-    categorias = [
-        "Poste",
-        "Primario",
-        "Secundario",
-        "Retenidas",
-        "Conexiones a tierra",
-        "Transformadores",
-        "Luminarias",
-    ]
+    df_final, ruta = construir_dataframe_salida()
 
-    kp = f"kp_{punto}"
+    if df_final is not None and not df_final.empty:
+        st.session_state["df_estructuras"] = df_final
 
-    for cat in categorias:
-        valores = opciones.get(cat, {}).get("valores", [])
-        etiquetas = opciones.get(cat, {}).get("etiquetas", {})
-        _fila_categoria_ui(cat, valores, etiquetas, kp)
-
-    # =====================================================
-    # VISTA PREVIA FINAL
-    # =====================================================
-    fila = consolidar_punto(punto)
-
-    st.divider()
-    st.markdown("### 📊 Vista previa")
-
-    st.dataframe(
-        pd.DataFrame([fila]),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # =====================================================
-    # GUARDAR
-    # =====================================================
-    if st.button("💾 Guardar"):
-
-        df, ruta = construir_dataframe_salida()
-
-        if df is None or df.empty:
-            st.warning("No hay estructuras para guardar")
-            return None, None
-
-        st.session_state["df_estructuras"] = df
-
-        st.success("✅ Estructuras guardadas correctamente")
-
-        return df, ruta
-
-    return None, None
+    return df_final, ruta
