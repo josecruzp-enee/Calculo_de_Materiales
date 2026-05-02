@@ -20,14 +20,15 @@ from entradas.estructuras import (
 # DATA (DESDE ORQUESTADOR)
 # =========================================================
 
+from entradas.base_datos import cargar_base_datos
+
 def _obtener_opciones_desde_orquestador() -> dict:
 
-    resultado = st.session_state.get("resultado_calculo")
-
-    if not resultado or not hasattr(resultado, "entradas"):
+    try:
+        base_datos = cargar_base_datos()
+        df_indice = base_datos.get("INDICE", pd.DataFrame())
+    except:
         return {}
-
-    df_indice = resultado.entradas.base_datos.get("INDICE", pd.DataFrame())
 
     if df_indice.empty or "CODIGO" not in df_indice.columns:
         return {}
@@ -60,7 +61,6 @@ def _obtener_opciones_desde_orquestador() -> dict:
         }
 
     return opciones
-
 
 # =========================================================
 # UI HELPERS
