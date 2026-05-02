@@ -127,6 +127,17 @@ def main():
         ["C1", "C2"],
         key="contratista",
     )
+
+    st.toggle("Incluir logística", True, key="incluir_logistica")
+
+    st.number_input("Horas grúa", value=12, key="horas_grua")
+    st.number_input("Precio hora grúa", value=1700, key="precio_hora_grua")
+    st.number_input("Costo flete", value=25000, key="costo_flete")
+    st.number_input("Viajes", value=1, key="viajes_flete")
+    st.number_input("Ingeniería", value=25000, key="ingenieria")
+
+
+
     
     # 🔥 SOLO ORQUESTADOR INTERFAZ
     salida = ejecutar_orquestador_interfaz(
