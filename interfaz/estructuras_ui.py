@@ -22,12 +22,12 @@ from entradas.estructuras import (
 
 def _obtener_opciones_desde_orquestador() -> dict:
 
-    res_entradas = st.session_state.get("resultado_entradas")
+    resultado = st.session_state.get("resultado_calculo")
 
-    if not res_entradas or not hasattr(res_entradas, "base_datos"):
+    if not resultado or not hasattr(resultado, "entradas"):
         return {}
 
-    df_indice = res_entradas.base_datos.get("INDICE", pd.DataFrame())
+    df_indice = resultado.entradas.base_datos.get("INDICE", pd.DataFrame())
 
     if df_indice.empty or "CODIGO" not in df_indice.columns:
         return {}
