@@ -122,6 +122,12 @@ def main():
         key="membrete_pdf",
     )
 
+    st.radio(
+        "👷 Contratista",
+        ["C1", "C2"],
+        key="contratista",
+    )
+    
     # 🔥 SOLO ORQUESTADOR INTERFAZ
     salida = ejecutar_orquestador_interfaz(
         _nav_estado_actual,
