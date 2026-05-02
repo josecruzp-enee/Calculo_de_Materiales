@@ -64,6 +64,70 @@ def _obtener_opciones_desde_orquestador() -> dict:
 
 
 # =========================================================
+# AGRUPAR CANTIDADES
+# =========================================================
+def _agrupar_cantidades(lista):
+
+    conteo = {}
+
+    for e in lista:
+        conteo[e] = conteo.get(e, 0) + 1
+
+    salida = []
+
+    for est, cant in conteo.items():
+        if cant > 1:
+            salida.append(f"{cant}x{est}")
+        else:
+            salida.append(est)
+
+    return ", ".join(sorted(salida))
+
+
+# =========================================================
+# CLASIFICACIÓN
+# =========================================================
+def _clasificar_en_fila(punto, df_punto):
+
+    fila = {
+        "Punto": punto,
+        "Poste": [],
+        "Primario": [],
+        "Secundario": [],
+        "Retenidas": [],
+        "Conexiones a tierra": [],
+        "Transformadores": [],
+        "Luminarias": [],
+    }
+
+    for _, row in df_punto.iterrows():
+
+        est = row["Estructuras"]
+
+        if est.startswith("PC"):
+            fila["Poste"].append(est)
+        elif est.startswith("A-"):
+            fila["Primario"].append(est)
+        elif est.startswith("B-"):
+            fila["Secundario"].append(est)
+        elif est.startswith("R-"):
+            fila["Retenidas"].append(est)
+        elif est.startswith(("CA", "CS", "CT")):
+            fila["Conexiones a tierra"].append(est)
+        elif est.startswith("TS"):
+            fila["Transformadores"].append(est)
+        elif est.startswith("LL"):
+            fila["Luminarias"].append(est)
+
+    # convertir a texto con cantidades
+    for k in fila:
+        if k != "Punto":
+            fila[k] = _agrupar_cantidades(fila[k])
+
+    return fila
+
+
+# =========================================================
 # UI PRINCIPAL
 # =========================================================
 def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
@@ -114,7 +178,7 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     st.divider()
 
     # =====================================================
-    # FORM (🔥 CLAVE PARA EVITAR RERUN MOLESTO)
+    # FORM
     # =====================================================
     categorias = [
         "Poste",
@@ -137,20 +201,25 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
             valores = opciones.get(cat, {}).get("valores", [])
             etiquetas = opciones.get(cat, {}).get("etiquetas", {})
 
-            sel = st.selectbox(
-                cat,
-                valores if valores else [""],
-                key=f"{kp}_{cat}",
-                format_func=lambda x: f"{x} - {etiquetas.get(x, '')}"
-            )
+            c1, c2 = st.columns([6, 2])
 
-            qty = st.number_input(
-                f"Cantidad {cat}",
-                min_value=1,
-                max_value=99,
-                value=1,
-                key=f"{kp}_{cat}_qty"
-            )
+            with c1:
+                sel = st.selectbox(
+                    cat,
+                    valores if valores else [""],
+                    key=f"{kp}_{cat}",
+                    format_func=lambda x: f"{x} - {etiquetas.get(x, '')}"
+                )
+
+            with c2:
+                qty = st.number_input(
+                    "Cant",
+                    min_value=1,
+                    max_value=99,
+                    value=1,
+                    key=f"{kp}_{cat}_qty",
+                    label_visibility="collapsed"
+                )
 
             if sel:
                 for _ in range(qty):
@@ -159,58 +228,40 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
         guardar_punto = st.form_submit_button("💾 Guardar punto")
 
         if guardar_punto:
-
             for est in seleccion_temp:
                 agregar_item_estructura(punto, est)
 
             st.success(f"✅ {punto} guardado correctamente")
 
     # =====================================================
-    # VISUALIZACIÓN
+    # TABLA DEL PUNTO
     # =====================================================
     df_hist = st.session_state.get("df_puntos", pd.DataFrame())
     df_punto = df_hist[df_hist["Punto"] == punto]
 
     if not df_punto.empty:
-        st.markdown("### 📌 Estructuras en este punto")
-        st.dataframe(df_punto, use_container_width=True, hide_index=True)
-    else:
-        st.info("Este punto aún no tiene estructuras")
+
+        fila = _clasificar_en_fila(punto, df_punto)
+        df_horizontal = pd.DataFrame([fila])
+
+        st.markdown("### 📊 Vista del punto")
+        st.dataframe(df_horizontal, use_container_width=True, hide_index=True)
 
     # =====================================================
-    # RESUMEN
-    # =====================================================
-    fila_actual = consolidar_punto(punto)
-
-    if fila_actual and fila_actual.get("Estructuras"):
-        st.markdown("### 🧾 Resumen del punto")
-
-        df_sel = pd.DataFrame({
-            "Estructura": fila_actual["Estructuras"]
-        })
-
-        st.dataframe(df_sel, use_container_width=True, hide_index=True)
-
-    # =====================================================
-    # HISTÓRICO
+    # TABLA GLOBAL
     # =====================================================
     if not df_hist.empty:
 
-        st.divider()
-        st.markdown("### 📍 Puntos guardados")
+        filas = []
 
-        df_hist_temp = df_hist.copy()
+        for p in df_hist["Punto"].unique():
+            df_p = df_hist[df_hist["Punto"] == p]
+            filas.append(_clasificar_en_fila(p, df_p))
 
-        df_hist_temp["orden"] = (
-            df_hist_temp["Punto"]
-            .astype(str)
-            .str.extract(r'(\d+)')[0]
-            .astype(float)
-        )
+        df_all = pd.DataFrame(filas)
 
-        df_hist_temp = df_hist_temp.sort_values("orden").drop(columns=["orden"])
-
-        st.dataframe(df_hist_temp, use_container_width=True, hide_index=True)
+        st.markdown("### 📋 Tabla general del proyecto")
+        st.dataframe(df_all, use_container_width=True, hide_index=True)
 
     # =====================================================
     # SALIDA FINAL
