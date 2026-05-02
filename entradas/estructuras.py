@@ -115,4 +115,27 @@ def construir_dataframe_salida():
 
 
 def crear_nuevo_punto():
-    st.session_state["punto_en_edicion"] = f"Punto {len(st.session_state['df_puntos']) + 1}"
+
+    import streamlit as st
+    import pandas as pd
+
+    df = st.session_state.get("df_puntos", pd.DataFrame())
+
+    # 🔥 obtener números reales de puntos existentes
+    if df.empty or "Punto" not in df.columns:
+        n = 1
+    else:
+        nums = (
+            df["Punto"]
+            .astype(str)
+            .str.extract(r'(\d+)')[0]
+            .dropna()
+            .astype(int)
+        )
+
+        n = nums.max() + 1 if not nums.empty else 1
+
+    # 🔥 formato estándar del sistema
+    punto = f"P-{n:02d}"
+
+    st.session_state["punto_en_edicion"] = punto
