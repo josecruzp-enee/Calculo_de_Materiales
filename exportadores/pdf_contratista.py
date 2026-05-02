@@ -168,7 +168,13 @@ def generar_pdf_contratista(entrada):
 
     buffer = BytesIO()
     styles = getSampleStyleSheet()
-    doc = SimpleDocTemplate(buffer)
+    doc = SimpleDocTemplate(
+        buffer,
+        topMargin=160,   # 🔥 espacio para el membrete
+        bottomMargin=40,
+        leftMargin=40,
+        rightMargin=40
+    )
 
     elementos = []
 
