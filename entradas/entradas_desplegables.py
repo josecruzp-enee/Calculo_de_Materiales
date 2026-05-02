@@ -35,15 +35,9 @@ def _normalizar_columnas(df: pd.DataFrame) -> pd.DataFrame:
 def cargar_desde_desplegables(
     datos_fuente: Optional[Dict[str, Any]] = None
 ) -> Tuple[pd.DataFrame, None]:
-    """
-    Versión compatible con orquestador actual.
-
-    Retorna:
-        df_estructuras, ruta(None)
-    """
 
     # =========================
-    # Si no viene datos → usar session_state
+    # session_state
     # =========================
     if datos_fuente is None:
         try:
@@ -52,16 +46,35 @@ def cargar_desde_desplegables(
         except Exception:
             datos_fuente = {}
 
-    # =========================
-    # Obtener estructuras (principal)
-    # =========================
-    df_estructuras = _asegurar_dataframe(
-        datos_fuente.get("df_estructuras")
-    )
+    df = datos_fuente.get("df_estructuras")
 
-    df_estructuras = _normalizar_columnas(df_estructuras)
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return pd.DataFrame(), None
 
     # =========================
-    # Retorno compatible
+    # 🔥 CLAVE: convertir a texto tipo DXF
     # =========================
-    return df_estructuras, None
+    textos = []
+
+    for _, row in df.iterrows():
+
+        punto = str(row.get("Punto", "")).strip()
+        if not punto:
+            continue
+
+        partes = [punto]
+
+        for col in df.columns:
+            if col == "Punto":
+                continue
+
+            val = row[col]
+
+            if pd.notna(val) and val:
+                partes.append(f"{val} (P)")  # ← clave
+
+        textos.append(" ".join(partes))
+
+    df_out = pd.DataFrame({"texto": textos})
+
+    return df_out, None
