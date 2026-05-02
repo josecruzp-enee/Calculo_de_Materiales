@@ -91,7 +91,6 @@ def _convertir(df: pd.DataFrame):
         m_punto = re.search(r"\bP[-\s]?(\d+)\b", texto_upper)
         if m_punto:
             punto_actual = f"P-{m_punto.group(1)}"
-            
 
         # =====================================================
         # ⚠ FALLBACK CONTROLADO
@@ -99,7 +98,6 @@ def _convertir(df: pd.DataFrame):
         if not punto_actual:
             punto_actual = f"SIN_PUNTO_{idx+1}"
 
-            # 🔥 DEBUG DE ADVERTENCIA
             try:
                 debug_guardar("WARNING_SIN_PUNTO", {
                     "fila": idx,
@@ -117,14 +115,18 @@ def _convertir(df: pd.DataFrame):
 
             m_tipo = re.search(r'\((P|D|E|R)\)', token)
 
-            if not m_tipo:
-                continue
+            # =====================================================
+            # 🔥 SOPORTE DXF + MANUAL (CORRECTO)
+            # =====================================================
+            if m_tipo:
+                # DXF: solo proyectado
+                if m_tipo.group(1) != "P":
+                    continue
+                est_raw = re.sub(r'\s*\([EPDR]\)', '', token)
+            else:
+                # Manual: aceptar directo
+                est_raw = token
 
-            # SOLO PROYECTADO
-            if m_tipo.group(1) != "P":
-                continue
-
-            est_raw = re.sub(r'\s*\([EPDR]\)', '', token)
             est = limpiar_codigo(est_raw)
 
             if not est:
@@ -149,7 +151,6 @@ def _convertir(df: pd.DataFrame):
         .groupby(["Punto", "Estructura"], as_index=False)["Cantidad"]
         .sum()
     )
-
 # =========================================================
 # API
 # =========================================================
