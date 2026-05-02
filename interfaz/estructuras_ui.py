@@ -8,7 +8,6 @@ import pandas as pd
 
 from entradas.estructuras import (
     inicializar_estado_estructuras,
-    obtener_opciones_catalogo,
     agregar_item_estructura,
     consolidar_punto,
     eliminar_punto,
@@ -16,6 +15,52 @@ from entradas.estructuras import (
     construir_dataframe_salida,
     crear_nuevo_punto,
 )
+
+# =========================================================
+# DATA (DESDE ORQUESTADOR)
+# =========================================================
+
+def _obtener_opciones_desde_orquestador() -> dict:
+
+    res_entradas = st.session_state.get("resultado_entradas")
+
+    if not res_entradas or not hasattr(res_entradas, "base_datos"):
+        return {}
+
+    df_indice = res_entradas.base_datos.get("INDICE", pd.DataFrame())
+
+    if df_indice.empty or "CODIGO" not in df_indice.columns:
+        return {}
+
+    df_indice = df_indice.copy()
+    df_indice.columns = df_indice.columns.str.strip().str.upper()
+
+    def clasificar(c):
+        c = str(c).upper()
+        if c.startswith("PC"): return "Poste"
+        elif c.startswith("A-"): return "Primario"
+        elif c.startswith("B-"): return "Secundario"
+        elif c.startswith("R-"): return "Retenidas"
+        elif c.startswith("CA") or c.startswith("CS") or c.startswith("CT"): return "Conexiones a tierra"
+        elif c.startswith("TS"): return "Transformadores"
+        elif c.startswith("LL"): return "Luminarias"
+        return "Otros"
+
+    df_indice["CATEGORIA"] = df_indice["CODIGO"].apply(clasificar)
+
+    opciones = {}
+
+    for cat, g in df_indice.groupby("CATEGORIA"):
+        opciones[cat] = {
+            "valores": sorted(g["CODIGO"].dropna().unique().tolist()),
+            "etiquetas": {
+                row["CODIGO"]: row.get("ESTRUCTURA", row["CODIGO"])
+                for _, row in g.iterrows()
+            }
+        }
+
+    return opciones
+
 
 # =========================================================
 # UI HELPERS
@@ -62,9 +107,15 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
 def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
 
     inicializar_estado_estructuras()
-    opciones = obtener_opciones_catalogo()
+
+    # 🔥 OPCIONES DESDE ORQUESTADOR
+    opciones = _obtener_opciones_desde_orquestador()
 
     st.subheader("🏗️ Estructuras del Proyecto")
+
+    # 🔎 DEBUG SUAVE (no rompe nada)
+    if not opciones:
+        st.warning("⚠️ No se pudo cargar catálogo desde base_datos (INDICE)")
 
     df_actual = st.session_state.get("df_puntos", pd.DataFrame())
 
@@ -133,7 +184,6 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
             st.warning("No hay estructuras para guardar")
             return None, None
 
-        # 🔥 AQUÍ ESTÁ EL CAMBIO IMPORTANTE
         st.session_state["df_estructuras"] = df
 
         st.success("✅ Estructuras guardadas correctamente")
