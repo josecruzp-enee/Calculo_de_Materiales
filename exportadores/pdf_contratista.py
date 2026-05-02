@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
@@ -7,6 +8,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from io import BytesIO
 import pandas as pd
+import streamlit as st
 
 from materiales.calculos.calculo_estructuras import calcular_estructuras_por_punto
 from costos_precios.mano_obra_por_punto import calcular_mano_obra_proyecto
@@ -14,7 +16,20 @@ from exportadores.pdf_base import fondo_pagina
 
 
 # ======================================================
-# 🎨 ESTILO TABLAS
+# ⚙️ CONFIG LOGÍSTICA DINÁMICA
+# ======================================================
+def cfg_logistica():
+    return {
+        "horas_poste": st.session_state.get("horas_grua_poste", 3),
+        "precio_hora": st.session_state.get("precio_hora_grua", 1700),
+        "flete": st.session_state.get("costo_flete", 25000),
+        "viajes": st.session_state.get("viajes_flete", 2),
+        "ingenieria": st.session_state.get("ingenieria", 25000),
+    }
+
+
+# ======================================================
+# 🎨 ESTILO TABLA
 # ======================================================
 def estilo_tabla():
     return [
@@ -22,92 +37,49 @@ def estilo_tabla():
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-
         ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-
-        ("ROWBACKGROUNDS", (0, 1), (-1, -2),
-         [colors.whitesmoke, colors.transparent]),
-
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#D9E2F3")),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
     ]
 
 
 # ======================================================
-# 🔥 TABLA GENERAL
+# 🔥 TABLA GENERAL (C1 CON LOGÍSTICA)
 # ======================================================
 def tabla_presupuesto_general(df_detalle):
 
-    style_small = ParagraphStyle(
-        name="Small",
-        fontName="Helvetica",
-        fontSize=8,
-        leading=9
-    )
+    cfg = cfg_logistica()
 
-    df = (
-        df_detalle
-        .groupby("Estructura", as_index=False)
-        .agg({
-            "Cantidad": "sum",
-            "Precio": "first",
-            "Subtotal": "sum"
-        })
-    )
-
-    def _orden(nombre):
-        n = str(nombre).upper()
-
-        if "TS-" in n: return 1
-        elif "PC-" in n: return 2
-        elif "CONDUCTOR" in n: return 3
-        elif n.startswith("A-"): return 4
-        elif n.startswith("B-"): return 5
-        elif "LL-" in n: return 6
-        elif n.startswith("R-"): return 7
-        elif "CA-" in n or "CS-" in n: return 8
-        else: return 9
-
-    df["orden"] = df["Estructura"].apply(_orden)
-    df = df.sort_values(["orden", "Subtotal"], ascending=[True, False])
+    df = df_detalle.groupby("Estructura", as_index=False).agg({
+        "Cantidad": "sum",
+        "Precio": "first",
+        "Subtotal": "sum"
+    })
 
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
-    total = 0
 
     total = df_detalle["Subtotal"].sum()
-    for _, r in df.iterrows():
-        texto = f"Instalación de {str(r['Estructura']).upper()}"
 
+    for _, r in df.iterrows():
         data.append([
-            Paragraph(texto, style_small),
+            f"Instalación de {r['Estructura']}",
             f"L {r['Precio']:,.2f}",
             int(r["Cantidad"]),
             f"L {r['Subtotal']:,.2f}",
         ])
 
-    
+    # 🔥 LOGÍSTICA DINÁMICA
+    postes = df[df["Estructura"].str.contains("PC-")]["Cantidad"].sum()
 
-    # COSTOS
-    horas_grua = 84
-    precio_hora = 1700
-    total_grua = horas_grua * precio_hora
+    horas = postes * cfg["horas_poste"]
+    total_grua = horas * cfg["precio_hora"]
+    total_flete = cfg["flete"] * cfg["viajes"]
 
-    flete_unit = 25000
-    viajes = 2
-    flete_total = flete_unit * viajes
+    data.append(["Equipo Grúa", f"L {cfg['precio_hora']:,.2f}", horas, f"L {total_grua:,.2f}"])
+    data.append(["Flete", f"L {cfg['flete']:,.2f}", cfg["viajes"], f"L {total_flete:,.2f}"])
+    data.append(["Ingeniería", "", 1, f"L {cfg['ingenieria']:,.2f}"])
 
-    ingenieria = 25000
+    total_general = total + total_grua + total_flete + cfg["ingenieria"]
 
-    data.append(["Equipo Grúa (Horas)", f"L {precio_hora:,.2f}", horas_grua, f"L {total_grua:,.2f}"])
-    data.append(["Flete de Postes (Viajes)", f"L {flete_unit:,.2f}", viajes, f"L {flete_total:,.2f}"])
-    data.append(["Ingeniería", f"L {ingenieria:,.2f}", 1, f"L {ingenieria:,.2f}"])
-
-    total_general = total + total_grua + flete_total + ingenieria
-
-    data.append(["", "", "", ""])
     data.append(["", "", "TOTAL GENERAL", f"L {total_general:,.2f}"])
 
     tabla = Table(data, colWidths=[320, 80, 60, 90])
@@ -116,81 +88,104 @@ def tabla_presupuesto_general(df_detalle):
     return tabla
 
 
+# ======================================================
+# 🔹 TABLA BASE (C2)
+# ======================================================
 def tabla_presupuesto(df_detalle):
 
-    from reportlab.platypus import Paragraph
-    from reportlab.lib.styles import ParagraphStyle
-
-    style_small = ParagraphStyle(
-        name="Small",
-        fontName="Helvetica",
-        fontSize=8,
-        leading=9
-    )
-
-    df = (
-        df_detalle
-        .groupby("Estructura", as_index=False)
-        .agg({
-            "Cantidad": "sum",
-            "Precio": "first",
-            "Subtotal": "sum"
-        })
-    )
-
-    def _orden(nombre):
-        n = str(nombre).upper()
-
-        if "TS-" in n:
-            return 1
-        elif "PC-" in n:
-            return 2
-        elif "CONDUCTOR" in n:
-            return 3
-        elif n.startswith("A-"):
-            return 4
-        elif n.startswith("B-"):
-            return 5
-        elif "LL-" in n:
-            return 6
-        elif n.startswith("R-"):
-            return 7
-        elif "CA-" in n or "CS-" in n:
-            return 8
-        else:
-            return 9
-
-    df["orden"] = df["Estructura"].apply(_orden)
-    df = df.sort_values(["orden", "Subtotal"], ascending=[True, False])
+    df = df_detalle.groupby("Estructura", as_index=False).agg({
+        "Cantidad": "sum",
+        "Precio": "first",
+        "Subtotal": "sum"
+    })
 
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
     total = 0
 
     for _, r in df.iterrows():
-
-        texto = str(r["Estructura"]).replace("BT BT", "BT")
-        texto = f"Instalación de {texto}"
-
-        descripcion = Paragraph(texto, style_small)
-
         data.append([
-            descripcion,
+            f"Instalación de {r['Estructura']}",
             f"L {r['Precio']:,.2f}",
             int(r["Cantidad"]),
             f"L {r['Subtotal']:,.2f}",
         ])
-
         total += r["Subtotal"]
 
     data.append(["", "", "TOTAL", f"L {total:,.2f}"])
 
-    from reportlab.platypus import Table
     tabla = Table(data, colWidths=[320, 80, 60, 90])
     tabla.setStyle(estilo_tabla())
 
     return tabla
 
-def pagina_resumen(elementos, styles, df_totales):
+
+# ======================================================
+# 📄 GENERADOR PDF
+# ======================================================
+def generar_pdf_contratista(entrada):
+
+    contratista = st.session_state.get("contratista", "C1")
+
+    # =============================
+    # ENTRADAS
+    # =============================
+    if isinstance(entrada, pd.DataFrame):
+        df_estructuras = entrada
+        df_cables = None
+    else:
+        df_estructuras = getattr(entrada, "df_estructuras", None)
+        df_cables = getattr(entrada, "df_cables", None)
+
+    if df_estructuras is None:
+        raise ValueError("No hay estructuras")
+
+    # =============================
+    # CÁLCULO
+    # =============================
+    df_puntos = calcular_estructuras_por_punto(df_estructuras)
+
+    resultado = calcular_mano_obra_proyecto(df_puntos, df_cables)
+
+    df_detalle = resultado["df_detalle"]
+    df_totales = resultado["df_totales"]
+
+    # =============================
+    # PDF
+    # =============================
+    buffer = BytesIO()
+    styles = getSampleStyleSheet()
+
+    doc = SimpleDocTemplate(buffer)
+
+    elementos = []
+
+    # ======================================================
+    # 🔴 C1 → TODO INCLUIDO
+    # ======================================================
+    if contratista == "C1":
+
+        elementos.append(Paragraph("CUADRO GENERAL DE PRECIOS", styles["Title"]))
+        elementos.append(Spacer(1, 12))
+        elementos.append(tabla_presupuesto_general(df_detalle))
+        elementos.append(PageBreak())
+
+    # ======================================================
+    # 🔵 C2 → SEPARADO
+    # ======================================================
+    else:
+
+        elementos.append(Paragraph("ESTRUCTURAS Y CONDUCTORES", styles["Title"]))
+        elementos.append(tabla_presupuesto(df_detalle))
+        elementos.append(PageBreak())
+
+        elementos.append(Paragraph("MANO DE OBRA", styles["Title"]))
+        elementos.append(tabla_presupuesto(df_detalle))
+        elementos.append(PageBreak())
+
+    # ======================================================
+    # COMUNES
+    # ======================================================
+    from reportlab.platypus import Spacer
 
     elementos.append(Paragraph("RESUMEN DE PAGO POR PUNTO", styles["Title"]))
     elementos.append(Spacer(1, 12))
@@ -210,207 +205,7 @@ def pagina_resumen(elementos, styles, df_totales):
     elementos.append(tabla)
     elementos.append(PageBreak())
 
-# ======================================================
-# 💰 RESUMEN GLOBAL (CORREGIDO)
-# ======================================================
-def pagina_resumen_global(elementos, styles, df_detalle):
-
-    subtotal_estructuras = df_detalle[df_detalle["Punto"].notna()]["Subtotal"].sum()
-    subtotal_conductores = df_detalle[df_detalle["Punto"].isna()]["Subtotal"].sum()
-
-    # 🔥 CORRECCIÓN
-    grua = 123 * 1700
-    rastra = 3 * 24000
-
-    total_mano_obra = subtotal_estructuras + subtotal_conductores
-    total_logistica = grua + rastra
-    total_general = total_mano_obra + total_logistica
-
-    data = [
-        ["Concepto", "Monto (L)"],
-        ["Mano de Obra (Estructuras)", f"L {subtotal_estructuras:,.2f}"],
-        ["Mano de Obra (Conductores)", f"L {subtotal_conductores:,.2f}"],
-        ["TOTAL MANO DE OBRA", f"L {total_mano_obra:,.2f}"],
-        ["Equipo Grúa", f"L {grua:,.2f}"],
-        ["Flete de Postes (Viajes)", f"L {rastra:,.2f}"],
-        ["TOTAL LOGÍSTICA", f"L {total_logistica:,.2f}"],
-        ["TOTAL GENERAL", f"L {total_general:,.2f}"],
-    ]
-
-    tabla = Table(data, colWidths=[250, 150])
-    tabla.setStyle(estilo_tabla())
-
-    elementos.append(tabla)
-    elementos.append(PageBreak())
-
-
-# ======================================================
-# 💰 COTIZACIÓN (CORREGIDO)
-# ======================================================
-def pagina_cotizacion(elementos, styles, doc, df_detalle):
-
-    subtotal_estructuras = df_detalle[df_detalle["Punto"].notna()]["Subtotal"].sum()
-    subtotal_conductores = df_detalle[df_detalle["Punto"].isna()]["Subtotal"].sum()
-
-    mano_obra = subtotal_estructuras + subtotal_conductores
-
-    # 🔥 CORRECCIÓN
-    grua = 123 * 1700
-    rastra = 3 * 24000
-
-    logistica = grua + rastra
-    ingenieria = 25000
-
-    subtotal = mano_obra + logistica + ingenieria
-    isv = subtotal * 0.15
-    total_final = subtotal + isv
-
-    elementos.append(Paragraph("COTIZACIÓN DEL PROYECTO", styles["Title"]))
-    elementos.append(Spacer(1, 16))
-
-    data = [
-        ["Concepto", "Monto (L)"],
-        ["Mano de Obra", f"L {mano_obra:,.2f}"],
-        ["Logística", f"L {logistica:,.2f}"],
-        ["Ingeniería", f"L {ingenieria:,.2f}"],
-        ["Subtotal", f"L {subtotal:,.2f}"],
-        ["TOTAL", f"L {total_final:,.2f}"],
-    ]
-
-    tabla = Table(data, colWidths=[doc.width * 0.6, doc.width * 0.4])
-    tabla.setStyle(estilo_tabla())
-
-    elementos.append(tabla)
-    elementos.append(PageBreak())
-
-# ======================================================
-# 📄 DETALLE POR PUNTO
-# ======================================================
-def pagina_detalle(elementos, styles, df_detalle, df_totales):
-
-    elementos.append(Paragraph("DETALLE POR PUNTO", styles["Title"]))
-    elementos.append(Spacer(1, 16))
-
-    for punto in sorted(df_detalle["Punto"].dropna().unique()):
-
-        df_p = df_detalle[df_detalle["Punto"] == punto]
-        total = df_totales[df_totales["Punto"] == punto]["TOTAL_PUNTO"].values[0]
-
-        data = [[f"PUNTO: {punto}", "", "", ""]]
-        data.append(["Estructura", "Cant", "Precio", "Subtotal"])
-
-        for _, r in df_p.iterrows():
-            data.append([
-                r["Estructura"],
-                int(r["Cantidad"]),
-                f"{r['Precio']:,.2f}",
-                f"{r['Subtotal']:,.2f}",
-            ])
-
-        data.append([f"SUBTOTAL PUNTO {punto}", "", "", f"L {total:,.2f}"])
-
-        tabla = Table(data, colWidths=[200, 60, 80, 100])
-        tabla.setStyle(estilo_tabla())
-        tabla.setStyle([
-            ("SPAN", (0, -1), (2, -1)),
-            ("ALIGN", (0, -1), (-1, -1), "RIGHT"),
-        ])
-
-        elementos.append(tabla)
-        elementos.append(Spacer(1, 14))
-
-
-# ======================================================
-# 🚀 GENERADOR PDF
-# ======================================================
-def generar_pdf_contratista(entrada):
-
-    from io import BytesIO
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-    from reportlab.lib.styles import getSampleStyleSheet
-
-    # ======================================================
-    # 📥 ENTRADAS
-    # ======================================================
-    if isinstance(entrada, pd.DataFrame):
-        df_estructuras = entrada
-        df_cables = None
-    else:
-        df_estructuras = getattr(entrada, "df_estructuras", None)
-        df_cables = getattr(entrada, "df_cables", None)
-
-    if df_estructuras is None:
-        raise ValueError("No hay estructuras")
-
-    # ======================================================
-    # ⚙️ CÁLCULO
-    # ======================================================
-    df_puntos = calcular_estructuras_por_punto(df_estructuras)
-
-    resultado = calcular_mano_obra_proyecto(df_puntos, df_cables)
-
-    df_detalle = resultado["df_detalle"]
-    df_totales = resultado["df_totales"]
-
-    # ======================================================
-    # 📄 PDF
-    # ======================================================
-    buffer = BytesIO()
-    styles = getSampleStyleSheet()
-
-    doc = SimpleDocTemplate(
-        buffer,
-        topMargin=120,
-        leftMargin=40,
-        rightMargin=40
-    )
-
-    elementos = []
-
-    # ======================================================
-    # 🔥 1. TABLA GENERAL (NUEVA - PRIMERA)
-    # ======================================================
-    elementos.append(Paragraph("CUADRO GENERAL DE PRECIOS", styles["Title"]))
-    elementos.append(Spacer(1, 16))
-    elementos.append(tabla_presupuesto_general(df_detalle))
-    elementos.append(PageBreak())
-
-    # ======================================================
-    # 🔹 2. TABLA ORIGINAL (SE MANTIENE)
-    # ======================================================
-    elementos.append(Paragraph("PRESUPUESTO DE INSTALACIÓN", styles["Title"]))
-    elementos.append(Spacer(1, 16))
-    elementos.append(tabla_presupuesto(df_detalle))
-    elementos.append(PageBreak())
-
-    # ======================================================
-    # 🔹 3. RESUMEN POR PUNTO
-    # ======================================================
-    pagina_resumen(elementos, styles, df_totales)
-
-    # ======================================================
-    # 🔹 4. RESUMEN GLOBAL
-    # ======================================================
-    pagina_resumen_global(elementos, styles, df_detalle)
-
-    # ======================================================
-    # 🔹 5. COTIZACIÓN
-    # ======================================================
-    pagina_cotizacion(elementos, styles, doc, df_detalle)
-
-    # ======================================================
-    # 🔹 6. DETALLE POR PUNTO
-    # ======================================================
-    pagina_detalle(elementos, styles, df_detalle, df_totales)
-
-    # ======================================================
-    # 🧱 BUILD
-    # ======================================================
-    doc.build(
-        elementos,
-        onFirstPage=fondo_pagina,
-        onLaterPages=fondo_pagina
-    )
+    doc.build(elementos, onFirstPage=fondo_pagina)
 
     pdf = buffer.getvalue()
     buffer.close()
