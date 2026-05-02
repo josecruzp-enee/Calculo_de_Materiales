@@ -84,8 +84,12 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
             format_func=lambda x: f"{x} - {etiquetas.get(x, '')}",
         )
 
+        # 🔥 mostrar selección actual
+        if sel:
+            st.caption(f"Seleccionado: {sel}")
+
     with c2:
-        st.number_input(
+        qty = st.number_input(
             "",
             min_value=1,
             max_value=99,
@@ -99,8 +103,11 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
         if st.button("➕", key=f"{key_prefix}_{cat_key}_add"):
             if sel:
                 punto = st.session_state.get("punto_en_edicion", "P-01")
-                agregar_item_estructura(punto, sel)
 
+                for _ in range(qty):
+                    agregar_item_estructura(punto, sel)
+
+                st.success(f"✔ {sel} agregado a {punto}")
 
 # =========================================================
 # UI PRINCIPAL
@@ -117,7 +124,7 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     if not opciones:
         st.warning("⚠️ No se pudo cargar catálogo desde base_datos (INDICE)")
 
-    df_actual = st.session_state.get("df_puntos", pd.DataFrame())
+    df_hist = st.session_state.get("df_puntos", pd.DataFrame())
 
     # =====================================================
     # CONTROLES
@@ -127,16 +134,17 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     with colA:
         if st.button("🆕 Punto"):
             crear_nuevo_punto()
+            st.success(f"Creando {st.session_state.get('punto_en_edicion')}")
 
     with colB:
-        if not df_actual.empty:
-            p_sel = st.selectbox("Ir a:", df_actual["Punto"].unique())
+        if not df_hist.empty:
+            p_sel = st.selectbox("Ir a:", df_hist["Punto"].unique())
             if st.button("Editar"):
                 st.session_state["punto_en_edicion"] = p_sel
 
     with colC:
-        if not df_actual.empty:
-            p_del = st.selectbox("Eliminar:", df_actual["Punto"].unique())
+        if not df_hist.empty:
+            p_del = st.selectbox("Eliminar:", df_hist["Punto"].unique())
             if st.button("Borrar"):
                 eliminar_punto(p_del)
 
@@ -144,37 +152,59 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
         if st.button("🧹 Reset"):
             reset_estructuras()
 
+    # =====================================================
+    # PUNTO ACTUAL
+    # =====================================================
     punto = st.session_state.get("punto_en_edicion", "P-01")
     st.markdown(f"### {punto}")
 
     # =====================================================
+    # 🔥 ESTRUCTURAS DEL PUNTO ACTUAL
+    # =====================================================
+    df_punto = df_hist[df_hist["Punto"] == punto]
+
+    st.divider()
+
+    if not df_punto.empty:
+        st.markdown("### 📌 Estructuras en este punto")
+        st.dataframe(df_punto, use_container_width=True, hide_index=True)
+    else:
+        st.info("Este punto aún no tiene estructuras")
+
+    # =====================================================
+    # 🔥 RESUMEN DEL PUNTO
+    # =====================================================
+    fila_actual = consolidar_punto(punto)
+
+    if fila_actual and fila_actual.get("Estructuras"):
+        st.markdown("### 🧾 Resumen del punto")
+
+        df_sel = pd.DataFrame({
+            "Estructura": fila_actual["Estructuras"]
+        })
+
+        st.dataframe(df_sel, use_container_width=True, hide_index=True)
+
+    # =====================================================
     # 🔥 HISTÓRICO DE PUNTOS
     # =====================================================
-    df_hist = st.session_state.get("df_puntos", pd.DataFrame())
-
     if not df_hist.empty:
+
+        st.divider()
         st.markdown("### 📍 Puntos guardados")
 
         df_hist_temp = df_hist.copy()
-        df_hist_temp["orden"] = df_hist_temp["Punto"].str.extract(r'(\d+)').astype(int)
+
+        df_hist_temp["orden"] = (
+            df_hist_temp["Punto"]
+            .astype(str)
+            .str.extract(r'(\d+)')[0]
+            .astype(float)
+        )
+
         df_hist_temp = df_hist_temp.sort_values("orden").drop(columns=["orden"])
 
         st.dataframe(df_hist_temp, use_container_width=True, hide_index=True)
-
-    # =====================================================
-    # 🔥 SELECCIÓN ACTUAL
-    # =====================================================
-    fila_actual = consolidar_punto(punto)
-    seleccion = {k: v for k, v in fila_actual.items() if k != "Punto" and v}
-
-    if seleccion:
-        st.markdown("#### 🧾 Selección actual")
-
-        df_sel = pd.DataFrame([
-            {"Categoría": k, "Código": v}
-            for k, v in seleccion.items()
-        ])
-        st.dataframe(df_sel, use_container_width=True, hide_index=True)
 
     # =====================================================
     # CATEGORÍAS
@@ -197,10 +227,18 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
         _fila_categoria_ui(cat, valores, etiquetas, kp)
 
     # =====================================================
-    # VISTA PREVIA
+    # VISTA PREVIA FINAL
     # =====================================================
     fila = consolidar_punto(punto)
-    st.dataframe(pd.DataFrame([fila]), use_container_width=True, hide_index=True)
+
+    st.divider()
+    st.markdown("### 📊 Vista previa")
+
+    st.dataframe(
+        pd.DataFrame([fila]),
+        use_container_width=True,
+        hide_index=True
+    )
 
     # =====================================================
     # GUARDAR
