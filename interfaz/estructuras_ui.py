@@ -17,10 +17,11 @@ from entradas.estructuras import (
 )
 
 # =========================================================
-# DATA (DESDE ORQUESTADOR)
+# DATA (CATÁLOGO)
 # =========================================================
 
 from entradas.base_datos import cargar_base_datos
+
 
 def _obtener_opciones_desde_orquestador() -> dict:
 
@@ -62,6 +63,7 @@ def _obtener_opciones_desde_orquestador() -> dict:
 
     return opciones
 
+
 # =========================================================
 # UI HELPERS
 # =========================================================
@@ -96,7 +98,7 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
     with c3:
         if st.button("➕", key=f"{key_prefix}_{cat_key}_add"):
             if sel:
-                punto = st.session_state.get("punto_en_edicion", "Punto 1")
+                punto = st.session_state.get("punto_en_edicion", "P-01")
                 agregar_item_estructura(punto, sel)
 
 
@@ -108,12 +110,10 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
 
     inicializar_estado_estructuras()
 
-    # 🔥 OPCIONES DESDE ORQUESTADOR
     opciones = _obtener_opciones_desde_orquestador()
 
     st.subheader("🏗️ Estructuras del Proyecto")
 
-    # 🔎 DEBUG SUAVE (no rompe nada)
     if not opciones:
         st.warning("⚠️ No se pudo cargar catálogo desde base_datos (INDICE)")
 
@@ -144,8 +144,37 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
         if st.button("🧹 Reset"):
             reset_estructuras()
 
-    punto = st.session_state.get("punto_en_edicion", "Punto 1")
+    punto = st.session_state.get("punto_en_edicion", "P-01")
     st.markdown(f"### {punto}")
+
+    # =====================================================
+    # 🔥 HISTÓRICO DE PUNTOS
+    # =====================================================
+    df_hist = st.session_state.get("df_puntos", pd.DataFrame())
+
+    if not df_hist.empty:
+        st.markdown("### 📍 Puntos guardados")
+
+        df_hist_temp = df_hist.copy()
+        df_hist_temp["orden"] = df_hist_temp["Punto"].str.extract(r'(\d+)').astype(int)
+        df_hist_temp = df_hist_temp.sort_values("orden").drop(columns=["orden"])
+
+        st.dataframe(df_hist_temp, use_container_width=True, hide_index=True)
+
+    # =====================================================
+    # 🔥 SELECCIÓN ACTUAL
+    # =====================================================
+    fila_actual = consolidar_punto(punto)
+    seleccion = {k: v for k, v in fila_actual.items() if k != "Punto" and v}
+
+    if seleccion:
+        st.markdown("#### 🧾 Selección actual")
+
+        df_sel = pd.DataFrame([
+            {"Categoría": k, "Código": v}
+            for k, v in seleccion.items()
+        ])
+        st.dataframe(df_sel, use_container_width=True, hide_index=True)
 
     # =====================================================
     # CATEGORÍAS
@@ -174,7 +203,7 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     st.dataframe(pd.DataFrame([fila]), use_container_width=True, hide_index=True)
 
     # =====================================================
-    # GUARDAR (🔥 SOLO UI)
+    # GUARDAR
     # =====================================================
     if st.button("💾 Guardar"):
 
@@ -190,7 +219,4 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
 
         return df, ruta
 
-    # =====================================================
-    # SALIDA FINAL
-    # =====================================================
     return None, None
