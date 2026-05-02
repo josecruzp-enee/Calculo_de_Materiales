@@ -79,7 +79,7 @@ def _fila_categoria_ui(cat_key, valores, etiquetas, key_prefix):
             index=0,
             key=f"{key_prefix}_{cat_key}_sel",
             label_visibility="collapsed",
-            format_func=lambda x: etiquetas.get(x, x),
+            format_func=lambda x: f"{x} - {etiquetas.get(x, '')}",
         )
 
     with c2:
