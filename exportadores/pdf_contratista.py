@@ -4,7 +4,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
     Table, PageBreak
 )
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from io import BytesIO
 import pandas as pd
@@ -13,19 +13,6 @@ import streamlit as st
 from materiales.calculos.calculo_estructuras import calcular_estructuras_por_punto
 from costos_precios.mano_obra_por_punto import calcular_mano_obra_proyecto
 from exportadores.pdf_base import fondo_pagina
-
-
-# ======================================================
-# ⚙️ CONFIG LOGÍSTICA DINÁMICA
-# ======================================================
-def cfg_logistica():
-    return {
-        "horas_poste": st.session_state.get("horas_grua_poste", 3),
-        "precio_hora": st.session_state.get("precio_hora_grua", 1700),
-        "flete": st.session_state.get("costo_flete", 25000),
-        "viajes": st.session_state.get("viajes_flete", 2),
-        "ingenieria": st.session_state.get("ingenieria", 25000),
-    }
 
 
 # ======================================================
@@ -43,11 +30,9 @@ def estilo_tabla():
 
 
 # ======================================================
-# 🔥 TABLA GENERAL (C1 CON LOGÍSTICA)
+# 🔴 TABLA GENERAL C1 (CON LOGÍSTICA)
 # ======================================================
 def tabla_presupuesto_general(df_detalle):
-
-    cfg = cfg_logistica()
 
     df = df_detalle.groupby("Estructura", as_index=False).agg({
         "Cantidad": "sum",
@@ -57,8 +42,9 @@ def tabla_presupuesto_general(df_detalle):
 
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
 
-    total = df_detalle["Subtotal"].sum()
+    total_general = df_detalle["Subtotal"].sum()
 
+    # 🔹 estructuras
     for _, r in df.iterrows():
         data.append([
             f"Instalación de {r['Estructura']}",
@@ -67,18 +53,25 @@ def tabla_presupuesto_general(df_detalle):
             f"L {r['Subtotal']:,.2f}",
         ])
 
-    # 🔥 LOGÍSTICA DINÁMICA
-    postes = df[df["Estructura"].str.contains("PC-")]["Cantidad"].sum()
+    # =====================================================
+    # 🔥 LOGÍSTICA MANUAL
+    # =====================================================
+    if st.session_state.get("incluir_logistica", True):
 
-    horas = postes * cfg["horas_poste"]
-    total_grua = horas * cfg["precio_hora"]
-    total_flete = cfg["flete"] * cfg["viajes"]
+        horas = st.session_state.get("horas_grua", 12)
+        precio = st.session_state.get("precio_hora_grua", 1700)
+        flete = st.session_state.get("costo_flete", 25000)
+        viajes = st.session_state.get("viajes_flete", 1)
+        ingenieria = st.session_state.get("ingenieria", 25000)
 
-    data.append(["Equipo Grúa", f"L {cfg['precio_hora']:,.2f}", horas, f"L {total_grua:,.2f}"])
-    data.append(["Flete", f"L {cfg['flete']:,.2f}", cfg["viajes"], f"L {total_flete:,.2f}"])
-    data.append(["Ingeniería", "", 1, f"L {cfg['ingenieria']:,.2f}"])
+        total_grua = horas * precio
+        total_flete = flete * viajes
 
-    total_general = total + total_grua + total_flete + cfg["ingenieria"]
+        data.append(["Equipo Grúa", f"L {precio:,.2f}", horas, f"L {total_grua:,.2f}"])
+        data.append(["Flete", f"L {flete:,.2f}", viajes, f"L {total_flete:,.2f}"])
+        data.append(["Ingeniería", "", 1, f"L {ingenieria:,.2f}"])
+
+        total_general += total_grua + total_flete + ingenieria
 
     data.append(["", "", "TOTAL GENERAL", f"L {total_general:,.2f}"])
 
@@ -89,7 +82,7 @@ def tabla_presupuesto_general(df_detalle):
 
 
 # ======================================================
-# 🔹 TABLA BASE (C2)
+# 🔵 TABLA BASE C2
 # ======================================================
 def tabla_presupuesto(df_detalle):
 
@@ -120,15 +113,42 @@ def tabla_presupuesto(df_detalle):
 
 
 # ======================================================
+# 🔵 TABLA LOGÍSTICA (C2)
+# ======================================================
+def tabla_logistica():
+
+    if not st.session_state.get("incluir_logistica", True):
+        return None
+
+    horas = st.session_state.get("horas_grua", 12)
+    precio = st.session_state.get("precio_hora_grua", 1700)
+    flete = st.session_state.get("costo_flete", 25000)
+    viajes = st.session_state.get("viajes_flete", 1)
+    ingenieria = st.session_state.get("ingenieria", 25000)
+
+    total_grua = horas * precio
+    total_flete = flete * viajes
+
+    data = [
+        ["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"],
+        ["Equipo Grúa", f"L {precio:,.2f}", horas, f"L {total_grua:,.2f}"],
+        ["Flete", f"L {flete:,.2f}", viajes, f"L {total_flete:,.2f}"],
+        ["Ingeniería", "", 1, f"L {ingenieria:,.2f}"],
+    ]
+
+    tabla = Table(data, colWidths=[320, 80, 60, 90])
+    tabla.setStyle(estilo_tabla())
+
+    return tabla
+
+
+# ======================================================
 # 📄 GENERADOR PDF
 # ======================================================
 def generar_pdf_contratista(entrada):
 
     contratista = st.session_state.get("contratista", "C1")
 
-    # =============================
-    # ENTRADAS
-    # =============================
     if isinstance(entrada, pd.DataFrame):
         df_estructuras = entrada
         df_cables = None
@@ -139,9 +159,6 @@ def generar_pdf_contratista(entrada):
     if df_estructuras is None:
         raise ValueError("No hay estructuras")
 
-    # =============================
-    # CÁLCULO
-    # =============================
     df_puntos = calcular_estructuras_por_punto(df_estructuras)
 
     resultado = calcular_mano_obra_proyecto(df_puntos, df_cables)
@@ -149,18 +166,14 @@ def generar_pdf_contratista(entrada):
     df_detalle = resultado["df_detalle"]
     df_totales = resultado["df_totales"]
 
-    # =============================
-    # PDF
-    # =============================
     buffer = BytesIO()
     styles = getSampleStyleSheet()
-
     doc = SimpleDocTemplate(buffer)
 
     elementos = []
 
     # ======================================================
-    # 🔴 C1 → TODO INCLUIDO
+    # 🔴 C1
     # ======================================================
     if contratista == "C1":
 
@@ -170,7 +183,7 @@ def generar_pdf_contratista(entrada):
         elementos.append(PageBreak())
 
     # ======================================================
-    # 🔵 C2 → SEPARADO
+    # 🔵 C2
     # ======================================================
     else:
 
@@ -182,11 +195,16 @@ def generar_pdf_contratista(entrada):
         elementos.append(tabla_presupuesto(df_detalle))
         elementos.append(PageBreak())
 
-    # ======================================================
-    # COMUNES
-    # ======================================================
-    from reportlab.platypus import Spacer
+        tabla_log = tabla_logistica()
+        if tabla_log:
+            elementos.append(Paragraph("LOGÍSTICA", styles["Title"]))
+            elementos.append(Spacer(1, 12))
+            elementos.append(tabla_log)
+            elementos.append(PageBreak())
 
+    # ======================================================
+    # RESUMEN
+    # ======================================================
     elementos.append(Paragraph("RESUMEN DE PAGO POR PUNTO", styles["Title"]))
     elementos.append(Spacer(1, 12))
 
