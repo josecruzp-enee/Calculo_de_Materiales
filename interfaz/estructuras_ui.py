@@ -9,7 +9,6 @@ import pandas as pd
 from entradas.estructuras import (
     inicializar_estado_estructuras,
     agregar_item_estructura,
-    consolidar_punto,
     eliminar_punto,
     reset_estructuras,
     construir_dataframe_salida,
@@ -66,7 +65,7 @@ def _obtener_opciones_desde_orquestador() -> dict:
 # =========================================================
 # AGRUPAR CANTIDADES
 # =========================================================
-def _agrupar_cantidades(lista):
+def _agrupar(lista):
 
     conteo = {}
 
@@ -85,9 +84,9 @@ def _agrupar_cantidades(lista):
 
 
 # =========================================================
-# CLASIFICACIÓN
+# CLASIFICAR FILA
 # =========================================================
-def _clasificar_en_fila(punto, df_punto):
+def _fila_horizontal(punto, df_punto):
 
     fila = {
         "Punto": punto,
@@ -119,10 +118,9 @@ def _clasificar_en_fila(punto, df_punto):
         elif est.startswith("LL"):
             fila["Luminarias"].append(est)
 
-    # convertir a texto con cantidades
     for k in fila:
         if k != "Punto":
-            fila[k] = _agrupar_cantidades(fila[k])
+            fila[k] = _agrupar(fila[k])
 
     return fila
 
@@ -151,7 +149,6 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
     with colA:
         if st.button("🆕 Punto"):
             crear_nuevo_punto()
-            st.success(f"Creando {st.session_state.get('punto_en_edicion')}")
 
     with colB:
         if not df_hist.empty:
@@ -170,16 +167,13 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
             reset_estructuras()
 
     # =====================================================
-    # PUNTO ACTUAL
+    # PUNTO
     # =====================================================
     punto = st.session_state.get("punto_en_edicion", "P-01")
     st.markdown(f"### {punto}")
 
     st.divider()
 
-    # =====================================================
-    # FORM
-    # =====================================================
     categorias = [
         "Poste",
         "Primario",
@@ -192,13 +186,16 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
 
     kp = f"kp_{punto}"
 
+    # =====================================================
+    # FORM
+    # =====================================================
     with st.form(key=f"form_{punto}"):
 
         seleccion_temp = []
 
         for cat in categorias:
 
-            valores = opciones.get(cat, {}).get("valores", [])
+            valores = [""] + opciones.get(cat, {}).get("valores", [])
             etiquetas = opciones.get(cat, {}).get("etiquetas", {})
 
             c1, c2 = st.columns([6, 2])
@@ -206,14 +203,14 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
             with c1:
                 sel = st.selectbox(
                     cat,
-                    valores if valores else [""],
+                    valores,
                     key=f"{kp}_{cat}",
-                    format_func=lambda x: f"{x} - {etiquetas.get(x, '')}"
+                    format_func=lambda x: "Seleccionar estructura..." if x == "" else f"{x} - {etiquetas.get(x, '')}"
                 )
 
             with c2:
                 qty = st.number_input(
-                    "Cant",
+                    "",
                     min_value=1,
                     max_value=99,
                     value=1,
@@ -225,27 +222,24 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
                 for _ in range(qty):
                     seleccion_temp.append(sel)
 
-        guardar_punto = st.form_submit_button("💾 Guardar punto")
+        guardar = st.form_submit_button("💾 Guardar punto")
 
-        if guardar_punto:
+        if guardar:
             for est in seleccion_temp:
                 agregar_item_estructura(punto, est)
 
             st.success(f"✅ {punto} guardado correctamente")
 
     # =====================================================
-    # TABLA DEL PUNTO
+    # TABLA PUNTO
     # =====================================================
     df_hist = st.session_state.get("df_puntos", pd.DataFrame())
     df_punto = df_hist[df_hist["Punto"] == punto]
 
     if not df_punto.empty:
-
-        fila = _clasificar_en_fila(punto, df_punto)
-        df_horizontal = pd.DataFrame([fila])
-
+        fila = _fila_horizontal(punto, df_punto)
         st.markdown("### 📊 Vista del punto")
-        st.dataframe(df_horizontal, use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame([fila]), use_container_width=True, hide_index=True)
 
     # =====================================================
     # TABLA GLOBAL
@@ -256,12 +250,10 @@ def seccion_entrada_estructuras() -> Tuple[pd.DataFrame | None, str | None]:
 
         for p in df_hist["Punto"].unique():
             df_p = df_hist[df_hist["Punto"] == p]
-            filas.append(_clasificar_en_fila(p, df_p))
-
-        df_all = pd.DataFrame(filas)
+            filas.append(_fila_horizontal(p, df_p))
 
         st.markdown("### 📋 Tabla general del proyecto")
-        st.dataframe(df_all, use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
 
     # =====================================================
     # SALIDA FINAL
