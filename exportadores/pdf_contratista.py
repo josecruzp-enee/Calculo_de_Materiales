@@ -196,7 +196,11 @@ def generar_pdf_contratista(entrada):
 
     df_puntos = calcular_estructuras_por_punto(df_estructuras)
 
-    resultado = calcular_mano_obra_proyecto(df_puntos, df_cables)
+    resultado = calcular_mano_obra_proyecto(
+        df_puntos,
+        df_cables,
+        contratista=contratista
+    )
 
     df_detalle = resultado["df_detalle"]
     df_totales = resultado["df_totales"]
