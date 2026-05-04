@@ -280,7 +280,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
 
         contratista = st.session_state.get("contratista", "C1")
 
-        res_costos = ejecutar_costos(entrada_costos)
+        res_costos = ejecutar_costos(entrada_costos, contratista=contratista)
 
         df_precios = res_costos.get("df_precios_estructura")
 
