@@ -95,6 +95,7 @@ def tabla_presupuesto(df_detalle):
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
     total = 0
 
+    # 🔹 estructuras normales
     for _, r in df.iterrows():
         data.append([
             f"Instalación de {r['Estructura']}",
@@ -104,13 +105,37 @@ def tabla_presupuesto(df_detalle):
         ])
         total += r["Subtotal"]
 
+    # =========================
+    # 🔴 ITEMS MANUALES
+    # =========================
+
+    # DESMONTAJE
+    data.append([
+        "Desmontaje de Red Existente",
+        "L 35,000.00",
+        1,
+        "L 35,000.00",
+    ])
+    total += 35000
+
+    # REUBICACION
+    data.append([
+        "Reubicación de Transformador Existente",
+        "L 80,000.00",
+        1,
+        "L 80,000.00",
+    ])
+    total += 80000
+
+    # =========================
+    # 🔹 TOTAL
+    # =========================
     data.append(["", "", "TOTAL", f"L {total:,.2f}"])
 
     tabla = Table(data, colWidths=[320, 80, 60, 90])
     tabla.setStyle(estilo_tabla())
 
     return tabla
-
 
 # ======================================================
 # 🔵 TABLA LOGÍSTICA (C2)
