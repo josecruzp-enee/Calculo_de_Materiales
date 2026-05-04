@@ -256,7 +256,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
                     factor = 2
 
                 longitud_real = longitud / factor
-                total_bt += longitud_real
+                total_bt += longitud_real / 2
 
             elif tipo == "MT":
                 total_mt += longitud
