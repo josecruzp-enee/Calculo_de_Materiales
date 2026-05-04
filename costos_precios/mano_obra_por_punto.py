@@ -130,6 +130,8 @@ PRECIOS_FIJOS_2 = {
     "CT-N": 1500,
     "CA-32": 2500,
     "CS-2": 1200,
+    "DESMONTAJE": 35000,
+    "REUBICACION": 80000,
 }
 
 
@@ -371,6 +373,38 @@ def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cable
 
     df_detalle = _agregar_cable_resumen(df_detalle, df_cables, lista_precios, contratista)
 
+    # =========================
+    # 🔴 COSTOS GLOBALES
+    # =========================
+
+    filas_globales = []
+
+    # DESMONTAJE
+    if "DESMONTAJE" in lista_precios:
+        filas_globales.append({
+            "Punto": None,
+            "Estructura": "DESMONTAJE",
+            "Cantidad": 1,
+            "Precio": lista_precios.get("DESMONTAJE", 0),
+            "Subtotal": lista_precios.get("DESMONTAJE", 0),
+        })
+
+    # REUBICACIÓN (ejemplo simple)
+    if "REUBICACION" in lista_precios:
+        filas_globales.append({
+            "Punto": None,
+            "Estructura": "REUBICACION",
+            "Cantidad": 1,
+            "Precio": lista_precios.get("REUBICACION", 0),
+            "Subtotal": lista_precios.get("REUBICACION", 0),
+        })
+
+    if filas_globales:
+        df_detalle = pd.concat([df_detalle, pd.DataFrame(filas_globales)], ignore_index=True)
+
+    # =========================
+    # 🧮 TOTALES
+    # =========================
     df_totales = calcular_totales_por_punto(df_detalle[df_detalle["Punto"].notna()])
 
     df_detalle = df_detalle.sort_values(["Punto", "Estructura"])
