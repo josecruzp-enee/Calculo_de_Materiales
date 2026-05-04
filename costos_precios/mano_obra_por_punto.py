@@ -247,16 +247,16 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
 
             if tipo == "BT":
 
-            fases = str(c.get("Fases", "")).upper()
+                fases = str(c.get("Fases", "")).upper()
 
-            factor = 1
-            if "3" in fases:
-                factor = 3
-            elif "2" in fases:
-                factor = 2
+                factor = 1
+                if "3" in fases:
+                    factor = 3
+                elif "2" in fases:
+                    factor = 2
 
-            longitud_real = longitud / factor
-            total_bt += longitud_real
+                longitud_real = longitud / factor
+                total_bt += longitud_real
 
             elif tipo == "MT":
                 total_mt += longitud
