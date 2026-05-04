@@ -61,7 +61,7 @@ PATRON = re.compile(
     \b(TS-\d+(?:\.\d+)?KVA)\b|
     \b(CT-[A-Z])\b|
     \b(R-\d+[A-Z]?)\b|
-    \b(LL-\d+(?:-\d+[A-Z]+)+)\b
+    \b(LL-\d+(?:-[0-9A-Z]+)+)\b
     """,
     re.VERBOSE
 )
