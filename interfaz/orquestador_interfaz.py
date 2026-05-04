@@ -184,7 +184,7 @@ def _construir_salida_interfaz() -> SalidaInterfaz:
         datos_proyecto=datos,
         df_cables=df_cables,
         df_materiales_extra=st.session_state.get("df_materiales_extra"),
-        contratista=st.session_state.get("contratista", "C1"),
+     
     )
 
     # DEBUG INTERFAZ (se mantiene igual)
