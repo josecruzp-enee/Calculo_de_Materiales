@@ -236,10 +236,7 @@ def generar_pdf_contratista(entrada):
         elementos.append(tabla_presupuesto(df_detalle))
         elementos.append(PageBreak())
 
-        elementos.append(Paragraph("MANO DE OBRA", styles["Title"]))
-        elementos.append(tabla_presupuesto(df_detalle))
-        elementos.append(PageBreak())
-
+        
         tabla_log = tabla_logistica()
         if tabla_log:
             elementos.append(Paragraph("LOGÍSTICA", styles["Title"]))
