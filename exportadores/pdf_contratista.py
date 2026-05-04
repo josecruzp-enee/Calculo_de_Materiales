@@ -44,7 +44,6 @@ def tabla_presupuesto_general(df_detalle):
 
     total_general = df_detalle["Subtotal"].sum()
 
-    # 🔹 estructuras
     for _, r in df.iterrows():
         data.append([
             f"Instalación de {r['Estructura']}",
@@ -53,9 +52,6 @@ def tabla_presupuesto_general(df_detalle):
             f"L {r['Subtotal']:,.2f}",
         ])
 
-    # =====================================================
-    # 🔥 LOGÍSTICA MANUAL
-    # =====================================================
     if st.session_state.get("incluir_logistica", True):
 
         horas = st.session_state.get("horas_grua", 12)
@@ -95,7 +91,6 @@ def tabla_presupuesto(df_detalle):
     data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
     total = 0
 
-    # 🔹 estructuras normales
     for _, r in df.iterrows():
         data.append([
             f"Instalación de {r['Estructura']}",
@@ -105,31 +100,13 @@ def tabla_presupuesto(df_detalle):
         ])
         total += r["Subtotal"]
 
-    # =========================
-    # 🔴 ITEMS MANUALES
-    # =========================
-
-    # DESMONTAJE
-    data.append([
-        "Desmontaje de Red Existente",
-        "L 35,000.00",
-        1,
-        "L 35,000.00",
-    ])
+    # 🔴 HARDCODE
+    data.append(["Desmontaje de Red Existente", "L 35,000.00", 1, "L 35,000.00"])
     total += 35000
 
-    # REUBICACION
-    data.append([
-        "Reubicación de Transformador Existente",
-        "L 80,000.00",
-        1,
-        "L 80,000.00",
-    ])
+    data.append(["Reubicación de Transformador Existente", "L 80,000.00", 1, "L 80,000.00"])
     total += 80000
 
-    # =========================
-    # 🔹 TOTAL
-    # =========================
     data.append(["", "", "TOTAL", f"L {total:,.2f}"])
 
     tabla = Table(data, colWidths=[320, 80, 60, 90])
@@ -137,8 +114,9 @@ def tabla_presupuesto(df_detalle):
 
     return tabla
 
+
 # ======================================================
-# 🔵 TABLA LOGÍSTICA (C2)
+# 🔵 TABLA LOGÍSTICA
 # ======================================================
 def tabla_logistica():
 
@@ -167,13 +145,15 @@ def tabla_logistica():
     return tabla
 
 
+# ======================================================
+# 🔵 DETALLE POR PUNTO
+# ======================================================
 def tabla_detalle_por_punto(df_detalle):
 
     data = [["Punto", "Descripción", "P.U.", "Cant", "Subtotal"]]
 
     for punto, grupo in df_detalle.groupby("Punto"):
 
-        # 🔹 fila tipo encabezado de punto
         data.append([punto, "", "", "", ""])
 
         subtotal_punto = 0
@@ -188,7 +168,6 @@ def tabla_detalle_por_punto(df_detalle):
             ])
             subtotal_punto += r["Subtotal"]
 
-        # 🔸 subtotal por punto
         data.append([
             "",
             "",
@@ -201,6 +180,7 @@ def tabla_detalle_por_punto(df_detalle):
     tabla.setStyle(estilo_tabla())
 
     return tabla
+
 
 # ======================================================
 # 📄 GENERADOR PDF
@@ -232,9 +212,10 @@ def generar_pdf_contratista(entrada):
 
     buffer = BytesIO()
     styles = getSampleStyleSheet()
+
     doc = SimpleDocTemplate(
         buffer,
-        topMargin=90,   # 🔥 espacio para el membrete
+        topMargin=90,
         bottomMargin=40,
         leftMargin=40,
         rightMargin=40
@@ -242,9 +223,6 @@ def generar_pdf_contratista(entrada):
 
     elementos = []
 
-    # ======================================================
-    # 🔴 C1
-    # ======================================================
     if contratista == "C1":
 
         elementos.append(Paragraph("CUADRO GENERAL DE PRECIOS", styles["Title"]))
@@ -252,16 +230,12 @@ def generar_pdf_contratista(entrada):
         elementos.append(tabla_presupuesto_general(df_detalle))
         elementos.append(PageBreak())
 
-    # ======================================================
-    # 🔵 C2
-    # ======================================================
     else:
 
         elementos.append(Paragraph("ESTRUCTURAS Y CONDUCTORES", styles["Title"]))
         elementos.append(tabla_presupuesto(df_detalle))
         elementos.append(PageBreak())
 
-        
         tabla_log = tabla_logistica()
         if tabla_log:
             elementos.append(Paragraph("LOGÍSTICA", styles["Title"]))
@@ -282,6 +256,11 @@ def generar_pdf_contratista(entrada):
         data.append([r["Punto"], f"{r['TOTAL_PUNTO']:,.2f}"])
         total_general += r["TOTAL_PUNTO"]
 
+    # 🔥 FIX (único cambio real)
+    if contratista != "C1":
+        total_general += 35000
+        total_general += 80000
+
     data.append(["TOTAL GENERAL", f"L {total_general:,.2f}"])
 
     tabla = Table(data, colWidths=[200, 150])
@@ -290,10 +269,6 @@ def generar_pdf_contratista(entrada):
     elementos.append(tabla)
     elementos.append(PageBreak())
 
-
-    # ======================================================
-    # 🔵 DETALLE POR PUNTO (LO QUE TE FALTA)
-    # ======================================================
     elementos.append(Paragraph("DETALLE DE PRECIOS POR PUNTO", styles["Title"]))
     elementos.append(Spacer(1, 12))
     elementos.append(tabla_detalle_por_punto(df_detalle))
