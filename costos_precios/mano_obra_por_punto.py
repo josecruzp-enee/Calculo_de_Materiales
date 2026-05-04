@@ -74,9 +74,11 @@ PRECIOS_FIJOS_2 = {
 
     "CONDUCTOR BT GLOBAL": 150,
     "CONDUCTOR MT GLOBAL": 120,
+    "CONDUCTOR N GLOBAL": 120,
     
     "CONDUCTOR MT 1/0 AWG RAVEN": 120,
     "CONDUCTOR BT WP 3/0 AWG FIG": 150,
+    "CONDUCTOR N 2 AWG SPARROW": 150,
 
     "R-1": 2100,
     "R-2": 2300,
@@ -171,7 +173,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
     filas = []
 
     # ======================================================
-    # 🟢 C1 → DETALLADO
+    # 🟢 C1 → DETALLADO (NO SE TOCA)
     # ======================================================
     if contratista == "C1":
 
@@ -188,7 +190,6 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
             if longitud <= 0:
                 continue
 
-            # 🔥 NORMALIZACIÓN
             desc = descripcion
             desc = desc.replace("CABLE DE ALUMINIO", "")
             desc = desc.replace("ACSR", "")
@@ -224,12 +225,13 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
             })
 
     # ======================================================
-    # 🔵 C2 → GLOBAL
+    # 🔵 C2 → CORREGIDO
     # ======================================================
     elif contratista == "C2":
 
         total_bt = 0
         total_mt = 0
+        total_n = 0
 
         for _, c in df_cables.iterrows():
 
@@ -244,33 +246,60 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
                 continue
 
             if tipo == "BT":
-                total_bt += longitud
+                total_bt += longitud   # ✔ NO multiplicar
 
             elif tipo == "MT":
                 total_mt += longitud
 
-        if total_bt > 0:
-            nombre = "CONDUCTOR BT GLOBAL"
+            elif tipo == "N":
+                total_n += longitud
+
+        # 🔥 NEUTRO SOLO
+        n_bt = max(total_n - total_bt, 0)
+
+        # =========================
+        # 🔴 MT
+        # =========================
+        if total_mt > 0:
+            nombre = "CONDUCTOR MT 1/0 AWG RAVEN"
             precio = lista_precios.get(nombre, 0)
 
             filas.append({
                 "Punto": None,
                 "Estructura": nombre,
-                "Cantidad": total_bt,
+                "Cantidad": round(total_mt, 2),
+                "Precio": precio,
+                "Subtotal": round(total_mt * precio, 2),
+            })
+
+        # =========================
+        # 🔵 BT
+        # =========================
+        if total_bt > 0:
+            nombre = "CONDUCTOR BT WP 3/0 AWG FIG"
+            precio = lista_precios.get(nombre, 0)
+
+            filas.append({
+                "Punto": None,
+                "Estructura": nombre,
+                "Cantidad": round(total_bt, 2),
                 "Precio": precio,
                 "Subtotal": round(total_bt * precio, 2),
             })
 
-        if total_mt > 0:
-            nombre = "CONDUCTOR MT GLOBAL"
+        # =========================
+        # ⚪ NEUTRO SOLO (N-BT)
+        # =========================
+        if n_bt > 0:
+            nombre = "CONDUCTOR N 2 AWG SPARROW"
             precio = lista_precios.get(nombre, 0)
 
             filas.append({
                 "Punto": None,
                 "Estructura": nombre,
-                "Cantidad": total_mt,
+                "Cantidad": round(n_bt, 2),
                 "Precio": precio,
-                "Subtotal": round(total_mt * precio, 2),
+                "Subtotal": round(n_bt * precio, 2),
             })
 
     return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
