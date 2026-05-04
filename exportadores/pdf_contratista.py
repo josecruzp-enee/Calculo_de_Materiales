@@ -223,6 +223,9 @@ def generar_pdf_contratista(entrada):
 
     elementos = []
 
+    # ======================================================
+    # TABLAS PRINCIPALES
+    # ======================================================
     if contratista == "C1":
 
         elementos.append(Paragraph("CUADRO GENERAL DE PRECIOS", styles["Title"]))
@@ -244,31 +247,50 @@ def generar_pdf_contratista(entrada):
             elementos.append(PageBreak())
 
     # ======================================================
-    # RESUMEN
+    # 🔥 RESUMEN COMPLETO
     # ======================================================
-    elementos.append(Paragraph("RESUMEN DE PAGO POR PUNTO", styles["Title"]))
+    elementos.append(Paragraph("RESUMEN GENERAL", styles["Title"]))
     elementos.append(Spacer(1, 12))
 
-    data = [["Punto", "Total (L)"]]
-    total_general = 0
+    data = [["Concepto", "Total (L)"]]
 
+    # 🔹 TOTAL PUNTOS
+    total_puntos = 0
     for _, r in df_totales.iterrows():
-        data.append([r["Punto"], f"{r['TOTAL_PUNTO']:,.2f}"])
-        total_general += r["TOTAL_PUNTO"]
+        total_puntos += r["TOTAL_PUNTO"]
 
-    # 🔥 FIX (único cambio real)
+    data.append(["TOTAL POR PUNTOS", f"L {total_puntos:,.2f}"])
+
+    # 🔹 CONDUCTORES
+    total_conductores = 0
+    for _, r in df_detalle.iterrows():
+        nombre = str(r["Estructura"]).upper()
+        if "CONDUCTOR" in nombre:
+            total_conductores += r["Subtotal"]
+
+    data.append(["CONDUCTORES", f"L {total_conductores:,.2f}"])
+
+    # 🔹 ACTIVIDADES
+    total_actividades = 0
     if contratista != "C1":
-        total_general += 35000
-        total_general += 80000
+        total_actividades = 35000 + 80000
 
+    if total_actividades > 0:
+        data.append(["ACTIVIDADES", f"L {total_actividades:,.2f}"])
+
+    # 🔹 TOTAL GENERAL
+    total_general = total_puntos + total_conductores + total_actividades
     data.append(["TOTAL GENERAL", f"L {total_general:,.2f}"])
 
-    tabla = Table(data, colWidths=[200, 150])
+    tabla = Table(data, colWidths=[250, 150])
     tabla.setStyle(estilo_tabla())
 
     elementos.append(tabla)
     elementos.append(PageBreak())
 
+    # ======================================================
+    # DETALLE POR PUNTO
+    # ======================================================
     elementos.append(Paragraph("DETALLE DE PRECIOS POR PUNTO", styles["Title"]))
     elementos.append(Spacer(1, 12))
     elementos.append(tabla_detalle_por_punto(df_detalle))
