@@ -245,7 +245,7 @@ def generar_pdf_contratista(entrada):
             elementos.append(Spacer(1, 12))
             elementos.append(tabla_log)
             elementos.append(PageBreak())
-'''
+    '''
     # ======================================================
     # 🔥 RESUMEN COMPLETO
     # ======================================================
@@ -287,7 +287,7 @@ def generar_pdf_contratista(entrada):
 
     elementos.append(tabla)
     elementos.append(PageBreak())
-'''
+    '''
     # ======================================================
     # DETALLE POR PUNTO
     # ======================================================
