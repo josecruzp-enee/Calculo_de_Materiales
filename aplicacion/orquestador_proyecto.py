@@ -306,7 +306,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         entrada_cp.precio_venta_proyecto = total
 
         res_cp = calcular_costos_proyecto(entrada_cp)
-        entrada_cp.df_materiales_costos = res_costos.get("df_costos_materiales")
+        df_costos_materiales = res_costos.get("df_costos_materiales")
 
         # =====================================================
         # 🔥 FIX MATERIALES POR PUNTO (AQUÍ VA)
