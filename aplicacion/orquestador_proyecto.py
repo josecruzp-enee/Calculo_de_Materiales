@@ -302,11 +302,11 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         entrada_cp = type("CP", (), {})()
         entrada_cp.df_estructuras = df_estructuras
         entrada_cp.df_cables = salida.df_cables
-        entrada_cp.df_materiales_costos = res_costos.get("df_materiales_costos")
+        entrada_cp.df_materiales_costos = res_costos.get("df_costos_materiales")
         entrada_cp.precio_venta_proyecto = total
 
         res_cp = calcular_costos_proyecto(entrada_cp)
-        df_costos_materiales = res_costos.get("df_materiales_costos")
+        entrada_cp.df_materiales_costos = res_costos.get("df_costos_materiales")
 
         # =====================================================
         # 🔥 FIX MATERIALES POR PUNTO (AQUÍ VA)
