@@ -292,7 +292,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         total = 0.0
         if df_precios is not None and not df_precios.empty:
             total = float(
-                pd.to_numeric(df_precios["Precio Total"], errors="coerce")
+                pd.to_numeric(df_precios["Total Proyecto"], errors="coerce")
                 .fillna(0)
                 .sum()
             )
