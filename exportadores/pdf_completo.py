@@ -12,7 +12,7 @@ from exportadores.hoja_info import seccion_hoja_info
 from exportadores.precios_estructura_pdf import generar_tabla_precios_estructura
 
 
-from exportadores.pdf_costos_proyecto import construir_bloque_costos
+from exportadores.reporte_costos_proyecto import construir_bloque_costos
 
 import pandas as pd
 from io import BytesIO
