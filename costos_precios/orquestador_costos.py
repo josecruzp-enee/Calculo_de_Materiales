@@ -34,7 +34,7 @@ class EntradaCostos:
 
     ruta_datos_materiales: Optional[str] = None
     df_cables: Optional[pd.DataFrame] = None 
-
+    contratista: str = "C1"
 
 # =====================================================
 # HELPERS
@@ -181,7 +181,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 res_mano_obra = calcular_mano_obra_proyecto(
                     df_estructuras_por_punto=entrada.df_estructuras,
                     df_cables=entrada.df_cables,
-                    contratista="C2"
+                    contratista=entrada.contratista
                 )
 
                 df_mano_obra = res_mano_obra.get(
