@@ -213,14 +213,14 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
                 cod = str(
                     mo.get(
-                        ""Estructura"",
+                        "Estructura",
                         ""
                     )
                 ).strip().upper()
 
                 mapa_mo[cod] = float(
                     mo.get(
-                        ""Precio"",
+                        "Precio",
                         0
                     )
                 )
