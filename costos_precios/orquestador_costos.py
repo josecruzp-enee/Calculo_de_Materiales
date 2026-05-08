@@ -76,9 +76,6 @@ def calcular_costos_cable(df_cables):
 # =====================================================
 # ORQUESTADOR
 # =====================================================
-# =====================================================
-# ORQUESTADOR
-# =====================================================
 def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
     debug: Dict[str, Any] = {}
@@ -201,39 +198,6 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         # =====================================================
         filas = []
 
-        # -----------------------------------------------------
-        # MAPA MANO OBRA
-        # -----------------------------------------------------
-        mapa_mo = {}
-
-        if (
-            df_mano_obra is not None
-            and not df_mano_obra.empty
-        ):
-
-            for _, mo in df_mano_obra.iterrows():
-
-                cod = str(
-                    mo.get(
-                        "Estructura",
-                        ""
-                    )
-                ).strip().upper()
-
-                mapa_mo[cod] = float(
-                    mo.get(
-                        "Precio",
-                        0
-                    )
-                )
-
-        debug["mapa_mo"] = list(
-            mapa_mo.items()
-        )[:10]
-
-        # -----------------------------------------------------
-        # LOOP PRINCIPAL
-        # -----------------------------------------------------
         for _, r in df_costos_estructura.iterrows():
 
             estructura = str(
@@ -249,9 +213,18 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 r["Costo Unitario"]
             )
 
-            mano_obra_unit = mapa_mo.get(
-                estructura,
-                0.0
+            df_match = df_mano_obra[
+                df_mano_obra["Estructura"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+                == estructura
+            ]
+
+            mano_obra_unit = (
+                float(df_match["Precio"].iloc[0])
+                if not df_match.empty
+                else 0.0
             )
 
             total_unit = (
