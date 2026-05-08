@@ -14,8 +14,8 @@ from costos_precios.costos_estructuras import (
     calcular_costos_por_estructura
 )
 from costos_precios.precio_estructura import _agregar_cable_a_precios
-from costos_precios.costos_operativos import calcular_costos_operativos
-from costos_precios.precio_estructura import calcular_precio_estructura
+#from costos_precios.costos_operativos import calcular_costos_operativos
+#from costos_precios.precio_estructura import calcular_precio_estructura
 from costos_precios.costos_mano_obra import calcular_mano_obra
 
 from ayuda.debug import debug_guardar
@@ -146,7 +146,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 )
             except Exception as e:
                 debug["mano_obra_error"] = str(e)
-
+        '''
         # =====================================================
         # 7. PRECIOS POR ESTRUCTURA
         # =====================================================
@@ -193,6 +193,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                     "Precio Unitario": res.precio_unitario,
                     "Precio Total": res.precio_unitario * cantidad,
                 })
+                '''
 
         df_precios_estructura = pd.DataFrame(filas)
         df_precios_estructura = _agregar_cable_a_precios(
