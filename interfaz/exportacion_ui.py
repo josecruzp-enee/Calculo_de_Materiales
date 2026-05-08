@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
-
+from exportadores.hoja_info import generar_pdf_hoja_info
 
 # =========================================================
 # HELPERS
@@ -109,6 +109,24 @@ def seccion_exportacion():
             st.warning(e)
 
     st.markdown("### 📥 Descargar archivos")
+
+    # =====================================================
+    # PDF INDEPENDIENTE - HOJA INFO
+    # =====================================================
+
+    df_estructuras = getattr(resultado, "df_estructuras", None)
+
+    pdf_info = generar_pdf_hoja_info(
+        datos_proyecto=datos_proyecto,
+        df_estructuras=df_estructuras
+    )
+
+    st.download_button(
+        label="Descargar Hoja Info",
+        data=pdf_info,
+        file_name="Hoja Info.pdf",
+        mime="application/pdf"
+    )
 
     for nombre, archivo in archivos.items():
 
