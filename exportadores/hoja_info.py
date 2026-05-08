@@ -389,3 +389,63 @@ def seccion_hoja_info(datos_proyecto, df_estructuras, df_mat, doc_width=None):
         df_estructuras=df_estructuras,
         doc_width=doc_width
     )
+
+# =========================================================
+# PDF INDEPENDIENTE
+# =========================================================
+from io import BytesIO
+
+from reportlab.platypus import (
+    BaseDocTemplate,
+    PageTemplate,
+    Frame
+)
+
+from reportlab.lib.pagesizes import letter
+
+from exportadores.pdf_base import fondo_pagina
+
+
+def generar_pdf_hoja_info(
+    datos_proyecto,
+    df_estructuras
+):
+
+    buffer = BytesIO()
+
+    doc = BaseDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=60,
+        rightMargin=60,
+        topMargin=120,
+        bottomMargin=50
+    )
+
+    frame = Frame(
+        doc.leftMargin,
+        doc.bottomMargin,
+        doc.width,
+        doc.height
+    )
+
+    template = PageTemplate(
+        id="normal",
+        frames=[frame],
+        onPage=fondo_pagina
+    )
+
+    doc.addPageTemplates([template])
+
+    elems = hoja_info_proyecto(
+        datos_proyecto=datos_proyecto,
+        df_estructuras=df_estructuras,
+        doc_width=doc.width
+    )
+
+    doc.build(elems)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
