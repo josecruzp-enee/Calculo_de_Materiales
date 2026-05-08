@@ -306,9 +306,7 @@ def _bloque_evaluacion(elementos, styles, resultado):
 def generar_pdf_costos_proyecto(
 
     resultado,
-
     df_materiales_costos=None,
-
     ruta="costos_proyecto.pdf"
 ):
 
@@ -324,9 +322,6 @@ def generar_pdf_costos_proyecto(
 
     elementos = []
 
-    # =================================================
-    # TÍTULO
-    # =================================================
     elementos.append(
         Paragraph(
             "ANÁLISIS FINANCIERO DEL PROYECTO",
@@ -336,57 +331,16 @@ def generar_pdf_costos_proyecto(
 
     elementos.append(Spacer(1, 18))
 
-    # =================================================
-    # KPIs
-    # =================================================
-    _bloque_kpis(
-        elementos,
-        resultado
-    )
-
-    # =================================================
-    # DISTRIBUCIÓN
-    # =================================================
-    _bloque_distribucion(
+    construir_bloque_costos(
         elementos,
         styles,
-        resultado
+        resultado,
+        df_materiales_costos
     )
 
-    # =================================================
-    # GANTT
-    # =================================================
-    _bloque_gantt(
-        elementos,
-        styles,
-        resultado
-    )
-
-    # =================================================
-    # RESULTADO
-    # =================================================
-    _bloque_resultado(
-        elementos,
-        styles,
-        resultado
-    )
-
-    # =================================================
-    # EVALUACIÓN
-    # =================================================
-    _bloque_evaluacion(
-        elementos,
-        styles,
-        resultado
-    )
-
-    # =================================================
-    # BUILD
-    # =================================================
     doc.build(elementos)
 
     return ruta
-
 # =====================================================
 # BLOQUE REUTILIZABLE PARA PDF MAESTRO
 # =====================================================
