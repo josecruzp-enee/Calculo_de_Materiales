@@ -108,7 +108,9 @@ def generar_pdf_completo(
         df_tmp = df_precios_estructura.copy()
 
         if "Subtotal" not in df_tmp.columns:
-            df_tmp["Subtotal"] = df_tmp["Precio Unitario"] * df_tmp["Cantidad"]
+            df_tmp["Subtotal"] = (
+                df_tmp["Total Proyecto"]
+            )
 
         elems.extend(generar_seccion_cotizacion_final(doc, styles, df_tmp))
 
