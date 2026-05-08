@@ -45,8 +45,17 @@ def generar_tabla_precios_estructura(
     if df_estructuras is not None and not df_estructuras.empty:
 
         df_tmp = df_estructuras.copy()
-        df_tmp["Estructura"] = df_tmp["Estructura"].astype(str).str.strip()
-        df_tmp["Cantidad"] = pd.to_numeric(df_tmp["Cantidad"], errors="coerce").fillna(0)
+
+        df_tmp["Estructura"] = (
+            df_tmp["Estructura"]
+            .astype(str)
+            .str.strip()
+        )
+
+        df_tmp["Cantidad"] = pd.to_numeric(
+            df_tmp["Cantidad"],
+            errors="coerce"
+        ).fillna(0)
 
         cantidades = (
             df_tmp.groupby("Estructura")["Cantidad"]
@@ -57,7 +66,14 @@ def generar_tabla_precios_estructura(
     # =====================================================
     # CABECERA
     # =====================================================
-    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
+    data = [[
+        "DESCRIPCIÓN",
+        "MATERIAL",
+        "INSTALACIÓN",
+        "TOTAL UNIT",
+        "CANT",
+        "TOTAL"
+    ]]
 
     total_general = 0.0
 
@@ -66,28 +82,79 @@ def generar_tabla_precios_estructura(
     # =====================================================
     for _, r in df_precios.iterrows():
 
-        estructura = str(r["Estructura"]).strip()
-        pu = float(r["Precio Unitario"])
+        estructura = str(
+            r.get("Estructura", "")
+        ).strip()
 
+        material = float(
+            r.get("Material Unitario", 0)
+        )
+
+        mano_obra = float(
+            r.get("Mano Obra Unitaria", 0)
+        )
+
+        total_unit = float(
+            r.get("Total Unitario", 0)
+        )
+
+        # =================================================
+        # CANTIDAD
+        # =================================================
         cantidad = cantidades.get(estructura, None)
 
         if cantidad is None or cantidad == 0:
-            cantidad = float(r.get("Cantidad", 0))
+
+            cantidad = float(
+                r.get("Cantidad", 0)
+            )
 
         if cantidad <= 0:
             continue
 
-        total = pu * cantidad
+        # =================================================
+        # TOTAL
+        # =================================================
+        total = total_unit * cantidad
 
-        texto = f"Suministro e instalación de estructura tipo {estructura}"
-        descripcion = Paragraph(texto, style_small)
+        # =================================================
+        # DESCRIPCIÓN
+        # =================================================
+        if estructura.startswith("CONDUCTOR"):
+
+            texto = (
+                f"Suministro e instalación de "
+                f"{estructura}"
+            )
+
+        else:
+
+            texto = (
+                f"Suministro e instalación de "
+                f"estructura {estructura}"
+            )
+
+        descripcion = Paragraph(
+            texto,
+            style_small
+        )
 
         total_general += total
 
+        # =================================================
+        # FILA
+        # =================================================
         data.append([
             descripcion,
-            f"L {pu:,.2f}",
+
+            f"L {material:,.2f}",
+
+            f"L {mano_obra:,.2f}",
+
+            f"L {total_unit:,.2f}",
+
             f"{int(cantidad)}",
+
             f"L {total:,.2f}",
         ])
 
@@ -95,12 +162,22 @@ def generar_tabla_precios_estructura(
     # CONTROL VACÍO
     # =====================================================
     if len(data) == 1:
-        data.append(["SIN DATOS", "-", "-", "-"])
+
+        data.append([
+            "SIN DATOS",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-"
+        ])
 
     # =====================================================
-    # TOTAL
+    # TOTAL GENERAL
     # =====================================================
     data.append([
+        "",
+        "",
         "",
         "",
         "TOTAL",
@@ -112,11 +189,13 @@ def generar_tabla_precios_estructura(
     # =====================================================
     tabla = Table(
         data,
-        colWidths=[320, 80, 60, 90],
-        repeatRows=1  # 🔥 IMPORTANTE
+        colWidths=[240, 70, 70, 70, 50, 90],
+        repeatRows=1
     )
 
-    # 🔥 ESTILO UNIFICADO
+    # =====================================================
+    # ESTILO
+    # =====================================================
     tabla.setStyle(estilo_tabla())
 
     return [tabla]
@@ -125,9 +204,17 @@ def generar_tabla_precios_estructura(
 # =========================================================
 # COTIZACIÓN SIMPLE
 # =========================================================
-def generar_cotizacion_desde_estructuras(doc, styles, df_precios):
+def generar_cotizacion_desde_estructuras(
+    doc,
+    styles,
+    df_precios
+):
 
-    from reportlab.platypus import Table, Paragraph, Spacer
+    from reportlab.platypus import (
+        Table,
+        Paragraph,
+        Spacer
+    )
 
     elems = []
 
@@ -135,50 +222,103 @@ def generar_cotizacion_desde_estructuras(doc, styles, df_precios):
     # VALIDACIÓN
     # =====================================================
     if df_precios is None or df_precios.empty:
-        elems.append(Paragraph("SIN DATOS PARA COTIZACIÓN", styles["Normal"]))
+
+        elems.append(
+            Paragraph(
+                "SIN DATOS PARA COTIZACIÓN",
+                styles["Normal"]
+            )
+        )
+
         return elems
 
     # =====================================================
     # TOTAL BASE
     # =====================================================
-    if "Subtotal" in df_precios.columns:
-        total_base = float(df_precios["Subtotal"].sum())
+    if "Total Proyecto" in df_precios.columns:
+
+        total_base = float(
+            df_precios["Total Proyecto"].sum()
+        )
+
+    elif "Subtotal" in df_precios.columns:
+
+        total_base = float(
+            df_precios["Subtotal"].sum()
+        )
+
     else:
-        total_base = float(df_precios["Precio Total"].sum())
+
+        total_base = 0.0
 
     # =====================================================
     # CÁLCULOS
     # =====================================================
     ingenieria = total_base * 0.15
+
     subtotal = total_base + ingenieria
+
     isv = subtotal * 0.15
+
     total_final = subtotal + isv
 
     # =====================================================
     # TÍTULO
     # =====================================================
-    elems.append(Paragraph("<b>COTIZACIÓN DEL PROYECTO</b>", styles["Heading1"]))
+    elems.append(
+        Paragraph(
+            "<b>COTIZACIÓN DEL PROYECTO</b>",
+            styles["Heading1"]
+        )
+    )
+
     elems.append(Spacer(1, 12))
 
     # =====================================================
     # TABLA
     # =====================================================
     data = [
+
         ["Concepto", "Monto (L)"],
-        ["Suministro e instalación", f"L {total_base:,.2f}"],
-        ["Gastos de Ingeniería (15%)", f"L {ingenieria:,.2f}"],
-        ["SUBTOTAL", f"L {subtotal:,.2f}"],
-        ["ISV (15%)", f"L {isv:,.2f}"],
-        ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
+
+        [
+            "Suministro e instalación",
+            f"L {total_base:,.2f}"
+        ],
+
+        [
+            "Gastos de Ingeniería (15%)",
+            f"L {ingenieria:,.2f}"
+        ],
+
+        [
+            "SUBTOTAL",
+            f"L {subtotal:,.2f}"
+        ],
+
+        [
+            "ISV (15%)",
+            f"L {isv:,.2f}"
+        ],
+
+        [
+            "TOTAL PROYECTO",
+            f"L {total_final:,.2f}"
+        ],
     ]
 
     tabla = Table(
         data,
-        colWidths=[doc.width * 0.7, doc.width * 0.3],
+        colWidths=[
+            doc.width * 0.7,
+            doc.width * 0.3
+        ],
         repeatRows=1
     )
 
-    # 🔥 MISMO ESTILO PARA TODO
+    # =====================================================
+    # ESTILO
+    # =====================================================
     tabla.setStyle(estilo_tabla())
 
     elems.append(tabla)
