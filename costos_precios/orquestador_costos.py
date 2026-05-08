@@ -16,7 +16,7 @@ from costos_precios.costos_estructuras import (
 from costos_precios.precio_estructura import _agregar_cable_a_precios
 #from costos_precios.costos_operativos import calcular_costos_operativos
 #from costos_precios.precio_estructura import calcular_precio_estructura
-from costos_precios.costos_mano_obra import calcular_mano_obra
+from costos_precios.mano_obra_por_punto import calcular_mano_obra_proyecto
 
 from ayuda.debug import debug_guardar
 
@@ -174,16 +174,18 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         # =====================================================
         df_mano_obra = None
 
-        if entrada.ruta_datos_materiales:
+        if entrada.df_estructuras is not None:
 
             try:
 
-                df_mano_obra = calcular_mano_obra(
-                    df_estructuras=entrada.df_estructuras,
+                res_mano_obra = calcular_mano_obra_proyecto(
+                    df_estructuras_por_punto=entrada.df_estructuras,
+                    df_cables=entrada.df_cables,
+                    contratista="C2"
+                )
 
-                    archivo_materiales=(
-                        entrada.ruta_datos_materiales
-                    )
+                df_mano_obra = res_mano_obra.get(
+                    "df_detalle"
                 )
 
                 debug["df_mano_obra"] = _preview_df(
