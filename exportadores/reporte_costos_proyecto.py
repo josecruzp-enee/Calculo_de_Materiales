@@ -386,3 +386,60 @@ def generar_pdf_costos_proyecto(
     doc.build(elementos)
 
     return ruta
+
+# =====================================================
+# BLOQUE REUTILIZABLE PARA PDF MAESTRO
+# =====================================================
+def construir_bloque_costos(
+    elementos,
+    styles,
+    resultado,
+    df_materiales_costos=None
+):
+
+    if not resultado:
+        return
+
+    # =================================================
+    # KPIs
+    # =================================================
+    _bloque_kpis(
+        elementos,
+        resultado
+    )
+
+    # =================================================
+    # DISTRIBUCIÓN
+    # =================================================
+    _bloque_distribucion(
+        elementos,
+        styles,
+        resultado
+    )
+
+    # =================================================
+    # GANTT
+    # =================================================
+    _bloque_gantt(
+        elementos,
+        styles,
+        resultado
+    )
+
+    # =================================================
+    # RESULTADO
+    # =================================================
+    _bloque_resultado(
+        elementos,
+        styles,
+        resultado
+    )
+
+    # =================================================
+    # EVALUACIÓN
+    # =================================================
+    _bloque_evaluacion(
+        elementos,
+        styles,
+        resultado
+    )
