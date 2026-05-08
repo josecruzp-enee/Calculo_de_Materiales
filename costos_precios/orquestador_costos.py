@@ -336,7 +336,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
             "ok": True,
 
-            "df_materiales_costos": (
+            "df_costos_materiales": (
                 df_materiales_costos
             ),
 
