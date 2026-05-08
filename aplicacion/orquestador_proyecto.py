@@ -274,6 +274,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             df_estructuras=df_estructuras,
             df_materiales_por_estructura=res_mat.df_materiales_por_estructura,
             df_cables=salida.df_cables,
+            contratista=contratista,
         )
 
         import streamlit as st  # si no está arriba
