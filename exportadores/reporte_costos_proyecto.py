@@ -1,193 +1,388 @@
 # -*- coding: utf-8 -*-
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, PageBreak
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
 )
+
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from reportlab.platypus.tables import TableStyle
 
 import math
 
-# 🔥 IMPORTAMOS TU SISTEMA BASE
-from exportadores.pdf_base import estilo_tabla, salto_pagina_seguro
+from exportadores.pdf_base import estilo_tabla
 
 
 # =====================================================
-# 🔥 GANTT (MEJORADO PERO SIMPLE)
+# 🔥 ESTILO KPI
 # =====================================================
-def generar_gantt_actividades(resultado):
+def _estilo_kpi(tabla):
+
+    tabla.setStyle(TableStyle([
+
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1F4E79")),
+
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+
+        ("FONTSIZE", (0, 0), (-1, -1), 16),
+
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+
+        ("TOPPADDING", (0, 0), (-1, -1), 12),
+
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#1F4E79")),
+    ]))
+
+
+# =====================================================
+# 🔥 GANTT VISUAL
+# =====================================================
+def _bloque_gantt(elementos, styles, resultado):
+
+    elementos.append(
+        Paragraph(
+            "Cronograma Estimado",
+            styles["Heading2"]
+        )
+    )
+
+    elementos.append(Spacer(1, 8))
 
     num_postes = resultado.get("num_postes", 0)
+
     num_retenidas = resultado.get("num_retenidas", 0)
+
     total_estructuras = resultado.get("total_estructuras", 0)
+
     long_prim = resultado.get("longitud_primario", 0)
-    long_sec = resultado.get("longitud_secundario", 0)
-
-    d_levantamiento = 1
-    total_agujeros = num_postes + num_retenidas
-    d_agujeros = math.ceil(total_agujeros / 20)
-    d_postes = math.ceil(num_postes / 8)
-    d_retenidas = math.ceil(num_retenidas / 8)
-    d_estructuras = math.ceil(total_estructuras / 8)
-
-    d_primario = math.ceil(long_prim / 500) if long_prim > 0 else 0
-    d_secundario = math.ceil(long_sec / 300) if long_sec > 0 else 0
 
     actividades = [
-        ("Levantamiento", d_levantamiento),
-        ("Apertura de agujeros", d_agujeros),
-        ("Hincado de postes", d_postes),
-        ("Puesta de retenidas", d_retenidas),
-        ("Armado de estructuras", d_estructuras),
-        ("Tendido línea primaria", d_primario),
-        ("Tendido línea secundaria", d_secundario),
+
+        ("Levantamiento", 1),
+
+        ("Agujeros",
+         math.ceil((num_postes + num_retenidas) / 20)),
+
+        ("Postes",
+         math.ceil(num_postes / 8)),
+
+        ("Retenidas",
+         math.ceil(num_retenidas / 8)),
+
+        ("Estructuras",
+         math.ceil(total_estructuras / 8)),
+
+        ("Tendido MT",
+         math.ceil(long_prim / 500)),
     ]
 
-    data = [["Actividad", "Duración", "Progreso"]]
+    data = [[
+        "Actividad",
+        "Días",
+        "Cronograma"
+    ]]
 
-    for nombre, duracion in actividades:
-        if duracion == 0:
+    for nombre, dias in actividades:
+
+        if dias <= 0:
             continue
-        barra = "█" * int(duracion)
-        data.append([nombre, duracion, barra])
 
-    tabla = Table(data)
+        barra = "█" * min(dias, 20)
+
+        data.append([
+            nombre,
+            str(dias),
+            barra
+        ])
+
+    tabla = Table(
+        data,
+        colWidths=[180, 60, 260]
+    )
+
     tabla.setStyle(estilo_tabla())
 
-    return tabla
+    elementos.append(tabla)
+
+    elementos.append(Spacer(1, 16))
 
 
 # =====================================================
-# 🔥 BLOQUE COSTOS (YA UNIFICADO)
+# 🔥 KPIs PRINCIPALES
 # =====================================================
-def construir_bloque_costos(elementos, styles, resultado, df_materiales_costos):
+def _bloque_kpis(elementos, resultado):
 
-    # =============================
-    # DATOS
-    # =============================
-    elementos.append(Paragraph("Datos del Proyecto", styles["Heading2"]))
-    elementos.append(Spacer(1, 6))
+    venta = resultado.get("precio_venta", 0)
 
-    tabla_info = Table([
-        ["Concepto", "Valor"],
-        ["Total estructuras", resultado.get("total_estructuras", 0)],
-        ["Postes", resultado.get("num_postes", 0)],
-        ["Retenidas", resultado.get("num_retenidas", 0)],
-        ["Longitud primaria (m)", resultado.get("longitud_primario", 0)],
-        ["Longitud secundaria (m)", resultado.get("longitud_secundario", 0)],
-    ])
-    tabla_info.setStyle(estilo_tabla())
+    costo = resultado.get("costo_total_real", 0)
 
-    elementos.append(tabla_info)
-    elementos.append(Spacer(1, 12))
-
-    # =============================
-    # GANTT
-    # =============================
-    elementos.append(Paragraph("Cronograma de Obra", styles["Heading2"]))
-    elementos.append(Spacer(1, 6))
-
-    elementos.append(generar_gantt_actividades(resultado))
-
-    # 🔥 SALTO CONTROLADO
-    salto_pagina_seguro(elementos)
-
-    # =============================
-    # MATERIALES
-    # =============================
-    elementos.append(Paragraph("Materiales del Proyecto", styles["Heading2"]))
-    elementos.append(Spacer(1, 6))
-
-    data_mat = [["Descripción", "Und", "Cant", "P.U.", "Total"]]
-
-    if df_materiales_costos is not None and not df_materiales_costos.empty:
-        for _, row in df_materiales_costos.iterrows():
-            data_mat.append([
-                str(row.get("Materiales", "")),
-                str(row.get("Unidad", "")),
-                f"{row.get('Cantidad', 0):,.2f}",
-                f"L {row.get('Costo Unitario', 0):,.2f}",
-                f"L {row.get('Costo Total', 0):,.2f}",
-            ])
-
-    tabla_mat = Table(data_mat)
-    tabla_mat.setStyle(estilo_tabla())
-
-    elementos.append(tabla_mat)
-
-    # 🔥 SALTO CONTROLADO
-    salto_pagina_seguro(elementos)
-
-    # =============================
-    # COSTOS
-    # =============================
-    elementos.append(Paragraph("Costos del Proyecto", styles["Heading2"]))
-    elementos.append(Spacer(1, 6))
-
-    tabla_costos = Table([
-        ["Concepto", "Lempiras"],
-        ["Materiales", f"L {resultado.get('costo_materiales', 0):,.2f}"],
-        ["Cuadrilla", f"L {resultado.get('costo_cuadrilla', 0):,.2f}"],
-        ["Agujeros", f"L {resultado.get('costo_agujeros', 0):,.2f}"],
-        ["Grúa", f"L {resultado.get('costo_grua', 0):,.2f}"],
-        ["ENEE", f"L {resultado.get('costo_enee', 0):,.2f}"],
-        ["Contingencia", f"L {resultado.get('contingencia', 0):,.2f}"],
-    ])
-    tabla_costos.setStyle(estilo_tabla())
-
-    elementos.append(tabla_costos)
-    elementos.append(Spacer(1, 12))
-
-    # =============================
-    # RESULTADO FINAL
-    # =============================
-    tabla_final = Table([
-        ["Concepto", "Valor"],
-        ["Costo total real", f"L {resultado.get('costo_total_real', 0):,.2f}"],
-        ["Precio venta", f"L {resultado.get('precio_venta', 0):,.2f}"],
-        ["Utilidad", f"L {resultado.get('utilidad', 0):,.2f}"],
-        ["Margen (%)", f"{resultado.get('margen_pct', 0)} %"],
-    ])
-    tabla_final.setStyle(estilo_tabla())
-
-    elementos.append(tabla_final)
-    elementos.append(Spacer(1, 12))
-
-    # =============================
-    # EVALUACIÓN
-    # =============================
-    elementos.append(Paragraph("Evaluación", styles["Heading2"]))
+    utilidad = resultado.get("utilidad", 0)
 
     margen = resultado.get("margen_pct", 0)
 
-    if margen < 10:
-        msg = "Margen bajo. Proyecto con alto riesgo financiero."
-    elif margen < 20:
-        msg = "Margen aceptable. Se recomienda optimización de costos."
-    else:
-        msg = "Margen saludable. Proyecto rentable."
+    data = [[
 
-    elementos.append(Paragraph(msg, styles["Normal"]))
+        f"VENTA\nL {venta:,.0f}",
+
+        f"COSTO\nL {costo:,.0f}",
+
+        f"UTILIDAD\nL {utilidad:,.0f}",
+
+        f"MARGEN\n{margen:.1f} %"
+    ]]
+
+    tabla = Table(
+        data,
+        colWidths=[130, 130, 130, 130],
+        rowHeights=[60]
+    )
+
+    _estilo_kpi(tabla)
+
+    elementos.append(tabla)
+
+    elementos.append(Spacer(1, 20))
+
+
+# =====================================================
+# 🔥 DISTRIBUCIÓN DE COSTOS
+# =====================================================
+def _bloque_distribucion(elementos, styles, resultado):
+
+    elementos.append(
+        Paragraph(
+            "Distribución de Costos",
+            styles["Heading2"]
+        )
+    )
+
+    elementos.append(Spacer(1, 8))
+
+    tabla = Table([
+
+        ["Concepto", "%"],
+
+        [
+            "Materiales",
+            f"{resultado.get('porcentaje_materiales', 0)} %"
+        ],
+
+        [
+            "Cuadrilla",
+            f"{resultado.get('porcentaje_cuadrilla', 0)} %"
+        ],
+
+        [
+            "Grúa",
+            f"{resultado.get('porcentaje_grua', 0)} %"
+        ],
+    ],
+        colWidths=[250, 120]
+    )
+
+    tabla.setStyle(estilo_tabla())
+
+    elementos.append(tabla)
+
+    elementos.append(Spacer(1, 16))
+
+
+# =====================================================
+# 🔥 RESULTADO FINANCIERO
+# =====================================================
+def _bloque_resultado(elementos, styles, resultado):
+
+    elementos.append(
+        Paragraph(
+            "Resultado Financiero",
+            styles["Heading2"]
+        )
+    )
+
+    elementos.append(Spacer(1, 8))
+
+    tabla = Table([
+
+        ["Concepto", "Valor"],
+
+        [
+            "Costo total real",
+            f"L {resultado.get('costo_total_real', 0):,.2f}"
+        ],
+
+        [
+            "Precio venta",
+            f"L {resultado.get('precio_venta', 0):,.2f}"
+        ],
+
+        [
+            "Utilidad",
+            f"L {resultado.get('utilidad', 0):,.2f}"
+        ],
+
+        [
+            "Margen",
+            f"{resultado.get('margen_pct', 0)} %"
+        ],
+    ],
+        colWidths=[250, 180]
+    )
+
+    tabla.setStyle(estilo_tabla())
+
+    elementos.append(tabla)
+
+    elementos.append(Spacer(1, 16))
+
+
+# =====================================================
+# 🔥 EVALUACIÓN EJECUTIVA
+# =====================================================
+def _bloque_evaluacion(elementos, styles, resultado):
+
+    elementos.append(
+        Paragraph(
+            "Evaluación Ejecutiva",
+            styles["Heading2"]
+        )
+    )
+
+    elementos.append(Spacer(1, 8))
+
+    margen = resultado.get("margen_pct", 0)
+
+    if margen < 0:
+
+        texto = """
+        <b>Proyecto NO rentable.</b><br/><br/>
+
+        El costo total estimado supera el valor de venta
+        del proyecto. Se recomienda revisar costos de
+        materiales, logística y márgenes de instalación.
+        """
+
+    elif margen < 10:
+
+        texto = """
+        <b>Proyecto con margen bajo.</b><br/><br/>
+
+        Existe riesgo financiero moderado. Se recomienda
+        optimizar costos operativos y logísticos.
+        """
+
+    elif margen < 20:
+
+        texto = """
+        <b>Proyecto con margen aceptable.</b><br/><br/>
+
+        El proyecto presenta una rentabilidad moderada.
+        """
+
+    else:
+
+        texto = """
+        <b>Proyecto rentable.</b><br/><br/>
+
+        El análisis financiero muestra un margen saludable.
+        """
+
+    elementos.append(
+        Paragraph(
+            texto,
+            styles["BodyText"]
+        )
+    )
 
 
 # =====================================================
 # 🔥 PDF FINAL
 # =====================================================
-def generar_pdf_costos_proyecto(resultado, df_materiales_costos, ruta="costos_proyecto.pdf"):
+def generar_pdf_costos_proyecto(
 
-    doc = SimpleDocTemplate(ruta)
+    resultado,
+
+    df_materiales_costos=None,
+
+    ruta="costos_proyecto.pdf"
+):
+
+    doc = SimpleDocTemplate(
+        ruta,
+        rightMargin=40,
+        leftMargin=40,
+        topMargin=40,
+        bottomMargin=40
+    )
+
     styles = getSampleStyleSheet()
 
     elementos = []
 
-    elementos.append(Paragraph("INFORME DE COSTOS DE PROYECTO", styles["Title"]))
-    elementos.append(Spacer(1, 12))
-
-    construir_bloque_costos(
-        elementos,
-        styles,
-        resultado,
-        df_materiales_costos
+    # =================================================
+    # TÍTULO
+    # =================================================
+    elementos.append(
+        Paragraph(
+            "ANÁLISIS FINANCIERO DEL PROYECTO",
+            styles["Title"]
+        )
     )
 
+    elementos.append(Spacer(1, 18))
+
+    # =================================================
+    # KPIs
+    # =================================================
+    _bloque_kpis(
+        elementos,
+        resultado
+    )
+
+    # =================================================
+    # DISTRIBUCIÓN
+    # =================================================
+    _bloque_distribucion(
+        elementos,
+        styles,
+        resultado
+    )
+
+    # =================================================
+    # GANTT
+    # =================================================
+    _bloque_gantt(
+        elementos,
+        styles,
+        resultado
+    )
+
+    # =================================================
+    # RESULTADO
+    # =================================================
+    _bloque_resultado(
+        elementos,
+        styles,
+        resultado
+    )
+
+    # =================================================
+    # EVALUACIÓN
+    # =================================================
+    _bloque_evaluacion(
+        elementos,
+        styles,
+        resultado
+    )
+
+    # =================================================
+    # BUILD
+    # =================================================
     doc.build(elementos)
 
     return ruta
