@@ -164,6 +164,9 @@ def _tabla_resultado(resultado):
 # =====================================================
 # GANTT VISUAL REAL
 # =====================================================
+# =====================================================
+# GANTT VISUAL REAL
+# =====================================================
 def _bloque_gantt(elementos, resultado):
 
     elementos.append(
@@ -213,8 +216,17 @@ def _bloque_gantt(elementos, resultado):
         ),
     ]
 
-    max_dias = 25
+    # =================================================
+    # MAX DÍAS DINÁMICO
+    # =================================================
+    max_dias = max(
+        sum(d for _, d in actividades) + 2,
+        25
+    )
 
+    # =================================================
+    # HEADER
+    # =================================================
     encabezado = [
         "Actividad",
         "Días"
@@ -224,6 +236,9 @@ def _bloque_gantt(elementos, resultado):
 
     inicio = 1
 
+    # =================================================
+    # FILAS
+    # =================================================
     for nombre, dias in actividades:
 
         fila = [
@@ -233,7 +248,10 @@ def _bloque_gantt(elementos, resultado):
 
         for d in range(1, max_dias + 1):
 
-            if inicio <= d < inicio + dias:
+            if (
+                inicio <= d < inicio + dias
+                and d <= max_dias
+            ):
                 fila.append("")
             else:
                 fila.append("")
@@ -242,6 +260,9 @@ def _bloque_gantt(elementos, resultado):
 
         inicio += dias
 
+    # =================================================
+    # TAMAÑOS
+    # =================================================
     col_widths = [150, 45] + [10] * max_dias
 
     tabla = Table(
@@ -250,30 +271,65 @@ def _bloque_gantt(elementos, resultado):
         rowHeights=22
     )
 
+    # =================================================
+    # ESTILO BASE
+    # =================================================
     style = [
 
-        ("BACKGROUND", (0, 0), (-1, 0),
-         colors.HexColor("#0B3B63")),
+        (
+            "BACKGROUND",
+            (0, 0),
+            (-1, 0),
+            colors.HexColor("#0B3B63")
+        ),
 
-        ("TEXTCOLOR", (0, 0), (-1, 0),
-         colors.white),
+        (
+            "TEXTCOLOR",
+            (0, 0),
+            (-1, 0),
+            colors.white
+        ),
 
-        ("FONTNAME", (0, 0), (-1, 0),
-         "Helvetica-Bold"),
+        (
+            "FONTNAME",
+            (0, 0),
+            (-1, 0),
+            "Helvetica-Bold"
+        ),
 
-        ("FONTSIZE", (0, 0), (-1, 0),
-         7),
+        (
+            "FONTSIZE",
+            (0, 0),
+            (-1, 0),
+            7
+        ),
 
-        ("ALIGN", (0, 0), (-1, -1),
-         "CENTER"),
+        (
+            "ALIGN",
+            (0, 0),
+            (-1, -1),
+            "CENTER"
+        ),
 
-        ("GRID", (0, 0), (-1, -1),
-         0.4, colors.HexColor("#D9E2EC")),
+        (
+            "GRID",
+            (0, 0),
+            (-1, -1),
+            0.4,
+            colors.HexColor("#D9E2EC")
+        ),
 
-        ("VALIGN", (0, 0), (-1, -1),
-         "MIDDLE"),
+        (
+            "VALIGN",
+            (0, 0),
+            (-1, -1),
+            "MIDDLE"
+        ),
     ]
 
+    # =================================================
+    # BARRAS GANTT
+    # =================================================
     inicio = 1
 
     for fila_idx, (_, dias) in enumerate(
@@ -283,7 +339,10 @@ def _bloque_gantt(elementos, resultado):
 
         col_inicio = 2 + inicio - 1
 
-        col_fin = col_inicio + dias - 1
+        col_fin = min(
+            col_inicio + dias - 1,
+            len(encabezado) - 1
+        )
 
         style.append(
 
@@ -297,12 +356,13 @@ def _bloque_gantt(elementos, resultado):
 
         inicio += dias
 
-    tabla.setStyle(TableStyle(style))
+    tabla.setStyle(
+        TableStyle(style)
+    )
 
     elementos.append(tabla)
 
     elementos.append(Spacer(1, 22))
-
 
 # =====================================================
 # EVALUACIÓN EJECUTIVA
