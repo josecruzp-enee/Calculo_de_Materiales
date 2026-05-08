@@ -84,7 +84,7 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
     if "Subtotal" in df_precios.columns:
         total_base = float(df_precios["Subtotal"].sum())
     else:
-        total_base = float(df_precios["Precio Total"].sum())
+        total_base = float(df_precios["Total Proyecto"].sum())
 
     # =====================================================
     # CÁLCULOS
