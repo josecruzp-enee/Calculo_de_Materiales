@@ -267,7 +267,9 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # 5. COSTOS
         # =====================================================
         df_catalogo = obtener_catalogo_materiales(salida.base_datos)
+        import streamlit as st  # si no está arriba
 
+        contratista = st.session_state.get("contratista", "C1")
         entrada_costos = EntradaCostos(
             df_materiales=df_materiales,
             df_catalogo=df_catalogo,
@@ -277,9 +279,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
             contratista=contratista,
         )
 
-        import streamlit as st  # si no está arriba
-
-        contratista = st.session_state.get("contratista", "C1")
+        
 
         res_costos = ejecutar_costos(entrada_costos)
 
