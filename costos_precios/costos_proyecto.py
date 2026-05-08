@@ -9,14 +9,18 @@ from typing import Dict, Any
 # 🔧 UTILIDADES SEGURAS
 # =========================================================
 def _safe_sum(series: pd.Series) -> float:
+
     try:
+
         return float(
             pd.to_numeric(
                 series,
                 errors="coerce"
             ).fillna(0).sum()
         )
+
     except Exception:
+
         return 0.0
 
 
@@ -71,8 +75,11 @@ def _extraer_metricas_estructuras(
     )
 
     return (
+
         total_estructuras,
+
         num_postes,
+
         num_retenidas
     )
 
@@ -123,6 +130,7 @@ def _extraer_longitudes(
         col_long = "Longitud"
 
     else:
+
         return 0.0, 0.0
 
     # =====================================================
@@ -139,7 +147,9 @@ def _extraer_longitudes(
     ]
 
     return (
+
         float(primario[col_long].sum()),
+
         float(secundario[col_long].sum())
     )
 
@@ -169,28 +179,14 @@ def _validar_materiales(
 
 
 # =========================================================
-# 🔥 MOTOR DE COSTOS REAL
+# 🔥 CALCULAR TIEMPOS
 # =========================================================
-def _motor_costos(
-    df_materiales,
+def _calcular_tiempos(
     longitud_primario_m,
     longitud_secundario_m,
     total_estructuras,
-    num_postes,
-    num_retenidas,
-    precio_total_proyecto,
 ):
 
-    # =====================================================
-    # COSTO MATERIALES
-    # =====================================================
-    costo_materiales = float(
-        df_materiales["Costo Total"].sum()
-    )
-
-    # =====================================================
-    # TIEMPOS
-    # =====================================================
     dias_primario = (
         longitud_primario_m / 500
         if longitud_primario_m else 0
@@ -207,14 +203,33 @@ def _motor_costos(
     )
 
     dias_totales = (
+
         dias_primario
         + dias_secundario
         + dias_estructura
     )
 
-    # =====================================================
-    # COSTOS OPERATIVOS
-    # =====================================================
+    return {
+
+        "dias_primario": dias_primario,
+
+        "dias_secundario": dias_secundario,
+
+        "dias_estructura": dias_estructura,
+
+        "dias_totales": dias_totales,
+    }
+
+
+# =========================================================
+# 🔥 CALCULAR COSTOS OPERATIVOS
+# =========================================================
+def _calcular_costos_operativos(
+    dias_totales,
+    num_postes,
+    num_retenidas,
+):
+
     costo_cuadrilla = (
         dias_totales * 10000
     )
@@ -238,6 +253,121 @@ def _motor_costos(
     )
 
     costo_enee = 35000
+
+    return {
+
+        "costo_cuadrilla": costo_cuadrilla,
+
+        "costo_agujeros": costo_agujeros,
+
+        "costo_grua": costo_grua,
+
+        "costo_enee": costo_enee,
+    }
+
+
+# =========================================================
+# 🔥 CALCULAR KPIs
+# =========================================================
+def _calcular_kpis(
+    costo_total_real,
+    utilidad,
+    total_estructuras,
+    num_postes,
+    dias_totales,
+):
+
+    costo_por_estructura = (
+        costo_total_real
+        / total_estructuras
+    ) if total_estructuras else 0
+
+    utilidad_por_estructura = (
+        utilidad
+        / total_estructuras
+    ) if total_estructuras else 0
+
+    costo_por_poste = (
+        costo_total_real
+        / num_postes
+    ) if num_postes else 0
+
+    utilidad_diaria = (
+        utilidad
+        / dias_totales
+    ) if dias_totales else 0
+
+    return {
+
+        "costo_por_estructura": round(
+            costo_por_estructura,
+            2
+        ),
+
+        "utilidad_por_estructura": round(
+            utilidad_por_estructura,
+            2
+        ),
+
+        "costo_por_poste": round(
+            costo_por_poste,
+            2
+        ),
+
+        "utilidad_diaria": round(
+            utilidad_diaria,
+            2
+        ),
+    }
+
+
+# =========================================================
+# 🔥 MOTOR DE COSTOS REAL
+# =========================================================
+def _motor_costos(
+    df_materiales,
+    longitud_primario_m,
+    longitud_secundario_m,
+    total_estructuras,
+    num_postes,
+    num_retenidas,
+    precio_total_proyecto,
+):
+
+    # =====================================================
+    # COSTO MATERIALES
+    # =====================================================
+    costo_materiales = float(
+        df_materiales["Costo Total"].sum()
+    )
+
+    # =====================================================
+    # TIEMPOS
+    # =====================================================
+    tiempos = _calcular_tiempos(
+        longitud_primario_m,
+        longitud_secundario_m,
+        total_estructuras,
+    )
+
+    dias_totales = tiempos["dias_totales"]
+
+    # =====================================================
+    # COSTOS OPERATIVOS
+    # =====================================================
+    costos = _calcular_costos_operativos(
+        dias_totales,
+        num_postes,
+        num_retenidas,
+    )
+
+    costo_cuadrilla = costos["costo_cuadrilla"]
+
+    costo_agujeros = costos["costo_agujeros"]
+
+    costo_grua = costos["costo_grua"]
+
+    costo_enee = costos["costo_enee"]
 
     # =====================================================
     # SUBTOTAL
@@ -282,27 +412,20 @@ def _motor_costos(
     ) if precio_total_proyecto else 0
 
     # =====================================================
-    # KPIs FINANCIEROS
+    # KPIs
     # =====================================================
-    costo_por_estructura = (
-        costo_total_real
-        / total_estructuras
-    ) if total_estructuras else 0
+    kpis = _calcular_kpis(
 
-    utilidad_por_estructura = (
-        utilidad
-        / total_estructuras
-    ) if total_estructuras else 0
+        costo_total_real,
 
-    costo_por_poste = (
-        costo_total_real
-        / num_postes
-    ) if num_postes else 0
+        utilidad,
 
-    utilidad_diaria = (
-        utilidad
-        / dias_totales
-    ) if dias_totales else 0
+        total_estructuras,
+
+        num_postes,
+
+        dias_totales,
+    )
 
     # =====================================================
     # RETORNO
@@ -339,7 +462,7 @@ def _motor_costos(
         ),
 
         # =============================
-        # MÉTRICAS PROYECTO
+        # MÉTRICAS
         # =============================
         "dias_totales": round(
             dias_totales,
@@ -357,27 +480,9 @@ def _motor_costos(
         "longitud_secundario": longitud_secundario_m,
 
         # =============================
-        # KPIs FINANCIEROS
+        # KPIs
         # =============================
-        "costo_por_estructura": round(
-            costo_por_estructura,
-            2
-        ),
-
-        "utilidad_por_estructura": round(
-            utilidad_por_estructura,
-            2
-        ),
-
-        "costo_por_poste": round(
-            costo_por_poste,
-            2
-        ),
-
-        "utilidad_diaria": round(
-            utilidad_diaria,
-            2
-        ),
+        **kpis
     }
 
 
@@ -403,6 +508,7 @@ def calcular_costos_proyecto(
             total_estructuras,
             num_postes,
             num_retenidas
+
         ) = _extraer_metricas_estructuras(
             df_estructuras_global
         )
@@ -413,6 +519,7 @@ def calcular_costos_proyecto(
         (
             longitud_primario,
             longitud_secundario
+
         ) = _extraer_longitudes(
             getattr(
                 entrada,
@@ -447,12 +554,19 @@ def calcular_costos_proyecto(
         # MOTOR
         # =================================================
         resultado = _motor_costos(
+
             df_materiales_costos,
+
             longitud_primario,
+
             longitud_secundario,
+
             total_estructuras,
+
             num_postes,
+
             num_retenidas,
+
             precio_total,
         )
 
