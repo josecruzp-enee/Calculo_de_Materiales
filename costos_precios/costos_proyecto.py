@@ -428,6 +428,24 @@ def _motor_costos(
     )
 
     # =====================================================
+    # DISTRIBUCIÓN DE COSTOS
+    # =====================================================
+    porcentaje_materiales = (
+        costo_materiales
+        / costo_total_real * 100
+    ) if costo_total_real else 0
+
+    porcentaje_cuadrilla = (
+        costo_cuadrilla
+        / costo_total_real * 100
+    ) if costo_total_real else 0
+
+    porcentaje_grua = (
+        costo_grua
+        / costo_total_real * 100
+    ) if costo_total_real else 0
+
+    # =====================================================
     # RETORNO
     # =====================================================
     return {
@@ -478,6 +496,24 @@ def _motor_costos(
         "longitud_primario": longitud_primario_m,
 
         "longitud_secundario": longitud_secundario_m,
+
+        # =============================
+        # DISTRIBUCIÓN
+        # =============================
+        "porcentaje_materiales": round(
+            porcentaje_materiales,
+            2
+        ),
+
+        "porcentaje_cuadrilla": round(
+            porcentaje_cuadrilla,
+            2
+        ),
+
+        "porcentaje_grua": round(
+            porcentaje_grua,
+            2
+        ),
 
         # =============================
         # KPIs
@@ -542,12 +578,23 @@ def calcular_costos_proyecto(
         )
 
         # =================================================
-        # PRECIO VENTA
+        # PRECIO VENTA FINAL
         # =================================================
-        precio_total = getattr(
+        precio_base = getattr(
             entrada,
             "precio_venta_proyecto",
             0
+        )
+
+        gastos_ingenieria = getattr(
+            entrada,
+            "gastos_ingenieria",
+            25000
+        )
+
+        precio_total = (
+            precio_base
+            + gastos_ingenieria
         )
 
         # =================================================
