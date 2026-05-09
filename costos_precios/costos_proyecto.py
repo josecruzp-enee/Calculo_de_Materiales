@@ -70,6 +70,7 @@ def _obtener_columna(df: pd.DataFrame, posibles: list[str]) -> Optional[str]:
 
     for nombre in posibles:
         nombre_norm = _normalizar_texto(nombre)
+
         if nombre_norm in columnas_norm:
             return columnas_norm[nombre_norm]
 
@@ -90,7 +91,7 @@ def _extraer_metricas_estructuras(
 
     col_estructura = _obtener_columna(
         df,
-        ["Estructura", "Codigo", "Código"],
+        ["Estructura", "Codigo", "Código", "codigodeestructura"],
     )
 
     col_cantidad = _obtener_columna(
@@ -212,7 +213,7 @@ def _validar_materiales(
 
 
 # =========================================================
-# CLASIFICAR COSTOS DESDE TABLA
+# CLASIFICAR COSTOS DESDE TABLA DE MATERIALES
 # =========================================================
 def _clasificar_costos_desde_materiales(
     df_materiales_costos: pd.DataFrame,
@@ -275,33 +276,36 @@ def _clasificar_costos_desde_materiales(
         if col_categoria:
             texto += " " + _normalizar_texto(row.get(col_categoria, ""))
 
-        # -----------------------------
-        # CLASIFICACIÓN OPERATIVA
-        # -----------------------------
-        if "GRUA" in texto or "GRÚA" in texto:
+        if "GRUA" in texto:
             costo_grua += monto
 
         elif "FLETE" in texto or "TRANSPORTE" in texto:
             costo_flete += monto
 
-        elif "AGUJERO" in texto or "EXCAVACION" in texto or "EXCAVACIÓN" in texto:
+        elif "AGUJERO" in texto or "EXCAVACION" in texto:
             costo_agujeros += monto
 
-        elif "CUADRILLA" in texto or "MANO DE OBRA" in texto or "INSTALACION" in texto:
+        elif (
+            "CUADRILLA" in texto
+            or "MANO DE OBRA" in texto
+            or "INSTALACION" in texto
+        ):
             costo_cuadrilla += monto
 
-        elif "INGENIERIA" in texto or "INGENIERÍA" in texto:
+        elif "INGENIERIA" in texto:
             costo_ingenieria += monto
 
-        elif "ENEE" in texto or "PERMISO" in texto or "GESTION" in texto or "GESTIÓN" in texto:
+        elif (
+            "ENEE" in texto
+            or "PERMISO" in texto
+            or "GESTION" in texto
+        ):
             costo_enee += monto
 
         elif "MATERIAL" in texto or "SUMINISTRO" in texto:
             costo_materiales += monto
 
         else:
-            # Por defecto se considera material,
-            # porque df_materiales_costos normalmente viene del catálogo de materiales.
             costo_materiales += monto
 
     return {
@@ -332,19 +336,279 @@ def _extraer_costos_manuales(entrada) -> Dict[str, float]:
             getattr(entrada, "costo_grua", 0)
         ),
         "costo_flete_manual": _to_float(
-            getattr(entrada, "costo_flete", 0)
+            getattr(entrada, "costo_flete_manual", 0)
         ),
         "costo_enee_manual": _to_float(
-            getattr(entrada, "costo_enee", 0)
+            getattr(entrada, "costo_enee_manual", 0)
         ),
         "costo_ingenieria_manual": _to_float(
-            getattr(entrada, "gastos_ingenieria", 0)
+            getattr(entrada, "costo_ingenieria_manual", 0)
         ),
     }
 
 
 # =========================================================
-# CALCULAR TIEMPOS
+# CALCULAR COSTOS REALES POR ACTIVIDAD
+# =========================================================
+def _calcular_costos_actividades(
+    entrada,
+    longitud_primario_m: float,
+    longitud_secundario_m: float,
+    total_estructuras: int,
+    num_postes: int,
+    num_retenidas: int,
+) -> Dict[str, Any]:
+
+    # =====================================================
+    # PARÁMETROS BASE
+    # =====================================================
+    costo_agujero_unitario = _to_float(
+        getattr(entrada, "costo_agujero_unitario", 500),
+        500,
+    )
+
+    costo_cuadrilla_dia = _to_float(
+        getattr(entrada, "costo_cuadrilla_dia", 10000),
+        10000,
+    )
+
+    horas_jornada = _to_float(
+        getattr(entrada, "horas_jornada", 8),
+        8,
+    )
+
+    horas_por_poste = _to_float(
+        getattr(entrada, "horas_por_poste", 0.75),
+        0.75,
+    )
+
+    horas_por_estructura = _to_float(
+        getattr(entrada, "horas_por_estructura", 0.50),
+        0.50,
+    )
+
+    horas_por_retenida = _to_float(
+        getattr(entrada, "horas_por_retenida", 0.50),
+        0.50,
+    )
+
+    costo_tendido_mt_m = _to_float(
+        getattr(entrada, "costo_tendido_mt_m", 0),
+        0,
+    )
+
+    costo_tendido_bt_m = _to_float(
+        getattr(entrada, "costo_tendido_bt_m", 0),
+        0,
+    )
+
+    horas_grua = _to_float(
+        getattr(entrada, "horas_grua", 0),
+        0,
+    )
+
+    precio_hora_grua = _to_float(
+        getattr(
+            entrada,
+            "precio_hora_grua",
+            getattr(entrada, "costo_hora_grua", 1500),
+        ),
+        1500,
+    )
+
+    costo_flete = _to_float(
+        getattr(entrada, "costo_flete", 0),
+        0,
+    )
+
+    costo_enee = _to_float(
+        getattr(entrada, "costo_enee", 0),
+        0,
+    )
+
+    costo_ingenieria = _to_float(
+        getattr(entrada, "gastos_ingenieria", 0),
+        0,
+    )
+
+    costo_hora_cuadrilla = (
+        costo_cuadrilla_dia / horas_jornada
+        if horas_jornada > 0
+        else 0.0
+    )
+
+    # =====================================================
+    # CANTIDADES BASE
+    # =====================================================
+    cantidad_agujeros = int(num_postes + num_retenidas)
+
+    horas_postes = num_postes * horas_por_poste
+    horas_estructuras = total_estructuras * horas_por_estructura
+    horas_retenidas = num_retenidas * horas_por_retenida
+
+    # =====================================================
+    # COSTOS CALCULADOS
+    # =====================================================
+    costo_agujeros = cantidad_agujeros * costo_agujero_unitario
+
+    costo_hincado_postes = horas_postes * costo_hora_cuadrilla
+
+    costo_armado_estructuras = (
+        horas_estructuras * costo_hora_cuadrilla
+    )
+
+    costo_instalacion_retenidas = (
+        horas_retenidas * costo_hora_cuadrilla
+    )
+
+    costo_tendido_mt = longitud_primario_m * costo_tendido_mt_m
+    costo_tendido_bt = longitud_secundario_m * costo_tendido_bt_m
+
+    costo_grua = horas_grua * precio_hora_grua
+
+    # =====================================================
+    # DETALLE DE ACTIVIDADES
+    # =====================================================
+    actividades = [
+        {
+            "actividad": "Apertura de agujeros",
+            "unidad": "agujero",
+            "cantidad": cantidad_agujeros,
+            "precio_unitario": costo_agujero_unitario,
+            "total": costo_agujeros,
+            "criterio": (
+                f"{num_postes} postes + "
+                f"{num_retenidas} retenidas"
+            ),
+        },
+        {
+            "actividad": "Hincado y aplomado de postes",
+            "unidad": "hora",
+            "cantidad": horas_postes,
+            "precio_unitario": costo_hora_cuadrilla,
+            "total": costo_hincado_postes,
+            "criterio": (
+                f"{num_postes} postes x "
+                f"{horas_por_poste} h/poste"
+            ),
+        },
+        {
+            "actividad": "Armado e instalación de estructuras",
+            "unidad": "hora",
+            "cantidad": horas_estructuras,
+            "precio_unitario": costo_hora_cuadrilla,
+            "total": costo_armado_estructuras,
+            "criterio": (
+                f"{total_estructuras} estructuras x "
+                f"{horas_por_estructura} h/estructura"
+            ),
+        },
+        {
+            "actividad": "Instalación de retenidas",
+            "unidad": "hora",
+            "cantidad": horas_retenidas,
+            "precio_unitario": costo_hora_cuadrilla,
+            "total": costo_instalacion_retenidas,
+            "criterio": (
+                f"{num_retenidas} retenidas x "
+                f"{horas_por_retenida} h/retenida"
+            ),
+        },
+        {
+            "actividad": "Tendido de conductor primario MT",
+            "unidad": "m",
+            "cantidad": longitud_primario_m,
+            "precio_unitario": costo_tendido_mt_m,
+            "total": costo_tendido_mt,
+            "criterio": "Longitud primaria x costo por metro",
+        },
+        {
+            "actividad": "Tendido de conductor secundario BT",
+            "unidad": "m",
+            "cantidad": longitud_secundario_m,
+            "precio_unitario": costo_tendido_bt_m,
+            "total": costo_tendido_bt,
+            "criterio": "Longitud secundaria x costo por metro",
+        },
+        {
+            "actividad": "Equipo grúa",
+            "unidad": "hora",
+            "cantidad": horas_grua,
+            "precio_unitario": precio_hora_grua,
+            "total": costo_grua,
+            "criterio": "Horas grúa x precio hora",
+        },
+        {
+            "actividad": "Flete / transporte",
+            "unidad": "global",
+            "cantidad": 1 if costo_flete > 0 else 0,
+            "precio_unitario": costo_flete,
+            "total": costo_flete,
+            "criterio": "Costo global de transporte",
+        },
+        {
+            "actividad": "Gestiones ENEE / permisos",
+            "unidad": "global",
+            "cantidad": 1 if costo_enee > 0 else 0,
+            "precio_unitario": costo_enee,
+            "total": costo_enee,
+            "criterio": "Gestión administrativa / permisos",
+        },
+        {
+            "actividad": "Ingeniería y administración técnica",
+            "unidad": "global",
+            "cantidad": 1 if costo_ingenieria > 0 else 0,
+            "precio_unitario": costo_ingenieria,
+            "total": costo_ingenieria,
+            "criterio": "Diseño, revisión y coordinación técnica",
+        },
+    ]
+
+    actividades = [
+        item for item in actividades
+        if _to_float(item.get("total", 0)) > 0
+    ]
+
+    costo_cuadrilla = (
+        costo_hincado_postes
+        + costo_armado_estructuras
+        + costo_instalacion_retenidas
+        + costo_tendido_mt
+        + costo_tendido_bt
+    )
+
+    return {
+        "detalle_costos_actividades": actividades,
+
+        "costo_agujeros": float(costo_agujeros),
+        "costo_cuadrilla": float(costo_cuadrilla),
+        "costo_grua": float(costo_grua),
+        "costo_flete": float(costo_flete),
+        "costo_enee": float(costo_enee),
+        "costo_ingenieria": float(costo_ingenieria),
+
+        "parametros_actividades": {
+            "costo_agujero_unitario": round(costo_agujero_unitario, 2),
+            "costo_cuadrilla_dia": round(costo_cuadrilla_dia, 2),
+            "horas_jornada": round(horas_jornada, 2),
+            "costo_hora_cuadrilla": round(costo_hora_cuadrilla, 2),
+            "horas_por_poste": round(horas_por_poste, 2),
+            "horas_por_estructura": round(horas_por_estructura, 2),
+            "horas_por_retenida": round(horas_por_retenida, 2),
+            "costo_tendido_mt_m": round(costo_tendido_mt_m, 2),
+            "costo_tendido_bt_m": round(costo_tendido_bt_m, 2),
+            "horas_grua": round(horas_grua, 2),
+            "precio_hora_grua": round(precio_hora_grua, 2),
+            "costo_hora_grua": round(precio_hora_grua, 2),
+            "costo_flete": round(costo_flete, 2),
+            "costo_enee": round(costo_enee, 2),
+            "costo_ingenieria": round(costo_ingenieria, 2),
+        },
+    }
+
+
+# =========================================================
+# CALCULAR TIEMPOS / CRONOGRAMA
 # =========================================================
 def _calcular_tiempos(
     longitud_primario_m: float,
@@ -376,18 +640,19 @@ def _calcular_tiempos(
         round(total_estructuras / 8),
     )
 
-    dias_primario = max(
-        0,
-        round(longitud_primario_m / 500),
-    ) if longitud_primario_m else 0
+    dias_primario = (
+        max(0, round(longitud_primario_m / 500))
+        if longitud_primario_m
+        else 0
+    )
 
-    dias_secundario = max(
-        0,
-        round(longitud_secundario_m / 300),
-    ) if longitud_secundario_m else 0
+    dias_secundario = (
+        max(0, round(longitud_secundario_m / 300))
+        if longitud_secundario_m
+        else 0
+    )
 
     cronograma = []
-
     dia_actual = 1
 
     actividades = [
@@ -426,12 +691,11 @@ def _calcular_tiempos(
 
         dia_actual = fin + 1
 
-    dias_totales = max(
-        [
-            item["fin"] or 0
-            for item in cronograma
-        ]
-    ) if cronograma else 0
+    dias_totales = (
+        max([item["fin"] or 0 for item in cronograma])
+        if cronograma
+        else 0
+    )
 
     return {
         "dias_levantamiento": dias_levantamiento,
@@ -459,19 +723,27 @@ def _calcular_kpis(
 
     costo_por_estructura = (
         costo_total_real / total_estructuras
-    ) if total_estructuras else 0
+        if total_estructuras
+        else 0
+    )
 
     utilidad_por_estructura = (
         utilidad / total_estructuras
-    ) if total_estructuras else 0
+        if total_estructuras
+        else 0
+    )
 
     costo_por_poste = (
         costo_total_real / num_postes
-    ) if num_postes else 0
+        if num_postes
+        else 0
+    )
 
     utilidad_diaria = (
         utilidad / dias_totales
-    ) if dias_totales else 0
+        if dias_totales
+        else 0
+    )
 
     return {
         "costo_por_estructura": round(costo_por_estructura, 2),
@@ -484,6 +756,10 @@ def _calcular_kpis(
 # =========================================================
 # DISTRIBUCIÓN DE COSTOS
 # =========================================================
+def costs_or_zero(costos: Dict[str, float], key: str) -> float:
+    return _to_float(costos.get(key, 0))
+
+
 def _crear_distribucion_costos(
     costo_total_real: float,
     costos: Dict[str, float],
@@ -497,6 +773,7 @@ def _crear_distribucion_costos(
         ("Flete", costs_or_zero(costos, "costo_flete")),
         ("ENEE / Permisos", costs_or_zero(costos, "costo_enee")),
         ("Ingeniería", costs_or_zero(costos, "costo_ingenieria")),
+        ("Otros", costs_or_zero(costos, "costo_otros")),
         ("Contingencia", costs_or_zero(costos, "contingencia")),
     ]
 
@@ -510,7 +787,9 @@ def _crear_distribucion_costos(
 
         porcentaje = (
             monto / costo_total_real * 100
-        ) if costo_total_real else 0
+            if costo_total_real
+            else 0
+        )
 
         salida.append(
             {
@@ -521,10 +800,6 @@ def _crear_distribucion_costos(
         )
 
     return salida
-
-
-def costs_or_zero(costos: Dict[str, float], key: str) -> float:
-    return _to_float(costos.get(key, 0))
 
 
 # =========================================================
@@ -564,15 +839,13 @@ def _evaluar_proyecto(
 
     return {
         "estado": "RENTABLE ALTO",
-        "mensaje": (
-            "El proyecto presenta una rentabilidad favorable."
-        ),
+        "mensaje": "El proyecto presenta una rentabilidad favorable.",
         "nivel": "bueno",
     }
 
 
 # =========================================================
-# MOTOR DE COSTOS REAL
+# MOTOR DE COSTOS REAL DEL CONTRATISTA
 # =========================================================
 def _motor_costos(
     df_materiales_costos: pd.DataFrame,
@@ -586,25 +859,39 @@ def _motor_costos(
 ) -> Dict[str, Any]:
 
     # =====================================================
-    # COSTOS DESDE TABLA
+    # COSTOS DESDE TABLA DE MATERIALES
     # =====================================================
     costos_tabla = _clasificar_costos_desde_materiales(
         df_materiales_costos
     )
 
     # =====================================================
-    # COSTOS MANUALES
+    # COSTOS POR ACTIVIDAD REAL
     # =====================================================
-    costos_manuales = _extraer_costos_manuales(
-        entrada
-    ) if entrada is not None else {
-        "costo_cuadrilla_manual": 0,
-        "costo_agujeros_manual": 0,
-        "costo_grua_manual": 0,
-        "costo_flete_manual": 0,
-        "costo_enee_manual": 0,
-        "costo_ingenieria_manual": 0,
-    }
+    costos_actividades = _calcular_costos_actividades(
+        entrada=entrada,
+        longitud_primario_m=longitud_primario_m,
+        longitud_secundario_m=longitud_secundario_m,
+        total_estructuras=total_estructuras,
+        num_postes=num_postes,
+        num_retenidas=num_retenidas,
+    )
+
+    # =====================================================
+    # COSTOS MANUALES ADICIONALES
+    # =====================================================
+    costos_manuales = (
+        _extraer_costos_manuales(entrada)
+        if entrada is not None
+        else {
+            "costo_cuadrilla_manual": 0,
+            "costo_agujeros_manual": 0,
+            "costo_grua_manual": 0,
+            "costo_flete_manual": 0,
+            "costo_enee_manual": 0,
+            "costo_ingenieria_manual": 0,
+        }
+    )
 
     # =====================================================
     # CONSOLIDACIÓN
@@ -613,32 +900,38 @@ def _motor_costos(
 
     costo_cuadrilla = (
         costos_tabla["costo_cuadrilla"]
+        + costos_actividades["costo_cuadrilla"]
         + costos_manuales["costo_cuadrilla_manual"]
     )
 
     costo_agujeros = (
         costos_tabla["costo_agujeros"]
+        + costos_actividades["costo_agujeros"]
         + costos_manuales["costo_agujeros_manual"]
     )
 
     costo_grua = (
         costos_tabla["costo_grua"]
+        + costos_actividades["costo_grua"]
         + costos_manuales["costo_grua_manual"]
     )
 
     costo_flete = (
         costos_tabla["costo_flete"]
+        + costos_actividades["costo_flete"]
         + costos_manuales["costo_flete_manual"]
     )
 
     costo_enee = (
         costos_tabla["costo_enee"]
-        + costos_manuales["costo_enee_manual"]
+        + costos_actividades["costo_enee"]
+        + costs_or_zero(costos_manuales, "costo_enee_manual")
     )
 
     costo_ingenieria = (
         costos_tabla["costo_ingenieria"]
-        + costos_manuales["costo_ingenieria_manual"]
+        + costos_actividades["costo_ingenieria"]
+        + costs_or_zero(costos_manuales, "costo_ingenieria_manual")
     )
 
     costo_otros = costos_tabla["costo_otros"]
@@ -673,9 +966,11 @@ def _motor_costos(
     # =====================================================
     # CONTINGENCIA
     # =====================================================
-    porcentaje_contingencia = _to_float(
-        getattr(entrada, "porcentaje_contingencia", 5)
-    ) if entrada is not None else 5
+    porcentaje_contingencia = (
+        _to_float(getattr(entrada, "porcentaje_contingencia", 5))
+        if entrada is not None
+        else 5
+    )
 
     contingencia = subtotal * (porcentaje_contingencia / 100)
 
@@ -691,7 +986,9 @@ def _motor_costos(
 
     margen_pct = (
         utilidad / precio_total_proyecto * 100
-    ) if precio_total_proyecto else 0
+        if precio_total_proyecto
+        else 0
+    )
 
     # =====================================================
     # KPIs
@@ -729,20 +1026,23 @@ def _motor_costos(
         margen_pct=margen_pct,
     )
 
-    # =====================================================
-    # PORCENTAJES DIRECTOS PARA COMPATIBILIDAD CON PDF ACTUAL
-    # =====================================================
     porcentaje_materiales = (
         costo_materiales / costo_total_real * 100
-    ) if costo_total_real else 0
+        if costo_total_real
+        else 0
+    )
 
     porcentaje_cuadrilla = (
         costo_cuadrilla / costo_total_real * 100
-    ) if costo_total_real else 0
+        if costo_total_real
+        else 0
+    )
 
     porcentaje_grua = (
         costo_grua / costo_total_real * 100
-    ) if costo_total_real else 0
+        if costo_total_real
+        else 0
+    )
 
     # =====================================================
     # RETORNO
@@ -761,6 +1061,16 @@ def _motor_costos(
         "costo_otros": round(costo_otros, 2),
         "contingencia": round(contingencia, 2),
         "porcentaje_contingencia": round(porcentaje_contingencia, 2),
+
+        # =============================
+        # DETALLE INTERNO DEL CONTRATISTA
+        # =============================
+        "detalle_costos_actividades": (
+            costos_actividades["detalle_costos_actividades"]
+        ),
+        "parametros_actividades": (
+            costos_actividades["parametros_actividades"]
+        ),
 
         # =============================
         # RESULTADOS FINANCIEROS
@@ -846,11 +1156,7 @@ def calcular_costos_proyecto(
             longitud_primario,
             longitud_secundario,
         ) = _extraer_longitudes(
-            getattr(
-                entrada,
-                "df_cables",
-                None,
-            )
+            getattr(entrada, "df_cables", None)
         )
 
         # =================================================
@@ -867,7 +1173,7 @@ def calcular_costos_proyecto(
         )
 
         # =================================================
-        # PRECIO DE VENTA FINAL
+        # PRECIO DE VENTA PACTADO
         # =================================================
         precio_base = _to_float(
             getattr(
