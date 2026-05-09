@@ -1,10 +1,136 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import pandas as pd
+import streamlit as st
+
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
+
 from exportadores.pdf_base import estilo_tabla
+
+
+# =========================================================
+# HELPERS NUMÉRICOS
+# =========================================================
+def _to_float(valor, default: float = 0.0) -> float:
+    try:
+        if valor is None:
+            return default
+
+        if isinstance(valor, str):
+            valor = (
+                valor.replace("L", "")
+                .replace(",", "")
+                .replace("%", "")
+                .strip()
+            )
+
+        return float(valor)
+
+    except Exception:
+        return default
+
+
+def _fmt_lps(valor) -> str:
+    try:
+        return f"L {float(valor):,.2f}"
+    except Exception:
+        return "L 0.00"
+
+
+def _sumar_base_cotizacion(df_precios: pd.DataFrame) -> float:
+    """
+    Suma el presupuesto base:
+    estructuras + materiales + instalación + conductores.
+    """
+
+    if df_precios is None or df_precios.empty:
+        return 0.0
+
+    columnas_posibles = [
+        "Subtotal",
+        "Total Proyecto",
+        "TOTAL PROYECTO",
+        "Total",
+        "TOTAL",
+    ]
+
+    for col in columnas_posibles:
+        if col in df_precios.columns:
+            return float(
+                pd.to_numeric(
+                    df_precios[col],
+                    errors="coerce",
+                )
+                .fillna(0)
+                .sum()
+            )
+
+    return 0.0
+
+
+# =========================================================
+# LOGÍSTICA DESDE STREAMLIT
+# =========================================================
+def _leer_logistica_streamlit() -> dict:
+    """
+    Lee los valores comerciales definidos en la interfaz.
+    Usa los mismos nombres que tu reporte de contratista.
+    """
+
+    incluir_logistica = st.session_state.get(
+        "incluir_logistica",
+        True,
+    )
+
+    if not incluir_logistica:
+        return {
+            "horas_grua": 0.0,
+            "precio_hora_grua": 0.0,
+            "total_grua": 0.0,
+            "costo_flete": 0.0,
+            "viajes_flete": 0.0,
+            "total_flete": 0.0,
+            "ingenieria": 0.0,
+        }
+
+    horas_grua = _to_float(
+        st.session_state.get("horas_grua", 12)
+    )
+
+    precio_hora_grua = _to_float(
+        st.session_state.get("precio_hora_grua", 1700)
+    )
+
+    costo_flete = _to_float(
+        st.session_state.get("costo_flete", 25000)
+    )
+
+    viajes_flete = _to_float(
+        st.session_state.get("viajes_flete", 1)
+    )
+
+    ingenieria = _to_float(
+        st.session_state.get(
+            "ingenieria",
+            st.session_state.get("gastos_ingenieria", 25000),
+        )
+    )
+
+    total_grua = horas_grua * precio_hora_grua
+    total_flete = costo_flete * viajes_flete
+
+    return {
+        "horas_grua": horas_grua,
+        "precio_hora_grua": precio_hora_grua,
+        "total_grua": total_grua,
+        "costo_flete": costo_flete,
+        "viajes_flete": viajes_flete,
+        "total_flete": total_flete,
+        "ingenieria": ingenieria,
+    }
 
 
 # =========================================================
@@ -18,18 +144,23 @@ def _agregar_notas(elems, styles):
     elems.append(Spacer(1, 4))
 
     elems.append(Paragraph(
-        "- Los precios incluyen el suministro e instalación de los materiales y equipos descritos en el presente documento.",
-        styles["Normal"]
+        "- Los precios incluyen la instalación y suministro de los materiales, estructuras y equipos descritos en el presente documento.",
+        styles["Normal"],
     ))
 
     elems.append(Paragraph(
-        "- La gestión de permisos ante ENEE está incluida dentro del alcance del proyecto.",
-        styles["Normal"]
+        "- El total del proyecto incluye los costos comerciales de grúa, flete/rastra e ingeniería cuando apliquen.",
+        styles["Normal"],
+    ))
+
+    elems.append(Paragraph(
+        "- La gestión de permisos ante ENEE está incluida dentro del alcance definido para el proyecto.",
+        styles["Normal"],
     ))
 
     elems.append(Paragraph(
         "- La presente oferta tiene una validez de 30 días calendario a partir de la fecha de emisión.",
-        styles["Normal"]
+        styles["Normal"],
     ))
 
 
@@ -37,14 +168,16 @@ def _estilo_cotizacion(tabla):
 
     tabla.setStyle(TableStyle([
 
-        # 🔹 SUBTOTAL (fila -3)
-        ("BACKGROUND", (0, -3), (-1, -3), colors.HexColor("#D9E1F2")),
-        ("FONTNAME", (0, -3), (-1, -3), "Helvetica-Bold"),
+        # Encabezado
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
 
-        # 🔹 ISV (fila -2)
-        ("BACKGROUND", (0, -2), (-1, -2), colors.whitesmoke),
+        # Alineación de montos
+        ("ALIGN", (1, 1), (1, -1), "RIGHT"),
 
-        # 🔹 TOTAL FINAL (fila -1)
+        # Total final
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#1F4E79")),
         ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
@@ -66,7 +199,12 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
     # VALIDACIÓN
     # =====================================================
     if df_precios is None or df_precios.empty:
-        elems.append(Paragraph("SIN DATOS PARA COTIZACIÓN", styles["Normal"]))
+        elems.append(
+            Paragraph(
+                "SIN DATOS PARA COTIZACIÓN",
+                styles["Normal"],
+            )
+        )
         return elems
 
     # =====================================================
@@ -75,47 +213,88 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
     styleTitulo = styles["Heading1"].clone("titulo_cotizacion")
     styleTitulo.alignment = TA_CENTER
 
-    elems.append(Paragraph("COTIZACIÓN DEL PROYECTO", styleTitulo))
+    elems.append(
+        Paragraph(
+            "COTIZACIÓN DEL PROYECTO",
+            styleTitulo,
+        )
+    )
     elems.append(Spacer(1, 10))
 
     # =====================================================
     # BASE
     # =====================================================
-    if "Subtotal" in df_precios.columns:
-        total_base = float(df_precios["Subtotal"].sum())
-    else:
-        total_base = float(df_precios["Total Proyecto"].sum())
+    total_base = _sumar_base_cotizacion(df_precios)
 
     # =====================================================
-    # CÁLCULOS
+    # LOGÍSTICA STREAMLIT
     # =====================================================
-    ingenieria = 25000
-    subtotal = total_base + ingenieria
-    total_final = subtotal
+    logistica = _leer_logistica_streamlit()
+
+    horas_grua = logistica["horas_grua"]
+    precio_hora_grua = logistica["precio_hora_grua"]
+    total_grua = logistica["total_grua"]
+
+    costo_flete = logistica["costo_flete"]
+    viajes_flete = logistica["viajes_flete"]
+    total_flete = logistica["total_flete"]
+
+    ingenieria = logistica["ingenieria"]
+
+    # =====================================================
+    # TOTAL FINAL
+    # =====================================================
+    total_final = (
+        total_base
+        + total_grua
+        + total_flete
+        + ingenieria
+    )
 
     # =====================================================
     # DATA
     # =====================================================
     data = [
         ["Concepto", "Monto (L)"],
-        ["Suministro e instalación", f"L {total_base:,.2f}"],
-        ["Gastos de Ingeniería (15%)", f"L {ingenieria:,.2f}"],
-        ["TOTAL PROYECTO", f"L {total_final:,.2f}"],
+        ["Instalación y Suministro", _fmt_lps(total_base)],
     ]
+
+    if total_grua > 0:
+        data.append([
+            f"Equipo Grúa ({horas_grua:,.0f} h x {_fmt_lps(precio_hora_grua)})",
+            _fmt_lps(total_grua),
+        ])
+
+    if total_flete > 0:
+        data.append([
+            f"Flete / rastra ({viajes_flete:,.0f} viaje(s) x {_fmt_lps(costo_flete)})",
+            _fmt_lps(total_flete),
+        ])
+
+    if ingenieria > 0:
+        data.append([
+            "Gastos de Ingeniería",
+            _fmt_lps(ingenieria),
+        ])
+
+    data.append([
+        "TOTAL PROYECTO",
+        _fmt_lps(total_final),
+    ])
 
     # =====================================================
     # TABLA
     # =====================================================
     tabla = Table(
         data,
-        colWidths=[doc.width * 0.7, doc.width * 0.3],
-        repeatRows=1
+        colWidths=[
+            doc.width * 0.7,
+            doc.width * 0.3,
+        ],
+        repeatRows=1,
     )
 
-    # 🔥 ESTILO GLOBAL
     tabla.setStyle(estilo_tabla())
-
-    # 🔥 AJUSTE LOCAL
     _estilo_cotizacion(tabla)
 
     elems.append(tabla)
