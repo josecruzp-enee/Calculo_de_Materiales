@@ -224,47 +224,32 @@ def _calcular_tiempos(
 # =========================================================
 # 🔥 CALCULAR COSTOS OPERATIVOS
 # =========================================================
-def _calcular_costos_operativos(
-    dias_totales,
-    num_postes,
-    num_retenidas,
-):
-
-    costo_cuadrilla = (
-        dias_totales * 10000
-    )
-
-    total_agujeros = (
-        num_postes
-        + num_retenidas
-    )
-
-    costo_agujeros = (
-        total_agujeros * 500
-    )
-
-    horas_grua = (
-        num_postes * 1
-        + (num_postes // 8) * 2
-    )
-
-    costo_grua = (
-        horas_grua * 1500
-    )
-
-    costo_enee = 35000
+# =========================================================
+# 🔥 CALCULAR COSTOS OPERATIVOS
+# =========================================================
+def _calcular_costos_operativos():
 
     return {
 
-        "costo_cuadrilla": costo_cuadrilla,
+        # =========================================
+        # COSTOS MANUALES
+        # =========================================
+        # Estos costos ya se agregan en:
+        # - tabla_presupuesto_general()
+        # - cuadro_general_precios
+        # - resumen comercial
+        #
+        # NO volver a calcular aquí.
+        # =========================================
 
-        "costo_agujeros": costo_agujeros,
+        "costo_cuadrilla": 0.0,
 
-        "costo_grua": costo_grua,
+        "costo_agujeros": 0.0,
 
-        "costo_enee": costo_enee,
+        "costo_grua": 0.0,
+
+        "costo_enee": 0.0,
     }
-
 
 # =========================================================
 # 🔥 CALCULAR KPIs
@@ -355,11 +340,7 @@ def _motor_costos(
     # =====================================================
     # COSTOS OPERATIVOS
     # =====================================================
-    costos = _calcular_costos_operativos(
-        dias_totales,
-        num_postes,
-        num_retenidas,
-    )
+    costos = _calcular_costos_operativos()
 
     costo_cuadrilla = costos["costo_cuadrilla"]
 
