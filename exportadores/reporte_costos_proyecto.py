@@ -98,25 +98,34 @@ def _estilos():
 
     return {
         "titulo": ParagraphStyle(
-            "titulo_costos",
+            "titulo_costos_contratista",
             parent=styles["Title"],
             fontName="Helvetica-Bold",
-            fontSize=16,
-            leading=20,
+            fontSize=15,
+            leading=18,
             alignment=TA_CENTER,
             textColor=colors.HexColor("#0B3B63"),
-            spaceAfter=12,
+            spaceAfter=10,
         ),
 
         "subtitulo": ParagraphStyle(
-            "subtitulo_costos",
+            "subtitulo_costos_contratista",
             parent=styles["Heading2"],
             fontName="Helvetica-Bold",
-            fontSize=11,
+            fontSize=10.5,
             leading=13,
             textColor=colors.HexColor("#0B3B63"),
             spaceBefore=4,
             spaceAfter=7,
+        ),
+
+        "texto": ParagraphStyle(
+            "texto_costos_contratista",
+            parent=styles["BodyText"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=10,
+            textColor=colors.HexColor("#263238"),
         ),
 
         "kpi_label": ParagraphStyle(
@@ -133,8 +142,8 @@ def _estilos():
             "kpi_valor",
             parent=styles["BodyText"],
             fontName="Helvetica-Bold",
-            fontSize=14,
-            leading=16,
+            fontSize=13,
+            leading=15,
             alignment=TA_CENTER,
             textColor=colors.white,
         ),
@@ -186,7 +195,7 @@ def _bloque_kpis(elementos, resultado):
 
     data = [[
         [
-            Paragraph("VENTA", st["kpi_label"]),
+            Paragraph("VENTA PACTADA", st["kpi_label"]),
             Paragraph(_fmt_lps_0(venta), st["kpi_valor"]),
         ],
         [
@@ -198,7 +207,7 @@ def _bloque_kpis(elementos, resultado):
             Paragraph(_fmt_lps_0(utilidad), st["kpi_valor"]),
         ],
         [
-            Paragraph("MARGEN", st["kpi_label"]),
+            Paragraph("MARGEN REAL", st["kpi_label"]),
             Paragraph(f"{_to_float(margen):,.1f} %", st["kpi_valor"]),
         ],
     ]]
@@ -206,7 +215,7 @@ def _bloque_kpis(elementos, resultado):
     tabla = Table(
         data,
         colWidths=[132, 132, 132, 132],
-        rowHeights=[66],
+        rowHeights=[64],
     )
 
     tabla.setStyle(TableStyle([
@@ -219,14 +228,14 @@ def _bloque_kpis(elementos, resultado):
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
 
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
         ("LEFTPADDING", (0, 0), (-1, -1), 5),
         ("RIGHTPADDING", (0, 0), (-1, -1), 5),
     ]))
 
     elementos.append(tabla)
-    elementos.append(Spacer(1, 16))
+    elementos.append(Spacer(1, 14))
 
 
 # =====================================================
@@ -238,15 +247,24 @@ def _bloque_detalle_actividades(elementos, resultado):
 
     actividades = resultado.get("detalle_costos_actividades", [])
 
-    if not isinstance(actividades, list) or not actividades:
-        return
-
     elementos.append(
         Paragraph(
-            "Detalle de costos reales por actividad",
+            "Detalle interno de costos reales por actividad",
             st["subtitulo"],
         )
     )
+
+    if not isinstance(actividades, list) or not actividades:
+        elementos.append(
+            Paragraph(
+                "No se recibieron actividades internas de costeo. "
+                "Verificar que costos_proyecto.py devuelva "
+                "'detalle_costos_actividades'.",
+                st["nota"],
+            )
+        )
+        elementos.append(Spacer(1, 10))
+        return
 
     data = [[
         "Actividad",
@@ -301,7 +319,7 @@ def _bloque_detalle_actividades(elementos, resultado):
     ]))
 
     elementos.append(tabla)
-    elementos.append(Spacer(1, 15))
+    elementos.append(Spacer(1, 14))
 
 
 # =====================================================
@@ -336,6 +354,9 @@ def _bloque_parametros_actividades(elementos, resultado):
         ["Costo tendido BT", _fmt_lps(params.get("costo_tendido_bt_m", 0)) + " / m"],
         ["Costo hora grúa", _fmt_lps(params.get("costo_hora_grua", 0))],
         ["Horas grúa", f"{_to_float(params.get('horas_grua', 0)):,.2f} h"],
+        ["Flete / transporte", _fmt_lps(params.get("costo_flete", 0))],
+        ["Gestiones ENEE / permisos", _fmt_lps(params.get("costo_enee", 0))],
+        ["Ingeniería / administración técnica", _fmt_lps(params.get("costo_ingenieria", 0))],
     ]
 
     tabla = Table(
@@ -366,7 +387,7 @@ def _bloque_parametros_actividades(elementos, resultado):
     ]))
 
     elementos.append(tabla)
-    elementos.append(Spacer(1, 15))
+    elementos.append(Spacer(1, 14))
 
 
 # =====================================================
@@ -463,9 +484,9 @@ def _tabla_resultado(resultado):
         ["Subtotal costos", _fmt_lps(resultado.get("subtotal_costos", 0))],
         ["Contingencia", _fmt_lps(resultado.get("contingencia", 0))],
         ["Costo total real", _fmt_lps(resultado.get("costo_total_real", 0))],
-        ["Venta", _fmt_lps(resultado.get("precio_venta", 0))],
+        ["Venta pactada", _fmt_lps(resultado.get("precio_venta", 0))],
         ["Utilidad", _fmt_lps(resultado.get("utilidad", 0))],
-        ["Margen", _fmt_pct(resultado.get("margen_pct", 0))],
+        ["Margen real", _fmt_pct(resultado.get("margen_pct", 0))],
     ]
 
     tabla = Table(
@@ -518,7 +539,7 @@ def _bloque_financiero(elementos, resultado):
 
     elementos.append(
         Paragraph(
-            "Resumen financiero interno",
+            "Resumen financiero interno del contratista",
             st["subtitulo"],
         )
     )
@@ -538,7 +559,7 @@ def _bloque_financiero(elementos, resultado):
     ]))
 
     elementos.append(fila)
-    elementos.append(Spacer(1, 15))
+    elementos.append(Spacer(1, 14))
 
 
 # =====================================================
@@ -598,7 +619,7 @@ def _bloque_indicadores(elementos, resultado):
     ]))
 
     elementos.append(tabla)
-    elementos.append(Spacer(1, 15))
+    elementos.append(Spacer(1, 14))
 
 
 # =====================================================
@@ -634,7 +655,7 @@ def _bloque_cronograma(elementos, resultado):
 
     elementos.append(
         Paragraph(
-            "Cronograma estimado",
+            "Cronograma estimado de ejecución",
             st["subtitulo"],
         )
     )
@@ -747,7 +768,7 @@ def _bloque_cronograma(elementos, resultado):
             )
         )
 
-    elementos.append(Spacer(1, 15))
+    elementos.append(Spacer(1, 14))
 
 
 # =====================================================
@@ -767,7 +788,7 @@ def _bloque_evaluacion(elementos, resultado):
 
         if utilidad < 0:
             estado = "NO RENTABLE"
-            mensaje = "El costo total estimado supera el valor de venta del proyecto."
+            mensaje = "El costo total estimado supera el valor de venta pactado."
             nivel = "critico"
 
         elif margen < 10:
@@ -793,14 +814,14 @@ def _bloque_evaluacion(elementos, resultado):
     texto = (
         f"{mensaje}<br/><br/>"
         f"<b>Utilidad estimada:</b> {_fmt_lps(utilidad)}<br/>"
-        f"<b>Margen estimado:</b> {_fmt_pct(margen)}"
+        f"<b>Margen real estimado:</b> {_fmt_pct(margen)}"
     )
 
     tabla = Table(
         [
             [
                 Paragraph(
-                    f"Evaluación ejecutiva: {estado}",
+                    f"Evaluación interna: {estado}",
                     st["evaluacion_titulo"],
                 )
             ],
@@ -902,7 +923,7 @@ def generar_pdf_costos_proyecto(
 
     elementos.append(
         Paragraph(
-            "ANÁLISIS FINANCIERO INTERNO DEL PROYECTO",
+            "REPORTE INTERNO DE COSTOS Y UTILIDAD DEL CONTRATISTA",
             st["titulo"],
         )
     )
