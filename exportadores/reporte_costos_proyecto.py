@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-#exportadores/reporte_costos_proyecto.py
+# exportadores/reporte_costos_proyecto.py
 from __future__ import annotations
 
 from reportlab.platypus import (
@@ -230,6 +230,146 @@ def _bloque_kpis(elementos, resultado):
 
 
 # =====================================================
+# DETALLE DE COSTOS REALES POR ACTIVIDAD
+# =====================================================
+def _bloque_detalle_actividades(elementos, resultado):
+
+    st = _estilos()
+
+    actividades = resultado.get("detalle_costos_actividades", [])
+
+    if not isinstance(actividades, list) or not actividades:
+        return
+
+    elementos.append(
+        Paragraph(
+            "Detalle de costos reales por actividad",
+            st["subtitulo"],
+        )
+    )
+
+    data = [[
+        "Actividad",
+        "Unidad",
+        "Cantidad",
+        "P.U.",
+        "Total",
+        "Criterio",
+    ]]
+
+    for item in actividades:
+        data.append([
+            str(item.get("actividad", "")),
+            str(item.get("unidad", "")),
+            f"{_to_float(item.get('cantidad', 0)):,.2f}",
+            _fmt_lps(item.get("precio_unitario", 0)),
+            _fmt_lps(item.get("total", 0)),
+            str(item.get("criterio", "")),
+        ])
+
+    tabla = Table(
+        data,
+        colWidths=[132, 42, 55, 65, 75, 166],
+        repeatRows=1,
+    )
+
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B3B63")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 6.8),
+
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 6.3),
+        ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#263238")),
+
+        ("ALIGN", (2, 1), (4, -1), "RIGHT"),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D9E2EC")),
+
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [
+            colors.white,
+            colors.HexColor("#F7F9FB"),
+        ]),
+
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+    ]))
+
+    elementos.append(tabla)
+    elementos.append(Spacer(1, 15))
+
+
+# =====================================================
+# PARÁMETROS DE COSTEO
+# =====================================================
+def _bloque_parametros_actividades(elementos, resultado):
+
+    st = _estilos()
+
+    params = resultado.get("parametros_actividades", {})
+
+    if not isinstance(params, dict) or not params:
+        return
+
+    elementos.append(
+        Paragraph(
+            "Parámetros usados para el costeo operativo",
+            st["subtitulo"],
+        )
+    )
+
+    data = [
+        ["Parámetro", "Valor"],
+        ["Costo agujero unitario", _fmt_lps(params.get("costo_agujero_unitario", 0))],
+        ["Costo cuadrilla por día", _fmt_lps(params.get("costo_cuadrilla_dia", 0))],
+        ["Horas por jornada", f"{_to_float(params.get('horas_jornada', 0)):,.2f} h"],
+        ["Costo hora cuadrilla", _fmt_lps(params.get("costo_hora_cuadrilla", 0))],
+        ["Horas por estructura", f"{_to_float(params.get('horas_por_estructura', 0)):,.2f} h"],
+        ["Horas por poste", f"{_to_float(params.get('horas_por_poste', 0)):,.2f} h"],
+        ["Horas por retenida", f"{_to_float(params.get('horas_por_retenida', 0)):,.2f} h"],
+        ["Costo tendido MT", _fmt_lps(params.get("costo_tendido_mt_m", 0)) + " / m"],
+        ["Costo tendido BT", _fmt_lps(params.get("costo_tendido_bt_m", 0)) + " / m"],
+        ["Costo hora grúa", _fmt_lps(params.get("costo_hora_grua", 0))],
+        ["Horas grúa", f"{_to_float(params.get('horas_grua', 0)):,.2f} h"],
+    ]
+
+    tabla = Table(
+        data,
+        colWidths=[260, 160],
+        repeatRows=1,
+    )
+
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B3B63")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 7.2),
+
+        ("ALIGN", (1, 1), (1, -1), "RIGHT"),
+        ("GRID", (0, 0), (-1, -1), 0.30, colors.HexColor("#D9E2EC")),
+
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [
+            colors.white,
+            colors.HexColor("#F7F9FB"),
+        ]),
+
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+
+    elementos.append(tabla)
+    elementos.append(Spacer(1, 15))
+
+
+# =====================================================
 # TABLA DE DISTRIBUCIÓN
 # =====================================================
 def _tabla_distribucion(resultado):
@@ -257,7 +397,9 @@ def _tabla_distribucion(resultado):
             ("Agujeros", resultado.get("costo_agujeros", 0)),
             ("Grúa", resultado.get("costo_grua", 0)),
             ("Flete", resultado.get("costo_flete", 0)),
+            ("ENEE / Permisos", resultado.get("costo_enee", 0)),
             ("Ingeniería", resultado.get("costo_ingenieria", 0)),
+            ("Otros", resultado.get("costo_otros", 0)),
             ("Contingencia", resultado.get("contingencia", 0)),
         ]
 
@@ -469,7 +611,12 @@ def _obtener_cronograma(resultado):
     if isinstance(cronograma, list) and cronograma:
         return cronograma
 
-    dias = int(_to_float(resultado.get("dias_totales", 1), 1))
+    dias = int(
+        _to_float(
+            resultado.get("dias_totales", 1),
+            1,
+        )
+    )
 
     return [
         {
@@ -696,15 +843,40 @@ def construir_bloque_costos(
     if not resultado:
         return
 
-    _bloque_kpis(elementos, resultado)
+    _bloque_kpis(
+        elementos,
+        resultado,
+    )
 
-    _bloque_financiero(elementos, resultado)
+    _bloque_detalle_actividades(
+        elementos,
+        resultado,
+    )
 
-    _bloque_indicadores(elementos, resultado)
+    _bloque_parametros_actividades(
+        elementos,
+        resultado,
+    )
 
-    _bloque_cronograma(elementos, resultado)
+    _bloque_financiero(
+        elementos,
+        resultado,
+    )
 
-    _bloque_evaluacion(elementos, resultado)
+    _bloque_indicadores(
+        elementos,
+        resultado,
+    )
+
+    _bloque_cronograma(
+        elementos,
+        resultado,
+    )
+
+    _bloque_evaluacion(
+        elementos,
+        resultado,
+    )
 
 
 # =====================================================
