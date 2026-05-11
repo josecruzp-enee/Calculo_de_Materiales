@@ -10,6 +10,7 @@ PRECIOS_FIJOS = {
 
     "TS-37.5KVA": 13000,
     "TS-50KVA": 15000,
+    "TS-15KVA": 10000,
 
     "CONDUCTOR MT 1/0 AWG RAVEN": 30,
     "CONDUCTOR BT WP 3/0 AWG FIG": 35,
@@ -52,7 +53,9 @@ PRECIOS_FIJOS = {
     "B-I-1": 400,
     "B-I-3": 400,
     "B-I-4D": 500,
+    "B-I-4": 500,
     "B-I-4B": 500,
+    "B-I-6": 600,
     "B-I-7A": 500,
     "B-II-1": 500,
     "B-III-1": 600,
