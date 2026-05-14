@@ -7,6 +7,7 @@ import pandas as pd
 import traceback
 from exportadores.pdf_contratista import generar_pdf_contratista
 from exportadores.pdf_lista_costos_materiales import generar_pdf_lista_materiales
+from exportadores.hoja_info import generar_pdf_hoja_info
 # =========================================================
 # 📦 CONTRATO
 # =========================================================
@@ -126,6 +127,11 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
                 entrada.datos_proyecto
             )),
 
+            ("hoja_info.pdf", lambda: generar_pdf_hoja_info(
+                datos_proyecto=datos_proyecto,
+                df_estructuras=entrada.df_estructuras,
+            )),
+            
             ("reporte_completo.pdf", lambda: generar_pdf_completo(
                 df_materiales=entrada.df_materiales,
                 df_estructuras=entrada.df_estructuras,
