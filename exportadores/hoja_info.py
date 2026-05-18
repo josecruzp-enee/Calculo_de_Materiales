@@ -91,7 +91,7 @@ def extraer_calibres(datos):
 # =========================================================
 def _desc_postes(df):
 
-    postes = df[df["cod"].str.contains(r"^(PC|PM)-", regex=True, na=False)]
+    postes = df[df["cod"].str.contains(r"^(PC|PCA|PM)-", regex=True, na=False)]
     if postes.empty:
         return None
 
