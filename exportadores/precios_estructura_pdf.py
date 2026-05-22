@@ -85,21 +85,15 @@ def generar_tabla_precios_estructura(
     # =====================================================
     for _, r in df_precios.iterrows():
 
-        estructura = str(
-            r.get("Estructura", "")
-        ).strip()
+        estructura = str(r.get("Estructura", "")).strip()
 
-        material = float(
-            r.get("Material Unitario", 0)
-        )
+        material = float(r.get("Material Unitario", 0))
+        mano_obra = float(r.get("Mano Obra Unitaria", 0))
+        total_unit = float(r.get("Total Unitario", 0))
 
-        mano_obra = float(
-            r.get("Mano Obra Unitaria", 0)
-        )
-
-        total_unit = float(
-            r.get("Total Unitario", 0)
-        )
+        # Si Total Unitario viene vacío o en cero, calcularlo
+        if total_unit <= 0:
+            total_unit = material + mano_obra
 
         # =================================================
         # CANTIDAD
@@ -107,56 +101,46 @@ def generar_tabla_precios_estructura(
         cantidad = cantidades.get(estructura, None)
 
         if cantidad is None or cantidad == 0:
-
-            cantidad = float(
-                r.get("Cantidad", 0)
-            )
+            cantidad = float(r.get("Cantidad", 0))
 
         if cantidad <= 0:
             continue
 
         # =================================================
-        # TOTAL
+        # TOTALES POR FILA
         # =================================================
+        total_material = material * cantidad
+        total_instalacion = mano_obra * cantidad
         total = total_unit * cantidad
+
+        # =================================================
+        # ACUMULADORES GENERALES
+        # =================================================
+        total_material_general += total_material
+        total_instalacion_general += total_instalacion
+        total_cantidad_general += cantidad
+        total_general += total
 
         # =================================================
         # DESCRIPCIÓN
         # =================================================
         if estructura.startswith("CONDUCTOR"):
-
-            texto = (
-                f"Suministro e instalación de "
-                f"{estructura}"
-            )
-
+            texto = f"Suministro e instalación de {estructura}"
         else:
+            texto = f"Suministro e instalación de estructura {estructura}"
 
-            texto = (
-                f"Suministro e instalación de "
-                f"estructura {estructura}"
-            )
-
-        descripcion = Paragraph(
-            texto,
-            style_small
-        )
-
-        total_material_general = 0.0
-        total_instalacion_general = 0.0
-        total_cantidad_general = 0.0
-        total_general = 0.0
+        descripcion = Paragraph(texto, style_small)
 
         # =================================================
-        # FILA
+        # FILA NORMAL
         # =================================================
         data.append([
-            "TOTAL",
-            f"L {total_material_general:,.2f}",
-            f"L {total_instalacion_general:,.2f}",
-            "",
-            f"{int(total_cantidad_general)}",
-            f"L {total_general:,.2f}",
+            descripcion,
+            f"L {material:,.2f}",
+            f"L {mano_obra:,.2f}",
+            f"L {total_unit:,.2f}",
+            f"{int(cantidad)}",
+            f"L {total:,.2f}",
         ])
 
     # =====================================================
@@ -174,15 +158,15 @@ def generar_tabla_precios_estructura(
         ])
 
     # =====================================================
-    # TOTAL GENERAL
+    # FILA TOTAL GENERAL CORREGIDA
     # =====================================================
     data.append([
-        "",
-        "",
-        "",
-        "",
         "TOTAL",
-        f"L {total_general:,.2f}"
+        f"L {total_material_general:,.2f}",
+        f"L {total_instalacion_general:,.2f}",
+        "",
+        f"{int(total_cantidad_general)}",
+        f"L {total_general:,.2f}",
     ])
 
     # =====================================================
@@ -200,7 +184,6 @@ def generar_tabla_precios_estructura(
     tabla.setStyle(estilo_tabla())
 
     return [tabla]
-
 
 # =========================================================
 # COTIZACIÓN SIMPLE
