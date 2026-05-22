@@ -402,7 +402,7 @@ def _procesar_fila_cable(
 def _agregar_cable_a_precios(
     df_precios,
     entrada,
-    contratista="C1"
+    contratista
 ):
     """
     Agrega cables al presupuesto.
@@ -425,7 +425,8 @@ def _agregar_cable_a_precios(
         return df_precios
 
     contratista_norm = _normalizar_contratista(contratista)
-    lista_mano_obra = obtener_lista_precios(contratista)
+
+    lista_mano_obra = obtener_lista_precios(contratista_norm)
 
     existe_bt = _existe_bt_en_cables(df_cables)
 
@@ -452,8 +453,6 @@ def _agregar_cable_a_precios(
         [df_precios, df_cables_precios],
         ignore_index=True
     )
-
-
 # =========================================================
 # COSTO UNITARIO DE ESTRUCTURAS
 # =========================================================
