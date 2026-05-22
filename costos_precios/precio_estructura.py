@@ -15,6 +15,7 @@ from costos_precios.mano_obra_por_punto import obtener_lista_precios
 
 FACTOR_PIE_POR_METRO = 3.28084
 
+
 PRECIOS_CABLE_PIE = {
     "CONDUCTOR MT 1/0 AWG RAVEN": 8.76,
     "CONDUCTOR N 2 AWG SPARROW": 5.64,
@@ -25,45 +26,86 @@ PRECIOS_CABLE_PIE = {
 
 
 # =========================================================
+# MANO DE OBRA UNITARIA PARA ESTRUCTURAS
+# =========================================================
+def _obtener_mano_obra_unitaria(
+    estructura: str,
+    lista_mano_obra: dict
+) -> float:
+    """
+    Busca la mano de obra unitaria de una estructura.
+
+    Primero intenta match exacto.
+    Si no encuentra, intenta match parcial por prefijo.
+    """
+
+    estructura = str(estructura).strip().upper()
+
+    if estructura in lista_mano_obra:
+        return float(lista_mano_obra[estructura])
+
+    for key in lista_mano_obra:
+        key_norm = str(key).strip().upper()
+
+        if estructura.startswith(key_norm):
+            return float(lista_mano_obra[key])
+
+    return 0.0
+
+
+# =========================================================
+# COSTOS OPERATIVOS
+# =========================================================
+def calcular_costos_operativos(
+    *,
+    costo_material_total: float,
+    factor_equipos: float = 0.05,
+    factor_logistica: float = 0.15,
+):
+    """
+    Calcula costos operativos distribuidos según el costo de materiales.
+    """
+
+    equipos = costo_material_total * factor_equipos
+    logistica = costo_material_total * factor_logistica
+
+    return {
+        "equipos": round(equipos, 2),
+        "logistica": round(logistica, 2),
+        "operativo_total": round(equipos + logistica, 2),
+    }
+
+
+# =========================================================
 # LIMPIEZA DE TEXTO
 # =========================================================
-
-def limpiar_calibre(txt) -> str:
+def limpiar_calibre(txt):
     """
     Limpia el texto del calibre para construir la descripción del conductor.
     """
 
-    txt = str(txt or "").upper().strip()
+    txt = str(txt).upper().strip()
 
-    reemplazos = [
-        "CABLE DE ALUMINIO",
-        "CABLE ALUMINIO",
-        "ALUMINIO",
-        "FORRADO",
-        "ACSR",
-        "#",
-    ]
-
-    for r in reemplazos:
-        txt = txt.replace(r, "")
-
+    txt = txt.replace("CABLE DE ALUMINIO", "")
+    txt = txt.replace("FORRADO", "")
+    txt = txt.replace("ACSR", "")
+    txt = txt.replace("#", "")
     txt = txt.replace("  ", " ")
 
     return txt.strip()
 
 
 def _normalizar_contratista(contratista: str) -> str:
-    return str(contratista or "C1").strip().upper()
+    return str(contratista).strip().upper()
 
 
 def _normalizar_tipo_cable(valor) -> str:
-    return str(valor or "").strip().upper()
+    return str(valor).strip().upper()
 
 
 # =========================================================
-# OBTENER DATAFRAME DE CABLES
+# VALIDACIONES DE CABLES
 # =========================================================
-
 def _obtener_df_cables(entrada) -> Optional[pd.DataFrame]:
     """
     Obtiene df_cables desde entrada.
@@ -84,14 +126,10 @@ def _obtener_df_cables(entrada) -> Optional[pd.DataFrame]:
 
 def _existe_bt_en_cables(df_cables: pd.DataFrame) -> bool:
     """
-    Detecta si existe cable BT en el proyecto.
-
-    Regla usada para C2:
+    Detecta si en el proyecto existe cable BT.
+    Esto se usa para la regla C2:
     si hay BT, no se cobra N ni HP por separado.
     """
-
-    if not isinstance(df_cables, pd.DataFrame):
-        return False
 
     if "Tipo" not in df_cables.columns:
         return False
@@ -109,32 +147,25 @@ def _existe_bt_en_cables(df_cables: pd.DataFrame) -> bool:
 
 def _leer_longitud_cable(fila: pd.Series) -> float:
     """
-    Lee longitud de cable.
-
+    Lee la longitud del cable.
     Prioridad:
     1. Total Cable (m)
     2. Longitud
-    3. longitud
     """
 
-    longitud = fila.get(
-        "Total Cable (m)",
-        fila.get(
-            "Longitud",
-            fila.get("longitud", 0)
-        )
-    )
+    longitud = fila.get("Total Cable (m)", fila.get("Longitud", 0))
 
     try:
-        return float(longitud or 0)
+        longitud = float(longitud or 0)
     except Exception:
-        return 0.0
+        longitud = 0.0
+
+    return longitud
 
 
 # =========================================================
 # REGLAS DE COBRO DE CABLES
 # =========================================================
-
 def _debe_ignorar_cable(
     *,
     tipo: str,
@@ -165,12 +196,14 @@ def _obtener_claves_cable(
     calibre: str
 ) -> Optional[Dict[str, str]]:
     """
-    Devuelve descripción y claves internas de material/mano de obra.
+    Devuelve la descripción y claves de material/mano de obra
+    según el tipo de cable.
     """
 
-    calibre_limpio = limpiar_calibre(calibre)
+    calibre_limpio = limpiar_calibre(calibre).strip()
 
     if tipo.startswith("MT"):
+
         calibre_limpio = calibre_limpio.replace("WP", "").strip()
 
         return {
@@ -180,6 +213,7 @@ def _obtener_claves_cable(
         }
 
     if tipo.startswith("BT"):
+
         return {
             "descripcion": f"CONDUCTOR BT {calibre_limpio}",
             "clave_material": "CONDUCTOR BT WP 3/0 AWG FIG",
@@ -187,6 +221,7 @@ def _obtener_claves_cable(
         }
 
     if tipo.startswith("N"):
+
         calibre_limpio = calibre_limpio.replace("WP", "").strip()
 
         return {
@@ -196,6 +231,7 @@ def _obtener_claves_cable(
         }
 
     if tipo.startswith("HP"):
+
         return {
             "descripcion": f"HILO PILOTO HP {calibre_limpio}",
             "clave_material": "HILO PILOTO HP WP 2 AWG PEACH",
@@ -206,12 +242,13 @@ def _obtener_claves_cable(
 
 
 # =========================================================
-# CÁLCULO DE COSTO DE CABLE
+# CÁLCULO DE MATERIAL Y MANO DE OBRA DE CABLES
 # =========================================================
-
-def _calcular_material_unitario_cable(clave_material: str) -> float:
+def _calcular_material_unitario_cable(
+    clave_material: str
+) -> float:
     """
-    El precio del material de cable está en L/pie.
+    El material del cable está en L/pie.
     Se convierte a L/metro.
     """
 
@@ -230,15 +267,16 @@ def _obtener_mano_obra_cable(
     lista_mano_obra: dict
 ) -> float:
     """
-    Devuelve mano de obra del cable.
+    Devuelve la mano de obra del cable.
 
     C1:
-        Usa clave específica.
+        Usa la clave específica.
 
     C2:
         MT usa CONDUCTOR MT GLOBAL.
         BT usa CONDUCTOR BT GLOBAL.
-        N y HP quedan con clave específica si aplican.
+        N usa CONDUCTOR N 2 AWG SPARROW.
+        HP usa clave específica.
     """
 
     if contratista_norm == "C2":
@@ -251,6 +289,16 @@ def _obtener_mano_obra_cable(
         if tipo.startswith("BT"):
             return float(
                 lista_mano_obra.get("CONDUCTOR BT GLOBAL", 0.0)
+            )
+
+        if tipo.startswith("N"):
+            return float(
+                lista_mano_obra.get("CONDUCTOR N 2 AWG SPARROW", 0.0)
+            )
+
+        if tipo.startswith("HP"):
+            return float(
+                lista_mano_obra.get(clave_mano_obra, 0.0)
             )
 
     return float(
@@ -266,7 +314,7 @@ def _crear_fila_cable_precio(
     mano_obra_unitaria: float
 ) -> Dict[str, Any]:
     """
-    Crea una fila compatible con los reportes de presupuesto.
+    Crea una fila de precio para un cable.
     """
 
     total_unitario = round(
@@ -283,6 +331,7 @@ def _crear_fila_cable_precio(
         "Estructura": descripcion,
         "Cantidad": round(longitud, 2),
 
+        # Contrato actual del exportador
         "Material Unitario": round(material_unitario, 2),
         "Mano Obra Unitaria": round(mano_obra_unitaria, 2),
         "Costo Operativo Unitario": 0.0,
@@ -306,17 +355,12 @@ def _procesar_fila_cable(
     lista_mano_obra: dict
 ) -> Optional[Dict[str, Any]]:
     """
-    Procesa una fila de df_cables.
-    Devuelve una fila para df_precios o None si no aplica.
+    Procesa una fila de df_cables y devuelve una fila para df_precios.
+    Si no aplica, devuelve None.
     """
 
-    tipo = _normalizar_tipo_cable(
-        fila_cable.get("Tipo", "")
-    )
-
-    calibre = str(
-        fila_cable.get("Calibre", "")
-    ).strip()
+    tipo = _normalizar_tipo_cable(fila_cable.get("Tipo", ""))
+    calibre = str(fila_cable.get("Calibre", "")).strip()
 
     longitud = _leer_longitud_cable(fila_cable)
 
@@ -358,24 +402,27 @@ def _procesar_fila_cable(
 
 
 # =========================================================
-# FUNCIÓN USADA POR costos_precios/orquestador_costos.py
+# AGREGAR CABLES AL PRESUPUESTO
 # =========================================================
-
 def _agregar_cable_a_precios(
     df_precios,
     entrada,
     contratista=None
-) -> pd.DataFrame:
+):
     """
-    Agrega cables al DataFrame de precios de estructura.
+    Agrega cables al presupuesto.
 
-    Esta función NO orquesta costos.
-    Esta función NO calcula costos de estructuras.
-    Esta función SOLO agrega las filas de cables al presupuesto.
+    Reglas:
+    - C1 cobra desagregado: MT, BT, N y HP si existen.
+    - C2 cobra globalizado:
+        Si hay BT, no se cobra N ni HP por separado.
+        Si no hay BT, sí cobra N y HP si aparecen.
+
+    Unidades:
+    - Longitud del proyecto: metros.
+    - Precio material cable: L/pie.
+    - Mano de obra: L/metro.
     """
-
-    if not isinstance(df_precios, pd.DataFrame):
-        df_precios = pd.DataFrame()
 
     df_cables = _obtener_df_cables(entrada)
 
@@ -387,9 +434,7 @@ def _agregar_cable_a_precios(
 
     contratista_norm = _normalizar_contratista(contratista)
 
-    lista_mano_obra = obtener_lista_precios(
-        contratista_norm
-    )
+    lista_mano_obra = obtener_lista_precios(contratista_norm)
 
     existe_bt = _existe_bt_en_cables(df_cables)
 
@@ -416,3 +461,318 @@ def _agregar_cable_a_precios(
         [df_precios, df_cables_precios],
         ignore_index=True
     )
+
+# =========================================================
+# COSTO UNITARIO DE ESTRUCTURAS
+# =========================================================
+def _calcular_costo_operativo_unitario(
+    *,
+    material_total_estructura: float,
+    material_total_global: float,
+    operativo_total: float,
+    cantidad: int
+) -> float:
+    """
+    Distribuye el costo operativo según el peso del material
+    de cada estructura.
+    """
+
+    if material_total_global <= 0 or cantidad <= 0:
+        return 0.0
+
+    peso = material_total_estructura / material_total_global
+
+    return (operativo_total * peso) / cantidad
+
+
+def _crear_fila_estructura_precio(
+    *,
+    estructura: str,
+    cantidad: int,
+    material_unit: float,
+    mano_obra_unit: float,
+    costo_operativo_unit: float,
+    porcentaje_utilidad: float
+) -> Dict[str, Any]:
+    """
+    Crea una fila de precio para una estructura.
+    """
+
+    total_unitario = (
+        material_unit
+        + mano_obra_unit
+        + costo_operativo_unit
+    )
+
+    if porcentaje_utilidad > 0:
+        total_unitario = total_unitario * (1 + porcentaje_utilidad)
+
+    total_unitario = round(total_unitario, 2)
+
+    total_proyecto = round(
+        total_unitario * cantidad,
+        2
+    )
+
+    return {
+        "Estructura": estructura,
+        "Cantidad": cantidad,
+
+        # Contrato actual del exportador
+        "Material Unitario": round(material_unit, 2),
+        "Mano Obra Unitaria": round(mano_obra_unit, 2),
+        "Costo Operativo Unitario": round(costo_operativo_unit, 2),
+        "Total Unitario": total_unitario,
+        "Total Proyecto": total_proyecto,
+        "Subtotal": total_proyecto,
+
+        # Compatibilidad con reportes/cálculos anteriores
+        "Costo Unitario": round(material_unit, 2),
+        "Costo Operativo": round(costo_operativo_unit, 2),
+        "Precio Unitario": total_unitario,
+        "Precio Total": total_proyecto,
+    }
+
+
+def _procesar_fila_estructura(
+    *,
+    fila: pd.Series,
+    lista_mano_obra: dict,
+    material_total_global: float,
+    operativo_total: float,
+    porcentaje_utilidad: float
+) -> Dict[str, Any]:
+    """
+    Procesa una fila de df_costos_estructura y devuelve una fila
+    para df_precios.
+    """
+
+    estructura = str(
+        fila["codigodeestructura"]
+    ).strip().upper()
+
+    cantidad = max(
+        1,
+        int(fila["Cantidad"])
+    )
+
+    material_unit = float(
+        fila["Costo Unitario"]
+    )
+
+    material_total_estructura = float(
+        fila["Costo Total"]
+    )
+
+    costo_operativo_unit = _calcular_costo_operativo_unitario(
+        material_total_estructura=material_total_estructura,
+        material_total_global=material_total_global,
+        operativo_total=operativo_total,
+        cantidad=cantidad
+    )
+
+    mano_obra_unit = _obtener_mano_obra_unitaria(
+        estructura,
+        lista_mano_obra
+    )
+
+    return _crear_fila_estructura_precio(
+        estructura=estructura,
+        cantidad=cantidad,
+        material_unit=material_unit,
+        mano_obra_unit=mano_obra_unit,
+        costo_operativo_unit=costo_operativo_unit,
+        porcentaje_utilidad=porcentaje_utilidad
+    )
+
+
+def _generar_df_precios_estructuras(
+    *,
+    df_costos_estructura: pd.DataFrame,
+    lista_mano_obra: dict,
+    costos_op: Dict[str, float],
+    porcentaje_utilidad: float
+) -> pd.DataFrame:
+    """
+    Genera el dataframe base de precios de estructuras.
+    """
+
+    material_total_global = float(
+        df_costos_estructura["Costo Total"].sum()
+    )
+
+    filas = []
+
+    for _, fila in df_costos_estructura.iterrows():
+
+        fila_precio = _procesar_fila_estructura(
+            fila=fila,
+            lista_mano_obra=lista_mano_obra,
+            material_total_global=material_total_global,
+            operativo_total=costos_op["operativo_total"],
+            porcentaje_utilidad=porcentaje_utilidad
+        )
+
+        filas.append(fila_precio)
+
+    df_precios = pd.DataFrame(filas)
+
+    if not df_precios.empty:
+        df_precios["Subtotal"] = df_precios["Total Proyecto"]
+
+    return df_precios
+
+
+# =========================================================
+# VALIDACIONES PRINCIPALES
+# =========================================================
+def _validar_df_costos_estructura(
+    df_costos_estructura: pd.DataFrame
+) -> Optional[Dict[str, Any]]:
+    """
+    Valida df_costos_estructura.
+    Si está mal, devuelve respuesta de error.
+    Si está bien, devuelve None.
+    """
+
+    if (
+        df_costos_estructura is None
+        or df_costos_estructura.empty
+    ):
+        return {
+            "ok": False,
+            "errores": ["Sin costos de estructura"],
+            "df_precios_estructura": None,
+            "df_costos_materiales": pd.DataFrame(),
+        }
+
+    return None
+
+
+def _obtener_df_costos_materiales_existente(entrada) -> pd.DataFrame:
+    """
+    Conserva df_costos_materiales si ya existe en entrada.
+
+    No calcula materiales.
+    No inventa filas.
+    No reemplaza el flujo de costos_materiales.py.
+    """
+
+    df_costos_materiales = getattr(
+        entrada,
+        "df_costos_materiales",
+        pd.DataFrame()
+    )
+
+    if isinstance(df_costos_materiales, pd.DataFrame):
+        return df_costos_materiales
+
+    return pd.DataFrame()
+
+
+def _respuesta_ok(
+    *,
+    entrada,
+    df_precios: pd.DataFrame,
+    costos_op: Dict[str, float]
+) -> Dict[str, Any]:
+
+    df_costos_materiales = _obtener_df_costos_materiales_existente(
+        entrada
+    )
+
+    return {
+        "ok": True,
+        "df_precios_estructura": df_precios,
+        "df_costos_materiales": df_costos_materiales,
+        "costos_operativos": costos_op,
+    }
+
+
+def _respuesta_error(
+    error: Exception,
+    entrada=None
+) -> Dict[str, Any]:
+
+    if entrada is not None:
+        df_costos_materiales = _obtener_df_costos_materiales_existente(
+            entrada
+        )
+    else:
+        df_costos_materiales = pd.DataFrame()
+
+    return {
+        "ok": False,
+        "errores": [str(error)],
+        "df_precios_estructura": None,
+        "df_costos_materiales": df_costos_materiales,
+    }
+
+
+# =========================================================
+# SUMINISTRO E INSTALACIÓN
+# =========================================================
+def ejecutar_costos(
+    entrada,
+    contratista="C1",
+    porcentaje_utilidad=0.0,
+) -> Dict[str, Any]:
+    """
+    Orquesta el cálculo de costos.
+
+    Flujo:
+    1. Valida costos de estructura.
+    2. Obtiene lista de mano de obra según contratista.
+    3. Calcula costos operativos.
+    4. Genera precios de estructuras.
+    5. Agrega cables del proyecto.
+    6. Devuelve df_precios_estructura.
+    7. Conserva df_costos_materiales si ya existe.
+    """
+
+    try:
+
+        df_costos_estructura = entrada.df_costos_estructura
+
+        error_validacion = _validar_df_costos_estructura(
+            df_costos_estructura
+        )
+
+        if error_validacion is not None:
+            return error_validacion
+
+        lista_mano_obra = obtener_lista_precios(contratista)
+
+        material_total = float(
+            df_costos_estructura["Costo Total"].sum()
+        )
+
+        costos_op = calcular_costos_operativos(
+            costo_material_total=material_total
+        )
+
+        df_precios = _generar_df_precios_estructuras(
+            df_costos_estructura=df_costos_estructura,
+            lista_mano_obra=lista_mano_obra,
+            costos_op=costos_op,
+            porcentaje_utilidad=porcentaje_utilidad
+        )
+
+        df_precios = _agregar_cable_a_precios(
+            df_precios,
+            entrada,
+            contratista
+        )
+
+        return _respuesta_ok(
+            entrada=entrada,
+            df_precios=df_precios,
+            costos_op=costos_op
+        )
+
+    except Exception as e:
+
+        return _respuesta_error(
+            e,
+            entrada=entrada
+        )
