@@ -407,7 +407,7 @@ def _procesar_fila_cable(
 def _agregar_cable_a_precios(
     df_precios,
     entrada,
-    contratista
+    contratista=None
 ):
     """
     Agrega cables al presupuesto.
@@ -415,8 +415,8 @@ def _agregar_cable_a_precios(
     Reglas:
     - C1 cobra desagregado: MT, BT, N y HP si existen.
     - C2 cobra globalizado:
-        Si hay BT, no cobra N ni HP por separado.
-        Si no hay BT, sí cobra N y HP si existen.
+        Si hay BT, no se cobra N ni HP por separado.
+        Si no hay BT, sí cobra N y HP si aparecen.
 
     Unidades:
     - Longitud del proyecto: metros.
@@ -428,6 +428,9 @@ def _agregar_cable_a_precios(
 
     if df_cables is None:
         return df_precios
+
+    if contratista is None:
+        contratista = getattr(entrada, "contratista", "C1")
 
     contratista_norm = _normalizar_contratista(contratista)
 
@@ -458,7 +461,6 @@ def _agregar_cable_a_precios(
         [df_precios, df_cables_precios],
         ignore_index=True
     )
-
 
 # =========================================================
 # COSTO UNITARIO DE ESTRUCTURAS
