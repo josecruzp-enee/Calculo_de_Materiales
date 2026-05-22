@@ -75,6 +75,9 @@ def generar_tabla_precios_estructura(
         "TOTAL"
     ]]
 
+    total_material_general = 0.0
+    total_instalacion_general = 0.0
+    total_cantidad_general = 0.0
     total_general = 0.0
 
     # =====================================================
@@ -139,23 +142,21 @@ def generar_tabla_precios_estructura(
             style_small
         )
 
-        total_general += total
+        total_material_general = 0.0
+        total_instalacion_general = 0.0
+        total_cantidad_general = 0.0
+        total_general = 0.0
 
         # =================================================
         # FILA
         # =================================================
         data.append([
-            descripcion,
-
-            f"L {material:,.2f}",
-
-            f"L {mano_obra:,.2f}",
-
-            f"L {total_unit:,.2f}",
-
-            f"{int(cantidad)}",
-
-            f"L {total:,.2f}",
+            "TOTAL",
+            f"L {total_material_general:,.2f}",
+            f"L {total_instalacion_general:,.2f}",
+            "",
+            f"{int(total_cantidad_general)}",
+            f"L {total_general:,.2f}",
         ])
 
     # =====================================================
