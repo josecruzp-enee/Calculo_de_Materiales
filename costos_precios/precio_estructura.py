@@ -713,13 +713,17 @@ def _respuesta_ok(
         df_precios=df_precios
     )
 
+    # CLAVE:
+    # El PDF lee entrada.df_costos_materiales directamente.
+    # No basta con devolverlo en el diccionario.
+    entrada.df_costos_materiales = df_costos_materiales
+
     return {
         "ok": True,
         "df_precios_estructura": df_precios,
         "df_costos_materiales": df_costos_materiales,
         "costos_operativos": costos_op,
     }
-
 
 def _respuesta_error(error: Exception) -> Dict[str, Any]:
     return {
