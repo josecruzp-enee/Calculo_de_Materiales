@@ -315,8 +315,6 @@ def _crear_fila_cable_precio(
 ) -> Dict[str, Any]:
     """
     Crea una fila de precio para un cable.
-    Mantiene compatibilidad con reportes que esperan:
-    Precio Unitario / Precio Total.
     """
 
     total_unitario = round(
@@ -333,16 +331,15 @@ def _crear_fila_cable_precio(
         "Estructura": descripcion,
         "Cantidad": round(longitud, 2),
 
+        # Contrato actual del exportador
         "Material Unitario": round(material_unitario, 2),
         "Mano Obra Unitaria": round(mano_obra_unitaria, 2),
-
         "Costo Operativo Unitario": 0.0,
-
         "Total Unitario": total_unitario,
         "Total Proyecto": total_proyecto,
         "Subtotal": total_proyecto,
 
-        # Compatibilidad con reportes anteriores
+        # Compatibilidad con reportes/cálculos anteriores
         "Costo Unitario": round(material_unitario, 2),
         "Costo Operativo": 0.0,
         "Precio Unitario": total_unitario,
@@ -497,8 +494,6 @@ def _crear_fila_estructura_precio(
 ) -> Dict[str, Any]:
     """
     Crea una fila de precio para una estructura.
-    Mantiene compatibilidad con reportes que esperan:
-    Precio Unitario / Precio Total.
     """
 
     total_unitario = (
@@ -521,21 +516,20 @@ def _crear_fila_estructura_precio(
         "Estructura": estructura,
         "Cantidad": cantidad,
 
+        # Contrato actual del exportador
         "Material Unitario": round(material_unit, 2),
         "Mano Obra Unitaria": round(mano_obra_unit, 2),
         "Costo Operativo Unitario": round(costo_operativo_unit, 2),
-
         "Total Unitario": total_unitario,
         "Total Proyecto": total_proyecto,
         "Subtotal": total_proyecto,
 
-        # Compatibilidad con reportes anteriores
+        # Compatibilidad con reportes/cálculos anteriores
         "Costo Unitario": round(material_unit, 2),
         "Costo Operativo": round(costo_operativo_unit, 2),
         "Precio Unitario": total_unitario,
         "Precio Total": total_proyecto,
     }
-
 
 
 def _procesar_fila_estructura(
@@ -647,28 +641,69 @@ def _validar_df_costos_estructura(
             "ok": False,
             "errores": ["Sin costos de estructura"],
             "df_precios_estructura": None,
+            "df_costos_materiales": pd.DataFrame(),
         }
 
     return None
 
 
+def _obtener_df_costos_materiales_existente(entrada) -> pd.DataFrame:
+    """
+    Conserva df_costos_materiales si ya existe en entrada.
+
+    No calcula materiales.
+    No inventa filas.
+    No reemplaza el flujo de costos_materiales.py.
+    """
+
+    df_costos_materiales = getattr(
+        entrada,
+        "df_costos_materiales",
+        pd.DataFrame()
+    )
+
+    if isinstance(df_costos_materiales, pd.DataFrame):
+        return df_costos_materiales
+
+    return pd.DataFrame()
+
+
 def _respuesta_ok(
     *,
+    entrada,
     df_precios: pd.DataFrame,
     costos_op: Dict[str, float]
 ) -> Dict[str, Any]:
+
+    df_costos_materiales = _obtener_df_costos_materiales_existente(
+        entrada
+    )
+
     return {
         "ok": True,
         "df_precios_estructura": df_precios,
+        "df_costos_materiales": df_costos_materiales,
         "costos_operativos": costos_op,
     }
 
 
-def _respuesta_error(error: Exception) -> Dict[str, Any]:
+def _respuesta_error(
+    error: Exception,
+    entrada=None
+) -> Dict[str, Any]:
+
+    if entrada is not None:
+        df_costos_materiales = _obtener_df_costos_materiales_existente(
+            entrada
+        )
+    else:
+        df_costos_materiales = pd.DataFrame()
+
     return {
         "ok": False,
         "errores": [str(error)],
         "df_precios_estructura": None,
+        "df_costos_materiales": df_costos_materiales,
     }
 
 
@@ -690,6 +725,7 @@ def ejecutar_costos(
     4. Genera precios de estructuras.
     5. Agrega cables del proyecto.
     6. Devuelve df_precios_estructura.
+    7. Conserva df_costos_materiales si ya existe.
     """
 
     try:
@@ -727,10 +763,14 @@ def ejecutar_costos(
         )
 
         return _respuesta_ok(
+            entrada=entrada,
             df_precios=df_precios,
             costos_op=costos_op
         )
 
     except Exception as e:
 
-        return _respuesta_error(e)
+        return _respuesta_error(
+            e,
+            entrada=entrada
+        )
