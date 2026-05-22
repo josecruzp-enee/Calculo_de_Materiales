@@ -77,11 +77,31 @@ def limpiar_calibre(txt):
 # =========================================================
 # AGREGAR CABLES
 # =========================================================
+# =========================================================
+# AGREGAR CABLES
+# =========================================================
 def _agregar_cable_a_precios(
     df_precios,
     entrada,
     contratista="C1"
 ):
+    """
+    Agrega cables al presupuesto.
+
+    Reglas:
+    - C1 cobra desagregado:
+        MT, BT, N y HP si existen en df_cables.
+
+    - C2 cobra globalizado:
+        Si hay BT, no cobra N ni HP por separado.
+        Si NO hay BT, sí cobra N y HP si existen.
+
+    Unidades:
+    - Longitud del proyecto: metros.
+    - Precio de material de cable: L/pie.
+    - Mano de obra: L/metro.
+    - Conversión: L/pie * 3.28084 = L/metro.
+    """
 
     df_cables = getattr(entrada, "df_cables", None)
 
@@ -94,6 +114,34 @@ def _agregar_cable_a_precios(
 
     lista_mano_obra = obtener_lista_precios(contratista)
 
+    contratista_norm = str(contratista).strip().upper()
+
+    # =====================================================
+    # DETECTAR SI EXISTE BT EN EL PROYECTO
+    # =====================================================
+    tipos_cable = (
+        df_cables["Tipo"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .tolist()
+    )
+
+    existe_bt = any(t.startswith("BT") for t in tipos_cable)
+
+    # =====================================================
+    # PRECIOS MATERIAL EN L/PIE
+    # =====================================================
+    PRECIOS_CABLE_PIE = {
+        "CONDUCTOR MT 1/0 AWG RAVEN": 8.76,
+        "CONDUCTOR N 2 AWG SPARROW": 5.64,
+        "CONDUCTOR BT WP 3/0 AWG FIG": 55.00,
+        "HILO PILOTO HP WP 2 AWG PEACH": 5.23,
+        "CONDUCTOR BT WP 266.8 MCM MULBERRY": 81.00,
+    }
+
+    FACTOR_PIE_POR_METRO = 3.28084
+
     filas = []
 
     for _, c in df_cables.iterrows():
@@ -105,78 +153,133 @@ def _agregar_cable_a_precios(
 
         try:
             longitud = float(longitud or 0)
-        except:
+        except Exception:
             continue
 
         if longitud <= 0:
             continue
 
-        # =================================================
-        # IGNORAR
-        # =================================================
-        if tipo.startswith(("N", "HP")):
-            continue
+        calibre_limpio = limpiar_calibre(calibre).strip()
+
+        descripcion = None
+        clave_material = None
+        clave_mano_obra = None
 
         # =================================================
-        # LIMPIAR
-        # =================================================
-        calibre_limpio = limpiar_calibre(calibre).replace("WP", "").strip()
-
-        # =================================================
-        # MT
+        # MEDIA TENSIÓN
         # =================================================
         if tipo.startswith("MT"):
 
+            calibre_limpio = calibre_limpio.replace("WP", "").strip()
+
             descripcion = f"CONDUCTOR MT {calibre_limpio}"
 
-            mano_obra = lista_mano_obra.get(
-                "CONDUCTOR MT 1/0 AWG RAVEN",
-                0
-            )
+            clave_material = "CONDUCTOR MT 1/0 AWG RAVEN"
+            clave_mano_obra = "CONDUCTOR MT 1/0 AWG RAVEN"
 
         # =================================================
-        # BT
+        # BAJA TENSIÓN
         # =================================================
         elif tipo.startswith("BT"):
 
             descripcion = f"CONDUCTOR BT {calibre_limpio}"
 
-            mano_obra = lista_mano_obra.get(
-                "CONDUCTOR BT WP 3/0 AWG FIG",
-                0
-            )
+            clave_material = "CONDUCTOR BT WP 3/0 AWG FIG"
+            clave_mano_obra = "CONDUCTOR BT WP 3/0 AWG FIG"
+
+        # =================================================
+        # NEUTRO
+        # =================================================
+        elif tipo.startswith("N"):
+
+            # C2:
+            # Si hay BT, el neutro se considera incluido en BT.
+            if contratista_norm == "C2" and existe_bt:
+                continue
+
+            calibre_limpio = calibre_limpio.replace("WP", "").strip()
+
+            descripcion = f"CONDUCTOR N {calibre_limpio}"
+
+            clave_material = "CONDUCTOR N 2 AWG SPARROW"
+            clave_mano_obra = "CONDUCTOR N 2 AWG SPARROW"
+
+        # =================================================
+        # HILO PILOTO
+        # =================================================
+        elif tipo.startswith("HP"):
+
+            # C2:
+            # Si hay BT, el HP se considera incluido en BT.
+            if contratista_norm == "C2" and existe_bt:
+                continue
+
+            descripcion = f"HILO PILOTO HP {calibre_limpio}"
+
+            clave_material = "HILO PILOTO HP WP 2 AWG PEACH"
+            clave_mano_obra = "HILO PILOTO HP WP 2 AWG PEACH"
 
         else:
             continue
 
         # =================================================
-        # FILA
+        # MATERIAL UNITARIO
+        # Material viene en L/pie.
+        # Convertir a L/metro.
         # =================================================
+        precio_material_pie = float(
+            PRECIOS_CABLE_PIE.get(clave_material, 0.0)
+        )
+
+        material_unitario_metro = round(
+            precio_material_pie * FACTOR_PIE_POR_METRO,
+            2
+        )
+
+        # =================================================
+        # MANO DE OBRA UNITARIA
+        # Mano de obra viene en L/metro.
+        # =================================================
+        mano_obra_unitaria = float(
+            lista_mano_obra.get(clave_mano_obra, 0.0)
+        )
+
+        # =================================================
+        # TOTAL UNITARIO
+        # =================================================
+        total_unitario = round(
+            material_unitario_metro + mano_obra_unitaria,
+            2
+        )
+
+        total_proyecto = round(
+            longitud * total_unitario,
+            2
+        )
+
         filas.append({
             "Estructura": descripcion,
             "Cantidad": round(longitud, 2),
 
-            "Material Unitario": 0.0,
-            "Mano Obra Unitaria": mano_obra,
+            "Material Unitario": material_unitario_metro,
+            "Mano Obra Unitaria": round(mano_obra_unitaria, 2),
 
             "Costo Operativo Unitario": 0.0,
 
-            "Total Unitario": round(mano_obra, 2),
-
-            "Total Proyecto": round(
-                longitud * mano_obra,
-                2
-            ),
+            "Total Unitario": total_unitario,
+            "Total Proyecto": total_proyecto,
+            "Subtotal": total_proyecto,
         })
 
     if not filas:
         return df_precios
 
+    df_cables_precios = pd.DataFrame(filas)
+
     return pd.concat(
-        [df_precios, pd.DataFrame(filas)],
+        [df_precios, df_cables_precios],
         ignore_index=True
     )
-
 
 # =========================================================
 # SUMINISTRO E INSTALACIÓN
