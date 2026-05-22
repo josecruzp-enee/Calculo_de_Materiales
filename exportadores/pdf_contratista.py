@@ -101,11 +101,11 @@ def tabla_presupuesto(df_detalle):
         total += r["Subtotal"]
 
     # 🔴 HARDCODE
-    data.append(["Desmontaje de Red Existente", "L 35,000.00", 1, "L 35,000.00"])
-    total += 35000
+    #data.append(["Desmontaje de Red Existente", "L 35,000.00", 1, "L 35,000.00"])
+    #total += 35000
 
-    data.append(["Reubicación de Transformador Existente", "L 80,000.00", 1, "L 80,000.00"])
-    total += 80000
+    #data.append(["Reubicación de Transformador Existente", "L 80,000.00", 1, "L 80,000.00"])
+    #total += 80000
 
     data.append(["", "", "TOTAL", f"L {total:,.2f}"])
 
