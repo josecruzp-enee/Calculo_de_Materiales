@@ -621,9 +621,11 @@ def _obtener_df_costos_materiales_para_reportes(
 
     Prioridad:
     1. Si entrada.df_costos_materiales ya existe y no está vacío, se conserva.
-    2. Si no existe, se genera un fallback mínimo desde df_precios.
+    2. Si no existe, se genera una tabla mínima no vacía desde df_precios.
 
-    Esto evita que lista_materiales.pdf falle por DataFrame vacío.
+    Importante:
+    No se filtra por Costo Total > 0, porque eso puede dejar el DataFrame vacío
+    y romper lista_materiales.pdf.
     """
 
     df_costos_materiales = getattr(entrada, "df_costos_materiales", None)
@@ -660,14 +662,18 @@ def _obtener_df_costos_materiales_para_reportes(
         errors="coerce"
     ).fillna(0)
 
-    salida["Costo Total"] = (
-        salida["Cantidad"] * salida["Costo Unitario"]
-    ).round(2)
+    salida["Costo Total"] = pd.to_numeric(
+        df.get("Total Proyecto", 0),
+        errors="coerce"
+    ).fillna(0).round(2)
 
-    salida = salida[salida["Costo Total"] > 0]
-
-    return salida.reset_index(drop=True)
-
+    return salida[[
+        "Materiales",
+        "Unidad",
+        "Cantidad",
+        "Costo Unitario",
+        "Costo Total",
+    ]].reset_index(drop=True)
 
 # =========================================================
 # VALIDACIONES PRINCIPALES
