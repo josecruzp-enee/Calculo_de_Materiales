@@ -453,6 +453,8 @@ def _agregar_cable_a_precios(
         [df_precios, df_cables_precios],
         ignore_index=True
     )
+
+
 # =========================================================
 # COSTO UNITARIO DE ESTRUCTURAS
 # =========================================================
@@ -608,6 +610,66 @@ def _generar_df_precios_estructuras(
 
 
 # =========================================================
+# CONSERVAR COSTOS DE MATERIALES PARA REPORTES
+# =========================================================
+def _obtener_df_costos_materiales_para_reportes(
+    entrada,
+    df_precios: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Conserva df_costos_materiales para lista_materiales.pdf.
+
+    Prioridad:
+    1. Si entrada.df_costos_materiales ya existe y no está vacío, se conserva.
+    2. Si no existe, se genera un fallback mínimo desde df_precios.
+
+    Esto evita que lista_materiales.pdf falle por DataFrame vacío.
+    """
+
+    df_costos_materiales = getattr(entrada, "df_costos_materiales", None)
+
+    if (
+        isinstance(df_costos_materiales, pd.DataFrame)
+        and not df_costos_materiales.empty
+    ):
+        return df_costos_materiales.copy()
+
+    if df_precios is None or df_precios.empty:
+        return pd.DataFrame(columns=[
+            "Materiales",
+            "Unidad",
+            "Cantidad",
+            "Costo Unitario",
+            "Costo Total",
+        ])
+
+    df = df_precios.copy()
+
+    salida = pd.DataFrame()
+
+    salida["Materiales"] = df["Estructura"].astype(str)
+    salida["Unidad"] = "UND"
+
+    salida["Cantidad"] = pd.to_numeric(
+        df["Cantidad"],
+        errors="coerce"
+    ).fillna(0)
+
+    salida["Costo Unitario"] = pd.to_numeric(
+        df.get("Material Unitario", 0),
+        errors="coerce"
+    ).fillna(0)
+
+    salida["Costo Total"] = (
+        salida["Cantidad"] * salida["Costo Unitario"]
+    ).round(2)
+
+    salida = salida[salida["Costo Total"] > 0]
+
+    return salida.reset_index(drop=True)
+
+
+# =========================================================
 # VALIDACIONES PRINCIPALES
 # =========================================================
 def _validar_df_costos_estructura(
@@ -627,6 +689,13 @@ def _validar_df_costos_estructura(
             "ok": False,
             "errores": ["Sin costos de estructura"],
             "df_precios_estructura": None,
+            "df_costos_materiales": pd.DataFrame(columns=[
+                "Materiales",
+                "Unidad",
+                "Cantidad",
+                "Costo Unitario",
+                "Costo Total",
+            ]),
         }
 
     return None
@@ -634,12 +703,20 @@ def _validar_df_costos_estructura(
 
 def _respuesta_ok(
     *,
+    entrada,
     df_precios: pd.DataFrame,
     costos_op: Dict[str, float]
 ) -> Dict[str, Any]:
+
+    df_costos_materiales = _obtener_df_costos_materiales_para_reportes(
+        entrada=entrada,
+        df_precios=df_precios
+    )
+
     return {
         "ok": True,
         "df_precios_estructura": df_precios,
+        "df_costos_materiales": df_costos_materiales,
         "costos_operativos": costos_op,
     }
 
@@ -649,6 +726,13 @@ def _respuesta_error(error: Exception) -> Dict[str, Any]:
         "ok": False,
         "errores": [str(error)],
         "df_precios_estructura": None,
+        "df_costos_materiales": pd.DataFrame(columns=[
+            "Materiales",
+            "Unidad",
+            "Cantidad",
+            "Costo Unitario",
+            "Costo Total",
+        ]),
     }
 
 
@@ -670,6 +754,7 @@ def ejecutar_costos(
     4. Genera precios de estructuras.
     5. Agrega cables del proyecto.
     6. Devuelve df_precios_estructura.
+    7. Conserva df_costos_materiales para lista_materiales.pdf.
     """
 
     try:
@@ -707,6 +792,7 @@ def ejecutar_costos(
         )
 
         return _respuesta_ok(
+            entrada=entrada,
             df_precios=df_precios,
             costos_op=costos_op
         )
