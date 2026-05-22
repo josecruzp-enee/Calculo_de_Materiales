@@ -497,6 +497,8 @@ def _crear_fila_estructura_precio(
 ) -> Dict[str, Any]:
     """
     Crea una fila de precio para una estructura.
+    Mantiene compatibilidad con reportes que esperan:
+    Precio Unitario / Precio Total.
     """
 
     total_unitario = (
@@ -525,7 +527,15 @@ def _crear_fila_estructura_precio(
 
         "Total Unitario": total_unitario,
         "Total Proyecto": total_proyecto,
+        "Subtotal": total_proyecto,
+
+        # Compatibilidad con reportes anteriores
+        "Costo Unitario": round(material_unit, 2),
+        "Costo Operativo": round(costo_operativo_unit, 2),
+        "Precio Unitario": total_unitario,
+        "Precio Total": total_proyecto,
     }
+
 
 
 def _procesar_fila_estructura(
