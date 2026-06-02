@@ -58,7 +58,7 @@ PATRON = re.compile(
     \b(CS-\d+)\b|      
     \b(CA-\d+)\b|  
     \b(P[CMT][A-Z]?-\d+)\b|
-    \b(TS-\d+(?:\.\d+)?KVA)\b|
+    \b(T[ST]-\d+(?:\.\d+)?KVA)\b|
     \b(CT-[A-Z])\b|
     \b(R-\d+[A-Z]?)\b|
     \b(LL-\d+(?:-[0-9A-Z]+)+)\b
