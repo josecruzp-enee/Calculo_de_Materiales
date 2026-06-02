@@ -107,7 +107,7 @@ def _desc_postes(df):
 # =========================================================
 def _desc_transformadores(df):
 
-    trafos = df[df["cod"].str.contains("TS")]
+    trafos = df[df["cod"].str.contains(r"\bT[ST]-", regex=True, na=False)]
     if trafos.empty:
         return None
 
@@ -118,8 +118,7 @@ def _desc_transformadores(df):
     tipo_txt = _plural("transformador", total)
 
     return f"Instalación de {total} {tipo_txt} en conexión {', '.join(partes)}."
-
-
+    
 # =========================================================
 # DESCRIPCIÓN: LUMINARIAS
 # =========================================================
