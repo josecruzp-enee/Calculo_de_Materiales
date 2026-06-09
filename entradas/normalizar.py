@@ -168,4 +168,11 @@ def normalizar_estructuras(df: pd.DataFrame):
         return df_norm, [], []
 
     except Exception as e:
-        return pd.DataFrame(), [str(e)], []
+        import traceback
+
+        debug_guardar("DXF_EXCEPTION", {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        })
+
+        raise
