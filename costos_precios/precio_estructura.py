@@ -309,13 +309,11 @@ def _obtener_mano_obra_cable(
 def _crear_fila_cable_precio(
     *,
     descripcion: str,
-    longitud: float,
+    longitud_material: float,
+    longitud_mano_obra: float,
     material_unitario: float,
     mano_obra_unitaria: float
 ) -> Dict[str, Any]:
-    """
-    Crea una fila de precio para un cable.
-    """
 
     total_unitario = round(
         material_unitario + mano_obra_unitaria,
@@ -323,15 +321,15 @@ def _crear_fila_cable_precio(
     )
 
     total_proyecto = round(
-        longitud * total_unitario,
+        (longitud_material * material_unitario)
+        + (longitud_mano_obra * mano_obra_unitaria),
         2
     )
 
     return {
         "Estructura": descripcion,
-        "Cantidad": round(longitud, 2),
+        "Cantidad": round(longitud_material, 2),
 
-        # Contrato actual del exportador
         "Material Unitario": round(material_unitario, 2),
         "Mano Obra Unitaria": round(mano_obra_unitaria, 2),
         "Costo Operativo Unitario": 0.0,
@@ -339,32 +337,31 @@ def _crear_fila_cable_precio(
         "Total Proyecto": total_proyecto,
         "Subtotal": total_proyecto,
 
-        # Compatibilidad con reportes/cálculos anteriores
         "Costo Unitario": round(material_unitario, 2),
         "Costo Operativo": 0.0,
         "Precio Unitario": total_unitario,
         "Precio Total": total_proyecto,
-    }
 
+        # Debug útil
+        "Cantidad Material": round(longitud_material, 2),
+        "Cantidad Mano Obra": round(longitud_mano_obra, 2),
+    }
 
 def _procesar_fila_cable(
     *,
     fila_cable: pd.Series,
     contratista_norm: str,
     existe_bt: bool,
-    lista_mano_obra: dict
+    lista_mano_obra: dict,
+    longitud_bt_mano_obra: float
 ) -> Optional[Dict[str, Any]]:
-    """
-    Procesa una fila de df_cables y devuelve una fila para df_precios.
-    Si no aplica, devuelve None.
-    """
 
     tipo = _normalizar_tipo_cable(fila_cable.get("Tipo", ""))
     calibre = str(fila_cable.get("Calibre", "")).strip()
 
-    longitud = _leer_longitud_cable(fila_cable)
+    longitud_material = _leer_longitud_cable(fila_cable)
 
-    if longitud <= 0:
+    if longitud_material <= 0:
         return None
 
     if _debe_ignorar_cable(
@@ -393,14 +390,18 @@ def _procesar_fila_cable(
         lista_mano_obra=lista_mano_obra
     )
 
+    longitud_mano_obra = longitud_material
+
+    if contratista_norm == "C2" and tipo.startswith("BT"):
+        longitud_mano_obra = longitud_bt_mano_obra
+
     return _crear_fila_cable_precio(
         descripcion=claves["descripcion"],
-        longitud=longitud,
+        longitud_material=longitud_material,
+        longitud_mano_obra=longitud_mano_obra,
         material_unitario=material_unitario,
         mano_obra_unitaria=mano_obra_unitaria
     )
-
-
 # =========================================================
 # AGREGAR CABLES AL PRESUPUESTO
 # =========================================================
@@ -409,20 +410,6 @@ def _agregar_cable_a_precios(
     entrada,
     contratista=None
 ):
-    """
-    Agrega cables al presupuesto.
-
-    Reglas:
-    - C1 cobra desagregado: MT, BT, N y HP si existen.
-    - C2 cobra globalizado:
-        Si hay BT, no se cobra N ni HP por separado.
-        Si no hay BT, sí cobra N y HP si aparecen.
-
-    Unidades:
-    - Longitud del proyecto: metros.
-    - Precio material cable: L/pie.
-    - Mano de obra: L/metro.
-    """
 
     df_cables = _obtener_df_cables(entrada)
 
@@ -433,10 +420,33 @@ def _agregar_cable_a_precios(
         contratista = getattr(entrada, "contratista", "C1")
 
     contratista_norm = _normalizar_contratista(contratista)
-
     lista_mano_obra = obtener_lista_precios(contratista_norm)
-
     existe_bt = _existe_bt_en_cables(df_cables)
+
+    # Misma lógica del contratista C2
+    total_bt = 0.0
+
+    for _, c in df_cables.iterrows():
+
+        tipo = str(c.get("Tipo", "")).upper().strip()
+        longitud = _leer_longitud_cable(c)
+
+        if longitud <= 0:
+            continue
+
+        if tipo == "BT":
+            fases = str(c.get("Fases", "")).upper().strip()
+
+            factor = 1
+            if "3" in fases:
+                factor = 3
+            elif "2" in fases:
+                factor = 2
+
+            longitud_real = longitud / factor
+            total_bt += longitud_real / 2
+
+    longitud_bt_mano_obra = round(total_bt, 2)
 
     filas = []
 
@@ -446,7 +456,8 @@ def _agregar_cable_a_precios(
             fila_cable=fila_cable,
             contratista_norm=contratista_norm,
             existe_bt=existe_bt,
-            lista_mano_obra=lista_mano_obra
+            lista_mano_obra=lista_mano_obra,
+            longitud_bt_mano_obra=longitud_bt_mano_obra
         )
 
         if fila_precio is not None:
