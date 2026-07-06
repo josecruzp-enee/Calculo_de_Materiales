@@ -30,30 +30,29 @@ def _df_circuitos_default() -> pd.DataFrame:
     return pd.DataFrame([
         {
             "Circuito": "LP-01",
-            "Tipo": "MT",
+            "Servicio": "Línea primaria",
+            "Usa Cable": "MT",
             "Tension": "19.9/34.5 kV",
             "Config Circuito": "1F+N",
             "Longitud": 240.0,
-            "Descripcion": "Línea primaria",
         },
         {
             "Circuito": "LS-01",
-            "Tipo": "BT",
+            "Servicio": "Línea secundaria",
+            "Usa Cable": "BT",
             "Tension": "120/240 V",
             "Config Circuito": "2F+N",
             "Longitud": 160.0,
-            "Descripcion": "Línea secundaria",
         },
         {
             "Circuito": "HP-01",
-            "Tipo": "HP",
+            "Servicio": "Hilo piloto",
+            "Usa Cable": "HP",
             "Tension": "120 V",
             "Config Circuito": "HP+N",
             "Longitud": 80.0,
-            "Descripcion": "Hilo piloto",
         },
     ])
-
 
 def _normalizar_circuitos(df: pd.DataFrame | None) -> pd.DataFrame:
     cols = [
@@ -70,16 +69,18 @@ def _normalizar_circuitos(df: pd.DataFrame | None) -> pd.DataFrame:
 
     out = df.copy()
 
+    # Compatibilidad con versión anterior
+    if "Descripcion" in out.columns and "Servicio" not in out.columns:
+        out["Servicio"] = out["Descripcion"]
+
+    if "Tipo" in out.columns and "Usa Cable" not in out.columns:
+        out["Usa Cable"] = out["Tipo"]
+
     for c in cols:
         if c not in out.columns:
-            if c == "Longitud":
-                out[c] = 0.0
-            else:
-                out[c] = ""
+            out[c] = 0.0 if c == "Longitud" else ""
 
     return out[cols].copy()
-
-
 # =========================================================
 # UI PRINCIPAL
 # =========================================================
@@ -163,9 +164,13 @@ def seccion_cables() -> dict:
                 "Circuito",
                 help="Ejemplo: LP-01, LP-02, LS-01, HP-01",
             ),
-            "Tipo": SelectboxColumn(
-                "Tipo",
-                options=["MT", "BT", "HP", "ACOMETIDA", "OTRO"],
+            "Servicio": TextColumn(
+                "Servicio",
+                help="Ejemplo: Línea primaria, Línea secundaria, Hilo piloto",
+            ),
+            "Usa Cable": SelectboxColumn(
+                "Usa Cable",
+                options=["MT", "BT", "N", "HP", "ACOMETIDA", "OTRO"],
                 required=True,
             ),
             "Tension": TextColumn(
@@ -182,10 +187,6 @@ def seccion_cables() -> dict:
                 min_value=0.0,
                 step=1.0,
                 format="%.2f",
-            ),
-            "Descripcion": TextColumn(
-                "Descripción",
-                help="Ejemplo: Línea primaria, Línea secundaria, Hilo piloto",
             ),
         }
 
@@ -209,10 +210,10 @@ def seccion_cables() -> dict:
             key="editor_cables_proyecto",
         )
 
-        st.markdown("### Configuración de circuitos")
+        st.markdown("### Circuitos del proyecto")
         st.caption(
-            "Cada fila representa un tramo/circuito. "
-            "Aquí puedes repetir líneas primarias, secundarias o HP sin que una excluya a la otra."
+            "Cada fila representa un tramo independiente de línea. "
+            "Puedes repetir líneas primarias, secundarias o HP sin que una excluya a la otra."
         )
 
         df_circuitos_edit = st.data_editor(
@@ -259,7 +260,6 @@ def seccion_cables() -> dict:
     if ok:
 
         df_ok = _validar_y_calcular(df_edit)
-
         df_circuitos_ok = _normalizar_circuitos(df_circuitos_edit)
 
         if df_ok is None or df_ok.empty:
