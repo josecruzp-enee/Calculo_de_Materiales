@@ -2,6 +2,7 @@
 """
 cables_ui.py
 UI de Streamlit para gestionar cables del proyecto.
+Incluye tabla adicional de configuración de circuitos sin romper salida anterior.
 """
 
 from __future__ import annotations
@@ -22,12 +23,69 @@ from materiales.cables.cables_logica import (
 
 
 # =========================================================
+# HELPERS CIRCUITOS
+# =========================================================
+
+def _df_circuitos_default() -> pd.DataFrame:
+    return pd.DataFrame([
+        {
+            "Circuito": "LP-01",
+            "Tipo": "MT",
+            "Tension": "19.9/34.5 kV",
+            "Config Circuito": "1F+N",
+            "Longitud": 240.0,
+            "Descripcion": "Línea primaria",
+        },
+        {
+            "Circuito": "LS-01",
+            "Tipo": "BT",
+            "Tension": "120/240 V",
+            "Config Circuito": "2F+N",
+            "Longitud": 160.0,
+            "Descripcion": "Línea secundaria",
+        },
+        {
+            "Circuito": "HP-01",
+            "Tipo": "HP",
+            "Tension": "120 V",
+            "Config Circuito": "HP+N",
+            "Longitud": 80.0,
+            "Descripcion": "Hilo piloto",
+        },
+    ])
+
+
+def _normalizar_circuitos(df: pd.DataFrame | None) -> pd.DataFrame:
+    cols = [
+        "Circuito",
+        "Tipo",
+        "Tension",
+        "Config Circuito",
+        "Longitud",
+        "Descripcion",
+    ]
+
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return _df_circuitos_default()
+
+    out = df.copy()
+
+    for c in cols:
+        if c not in out.columns:
+            if c == "Longitud":
+                out[c] = 0.0
+            else:
+                out[c] = ""
+
+    return out[cols].copy()
+
+
+# =========================================================
 # UI PRINCIPAL
 # =========================================================
 
 def seccion_cables() -> dict:
 
-    # Inicializar estado
     _init_state(st)
 
     st.subheader("Cables del proyecto")
@@ -35,7 +93,7 @@ def seccion_cables() -> dict:
     df_base = _editor_df_actual(st)
 
     # =====================================================
-    # NORMALIZAR DF
+    # NORMALIZAR DF CABLES EXISTENTE
     # =====================================================
 
     cols_min = ["Tipo", "Calibre", "Config", "Longitud"]
@@ -49,19 +107,88 @@ def seccion_cables() -> dict:
         df_base = df_base[cols_min].copy()
 
     # =====================================================
+    # NORMALIZAR DF CIRCUITOS NUEVO
+    # =====================================================
+
+    df_circuitos_base = _normalizar_circuitos(
+        st.session_state.get("circuitos_proyecto_df")
+    )
+
+    # =====================================================
     # CONFIGURACIÓN DE COLUMNAS
     # =====================================================
 
-    colcfg = None
-    try:
-        from streamlit.column_config import SelectboxColumn, NumberColumn
+    colcfg_cables = None
+    colcfg_circuitos = None
 
-        colcfg = {
-            "Tipo": SelectboxColumn("Tipo", options=get_tipos(), required=True),
-            "Calibre": SelectboxColumn("Calibre", options=get_calibres_union(), required=True),
-            "Config": SelectboxColumn("Config", options=get_configs_union(), required=True),
-            "Longitud": NumberColumn("Longitud (m)", min_value=0.0, step=1.0, format="%.2f"),
+    try:
+        from streamlit.column_config import SelectboxColumn, NumberColumn, TextColumn
+
+        configs_circuitos = [
+            "1F+N",
+            "2F+N",
+            "3F+N",
+            "2F+HP+N",
+            "HP+N",
+            "N",
+            "PERSONALIZADO",
+        ]
+
+        colcfg_cables = {
+            "Tipo": SelectboxColumn(
+                "Tipo",
+                options=get_tipos(),
+                required=True,
+            ),
+            "Calibre": SelectboxColumn(
+                "Calibre",
+                options=get_calibres_union(),
+                required=True,
+            ),
+            "Config": SelectboxColumn(
+                "Config",
+                options=get_configs_union(),
+                required=True,
+            ),
+            "Longitud": NumberColumn(
+                "Longitud (m)",
+                min_value=0.0,
+                step=1.0,
+                format="%.2f",
+            ),
         }
+
+        colcfg_circuitos = {
+            "Circuito": TextColumn(
+                "Circuito",
+                help="Ejemplo: LP-01, LP-02, LS-01, HP-01",
+            ),
+            "Tipo": SelectboxColumn(
+                "Tipo",
+                options=["MT", "BT", "HP", "ACOMETIDA", "OTRO"],
+                required=True,
+            ),
+            "Tension": TextColumn(
+                "Tensión",
+                help="Ejemplo: 19.9/34.5 kV, 120/240 V, 120 V",
+            ),
+            "Config Circuito": SelectboxColumn(
+                "Config Circuito",
+                options=configs_circuitos,
+                required=True,
+            ),
+            "Longitud": NumberColumn(
+                "Longitud (m)",
+                min_value=0.0,
+                step=1.0,
+                format="%.2f",
+            ),
+            "Descripcion": TextColumn(
+                "Descripción",
+                help="Ejemplo: Línea primaria, Línea secundaria, Hilo piloto",
+            ),
+        }
+
     except Exception:
         pass
 
@@ -78,7 +205,23 @@ def seccion_cables() -> dict:
             width="stretch",
             hide_index=True,
             num_rows="dynamic",
-            column_config=colcfg,
+            column_config=colcfg_cables,
+            key="editor_cables_proyecto",
+        )
+
+        st.markdown("### Configuración de circuitos")
+        st.caption(
+            "Cada fila representa un tramo/circuito. "
+            "Aquí puedes repetir líneas primarias, secundarias o HP sin que una excluya a la otra."
+        )
+
+        df_circuitos_edit = st.data_editor(
+            df_circuitos_base,
+            width="stretch",
+            hide_index=True,
+            num_rows="dynamic",
+            column_config=colcfg_circuitos,
+            key="editor_circuitos_proyecto",
         )
 
         col1, col2 = st.columns(2)
@@ -98,8 +241,12 @@ def seccion_cables() -> dict:
         st.session_state["cables_proyecto_df"] = pd.DataFrame()
         st.session_state["cables_proyecto"] = []
 
+        st.session_state["circuitos_proyecto_df"] = pd.DataFrame()
+        st.session_state["circuitos_proyecto"] = []
+
         dp = st.session_state.get("datos_proyecto", {}) or {}
         dp["cables_proyecto"] = []
+        dp["circuitos_proyecto"] = []
         st.session_state["datos_proyecto"] = dp
 
         st.success("Cables reseteados.")
@@ -113,23 +260,30 @@ def seccion_cables() -> dict:
 
         df_ok = _validar_y_calcular(df_edit)
 
+        df_circuitos_ok = _normalizar_circuitos(df_circuitos_edit)
+
         if df_ok is None or df_ok.empty:
             st.warning("⚠️ No hay datos válidos.")
             return {
                 "ok": False,
                 "cables": [],
                 "df": pd.DataFrame(),
+                "circuitos": df_circuitos_ok.to_dict(orient="records"),
             }
 
         registros = df_ok.to_dict(orient="records")
+        registros_circuitos = df_circuitos_ok.to_dict(orient="records")
 
         st.session_state["cables_proyecto_df"] = df_ok.copy()
+        st.session_state["circuitos_proyecto_df"] = df_circuitos_ok.copy()
+        st.session_state["circuitos_proyecto"] = registros_circuitos
 
         dp = st.session_state.get("datos_proyecto", {}) or {}
         dp["cables_proyecto"] = registros
+        dp["circuitos_proyecto"] = registros_circuitos
         st.session_state["datos_proyecto"] = dp
 
-        st.success("Cables guardados correctamente.")
+        st.success("Cables y circuitos guardados correctamente.")
 
         cols_show = [
             c for c in [
@@ -145,6 +299,9 @@ def seccion_cables() -> dict:
 
         st.dataframe(df_ok[cols_show], width="stretch", hide_index=True)
 
+        st.write("Circuitos guardados:")
+        st.dataframe(df_circuitos_ok, width="stretch", hide_index=True)
+
         resumen = _resumen_por_calibre(df_ok)
 
         if resumen:
@@ -157,8 +314,12 @@ def seccion_cables() -> dict:
     # SALIDA ESTÁNDAR
     # =====================================================
 
+    df_salida = st.session_state.get("cables_proyecto_df", pd.DataFrame())
+    df_circuitos_salida = st.session_state.get("circuitos_proyecto_df", pd.DataFrame())
+
     return {
         "ok": True,
-        "cables": st.session_state.get("cables_proyecto_df", pd.DataFrame()).to_dict(orient="records"),
-        "df": st.session_state.get("cables_proyecto_df", pd.DataFrame()),
+        "cables": df_salida.to_dict(orient="records"),
+        "df": df_salida,
+        "circuitos": df_circuitos_salida.to_dict(orient="records"),
     }
