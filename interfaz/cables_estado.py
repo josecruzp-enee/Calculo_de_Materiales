@@ -43,6 +43,8 @@ def _init_state(st) -> None:
     st.session_state.setdefault("cables_buffer_df", pd.DataFrame())
     st.session_state.setdefault("toast_cables_ok", False)
     st.session_state.setdefault("toast_cables_reset", False)
+    st.session_state.setdefault("circuitos_proyecto", [])
+    st.session_state.setdefault("circuitos_proyecto_df", pd.DataFrame())
 
     # datos_proyecto existe en tu app
     st.session_state.setdefault("datos_proyecto", {})
