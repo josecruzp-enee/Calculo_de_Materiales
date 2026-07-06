@@ -173,51 +173,25 @@ def calcular_lista_materiales_con_costos(
     if df_catalogo_costos is None or df_catalogo_costos.empty:
         raise ValueError("df_catalogo_costos vacío")
 
-    # -----------------------------
-    # NORMALIZAR
-    # -----------------------------
     df = _normalizar_materiales_df(df_materiales)
-    catalogo = _normalizar_catalogo_df(df_catalogo_costos)
+    catalogo = preparar_catalogo_costos(df_catalogo_costos)
 
-    # -----------------------------
-    # CONSOLIDAR
-    # -----------------------------
     df = _consolidar_materiales(df)
 
-    # -----------------------------
-    # DEBUG MATCH
-    # -----------------------------
     debug_guardar("DEBUG_MATCH_KEYS", {
         "proyecto": df["Materiales"].unique().tolist()[:10],
         "catalogo": catalogo["Materiales"].unique().tolist()[:10]
     })
 
-    # -----------------------------
-    # MERGE
-    # -----------------------------
     df = _merge_costos(df, catalogo)
-
-    # -----------------------------
-    # FILTRAR SIN COSTO
-    # -----------------------------
     df = _filtrar_sin_costo(df)
-
-    # -----------------------------
-    # COSTOS
-    # -----------------------------
     df = _calcular_costos(df)
 
-    # -----------------------------
-    # DEBUG FINAL
-    # -----------------------------
     debug_guardar("resultado_costos_materiales", {
         "total_materiales": len(df),
         "costo_total": float(df["Costo Total"].sum())
     })
 
-    # -----------------------------
-    # OUTPUT
-    # -----------------------------
     return df[[
         "Materiales",
         "Unidad",
