@@ -112,6 +112,47 @@ def _normalizar_df(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 # 🔷 VISOR DEBUG (MEJORADO)
 # =========================================================
+# =========================================================
+# 🔷 VISOR DEBUG (SEGURO)
+# =========================================================
+def _mostrar_debug_valor(nombre, valor, nivel=4):
+    """
+    Muestra cualquier valor de debug sin romper:
+    - dict
+    - list / tuple / set
+    - DataFrame
+    - None
+    - string / number
+    """
+
+    titulo = "#" * max(1, min(nivel, 6))
+    st.markdown(f"{titulo} 🔹 {nombre}")
+
+    if isinstance(valor, pd.DataFrame):
+        st.dataframe(valor, use_container_width=True)
+        return
+
+    if isinstance(valor, dict):
+        if not valor:
+            st.info("Dict vacío")
+            return
+
+        for k, v in valor.items():
+            _mostrar_debug_valor(str(k), v, nivel + 1)
+
+        return
+
+    if isinstance(valor, (list, tuple, set)):
+        st.json(list(valor))
+        return
+
+    if valor is None:
+        st.warning("None")
+        return
+
+    st.write(valor)
+
+
 def seccion_debug():
 
     st.title("🧠 Debug del sistema")
@@ -122,41 +163,8 @@ def seccion_debug():
 
         st.markdown("### 📊 Variables capturadas")
 
-        # =========================
-        # VISOR INTELIGENTE
-        # =========================
         for k, v in debug.items():
-
-            # 🔥 MODO NUEVO (DOMINIOS)
-            if isinstance(v, dict) and any(isinstance(i, dict) for i in v.values()):
-
-                st.markdown(f"# 🔷 {k}")
-
-                for etapa, contenido in v.items():
-
-                    st.markdown(f"## 🔹 {etapa}")
-
-                    for sub_k, sub_v in contenido.items():
-
-                        st.markdown(f"### {sub_k}")
-
-                        if isinstance(sub_v, (dict, list)):
-                            st.json(sub_v)
-                        elif hasattr(sub_v, "head"):
-                            st.dataframe(sub_v)
-                        else:
-                            st.write(sub_v)
-
-            else:
-                # 🔥 MODO ANTIGUO
-                st.markdown(f"#### 🔹 {k}")
-
-                if isinstance(v, (dict, list)):
-                    st.json(v)
-                elif hasattr(v, "head"):
-                    st.dataframe(v)
-                else:
-                    st.write(v)
+            _mostrar_debug_valor(str(k), v, nivel=2)
 
     else:
         st.info("No hay debug aún")
@@ -181,7 +189,7 @@ def seccion_debug():
 
     st.success("✔ DF encontrado")
     st.write("Shape:", df.shape)
-    st.dataframe(df.head(20))
+    st.dataframe(df.head(20), use_container_width=True)
 
     col = "codigodeestructura" if "codigodeestructura" in df.columns else "Estructura"
 
@@ -191,11 +199,15 @@ def seccion_debug():
     st.markdown("### 🔢 Conteo por estructura")
 
     if "Cantidad" in df.columns:
-        st.dataframe(df.groupby(col)["Cantidad"].sum().sort_values(ascending=False))
+        st.dataframe(
+            df.groupby(col)["Cantidad"].sum().sort_values(ascending=False),
+            use_container_width=True,
+        )
     else:
-        st.dataframe(df[col].value_counts())
-
-
+        st.dataframe(
+            df[col].value_counts(),
+            use_container_width=True,
+        )
 # =========================================================
 # 🔷 DEBUG COMPLETO (ANÁLISIS)
 # =========================================================
