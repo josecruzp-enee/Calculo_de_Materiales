@@ -343,7 +343,38 @@ def _crear_fila_cable_precio(
         "Cantidad Material": round(longitud_material, 2),
         "Cantidad Mano Obra": round(longitud_mano_obra, 2),
     }
+def _calcular_longitud_linea_desde_cable(
+    fila_cable: pd.Series,
+    longitud_material: float,
+) -> float:
+    """
+    Calcula la distancia lineal para mano de obra.
 
+    Regla:
+    - Material se cobra por metro-conductor.
+    - Mano de obra se cobra por distancia lineal del circuito.
+    - Si existe columna Longitud, esa es la distancia lineal.
+    - Si no existe, usa Total Cable (m) dividido entre Conductores.
+    """
+
+    longitud_lineal = _numero_seguro(
+        fila_cable.get("Longitud", 0.0),
+        0.0,
+    )
+
+    if longitud_lineal > 0:
+        return longitud_lineal
+
+    conductores = _numero_seguro(
+        fila_cable.get("Conductores", 1),
+        1,
+    )
+
+    if conductores <= 0:
+        conductores = 1
+
+    return float(longitud_material) / conductores
+    
 def _procesar_fila_cable(
     *,
     fila_cable: pd.Series,
