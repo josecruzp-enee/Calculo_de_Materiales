@@ -9,6 +9,18 @@ from reportlab.lib.styles import ParagraphStyle
 # 🔥 IMPORT DEL ESTILO GLOBAL
 from exportadores.pdf_base import estilo_tabla
 
+def _numero_seguro(valor, default=0.0) -> float:
+    valor = pd.to_numeric(valor, errors="coerce")
+
+    if pd.isna(valor):
+        return default
+
+    return float(valor)
+
+
+def _int_seguro_pdf(valor, default=0) -> int:
+    return int(_numero_seguro(valor, default)) 
+
 
 # =========================================================
 # TABLA PRECIOS DE ESTRUCTURA
@@ -149,6 +161,15 @@ def generar_tabla_precios_estructura(
         # =================================================
         # FILA NORMAL
         # =================================================
+        descripcion = Paragraph(texto, style_small)
+
+        if pd.isna(cantidad):
+            raise ValueError(
+                f"Cantidad NaN\n"
+                f"Estructura: {estructura}\n"
+                f"Fila: {r.to_dict()}"
+            )
+
         data.append([
             descripcion,
             f"L {material:,.2f}",
