@@ -72,27 +72,50 @@ def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
     col_costo = None
 
     for c in df.columns:
-        c_up = c.upper()
+        c_up = str(c).upper().strip()
 
         if "MATER" in c_up:
             col_material = c
         elif "UNIDAD" in c_up:
             col_unidad = c
-        elif "COSTO" in c_up:
+        elif "COSTO UNITARIO" in c_up:
+            col_costo = c
+        elif c_up == "COSTO":
+            col_costo = c
+        elif "PRECIO" in c_up:
             col_costo = c
 
     if not all([col_material, col_unidad, col_costo]):
-        raise ValueError(f"No se pudieron detectar columnas válidas: {df.columns}")
+        raise ValueError(
+            f"No se pudieron detectar columnas válidas. "
+            f"Detectado material={col_material}, unidad={col_unidad}, costo={col_costo}. "
+            f"Columnas={list(df.columns)}"
+        )
 
     df = df[[col_material, col_unidad, col_costo]].copy()
     df.columns = ["Materiales", "Unidad", "Costo Unitario"]
 
     df = _normalizar_catalogo_df(df)
 
-    df = df.dropna(subset=["Costo Unitario"])
-    df = df[df["Costo Unitario"] > 0]
+    debug_guardar("catalogo_costos_antes_filtrar", {
+        "filas": len(df),
+        "costos_nulos": int(df["Costo Unitario"].isna().sum()),
+        "costos_validos": int((df["Costo Unitario"].fillna(0) > 0).sum()),
+        "preview": df.head(10).to_dict(orient="records"),
+    })
 
-    df = df.drop_duplicates(subset=["Materiales", "Unidad"])
+    df_validos = df.dropna(subset=["Costo Unitario"])
+    df_validos = df_validos[df_validos["Costo Unitario"] > 0]
+
+    if df_validos.empty:
+        raise ValueError(
+            "El catálogo tiene columna de costo, pero todos los costos están vacíos, nulos o en 0. "
+            "Revisá la columna 'Costo' en data/Estructura_datos.xlsx."
+        )
+
+    df = df_validos.drop_duplicates(
+        subset=["Materiales", "Unidad"]
+    )
 
     debug_guardar("catalogo_costos_procesado", {
         "filas": len(df),
@@ -100,7 +123,6 @@ def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
     })
 
     return df
-
 
 # =========================================================
 # 🔧 CONSOLIDAR MATERIALES
