@@ -171,22 +171,21 @@ def _debe_ignorar_cable(
     existe_bt: bool
 ) -> bool:
     """
-    Define si un cable debe ignorarse según contratista.
+    Regla actualizada:
 
-    C1:
-        Cobra MT, BT, N y HP desagregado.
+    Ya NO se ignora automáticamente N ni HP solo porque exista BT.
 
-    C2:
-        Si hay BT, no cobra N ni HP por separado.
-        Si no hay BT, sí cobra N y HP si aparecen.
+    El presupuesto debe respetar las filas que vienen en df_cables:
+    - MT se cobra si viene.
+    - BT se cobra si viene.
+    - N se cobra si viene.
+    - HP se cobra si viene.
+
+    La lógica de si el neutro o HP existen debe resolverse antes,
+    al construir df_cables.
     """
 
-    if contratista_norm == "C2" and existe_bt:
-        if tipo.startswith("N") or tipo.startswith("HP"):
-            return True
-
     return False
-
 
 def _obtener_claves_cable(
     *,
@@ -354,10 +353,17 @@ def _procesar_fila_cable(
     longitud_bt_mano_obra: float
 ) -> Optional[Dict[str, Any]]:
 
-    tipo = _normalizar_tipo_cable(fila_cable.get("Tipo", ""))
-    calibre = str(fila_cable.get("Calibre", "")).strip()
+    tipo = _normalizar_tipo_cable(
+        fila_cable.get("Tipo", "")
+    )
 
-    longitud_material = _leer_longitud_cable(fila_cable)
+    calibre = str(
+        fila_cable.get("Calibre", "")
+    ).strip()
+
+    longitud_material = _leer_longitud_cable(
+        fila_cable
+    )
 
     if pd.isna(longitud_material) or longitud_material <= 0:
         return None
@@ -388,10 +394,31 @@ def _procesar_fila_cable(
         lista_mano_obra=lista_mano_obra
     )
 
+    # =====================================================
+    # MANO DE OBRA
+    # =====================================================
+    # Material se cobra por metro-conductor.
+    # Mano de obra se cobra por metro de línea.
+    #
+    # Ejemplo:
+    # BT 2F = 320 m material, pero 160 m mano de obra.
+    # N = 160 m material, pero 0 m mano de obra si ya se cobró BT.
+    # HP = 160 m material, pero 0 m mano de obra si ya se cobró BT.
+    # =====================================================
+
     longitud_mano_obra = longitud_material
 
-    if contratista_norm == "C2" and tipo.startswith("BT"):
-        longitud_mano_obra = longitud_bt_mano_obra
+    if tipo.startswith("BT"):
+        longitud_mano_obra = _calcular_longitud_linea_desde_cable(
+            fila_cable,
+            longitud_material
+        )
+
+    elif tipo.startswith("N") or tipo.startswith("HP"):
+        if existe_bt:
+            longitud_mano_obra = 0.0
+        else:
+            longitud_mano_obra = longitud_material
 
     if pd.isna(longitud_mano_obra):
         longitud_mano_obra = 0.0
@@ -412,42 +439,35 @@ def _agregar_cable_a_precios(
     contratista=None
 ):
 
-    df_cables = _obtener_df_cables(entrada)
+    df_cables = _obtener_df_cables(
+        entrada
+    )
 
     if df_cables is None:
         return df_precios
 
     if contratista is None:
-        contratista = getattr(entrada, "contratista", "C1")
+        contratista = getattr(
+            entrada,
+            "contratista",
+            "C1"
+        )
 
-    contratista_norm = _normalizar_contratista(contratista)
-    lista_mano_obra = obtener_lista_precios(contratista_norm)
-    existe_bt = _existe_bt_en_cables(df_cables)
+    contratista_norm = _normalizar_contratista(
+        contratista
+    )
 
-    # Misma lógica del contratista C2
-    total_bt = 0.0
+    lista_mano_obra = obtener_lista_precios(
+        contratista_norm
+    )
 
-    for _, c in df_cables.iterrows():
+    existe_bt = _existe_bt_en_cables(
+        df_cables
+    )
 
-        tipo = str(c.get("Tipo", "")).upper().strip()
-        longitud = _leer_longitud_cable(c)
-
-        if longitud <= 0:
-            continue
-
-        if tipo == "BT":
-            fases = str(c.get("Fases", "")).upper().strip()
-
-            factor = 1
-            if "3" in fases:
-                factor = 3
-            elif "2" in fases:
-                factor = 2
-
-            longitud_real = longitud / factor
-            total_bt += longitud_real / 2
-
-    longitud_bt_mano_obra = round(total_bt, 2)
+    # Ya no calculamos longitud_bt_mano_obra global.
+    # Cada fila BT calcula su propia longitud de línea.
+    longitud_bt_mano_obra = 0.0
 
     filas = []
 
@@ -467,13 +487,17 @@ def _agregar_cable_a_precios(
     if not filas:
         return df_precios
 
-    df_cables_precios = pd.DataFrame(filas)
-
-    return pd.concat(
-        [df_precios, df_cables_precios],
-        ignore_index=True
+    df_cables_precios = pd.DataFrame(
+        filas
     )
 
+    return pd.concat(
+        [
+            df_precios,
+            df_cables_precios
+        ],
+        ignore_index=True
+    )
 # =========================================================
 # COSTO UNITARIO DE ESTRUCTURAS
 # =========================================================
