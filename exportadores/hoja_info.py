@@ -378,14 +378,14 @@ def _build_tabla(datos, prim, sec, neu, pil, doc_width):
     data = [
         ["Nombre del Proyecto:", datos.get("nombre_proyecto", "SIN NOMBRE")],
         ["Código / Expediente:", datos.get("codigo_proyecto", "N/A")],
-        ["Nivel de Tensión (kV):", f"{formatear_tension(datos.get('tension'))} kV"],
+        ["Propietario del Proyecto:", datos.get("empresa", "N/A")],
+        ["Ingeniero Responsable:", datos.get("responsable", "N/A")],
+        ["Nivel de Tensión (KV):", f"{formatear_tension(datos.get('tension'))} KV"],
         ["Calibre Primario:", prim or "N/A"],
         ["Calibre Secundario:", sec or "N/A"],
         ["Calibre Neutro:", neu or "N/A"],
         ["Calibre Piloto:", pil or "N/A"],
         ["Fecha de Informe:", datos.get("fecha_informe", "N/A")],
-        ["Responsable:", datos.get("responsable", "N/A")],
-        ["Empresa:", datos.get("empresa", "N/A")],
     ]
 
     # 🔥 ANCHO COMPLETO (clave)
@@ -433,8 +433,8 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, doc_width=None):
     if doc_width is None:
         doc_width = 450
 
-    elems.append(Paragraph("Hoja de Información del Proyecto", styleTitulo))
-    elems.append(Spacer(1, 8))
+    elems.append(Paragraph("Ficha General del Proyecto", styleTitulo))
+    elems.append(Spacer(1, 20))
 
     datos = datos_proyecto or {}
     cables = datos.get("cables_proyecto", [])
