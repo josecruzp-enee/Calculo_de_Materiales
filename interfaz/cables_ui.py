@@ -58,11 +58,11 @@ def _df_circuitos_default() -> pd.DataFrame:
 def _normalizar_circuitos(df: pd.DataFrame | None) -> pd.DataFrame:
     cols = [
         "Circuito",
-        "Tipo",
+        "Servicio",
+        "Usa Cable",
         "Tension",
         "Config Circuito",
         "Longitud",
-        "Descripcion",
     ]
 
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
