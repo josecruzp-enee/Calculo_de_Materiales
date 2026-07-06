@@ -345,7 +345,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
 
             "errores": [str(e)],
 
-            "df_materiales_costos": None,
+            "df_costos_materiales": None,
 
             "df_costos_estructura": None,
 
