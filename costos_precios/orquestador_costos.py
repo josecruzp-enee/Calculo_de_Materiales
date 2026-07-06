@@ -117,6 +117,8 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         if df_costos is None or df_costos.empty:
             raise ValueError("df_costos vacío")
 
+        debug["df_costos"] = _preview_df(df_costos)
+
         # =====================================================
         # 3. COSTOS DE MATERIALES
         # =====================================================
@@ -127,25 +129,54 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             )
         )
 
-        # =====================================================
-        # 4. VALIDACIÓN
-        # =====================================================
         if (
-            entrada.df_estructuras is None
-            or entrada.df_materiales_por_estructura is None
-            or not isinstance(
-                entrada.df_materiales_por_estructura,
-                dict
-            )
+            df_materiales_costos is None
+            or not isinstance(df_materiales_costos, pd.DataFrame)
+            or df_materiales_costos.empty
         ):
-            raise ValueError(
-                "df_materiales_por_estructura inválido"
+            raise ValueError("df_materiales_costos inválido o vacío")
+
+        debug["df_materiales_costos"] = _preview_df(
+            df_materiales_costos
+        )
+
+        # =====================================================
+        # 4. VALIDACIÓN ESTRUCTURAS
+        # =====================================================
+        if entrada.df_estructuras is None:
+            raise ValueError("df_estructuras es None")
+
+        if not isinstance(entrada.df_estructuras, pd.DataFrame):
+            raise TypeError(
+                f"df_estructuras no es DataFrame: {type(entrada.df_estructuras)}"
+            )
+
+        if entrada.df_estructuras.empty:
+            raise ValueError("df_estructuras vacío")
+
+        if entrada.df_materiales_por_estructura is None:
+            raise ValueError("df_materiales_por_estructura es None")
+
+        if not isinstance(
+            entrada.df_materiales_por_estructura,
+            dict
+        ):
+            raise TypeError(
+                "df_materiales_por_estructura no es dict"
             )
 
         if len(entrada.df_materiales_por_estructura) == 0:
             raise ValueError(
                 "df_materiales_por_estructura vacío"
             )
+
+        debug["df_estructuras"] = _preview_df(
+            entrada.df_estructuras
+        )
+
+        debug["materiales_por_estructura_keys"] = list(
+            entrada.df_materiales_por_estructura.keys()
+        )
 
         # =====================================================
         # 5. COSTOS POR ESTRUCTURA
@@ -161,6 +192,13 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 df_precios_materiales=df_costos
             )
         )
+
+        if (
+            df_costos_estructura is None
+            or not isinstance(df_costos_estructura, pd.DataFrame)
+            or df_costos_estructura.empty
+        ):
+            raise ValueError("df_costos_estructura inválido o vacío")
 
         debug["df_costos_estructura"] = _preview_df(
             df_costos_estructura
@@ -181,21 +219,69 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                     contratista=entrada.contratista
                 )
 
+                if not isinstance(res_mano_obra, dict):
+                    raise TypeError(
+                        f"calcular_mano_obra_proyecto no devolvió dict: {type(res_mano_obra)}"
+                    )
+
                 df_mano_obra = res_mano_obra.get(
                     "df_detalle"
                 )
 
+                debug["mano_obra_ok"] = res_mano_obra.get("ok")
+                debug["mano_obra_keys"] = list(res_mano_obra.keys())
                 debug["df_mano_obra"] = _preview_df(
                     df_mano_obra
                 )
 
             except Exception as e:
 
-                debug["mano_obra_error"] = str(e)
+                debug["mano_obra_error"] = (
+                    f"{type(e).__name__}: {e}"
+                )
 
         # =====================================================
         # 7. SUMINISTRO E INSTALACIÓN
         # =====================================================
+        if df_mano_obra is None:
+            raise ValueError(
+                f"df_mano_obra es None. Error previo: {debug.get('mano_obra_error')}"
+            )
+
+        if not isinstance(df_mano_obra, pd.DataFrame):
+            raise TypeError(
+                f"df_mano_obra no es DataFrame: {type(df_mano_obra)}"
+            )
+
+        if df_mano_obra.empty:
+            raise ValueError("df_mano_obra vacío")
+
+        columnas_mano_obra = set(df_mano_obra.columns)
+
+        if "Estructura" not in columnas_mano_obra:
+            raise KeyError(
+                f"df_mano_obra no tiene columna 'Estructura'. Columnas: {list(df_mano_obra.columns)}"
+            )
+
+        if "Precio" not in columnas_mano_obra:
+            raise KeyError(
+                f"df_mano_obra no tiene columna 'Precio'. Columnas: {list(df_mano_obra.columns)}"
+            )
+
+        columnas_costos_estructura = set(
+            df_costos_estructura.columns
+        )
+
+        for col in [
+            "codigodeestructura",
+            "Cantidad",
+            "Costo Unitario",
+        ]:
+            if col not in columnas_costos_estructura:
+                raise KeyError(
+                    f"df_costos_estructura no tiene columna '{col}'. Columnas: {list(df_costos_estructura.columns)}"
+                )
+
         filas = []
 
         for _, r in df_costos_estructura.iterrows():
@@ -271,6 +357,9 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             filas
         )
 
+        if df_precios_estructura.empty:
+            raise ValueError("df_precios_estructura vacío")
+
         # =====================================================
         # CABLES
         # =====================================================
@@ -281,16 +370,29 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             )
         )
 
+        if (
+            df_precios_estructura is None
+            or not isinstance(df_precios_estructura, pd.DataFrame)
+            or df_precios_estructura.empty
+        ):
+            raise ValueError(
+                "df_precios_estructura inválido o vacío después de agregar cables"
+            )
+
         # =====================================================
         # SUBTOTAL
         # =====================================================
-        if not df_precios_estructura.empty:
+        df_precios_estructura["Subtotal"] = (
+            df_precios_estructura[
+                "Total Proyecto"
+            ]
+        )
 
-            df_precios_estructura["Subtotal"] = (
-                df_precios_estructura[
-                    "Total Proyecto"
-                ]
-            )
+        total_proyecto = float(
+            df_precios_estructura["Subtotal"].sum()
+        )
+
+        debug["total_proyecto"] = total_proyecto
 
         # =====================================================
         # DEBUG FINAL
@@ -300,7 +402,8 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
             {
                 "precios": _preview_df(
                     df_precios_estructura
-                )
+                ),
+                "total_proyecto": total_proyecto,
             }
         )
 
@@ -327,31 +430,36 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
                 df_precios_estructura
             ),
 
+            "total_materiales": total_proyecto,
+
+            "total_proyecto": total_proyecto,
+
             "debug": debug
         }
 
     except Exception as e:
+        import traceback
 
-        debug["error"] = str(e)
+        error_msg = f"{type(e).__name__}: {e}"
+        traceback_txt = traceback.format_exc()
 
-        debug_guardar(
-            "ORQUESTADOR_COSTOS_ERROR",
-            debug
-        )
+        debug["EXCEPTION"] = error_msg
+        debug["TRACEBACK"] = traceback_txt
 
         return {
-
             "ok": False,
-
-            "errores": [str(e)],
+            "error": error_msg,
+            "traceback": traceback_txt,
+            "errores": [error_msg],
 
             "df_costos_materiales": None,
-
             "df_costos_estructura": None,
-
             "df_mano_obra": None,
-
             "df_precios_estructura": None,
+            "df_resumen_costos": None,
 
-            "debug": debug
+            "total_materiales": 0.0,
+            "total_proyecto": 0.0,
+
+            "debug": debug,
         }
