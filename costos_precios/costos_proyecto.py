@@ -177,6 +177,10 @@ def _extraer_metricas_estructuras(
 # =========================================================
 # EXTRAER LONGITUDES DE CABLE
 # =========================================================
+# =========================================================
+# EXTRAER LONGITUDES DE CABLE
+# MISMA LÓGICA QUE CONTRATISTA C2
+# =========================================================
 def _extraer_longitudes(
     df_cables: Optional[pd.DataFrame],
 ) -> Tuple[float, float]:
@@ -202,6 +206,11 @@ def _extraer_longitudes(
         ],
     )
 
+    col_fases = _obtener_columna(
+        df,
+        ["Fases", "Fase", "No Fases", "N Fases"],
+    )
+
     if not col_tipo or not col_longitud:
         return 0.0, 0.0
 
@@ -217,22 +226,42 @@ def _extraer_longitudes(
         errors="coerce",
     ).fillna(0)
 
-    primario = df[
-        df[col_tipo].str.startswith("MT", na=False)
-        | df[col_tipo].str.contains("PRIMARIO", na=False)
-    ]
+    longitud_primario = 0.0
+    longitud_secundario = 0.0
 
-    secundario = df[
-        df[col_tipo].str.startswith("BT", na=False)
-        | df[col_tipo].str.contains("SECUNDARIO", na=False)
-    ]
+    for _, row in df.iterrows():
 
-    longitud_primario = float(primario[col_longitud].sum())
-    longitud_secundario = float(secundario[col_longitud].sum())
+        tipo = str(row.get(col_tipo, "")).upper().strip()
+        longitud = _to_float(row.get(col_longitud, 0))
 
-    return longitud_primario, longitud_secundario
+        if longitud <= 0:
+            continue
 
+        # MT se cobra tal como viene
+        if tipo.startswith("MT") or "PRIMARIO" in tipo:
+            longitud_primario += longitud
 
+        # BT se cobra por distancia lineal, no por cantidad de conductores
+        elif tipo.startswith("BT") or "SECUNDARIO" in tipo:
+
+            fases = ""
+            if col_fases:
+                fases = str(row.get(col_fases, "")).upper().strip()
+
+            factor = 1
+
+            if "3" in fases:
+                factor = 3
+            elif "2" in fases:
+                factor = 2
+
+            longitud_real = longitud / factor
+
+            # Misma corrección usada en contratista C2:
+            # evita cobrar el doble de la distancia lineal BT.
+            longitud_secundario += longitud_real / 2
+
+    return round(longitud_primario, 2), round(longitud_secundario, 2)
 # =========================================================
 # VALIDAR MATERIALES
 # =========================================================
