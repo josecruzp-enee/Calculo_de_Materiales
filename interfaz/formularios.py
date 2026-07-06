@@ -11,6 +11,17 @@ from datetime import date, datetime
 
 
 # =========================================================
+# CONFIG
+# =========================================================
+
+INGENIEROS_RESPONSABLES = [
+    "Ing. José Nikol Cruz (C-4565)",
+    "Ing. Romario Lara (C-4161)",
+    "Ing. Martha Benvidez (C-4191)",
+]
+
+
+# =========================================================
 # HELPERS
 # =========================================================
 
@@ -39,6 +50,13 @@ def _parse_fecha(s: str) -> date:
     return date.today()
 
 
+def _index_seguro(opciones: list[str], valor: str, default: int = 0) -> int:
+    try:
+        return opciones.index(valor)
+    except ValueError:
+        return default
+
+
 # =========================================================
 # FORMULARIO PRINCIPAL
 # =========================================================
@@ -47,8 +65,9 @@ def formulario_datos_proyecto() -> dict | None:
     """
     Formulario de datos del proyecto.
 
-    ✔ Mantiene session_state (compatibilidad actual)
-    ✔ Retorna datos cuando se presiona guardar (para futura arquitectura)
+    ✔ Mantiene session_state
+    ✔ Mantiene compatibilidad con la clave 'empresa'
+    ✔ Retorna datos cuando se presiona guardar
     """
 
     _ensure_estado()
@@ -61,9 +80,6 @@ def formulario_datos_proyecto() -> dict | None:
 
     fi_default = _parse_fecha(_get("fecha_informe", ""))
 
-    # ============================
-    # FORMULARIO
-    # ============================
     with st.form("form_datos_proyecto", clear_on_submit=False):
 
         col1, col2 = st.columns(2)
@@ -73,23 +89,22 @@ def formulario_datos_proyecto() -> dict | None:
                 "📄 Nombre del Proyecto",
                 value=_get("nombre_proyecto", ""),
             )
+
+            # OJO:
+            # Se mantiene la variable y clave interna 'empresa'
+            # para no romper PDFs, reportes ni lógica existente.
             empresa = st.text_input(
-                "🏢 Empresa / Área",
+                "👤 Propietario de Proyecto",
                 value=_get("empresa", "ENEE"),
             )
 
             opciones_tension = ["7.96/13.8", "19.9/34.5"]
             nivel_actual = _get("nivel_de_tension", "7.96/13.8")
 
-            try:
-                idx_tension = opciones_tension.index(nivel_actual)
-            except ValueError:
-                idx_tension = 0
-
             nivel_tension = st.selectbox(
-                "⚡ Nivel de Tensión (KV)",
+                "⚡ Nivel de Tensión (kV)",
                 opciones_tension,
-                index=idx_tension,
+                index=_index_seguro(opciones_tension, nivel_actual),
             )
 
         with col2:
@@ -97,10 +112,22 @@ def formulario_datos_proyecto() -> dict | None:
                 "🔢 Código / Expediente",
                 value=_get("codigo_proyecto", ""),
             )
-            responsable = st.text_input(
-                "👷‍♂️ Responsable / Diseñador",
-                value=_get("responsable", ""),
+
+            responsable_actual = _get(
+                "responsable",
+                INGENIEROS_RESPONSABLES[0],
             )
+
+            responsable = st.selectbox(
+                "👷‍♂️ Ingeniero Responsable / Diseñador",
+                INGENIEROS_RESPONSABLES,
+                index=_index_seguro(
+                    INGENIEROS_RESPONSABLES,
+                    responsable_actual,
+                    default=0,
+                ),
+            )
+
             fecha_informe = st.date_input(
                 "📅 Fecha del Informe",
                 value=fi_default,
@@ -108,15 +135,15 @@ def formulario_datos_proyecto() -> dict | None:
 
         guardar = st.form_submit_button("💾 Guardar datos", type="primary")
 
-    # ============================
-    # GUARDADO
-    # ============================
     if guardar:
 
         nuevos = {
             "nombre_proyecto": (nombre_proyecto or "").strip(),
             "codigo_proyecto": (codigo_proyecto or "").strip(),
+
+            # Se guarda como 'empresa' para compatibilidad.
             "empresa": (empresa or "").strip(),
+
             "responsable": (responsable or "").strip(),
             "nivel_de_tension": nivel_tension,
             "fecha_informe": str(fecha_informe),
@@ -124,12 +151,10 @@ def formulario_datos_proyecto() -> dict | None:
 
         datos_finales = _mezclar_sin_vacios(dp, nuevos)
 
-        # ✔ compatibilidad actual
         st.session_state["datos_proyecto"] = datos_finales
 
         st.success("✅ Datos del proyecto guardados correctamente.")
 
-        # ✔ futuro (para orquestador / core)
         return datos_finales
 
     return None
@@ -153,10 +178,10 @@ def mostrar_datos_formateados() -> None:
 
         with col1:
             st.write(f"**Nombre del Proyecto:** {dp.get('nombre_proyecto','')}")
-            st.write(f"**Empresa / Área:** {dp.get('empresa','')}")
-            st.write(f"**Nivel de Tensión (KV):** {dp.get('nivel_de_tension','')}")
+            st.write(f"**Propietario de Proyecto:** {dp.get('empresa','')}")
+            st.write(f"**Nivel de Tensión (kV):** {dp.get('nivel_de_tension','')}")
 
         with col2:
             st.write(f"**Código / Expediente:** {dp.get('codigo_proyecto','')}")
-            st.write(f"**Responsable / Diseñador:** {dp.get('responsable','')}")
+            st.write(f"**Ingeniero Responsable / Diseñador:** {dp.get('responsable','')}")
             st.write(f"**Fecha del Informe:** {dp.get('fecha_informe','')}")
