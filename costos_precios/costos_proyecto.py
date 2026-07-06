@@ -1285,14 +1285,21 @@ def calcular_costos_proyecto(
             getattr(entrada, "df_cables", None)
         )
 
-        df_materiales_costos = getattr(
+        df_costos_materiales = getattr(
             entrada,
-            "df_materiales_costos",
+            "df_costos_materiales",
             None,
         )
 
+        if df_costos_materiales is None:
+            df_costos_materiales = getattr(
+                entrada,
+                "df_materiales_costos",
+                None,
+            )
+
         _validar_materiales(
-            df_materiales_costos
+            df_costos_materiales
         )
 
         precio_base = _to_float(
@@ -1322,7 +1329,7 @@ def calcular_costos_proyecto(
             precio_total = precio_base
 
         resultado = _motor_costos(
-            df_materiales_costos=df_materiales_costos,
+            df_materiales_costos=df_costos_materiales,
             longitud_primario_m=longitud_primario,
             longitud_secundario_m=longitud_secundario,
             total_estructuras=total_estructuras,
@@ -1336,32 +1343,26 @@ def calcular_costos_proyecto(
             "entrada": {
                 "precio_base": precio_base,
                 "precio_total": precio_total,
-
                 "horas_grua": params["horas_grua"],
                 "precio_hora_grua": params["precio_hora_grua"],
                 "costo_grua": costo_grua,
-
                 "costo_flete_unitario": params["costo_flete_unitario"],
                 "viajes_flete": params["viajes_flete"],
                 "costo_flete": costo_flete,
-
                 "gastos_ingenieria": gastos_ingenieria,
-
                 "incluir_logistica": params["incluir_logistica"],
                 "incluir_logistica_en_venta": incluir_logistica_en_venta,
-
                 "porcentaje_contingencia": params["porcentaje_contingencia"],
-
                 "total_estructuras": total_estructuras,
                 "num_postes": num_postes,
                 "num_retenidas": num_retenidas,
                 "longitud_primario": longitud_primario,
                 "longitud_secundario": longitud_secundario,
-                "columnas_df_materiales_costos": list(
-                    df_materiales_costos.columns
+                "columnas_df_costos_materiales": list(
+                    df_costos_materiales.columns
                 ),
-                "filas_df_materiales_costos": len(
-                    df_materiales_costos
+                "filas_df_costos_materiales": len(
+                    df_costos_materiales
                 ),
             },
             "resultado": resultado,
@@ -1370,7 +1371,7 @@ def calcular_costos_proyecto(
         return {
             "ok": True,
             "resultado_costos_proyecto": resultado,
-            "df_materiales_costos": df_materiales_costos,
+            "df_costos_materiales": df_costos_materiales,
             "debug_costos_proyecto": debug_costos_proyecto,
         }
 
