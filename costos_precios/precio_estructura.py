@@ -8,6 +8,17 @@ import pandas as pd
 
 from costos_precios.mano_obra_por_punto import obtener_lista_precios
 
+def _numero_seguro(valor, default=0.0) -> float:
+    valor = pd.to_numeric(valor, errors="coerce")
+
+    if pd.isna(valor):
+        return default
+
+    return float(valor)
+
+
+def _int_seguro(valor, default=0) -> int:
+    return int(_numero_seguro(valor, default))
 
 # =========================================================
 # CONSTANTES
@@ -146,21 +157,8 @@ def _existe_bt_en_cables(df_cables: pd.DataFrame) -> bool:
 
 
 def _leer_longitud_cable(fila: pd.Series) -> float:
-    """
-    Lee la longitud del cable.
-    Prioridad:
-    1. Total Cable (m)
-    2. Longitud
-    """
-
     longitud = fila.get("Total Cable (m)", fila.get("Longitud", 0))
-
-    try:
-        longitud = float(longitud or 0)
-    except Exception:
-        longitud = 0.0
-
-    return longitud
+    return _numero_seguro(longitud, 0.0)
 
 
 # =========================================================
@@ -361,7 +359,7 @@ def _procesar_fila_cable(
 
     longitud_material = _leer_longitud_cable(fila_cable)
 
-    if longitud_material <= 0:
+    if pd.isna(longitud_material) or longitud_material <= 0:
         return None
 
     if _debe_ignorar_cable(
@@ -395,10 +393,13 @@ def _procesar_fila_cable(
     if contratista_norm == "C2" and tipo.startswith("BT"):
         longitud_mano_obra = longitud_bt_mano_obra
 
+    if pd.isna(longitud_mano_obra):
+        longitud_mano_obra = 0.0
+
     return _crear_fila_cable_precio(
         descripcion=claves["descripcion"],
-        longitud_material=longitud_material,
-        longitud_mano_obra=longitud_mano_obra,
+        longitud_material=float(longitud_material),
+        longitud_mano_obra=float(longitud_mano_obra),
         material_unitario=material_unitario,
         mano_obra_unitaria=mano_obra_unitaria
     )
