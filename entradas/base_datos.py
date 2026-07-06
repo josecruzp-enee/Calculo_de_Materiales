@@ -73,27 +73,60 @@ def cargar_catalogo_estructuras_desde_indice(data: dict) -> dict[str, str]:
 # ==========================================================
 # CATÁLOGO DE MATERIALES
 # ==========================================================
+# ==========================================================
+# CATÁLOGO DE MATERIALES
+# ==========================================================
 def obtener_catalogo_materiales(data: dict) -> pd.DataFrame:
+
     df = data.get("MATERIALES")
 
     if df is None:
         raise ValueError("Falta hoja MATERIALES")
 
-    for col in ["CODIGO", "MATERIALES"]:
+    columnas_requeridas = [
+        "CODIGO",
+        "MATERIALES",
+        "UNIDAD",
+        "REFERENCIA",
+        "COSTO UNITARIO",
+    ]
+
+    for col in columnas_requeridas:
         if col not in df.columns:
-            raise ValueError(f"Falta columna en MATERIALES: {col}")
+            raise ValueError(
+                f"Falta columna '{col}' en hoja MATERIALES. "
+                f"Columnas disponibles: {list(df.columns)}"
+            )
 
     out = pd.DataFrame()
 
-    out["Codigo"] = df["CODIGO"].astype(str).str.strip()
-    out["Materiales"] = df["MATERIALES"].astype(str).str.strip()
+    out["Codigo"] = (
+        df["CODIGO"]
+        .astype(str)
+        .str.strip()
+    )
 
-    out["Unidad"] = df["UNIDAD"].astype(str).str.strip() if "UNIDAD" in df.columns else ""
-    out["Referencia"] = df["REFERENCIA"].astype(str).str.strip() if "REFERENCIA" in df.columns else ""
+    out["Materiales"] = (
+        df["MATERIALES"]
+        .astype(str)
+        .str.strip()
+    )
 
-    if "COSTO" in df.columns:
-        out["Costo"] = pd.to_numeric(df["COSTO"], errors="coerce")
-    else:
-        out["Costo"] = None
+    out["Unidad"] = (
+        df["UNIDAD"]
+        .astype(str)
+        .str.strip()
+    )
+
+    out["Referencia"] = (
+        df["REFERENCIA"]
+        .astype(str)
+        .str.strip()
+    )
+
+    out["Costo"] = pd.to_numeric(
+        df["COSTO UNITARIO"],
+        errors="coerce"
+    )
 
     return out.reset_index(drop=True)
