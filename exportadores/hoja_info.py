@@ -276,6 +276,100 @@ def _desc_lineas(cables, tension):
 # =========================================================
 # TABLA
 # =========================================================
+def _buscar_calibre_por_tipo(cables, tipo):
+    tipo = str(tipo or "").upper().strip()
+
+    for c in cables or []:
+        if str(c.get("Tipo", "")).upper().strip() == tipo:
+            return _formato_tecnico_calibre(c.get("Calibre", ""))
+
+    return ""
+
+
+def _codigo_servicio(servicio, circuito=""):
+    txt = f"{servicio} {circuito}".upper()
+
+    if "LP" in txt or "PRIMARIA" in txt:
+        return "LP"
+
+    if "LS" in txt or "SECUNDARIA" in txt:
+        return "LS"
+
+    if "HP" in txt or "PILOTO" in txt:
+        return "HP"
+
+    return servicio or "Línea"
+
+
+def _conductores_configurados(config, cable_base, cables):
+    config = str(config or "").upper().replace(" ", "")
+    cable_base = str(cable_base or "").upper().strip()
+
+    calib_base = _buscar_calibre_por_tipo(cables, cable_base)
+    calib_n = _buscar_calibre_por_tipo(cables, "N")
+    calib_hp = _buscar_calibre_por_tipo(cables, "HP")
+
+    partes = []
+
+    if "3F" in config:
+        if calib_base:
+            partes.append(f"3 x {calib_base}")
+
+    elif "2F" in config:
+        if calib_base:
+            partes.append(f"2 x {calib_base}")
+
+    elif "1F" in config:
+        if calib_base:
+            partes.append(f"1 x {calib_base}")
+
+    elif config.startswith("HP"):
+        if calib_hp:
+            partes.append(f"1 x {calib_hp}")
+
+    if "HP" in config and not config.startswith("HP"):
+        if calib_hp:
+            partes.append(f"1 x {calib_hp}")
+
+    if "N" in config:
+        if calib_n:
+            partes.append(f"1 x {calib_n}")
+
+    return partes
+
+
+def _desc_lineas_circuitos(circuitos, cables):
+    lineas = []
+
+    for c in circuitos or []:
+        circuito = str(c.get("Circuito", "")).strip()
+        servicio = str(c.get("Servicio", "")).strip()
+        usa_cable = str(c.get("Usa Cable", "")).strip()
+        tension = str(c.get("Tension", "")).strip()
+        config = str(c.get("Config Circuito", "")).strip()
+
+        try:
+            longitud = int(float(c.get("Longitud", 0) or 0))
+        except Exception:
+            longitud = 0
+
+        if longitud <= 0:
+            continue
+
+        tipo_linea = _codigo_servicio(servicio, circuito)
+        conductores = _conductores_configurados(config, usa_cable, cables)
+
+        desc = (
+            f"Construcción de {longitud} m de {tipo_linea}, "
+            f"{tension}, {config}"
+        )
+
+        if conductores:
+            desc += ", " + " + ".join(conductores)
+
+        lineas.append(desc)
+
+    return lineas
 # =========================================================
 # TABLA
 # =========================================================
@@ -364,8 +458,13 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, doc_width=None):
             if res:
                 lineas.append(res)
 
-    tension = formatear_tension(datos.get("tension"))
-    lineas.extend(_desc_lineas(cables, tension))
+    circuitos = datos.get("circuitos_proyecto", [])
+
+    if circuitos:
+        lineas.extend(_desc_lineas_circuitos(circuitos, cables))
+    else:
+        tension = formatear_tension(datos.get("tension"))
+        lineas.extend(_desc_lineas(cables, tension))
 
     if not lineas:
         lineas.append("No se cuenta con información suficiente.")
