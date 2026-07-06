@@ -196,7 +196,7 @@ def calcular_lista_materiales_con_costos(
         raise ValueError("df_catalogo_costos vacío")
 
     df = _normalizar_materiales_df(df_materiales)
-    catalogo = preparar_catalogo_costos(df_catalogo_costos)
+    catalogo = df_catalogo_costos.copy()
 
     df = _consolidar_materiales(df)
 
