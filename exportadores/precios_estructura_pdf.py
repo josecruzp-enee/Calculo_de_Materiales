@@ -109,9 +109,24 @@ def generar_tabla_precios_estructura(
         # =================================================
         # TOTALES POR FILA
         # =================================================
-        total_material = material * cantidad
-        total_instalacion = mano_obra * cantidad
-        total = total_unit * cantidad
+        # =================================================
+
+        # =================================================
+        cantidad_material = float(
+            r.get("Cantidad Material", cantidad)
+        )
+
+        cantidad_mano_obra = float(
+            r.get("Cantidad Mano Obra", cantidad_material)
+        )
+
+        total_material = material * cantidad_material
+        total_instalacion = mano_obra * cantidad_mano_obra
+        total = total_material + total_instalacion
+
+        # Solo para mostrar en columna CANT
+        cantidad = cantidad_material
+        total_unit = material + mano_obra
 
         # =================================================
         # ACUMULADORES GENERALES
