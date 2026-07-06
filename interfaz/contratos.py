@@ -62,7 +62,7 @@ class SalidaCostos:
     warnings: List[str] = field(default_factory=list)
 
     # 🔥 ALINEADO AL ORQUESTADOR REAL
-    df_materiales_costos: Optional[pd.DataFrame] = None
+    df_costos_materiales: Optional[pd.DataFrame] = None
     df_costos_estructura: Optional[pd.DataFrame] = None
 
     total_materiales: float = 0.0
@@ -83,6 +83,7 @@ class ResultadoProyecto:
 
     materiales: Optional[Any] = None
     costos: Optional[Any] = None
+    df_costos_materiales: Optional[pd.DataFrame] = None
     reportes: Optional[Dict[str, Any]] = None
     df_costos_estructura: Optional[pd.DataFrame] = None
     df_precios_estructura: Optional[pd.DataFrame] = None
