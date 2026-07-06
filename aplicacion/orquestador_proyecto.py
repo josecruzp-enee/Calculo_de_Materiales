@@ -282,7 +282,17 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         
 
         res_costos = ejecutar_costos(entrada_costos)
+       
 
+        dbg(debug, "COSTOS_OK", res_costos.get("ok"))
+        dbg(debug, "COSTOS_ERRORES", res_costos.get("errores"))
+        dbg(debug, "COSTOS_DEBUG", res_costos.get("debug"))
+
+        df_precios = res_costos.get("df_precios_estructura")
+
+        dbg(debug, "PRECIOS_OK", df_precios is not None)
+
+        
         df_precios = res_costos.get("df_precios_estructura")
 
         dbg(debug, "PRECIOS_OK", df_precios is not None)
