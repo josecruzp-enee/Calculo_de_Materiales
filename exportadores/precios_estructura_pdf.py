@@ -122,15 +122,23 @@ def generar_tabla_precios_estructura(
         # TOTALES POR FILA
         # =================================================
         # =================================================
-
+        # TOTALES POR FILA
         # =================================================
-        cantidad_material = float(
-            r.get("Cantidad Material", cantidad)
-        )
 
-        cantidad_mano_obra = float(
-            r.get("Cantidad Mano Obra", cantidad_material)
-        )
+        cantidad_material = r.get("Cantidad Material", cantidad)
+
+        if pd.isna(cantidad_material):
+            cantidad_material = cantidad
+
+        cantidad_material = float(cantidad_material)
+
+
+        cantidad_mano_obra = r.get("Cantidad Mano Obra", cantidad_material)
+
+        if pd.isna(cantidad_mano_obra):
+            cantidad_mano_obra = cantidad_material
+
+        cantidad_mano_obra = float(cantidad_mano_obra)
 
         total_material = material * cantidad_material
         total_instalacion = mano_obra * cantidad_mano_obra
@@ -162,13 +170,6 @@ def generar_tabla_precios_estructura(
         # FILA NORMAL
         # =================================================
         descripcion = Paragraph(texto, style_small)
-
-        if pd.isna(cantidad):
-            raise ValueError(
-                f"Cantidad NaN\n"
-                f"Estructura: {estructura}\n"
-                f"Fila: {r.to_dict()}"
-            )
 
         data.append([
             descripcion,
