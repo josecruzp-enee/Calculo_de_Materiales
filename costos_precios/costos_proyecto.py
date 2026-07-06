@@ -188,80 +188,45 @@ def _extraer_longitudes(
     if df_cables is None or df_cables.empty:
         return 0.0, 0.0
 
-    df = df_cables.copy()
+    total_mt = 0.0
+    total_bt = 0.0
+    total_n = 0.0
 
-    col_tipo = _obtener_columna(
-        df,
-        ["Tipo", "Tipo Cable", "Categoria", "Categoría"],
-    )
+    for _, c in df_cables.iterrows():
 
-    col_longitud = _obtener_columna(
-        df,
-        [
-            "Total Cable (m)",
-            "Longitud",
-            "Longitud (m)",
-            "Metros",
-            "Cantidad",
-        ],
-    )
+        tipo = str(c.get("Tipo", "")).upper().strip()
 
-    col_fases = _obtener_columna(
-        df,
-        ["Fases", "Fase", "No Fases", "N Fases"],
-    )
-
-    if not col_tipo or not col_longitud:
-        return 0.0, 0.0
-
-    df[col_tipo] = (
-        df[col_tipo]
-        .astype(str)
-        .str.upper()
-        .str.strip()
-    )
-
-    df[col_longitud] = pd.to_numeric(
-        df[col_longitud],
-        errors="coerce",
-    ).fillna(0)
-
-    longitud_primario = 0.0
-    longitud_secundario = 0.0
-
-    for _, row in df.iterrows():
-
-        tipo = str(row.get(col_tipo, "")).upper().strip()
-        longitud = _to_float(row.get(col_longitud, 0))
+        try:
+            longitud = float(c.get("Total Cable (m)", 0))
+        except Exception:
+            continue
 
         if longitud <= 0:
             continue
 
-        # MT se cobra tal como viene
-        if tipo.startswith("MT") or "PRIMARIO" in tipo:
-            longitud_primario += longitud
+        if tipo == "MT":
+            total_mt += longitud
 
-        # BT se cobra por distancia lineal, no por cantidad de conductores
-        elif tipo.startswith("BT") or "SECUNDARIO" in tipo:
-
-            fases = ""
-            if col_fases:
-                fases = str(row.get(col_fases, "")).upper().strip()
+        elif tipo == "BT":
+            fases = str(c.get("Fases", "")).upper().strip()
 
             factor = 1
-
             if "3" in fases:
                 factor = 3
             elif "2" in fases:
                 factor = 2
 
             longitud_real = longitud / factor
+            total_bt += longitud_real / 2
 
-            # Misma corrección usada en contratista C2:
-            # evita cobrar el doble de la distancia lineal BT.
-            longitud_secundario += longitud_real / 2
+        elif tipo == "N":
+            total_n += longitud
 
-    return round(longitud_primario, 2), round(longitud_secundario, 2)
+    n_extra = max(total_n - total_bt, 0)
+
+    # Aquí no se devuelve n_extra porque tu motor actual solo recibe MT y BT.
+    # Si después querés cobrar el neutro extra separado, hay que ampliar el motor.
+    return round(total_mt, 2), round(total_bt, 2)
 # =========================================================
 # VALIDAR MATERIALES
 # =========================================================
