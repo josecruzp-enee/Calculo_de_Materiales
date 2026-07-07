@@ -325,7 +325,7 @@ def _crear_fila_cable_precio(
 
     return {
         "Estructura": descripcion,
-        "Cantidad": round(longitud_material, 2),
+        "Cantidad": round(longitud_mano_obra, 2),
 
         "Material Unitario": round(material_unitario, 2),
         "Mano Obra Unitaria": round(mano_obra_unitaria, 2),
@@ -469,7 +469,6 @@ def _agregar_cable_a_precios(
     entrada,
     contratista=None
 ):
-
     df_cables = _obtener_df_cables(
         entrada
     )
@@ -496,8 +495,6 @@ def _agregar_cable_a_precios(
         df_cables
     )
 
-    # Ya no calculamos longitud_bt_mano_obra global.
-    # Cada fila BT calcula su propia longitud de línea.
     longitud_bt_mano_obra = 0.0
 
     filas = []
@@ -522,6 +519,87 @@ def _agregar_cable_a_precios(
         filas
     )
 
+    # =====================================================
+    # CONSOLIDAR CABLES REPETIDOS
+    # Ejemplo:
+    # CONDUCTOR N 2 AWG SPARROW puede venir desde MT y BT.
+    # Debe mostrarse en un solo renglón.
+    #
+    # IMPORTANTE:
+    # - Cantidad Material se suma aparte.
+    # - Cantidad Mano Obra se suma aparte.
+    # - Total Proyecto se suma ya calculado.
+    # =====================================================
+    columnas_requeridas = [
+        "Estructura",
+        "Material Unitario",
+        "Mano Obra Unitaria",
+        "Total Unitario",
+        "Total Proyecto",
+        "Subtotal",
+        "Costo Unitario",
+        "Costo Operativo",
+        "Costo Operativo Unitario",
+        "Precio Unitario",
+        "Precio Total",
+        "Cantidad",
+        "Cantidad Material",
+        "Cantidad Mano Obra",
+    ]
+
+    for col in columnas_requeridas:
+        if col not in df_cables_precios.columns:
+            df_cables_precios[col] = 0.0
+
+    columnas_numericas = [
+        "Material Unitario",
+        "Mano Obra Unitaria",
+        "Total Unitario",
+        "Total Proyecto",
+        "Subtotal",
+        "Costo Unitario",
+        "Costo Operativo",
+        "Costo Operativo Unitario",
+        "Precio Unitario",
+        "Precio Total",
+        "Cantidad",
+        "Cantidad Material",
+        "Cantidad Mano Obra",
+    ]
+
+    for col in columnas_numericas:
+        df_cables_precios[col] = pd.to_numeric(
+            df_cables_precios[col],
+            errors="coerce"
+        ).fillna(0.0)
+
+    df_cables_precios = (
+        df_cables_precios
+        .groupby(
+            [
+                "Estructura",
+                "Material Unitario",
+                "Mano Obra Unitaria",
+            ],
+            as_index=False
+        )
+        .agg({
+            "Cantidad": "sum",
+            "Cantidad Material": "sum",
+            "Cantidad Mano Obra": "sum",
+
+            "Total Proyecto": "sum",
+            "Subtotal": "sum",
+            "Precio Total": "sum",
+
+            "Total Unitario": "first",
+            "Costo Unitario": "first",
+            "Costo Operativo": "first",
+            "Costo Operativo Unitario": "first",
+            "Precio Unitario": "first",
+        })
+    )
+
     return pd.concat(
         [
             df_precios,
@@ -529,6 +607,9 @@ def _agregar_cable_a_precios(
         ],
         ignore_index=True
     )
+
+
+
 # =========================================================
 # COSTO UNITARIO DE ESTRUCTURAS
 # =========================================================
