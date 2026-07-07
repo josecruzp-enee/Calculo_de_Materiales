@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import pandas as pd
-import re
 from ayuda.debug import debug_guardar
 
 
 # =========================================================
-# 🔧 NORMALIZADOR CENTRAL (CLAVE DEL SISTEMA)
+# 🔧 NORMALIZADOR CENTRAL
 # =========================================================
-def _norm_text(s: str) -> str:
+def _norm_text(s) -> str:
     return (
         str(s)
         .upper()
@@ -19,28 +18,49 @@ def _norm_text(s: str) -> str:
     )
 
 
-def _norm_material(s: str) -> str:
-    return (
-        _norm_text(s)
-        .replace("  ", " ")
-    )
+def _norm_material(s) -> str:
+    texto = _norm_text(s)
+
+    while "  " in texto:
+        texto = texto.replace("  ", " ")
+
+    return texto
 
 
 # =========================================================
-# 🔧 NORMALIZAR DATAFRAME (REUTILIZABLE)
+# 🔧 NORMALIZAR DATAFRAME DE MATERIALES DEL PROYECTO
 # =========================================================
 def _normalizar_materiales_df(df: pd.DataFrame) -> pd.DataFrame:
 
+    if df is None or df.empty:
+        raise ValueError("df_materiales vacío")
+
     df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+
+    columnas_requeridas = ["Materiales", "Unidad", "Cantidad"]
+    faltantes = [c for c in columnas_requeridas if c not in df.columns]
+
+    if faltantes:
+        raise ValueError(
+            f"df_materiales no tiene las columnas requeridas: {faltantes}. "
+            f"Columnas recibidas: {list(df.columns)}"
+        )
 
     df["Materiales"] = df["Materiales"].apply(_norm_material)
     df["Unidad"] = df["Unidad"].apply(_norm_text)
 
-    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0.0)
+    df["Cantidad"] = pd.to_numeric(
+        df["Cantidad"],
+        errors="coerce"
+    ).fillna(0.0)
 
     return df
 
 
+# =========================================================
+# 🔧 NORMALIZAR CATÁLOGO DE COSTOS
+# =========================================================
 def _normalizar_catalogo_df(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
@@ -76,12 +96,16 @@ def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
 
         if "MATER" in c_up:
             col_material = c
+
         elif "UNIDAD" in c_up:
             col_unidad = c
+
         elif "COSTO UNITARIO" in c_up:
             col_costo = c
+
         elif c_up == "COSTO":
             col_costo = c
+
         elif "PRECIO" in c_up:
             col_costo = c
 
@@ -109,39 +133,46 @@ def preparar_catalogo_costos(df_catalogo: pd.DataFrame) -> pd.DataFrame:
 
     if df_validos.empty:
         raise ValueError(
-            "El catálogo tiene columna de costo, pero todos los costos están vacíos, nulos o en 0. "
-            "Revisá la columna 'Costo' en data/Estructura_datos.xlsx."
+            "El catálogo tiene columna de costo, pero todos los costos están vacíos, "
+            "nulos o en 0. Revisá la columna de costos en data/Estructura_datos.xlsx."
         )
 
-    df = df_validos.drop_duplicates(
-        subset=["Materiales", "Unidad"]
+    df_validos = df_validos.drop_duplicates(
+        subset=["Materiales", "Unidad"],
+        keep="first"
     )
 
     debug_guardar("catalogo_costos_procesado", {
-        "filas": len(df),
-        "preview": df.head(10).to_dict(orient="records")
+        "filas": len(df_validos),
+        "preview": df_validos.head(10).to_dict(orient="records"),
     })
 
-    return df
+    return df_validos.reset_index(drop=True)
+
 
 # =========================================================
 # 🔧 CONSOLIDAR MATERIALES
 # =========================================================
 def _consolidar_materiales(df: pd.DataFrame) -> pd.DataFrame:
 
-    return (
+    df = (
         df
         .groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
         .sum()
     )
 
+    return df
+
 
 # =========================================================
 # 🔧 MERGE CON COSTOS
 # =========================================================
-def _merge_costos(df: pd.DataFrame, catalogo: pd.DataFrame) -> pd.DataFrame:
+def _merge_costos(
+    df_materiales: pd.DataFrame,
+    catalogo: pd.DataFrame
+) -> pd.DataFrame:
 
-    df = df.merge(
+    df = df_materiales.merge(
         catalogo,
         on=["Materiales", "Unidad"],
         how="left"
@@ -155,18 +186,21 @@ def _merge_costos(df: pd.DataFrame, catalogo: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 def _filtrar_sin_costo(df: pd.DataFrame) -> pd.DataFrame:
 
-    faltantes = df[df["Costo Unitario"].isna()]
+    faltantes = df[df["Costo Unitario"].isna()].copy()
 
     if not faltantes.empty:
         debug_guardar("WARNING_MATERIALES_SIN_COSTO", {
             "cantidad": len(faltantes),
-            "ejemplo": faltantes.head(10).to_dict(orient="records")
+            "ejemplo": faltantes.head(20).to_dict(orient="records"),
         })
 
-        df = df.dropna(subset=["Costo Unitario"])
+        df = df.dropna(subset=["Costo Unitario"]).copy()
 
     if df.empty:
-        raise ValueError("Todos los materiales quedaron sin costo")
+        raise ValueError(
+            "Todos los materiales quedaron sin costo. "
+            "Revisá nombres de materiales, unidades y catálogo de precios."
+        )
 
     return df
 
@@ -176,13 +210,25 @@ def _filtrar_sin_costo(df: pd.DataFrame) -> pd.DataFrame:
 # =========================================================
 def _calcular_costos(df: pd.DataFrame) -> pd.DataFrame:
 
+    df = df.copy()
+
+    df["Cantidad"] = pd.to_numeric(
+        df["Cantidad"],
+        errors="coerce"
+    ).fillna(0.0)
+
+    df["Costo Unitario"] = pd.to_numeric(
+        df["Costo Unitario"],
+        errors="coerce"
+    ).fillna(0.0)
+
     df["Costo Total"] = df["Cantidad"] * df["Costo Unitario"]
 
     return df
 
 
 # =========================================================
-# 🔥 FUNCIÓN PRINCIPAL (LIMPIA)
+# 🔥 FUNCIÓN PRINCIPAL
 # =========================================================
 def calcular_lista_materiales_con_costos(
     df_materiales: pd.DataFrame,
@@ -195,29 +241,50 @@ def calcular_lista_materiales_con_costos(
     if df_catalogo_costos is None or df_catalogo_costos.empty:
         raise ValueError("df_catalogo_costos vacío")
 
+    # 1. Normalizar materiales del proyecto
     df = _normalizar_materiales_df(df_materiales)
-    catalogo = df_catalogo_costos.copy()
 
+    # 2. Preparar catálogo correctamente
+    catalogo = preparar_catalogo_costos(df_catalogo_costos)
+
+    # 3. Consolidar cantidades repetidas
     df = _consolidar_materiales(df)
 
     debug_guardar("DEBUG_MATCH_KEYS", {
-        "proyecto": df["Materiales"].unique().tolist()[:10],
-        "catalogo": catalogo["Materiales"].unique().tolist()[:10]
+        "proyecto": df[["Materiales", "Unidad"]].head(20).to_dict(orient="records"),
+        "catalogo": catalogo[["Materiales", "Unidad"]].head(20).to_dict(orient="records"),
     })
 
+    # 4. Unir materiales con catálogo de costos
     df = _merge_costos(df, catalogo)
+
+    # 5. Guardar diagnóstico de merge
+    debug_guardar("DEBUG_RESULTADO_MERGE_COSTOS", {
+        "filas_total": len(df),
+        "sin_costo": int(df["Costo Unitario"].isna().sum()),
+        "con_costo": int(df["Costo Unitario"].notna().sum()),
+        "preview": df.head(20).to_dict(orient="records"),
+    })
+
+    # 6. Quitar materiales sin costo
     df = _filtrar_sin_costo(df)
+
+    # 7. Calcular costo total
     df = _calcular_costos(df)
 
-    debug_guardar("resultado_costos_materiales", {
-        "total_materiales": len(df),
-        "costo_total": float(df["Costo Total"].sum())
-    })
-
-    return df[[
+    # 8. Resultado final
+    resultado = df[[
         "Materiales",
         "Unidad",
         "Cantidad",
         "Costo Unitario",
-        "Costo Total"
+        "Costo Total",
     ]].reset_index(drop=True)
+
+    debug_guardar("resultado_costos_materiales", {
+        "total_materiales": len(resultado),
+        "costo_total": float(resultado["Costo Total"].sum()),
+        "preview": resultado.head(20).to_dict(orient="records"),
+    })
+
+    return resultado
