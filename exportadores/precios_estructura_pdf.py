@@ -197,22 +197,61 @@ def generar_tabla_precios_estructura(
     # =====================================================
     # FILA TOTAL GENERAL CORREGIDA
     # =====================================================
+    # =====================================================
+    # TOTALES
+    # =====================================================
     isv_materiales = total_material_general * 0.15
-    total_general_con_isv = (
+
+    subtotal_general = (
         total_material_general
         + total_instalacion_general
+    )
+
+    total_material_con_isv = (
+        total_material_general
         + isv_materiales
     )
 
+    total_general_con_isv = (
+        total_material_con_isv
+        + total_instalacion_general
+    )
+
+    # =====================================================
+    # SUBTOTAL
+    # =====================================================
     data.append([
-        "TOTAL",
-        f"L {total_material_general:,.2f}",      # ← SIN ISV
+        "SUBTOTAL",
+        f"L {total_material_general:,.2f}",
         f"L {total_instalacion_general:,.2f}",
         "",
         f"{int(total_cantidad_general)}",
-        f"L {total_general_con_isv:,.2f}",        # ← Aquí sí incluye ISV
+        f"L {subtotal_general:,.2f}",
     ])
 
+    # =====================================================
+    # ISV
+    # =====================================================
+    data.append([
+        "ISV MATERIALES (15%)",
+        f"L {isv_materiales:,.2f}",
+        "",
+        "",
+        "",
+        f"L {isv_materiales:,.2f}",
+        ])
+
+    # =====================================================
+    # TOTAL GENERAL
+    # =====================================================
+    data.append([
+        "TOTAL GENERAL",
+        f"L {total_material_con_isv:,.2f}",
+        f"L {total_instalacion_general:,.2f}",
+        "",
+        f"{int(total_cantidad_general)}",
+        f"L {total_general_con_isv:,.2f}",
+    ])
     # =====================================================
     # TABLA
     # =====================================================
