@@ -127,13 +127,9 @@ def _normalizar_circuitos(df: pd.DataFrame | None) -> pd.DataFrame:
         errors="coerce",
     ).fillna(0.0)
 
-    out = out[out["Longitud"] > 0].copy()
-
-    if out.empty:
-        return _df_circuitos_default()
-
+    # NO eliminar longitudes en cero.
+    # El cero es válido cuando el usuario quiere dejar el circuito sin longitud.
     return out.reset_index(drop=True)
-
 
 # =========================================================
 # GENERAR CABLES DESDE CIRCUITOS
@@ -322,11 +318,8 @@ def _normalizar_cables(
         errors="coerce",
     ).fillna(0.0)
 
-    out = out[out["Longitud"] > 0].copy()
-
-    if out.empty:
-        return _df_cables_desde_circuitos(df_circuitos)
-
+    # NO eliminar longitudes en cero.
+    # El cero es válido cuando el usuario quiere dejar el circuito sin longitud.
     return out.reset_index(drop=True)
 
 
