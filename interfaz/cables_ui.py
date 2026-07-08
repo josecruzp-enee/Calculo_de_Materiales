@@ -134,7 +134,6 @@ def _normalizar_circuitos(df: pd.DataFrame | None) -> pd.DataFrame:
 # =========================================================
 # GENERAR CABLES DESDE CIRCUITOS
 # =========================================================
-
 def _crear_fila_cable(
     *,
     tipo: str,
@@ -163,13 +162,19 @@ def _cables_desde_circuito(row: pd.Series) -> list[dict]:
 
     # =====================================================
     # LÍNEA PRIMARIA
+    # El neutro se genera aparte.
     # =====================================================
     if tipo_base == "MT":
+        config_mt = config.replace("+N", "").replace("N+", "").replace("N", "")
+
+        if not config_mt:
+            config_mt = "1F"
+
         filas.append(
             _crear_fila_cable(
                 tipo="MT",
                 calibre=CALIBRE_MT_DEFAULT,
-                config=config,
+                config=config_mt,
                 longitud=longitud,
             )
         )
@@ -187,14 +192,18 @@ def _cables_desde_circuito(row: pd.Series) -> list[dict]:
         return filas
 
     # =====================================================
-    # LÍNEA SECUNDARIA
+    # LÍNEA SECUNDARIA BT
+    # IMPORTANTE:
+    # BT se calcula como fases solamente.
+    # En 120/240 V siempre son 2F.
+    # El neutro y HP se generan aparte.
     # =====================================================
     if tipo_base == "BT":
         filas.append(
             _crear_fila_cable(
                 tipo="BT",
                 calibre=CALIBRE_BT_DEFAULT,
-                config=config,
+                config="2F",
                 longitud=longitud,
             )
         )
@@ -263,7 +272,6 @@ def _cables_desde_circuito(row: pd.Series) -> list[dict]:
 
     return []
 
-
 def _df_cables_desde_circuitos(
     df_circuitos: pd.DataFrame | None,
 ) -> pd.DataFrame:
@@ -288,12 +296,12 @@ def _df_cables_desde_circuitos(
 
     return pd.DataFrame(filas)
 
-
 def _normalizar_cables(
     df: pd.DataFrame | None,
     df_circuitos: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     cols_min = [
+        "Incluir",
         "Tipo",
         "Calibre",
         "Config",
@@ -307,10 +315,16 @@ def _normalizar_cables(
 
     for c in cols_min:
         if c not in out.columns:
-            out[c] = 0.0 if c == "Longitud" else ""
+            if c == "Longitud":
+                out[c] = 0.0
+            elif c == "Incluir":
+                out[c] = True
+            else:
+                out[c] = ""
 
     out = out[cols_min].copy()
 
+    out["Incluir"] = out["Incluir"].fillna(True).astype(bool)
     out["Tipo"] = out["Tipo"].astype(str).str.strip().str.upper()
     out["Calibre"] = out["Calibre"].astype(str).str.strip()
     out["Config"] = out["Config"].astype(str).str.strip().str.upper()
@@ -319,10 +333,7 @@ def _normalizar_cables(
         errors="coerce",
     ).fillna(0.0)
 
-    # NO eliminar longitudes en cero.
-    # El cero es válido cuando el usuario quiere dejar el circuito sin longitud.
     return out.reset_index(drop=True)
-
 
 # =========================================================
 # UI PRINCIPAL
