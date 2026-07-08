@@ -257,8 +257,20 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         )
 
         res_mat = ejecutar_materiales(entrada_mat)
-        df_materiales = res_mat.df_materiales
-        df_estructuras_pp = res_mat.df_estructuras_por_punto.copy()
+
+        df_materiales = (
+            res_mat.df_materiales.copy()
+            if getattr(res_mat, "df_materiales", None) is not None
+            else pd.DataFrame()
+        )
+
+        df_estructuras_pp_raw = getattr(res_mat, "df_estructuras_por_punto", None)
+
+        df_estructuras_pp = (
+            df_estructuras_pp_raw.copy()
+            if df_estructuras_pp_raw is not None
+            else pd.DataFrame()
+        )
        
 
         debug["res_mat_auditoria"] = {
@@ -345,7 +357,13 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         # =====================================================
         # 🔥 FIX MATERIALES POR PUNTO (AQUÍ VA)
         # =====================================================
-        df_mat_pp = res_mat.df_materiales_por_punto.copy()
+        df_mat_pp_raw = getattr(res_mat, "df_materiales_por_punto", None)
+
+        df_mat_pp = (
+            df_mat_pp_raw.copy()
+            if df_mat_pp_raw is not None
+            else pd.DataFrame()
+        )
 
         if "Punto" not in df_mat_pp.columns:
             df_mat_pp["Punto"] = "GLOBAL"
