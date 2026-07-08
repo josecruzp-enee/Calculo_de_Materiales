@@ -46,7 +46,32 @@ def limpiar_codigo(codigo: str) -> str:
 
     return codigo.strip("-")
 
+def extraer_multiplicador_estructura(codigo: str) -> tuple[int, str]:
+    """
+    Detecta estructuras con multiplicador al inicio.
 
+    Ejemplos:
+    3R-2      -> 3, R-2
+    3R-2 (P)  -> 3, R-2
+    2A-I-1    -> 2, A-I-1
+    R-2       -> 1, R-2
+    """
+
+    if not codigo:
+        return 1, ""
+
+    texto = str(codigo).upper().strip()
+
+    m = re.match(r"^(\d+)\s*([A-Z].*)$", texto)
+
+    if not m:
+        return 1, texto
+
+    cantidad = int(m.group(1))
+    estructura = m.group(2).strip()
+
+    return cantidad, estructura
+    
 # =========================================================
 # PATRÓN
 # =========================================================
