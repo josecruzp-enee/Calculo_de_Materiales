@@ -48,13 +48,42 @@ def _texto_upper(valor) -> str:
 
 def _numero(valor, default: float = 0.0) -> float:
     try:
-        return float(pd.to_numeric(valor, errors="coerce"))
+        valor = pd.to_numeric(valor, errors="coerce")
+        if pd.isna(valor):
+            return default
+        return float(valor)
     except Exception:
         return default
 
 
+def _bool_seguro(valor, default: bool = True) -> bool:
+    if isinstance(valor, bool):
+        return valor
+
+    if pd.isna(valor):
+        return default
+
+    txt = str(valor).strip().upper()
+
+    if txt in ["TRUE", "1", "SI", "SÍ", "YES", "Y", "X"]:
+        return True
+
+    if txt in ["FALSE", "0", "NO", "N", ""]:
+        return False
+
+    return default
+
+
 def _normalizar_config(config: str) -> str:
     return _texto_upper(config).replace(" ", "")
+
+
+def _clave_cable(row) -> tuple:
+    return (
+        str(row.get("Tipo", "")).strip().upper(),
+        str(row.get("Calibre", "")).strip().upper(),
+        str(row.get("Config", "")).strip().upper(),
+    )
 
 
 # =========================================================
@@ -127,13 +156,13 @@ def _normalizar_circuitos(df: pd.DataFrame | None) -> pd.DataFrame:
         errors="coerce",
     ).fillna(0.0)
 
-    # NO eliminar longitudes en cero.
-    # El cero es válido cuando el usuario quiere dejar el circuito sin longitud.
     return out.reset_index(drop=True)
+
 
 # =========================================================
 # GENERAR CABLES DESDE CIRCUITOS
 # =========================================================
+
 def _crear_fila_cable(
     *,
     tipo: str,
@@ -150,6 +179,7 @@ def _crear_fila_cable(
         "Longitud": round(float(longitud), 2),
     }
 
+
 def _cables_desde_circuito(row: pd.Series) -> list[dict]:
     tipo_base = _texto_upper(row.get("Usa Cable", ""))
     config = _normalizar_config(row.get("Config Circuito", ""))
@@ -160,10 +190,6 @@ def _cables_desde_circuito(row: pd.Series) -> list[dict]:
 
     filas = []
 
-    # =====================================================
-    # LÍNEA PRIMARIA
-    # El neutro se genera aparte.
-    # =====================================================
     if tipo_base == "MT":
         config_mt = config.replace("+N", "").replace("N+", "").replace("N", "")
 
@@ -191,13 +217,6 @@ def _cables_desde_circuito(row: pd.Series) -> list[dict]:
 
         return filas
 
-    # =====================================================
-    # LÍNEA SECUNDARIA BT
-    # IMPORTANTE:
-    # BT se calcula como fases solamente.
-    # En 120/240 V siempre son 2F.
-    # El neutro y HP se generan aparte.
-    # =====================================================
     if tipo_base == "BT":
         filas.append(
             _crear_fila_cable(
@@ -230,9 +249,6 @@ def _cables_desde_circuito(row: pd.Series) -> list[dict]:
 
         return filas
 
-    # =====================================================
-    # HILO PILOTO
-    # =====================================================
     if tipo_base == "HP":
         filas.append(
             _crear_fila_cable(
@@ -255,9 +271,6 @@ def _cables_desde_circuito(row: pd.Series) -> list[dict]:
 
         return filas
 
-    # =====================================================
-    # NEUTRO INDEPENDIENTE
-    # =====================================================
     if tipo_base == "N":
         filas.append(
             _crear_fila_cable(
@@ -271,6 +284,7 @@ def _cables_desde_circuito(row: pd.Series) -> list[dict]:
         return filas
 
     return []
+
 
 def _df_cables_desde_circuitos(
     df_circuitos: pd.DataFrame | None,
@@ -287,6 +301,7 @@ def _df_cables_desde_circuitos(
     if not filas:
         return pd.DataFrame(
             columns=[
+                "Incluir",
                 "Tipo",
                 "Calibre",
                 "Config",
@@ -295,6 +310,7 @@ def _df_cables_desde_circuitos(
         )
 
     return pd.DataFrame(filas)
+
 
 def _normalizar_cables(
     df: pd.DataFrame | None,
@@ -324,7 +340,7 @@ def _normalizar_cables(
 
     out = out[cols_min].copy()
 
-    out["Incluir"] = out["Incluir"].fillna(True).astype(bool)
+    out["Incluir"] = out["Incluir"].apply(lambda x: _bool_seguro(x, True))
     out["Tipo"] = out["Tipo"].astype(str).str.strip().str.upper()
     out["Calibre"] = out["Calibre"].astype(str).str.strip()
     out["Config"] = out["Config"].astype(str).str.strip().str.upper()
@@ -334,6 +350,52 @@ def _normalizar_cables(
     ).fillna(0.0)
 
     return out.reset_index(drop=True)
+
+
+def _aplicar_incluir_del_editor(
+    df_generado: pd.DataFrame,
+    df_editor: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Cuando se regeneran cables desde circuitos, se conservan los checkbox
+    Incluir/No incluir que el usuario marcó en la primera tabla.
+    """
+    if df_generado is None or not isinstance(df_generado, pd.DataFrame) or df_generado.empty:
+        return _normalizar_cables(df_generado)
+
+    df_out = _normalizar_cables(df_generado)
+    df_ref = _normalizar_cables(df_editor)
+
+    if df_ref.empty or "Incluir" not in df_ref.columns:
+        return df_out
+
+    mapa_incluir = {}
+
+    for _, r in df_ref.iterrows():
+        mapa_incluir[_clave_cable(r)] = _bool_seguro(r.get("Incluir", True), True)
+
+    for i, r in df_out.iterrows():
+        clave = _clave_cable(r)
+        if clave in mapa_incluir:
+            df_out.at[i, "Incluir"] = mapa_incluir[clave]
+
+    return df_out
+
+
+def _filtrar_cables_incluidos(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Esta función define la regla final:
+    lo que esté en Incluir = False NO se manda al cálculo.
+    """
+    df_ok = _normalizar_cables(df)
+
+    if df_ok.empty:
+        return df_ok
+
+    df_ok["Incluir"] = df_ok["Incluir"].apply(lambda x: _bool_seguro(x, True))
+
+    return df_ok[df_ok["Incluir"] == True].copy().reset_index(drop=True)
+
 
 # =========================================================
 # UI PRINCIPAL
@@ -376,6 +438,7 @@ def seccion_cables() -> dict:
             SelectboxColumn,
             NumberColumn,
             TextColumn,
+            CheckboxColumn,
         )
 
         configs_circuitos = [
@@ -389,6 +452,11 @@ def seccion_cables() -> dict:
         ]
 
         colcfg_cables = {
+            "Incluir": CheckboxColumn(
+                "Incluir",
+                help="Si está desmarcado, este cable NO entra al cálculo ni al PDF.",
+                default=True,
+            ),
             "Tipo": SelectboxColumn(
                 "Tipo",
                 options=get_tipos(),
@@ -469,7 +537,7 @@ def seccion_cables() -> dict:
             value=True,
             help=(
                 "Si cambias longitudes o configuraciones en Circuitos del proyecto, "
-                "la primera tabla se recalcula al guardar."
+                "la primera tabla se recalcula al guardar, pero respeta la columna Incluir."
             ),
         )
 
@@ -516,6 +584,8 @@ def seccion_cables() -> dict:
             df_circuitos_default
         )
 
+        df_cables_default = _normalizar_cables(df_cables_default)
+
         st.session_state["cables_buffer_df"] = df_cables_default.copy()
         st.session_state["cables_proyecto_df"] = pd.DataFrame()
         st.session_state["cables_proyecto"] = []
@@ -544,14 +614,27 @@ def seccion_cables() -> dict:
         )
 
         if regenerar_desde_circuitos:
-            df_cables_para_calcular = _df_cables_desde_circuitos(
+            df_generado = _df_cables_desde_circuitos(
                 df_circuitos_ok
             )
+
+            df_cables_para_mostrar = _aplicar_incluir_del_editor(
+                df_generado,
+                df_edit,
+            )
         else:
-            df_cables_para_calcular = _normalizar_cables(
+            df_cables_para_mostrar = _normalizar_cables(
                 df_edit,
                 df_circuitos_ok,
             )
+
+        # =================================================
+        # REGLA FINAL:
+        # Incluir = False NO entra al cálculo.
+        # =================================================
+        df_cables_para_calcular = _filtrar_cables_incluidos(
+            df_cables_para_mostrar
+        )
 
         df_ok = _validar_y_calcular(
             df_cables_para_calcular
@@ -559,6 +642,21 @@ def seccion_cables() -> dict:
 
         if df_ok is None or df_ok.empty:
             st.warning("⚠️ No hay datos válidos.")
+
+            st.session_state["cables_buffer_df"] = df_cables_para_mostrar.copy()
+            st.session_state["cables_proyecto_df"] = pd.DataFrame()
+            st.session_state["cables_proyecto"] = []
+
+            st.session_state["circuitos_proyecto_df"] = df_circuitos_ok.copy()
+            st.session_state["circuitos_proyecto"] = df_circuitos_ok.to_dict(
+                orient="records"
+            )
+
+            dp = st.session_state.get("datos_proyecto", {}) or {}
+            dp["cables_proyecto"] = []
+            dp["circuitos_proyecto"] = st.session_state["circuitos_proyecto"]
+            st.session_state["datos_proyecto"] = dp
+
             return {
                 "ok": False,
                 "cables": [],
@@ -569,7 +667,10 @@ def seccion_cables() -> dict:
         registros = df_ok.to_dict(orient="records")
         registros_circuitos = df_circuitos_ok.to_dict(orient="records")
 
-        st.session_state["cables_buffer_df"] = df_cables_para_calcular.copy()
+        # Se guarda la tabla completa para que el usuario vea lo desmarcado.
+        st.session_state["cables_buffer_df"] = df_cables_para_mostrar.copy()
+
+        # Se guarda solo lo calculado para salida estándar y reportes.
         st.session_state["cables_proyecto_df"] = df_ok.copy()
         st.session_state["cables_proyecto"] = registros
 
