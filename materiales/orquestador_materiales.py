@@ -191,16 +191,27 @@ def ejecutar_materiales(
         }
 
     except Exception as e:
-
-        warnings.append(f"Error en cálculo de estructuras: {e}")
+        import traceback
 
         debug["calculo_estructuras"] = {
-            "error": str(e)
+            "ok": False,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "df_norm_shape": df_norm.shape if isinstance(df_norm, pd.DataFrame) else None,
+            "df_norm_columns": list(df_norm.columns) if isinstance(df_norm, pd.DataFrame) else None,
+            "df_norm_preview": (
+                df_norm.head(30).to_dict("records")
+                if isinstance(df_norm, pd.DataFrame)
+                else None
+            ),
         }
 
-        df_estructuras = None
-        df_estructuras_por_punto = None
+        debug_guardar("ERROR_CALCULO_ESTRUCTURAS", debug["calculo_estructuras"])
 
+        raise RuntimeError(
+            f"Falló calcular_estructuras_proyecto(). "
+            f"Error real: {e}"
+        ) from e
     # =====================================================
     # 3. EXTRAER RESULTADOS
     # =====================================================
