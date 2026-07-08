@@ -139,10 +139,7 @@ def _convertir(df: pd.DataFrame):
         # 3R-2 (P)
         # 2A-I-1 (P)
         # =====================================================
-        tokens = re.findall(
-            r'\d*[A-Z][A-Z0-9\-\.]*(?:\s*\([EPDR]\))?',
-            texto_upper
-        )
+        tokens = re.findall(r'\S+(?:\s*\([EPDR]\))?', texto_upper)
 
         for token in tokens:
 
