@@ -141,14 +141,15 @@ def _crear_fila_cable(
     calibre: str,
     config: str,
     longitud: float,
+    incluir: bool = True,
 ) -> dict:
     return {
+        "Incluir": incluir,
         "Tipo": tipo,
         "Calibre": calibre,
         "Config": config,
         "Longitud": round(float(longitud), 2),
     }
-
 
 def _cables_desde_circuito(row: pd.Series) -> list[dict]:
     tipo_base = _texto_upper(row.get("Usa Cable", ""))
