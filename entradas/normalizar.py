@@ -209,6 +209,12 @@ def normalizar_estructuras(df: pd.DataFrame):
         if df_norm.empty:
             return df_norm, ["No se detectaron estructuras"], []
 
+        st.write("### DEBUG - df_norm")
+        st.write(df_norm)
+
+        st.write("Shape:", df_norm.shape)
+        st.write("Columnas:", list(df_norm.columns))
+
         return df_norm, [], []
 
     except Exception as e:
