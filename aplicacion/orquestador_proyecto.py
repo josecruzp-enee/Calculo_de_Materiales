@@ -259,10 +259,33 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         res_mat = ejecutar_materiales(entrada_mat)
         df_materiales = res_mat.df_materiales
         df_estructuras_pp = res_mat.df_estructuras_por_punto.copy()
+       
+
+        debug["res_mat_auditoria"] = {
+            "tipo_res_mat": str(type(res_mat)),
+            "ok": getattr(res_mat, "ok", None),
+            "errores": getattr(res_mat, "errores", None),
+            "warnings": getattr(res_mat, "warnings", None),
+
+            "tipo_df_materiales": str(type(getattr(res_mat, "df_materiales", None))),
+            "shape_df_materiales": (
+                res_mat.df_materiales.shape
+                if getattr(res_mat, "df_materiales", None) is not None
+                else None
+            ),
+
+            "tipo_df_estructuras_por_punto": str(type(df_estructuras_pp_raw)),
+            "shape_df_estructuras_por_punto": (
+                df_estructuras_pp_raw.shape
+                if df_estructuras_pp_raw is not None
+                else None
+            ),
+        }
+
         df_estructuras_pp = aplicar_descripciones(df_estructuras_pp, mapa, debug)
 
         dbg(debug, "MATERIALES_ROWS", len(df_materiales))
-
+        
         # =====================================================
         # 5. COSTOS
         # =====================================================
