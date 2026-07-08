@@ -460,11 +460,10 @@ def hoja_info_proyecto(datos_proyecto, df_estructuras=None, doc_width=None):
 
     circuitos = datos.get("circuitos_proyecto", [])
 
-    if circuitos:
-        lineas.extend(_desc_lineas_circuitos(circuitos, cables))
-    else:
-        tension = formatear_tension(datos.get("tension"))
-        lineas.extend(_desc_lineas(cables, tension))
+    lineas_circuitos = _desc_lineas_circuitos(circuitos, cables)
+
+    if lineas_circuitos:
+        lineas.extend(lineas_circuitos)
 
     if not lineas:
         lineas.append("No se cuenta con información suficiente.")
