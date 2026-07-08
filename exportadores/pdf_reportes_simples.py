@@ -98,7 +98,14 @@ def generar_pdf_materiales(df_mat, nombre_proy, datos_proyecto=None):
         doc.build(elems)
         return buffer.getvalue()
 
-    df_agrupado = df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+    df_agrupado = (
+        df_mat.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+        .sum()
+    )
+
+    # 🔥 Eliminar materiales con cantidad cero
+    df_agrupado["Cantidad"] = pd.to_numeric(df_agrupado["Cantidad"], errors="coerce").fillna(0)
+    df_agrupado = df_agrupado[df_agrupado["Cantidad"] > 0]
 
     data = [["Material", "Unidad", "Cantidad"]]
 
@@ -331,7 +338,14 @@ def generar_pdf_materiales_por_punto(df, nombre_proy, datos_proyecto=None):
 
         elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
 
-        df_agr = df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"].sum()
+        df_agr = (
+            df_p.groupby(["Materiales", "Unidad"], as_index=False)["Cantidad"]
+            .sum()
+        )
+
+        # 🔥 Eliminar materiales con cantidad cero
+        df_agr["Cantidad"] = pd.to_numeric(df_agr["Cantidad"], errors="coerce").fillna(0)
+        df_agr = df_agr[df_agr["Cantidad"] > 0]
 
         data = [["Material", "Unidad", "Cantidad"]]
 
