@@ -134,24 +134,45 @@ def _convertir(df: pd.DataFrame):
 
         # =====================================================
         # TOKENIZAR
+        # Soporta:
+        # R-2 (P)
+        # 3R-2 (P)
+        # 2A-I-1 (P)
         # =====================================================
-        tokens = re.findall(r'\S+(?:\s*\([EPDR]\))?', texto_upper)
+        tokens = re.findall(
+            r'\d*[A-Z][A-Z0-9\-\.]*(?:\s*\([EPDR]\))?',
+            texto_upper
+        )
 
         for token in tokens:
 
             m_tipo = re.search(r'\((P|D|E|R)\)', token)
 
             # =====================================================
-            # 🔥 SOPORTE DXF + MANUAL (CORRECTO)
+            # 🔥 SOPORTE DXF + MANUAL
             # =====================================================
             if m_tipo:
                 # DXF: solo proyectado
                 if m_tipo.group(1) != "P":
                     continue
+
                 est_raw = re.sub(r'\s*\([EPDR]\)', '', token)
             else:
                 # Manual: aceptar directo
                 est_raw = token
+
+            # =====================================================
+            # 🔥 MULTIPLICADOR
+            # 3R-2 -> cantidad 3, estructura R-2
+            # R-2  -> cantidad 1, estructura R-2
+            # =====================================================
+            cantidad = 1
+
+            m_mult = re.match(r"^(\d+)([A-Z].*)$", est_raw.strip())
+
+            if m_mult:
+                cantidad = int(m_mult.group(1))
+                est_raw = m_mult.group(2).strip()
 
             est = limpiar_codigo(est_raw)
 
@@ -164,7 +185,7 @@ def _convertir(df: pd.DataFrame):
             registros.append({
                 "Punto": punto_actual,
                 "Estructura": est,
-                "Cantidad": 1
+                "Cantidad": cantidad
             })
 
     df_out = pd.DataFrame(registros)
