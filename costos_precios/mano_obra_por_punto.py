@@ -192,7 +192,12 @@ def _precio_estructura(estructura: str, lista_precios=None) -> float:
 # ==========================================================
 # CABLE CONSOLIDADO
 # ==========================================================
-def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | None, lista_precios=None, contratista="C1"):
+def _agregar_cable_resumen(
+    df_detalle: pd.DataFrame,
+    df_cables: pd.DataFrame | None,
+    lista_precios=None,
+    contratista="C1"
+):
 
     if df_cables is None or df_cables.empty:
         return df_detalle
@@ -200,7 +205,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
     filas = []
 
     # ======================================================
-    # 🟢 C1 → DETALLADO (NO SE TOCA)
+    # C1 → DETALLADO (NO SE MODIFICA)
     # ======================================================
     if contratista == "C1":
 
@@ -211,7 +216,7 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
 
             try:
                 longitud = float(c.get("Total Cable (m)", 0))
-            except:
+            except (TypeError, ValueError):
                 continue
 
             if longitud <= 0:
@@ -231,17 +236,24 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
             if tipo == "MT":
                 desc = desc.replace("MT", "").strip()
                 nombre = f"CONDUCTOR MT {desc}"
+
             elif tipo == "BT":
                 desc = desc.replace("BT", "").strip()
                 nombre = f"CONDUCTOR BT {desc}"
+
             elif tipo == "HP":
                 nombre = f"HILO PILOTO {desc}"
+
             elif tipo == "N":
                 nombre = f"NEUTRO {desc}"
+
             else:
                 continue
 
-            precio = _precio_estructura(nombre, lista_precios)
+            precio = _precio_estructura(
+                nombre,
+                lista_precios
+            )
 
             filas.append({
                 "Punto": None,
@@ -252,94 +264,198 @@ def _agregar_cable_resumen(df_detalle: pd.DataFrame, df_cables: pd.DataFrame | N
             })
 
     # ======================================================
-    # 🔵 C2 → CORREGIDO
+    # C2 → MISMA LÓGICA DE PRECIO_ESTRUCTURA
     # ======================================================
     elif contratista == "C2":
 
-        total_bt = 0
-        total_mt = 0
-        total_n = 0
-
         for _, c in df_cables.iterrows():
 
-            tipo = str(c.get("Tipo", "")).upper()
+            tipo = str(
+                c.get("Tipo", "")
+            ).strip().upper()
 
-            try:
-                longitud = float(c.get("Total Cable (m)", 0))
-            except:
+            # ----------------------------------------------
+            # Longitud de material registrada en df_cables
+            # ----------------------------------------------
+            longitud_material = pd.to_numeric(
+                c.get("Total Cable (m)", 0),
+                errors="coerce"
+            )
+
+            if pd.isna(longitud_material) or longitud_material <= 0:
+                longitud_material = pd.to_numeric(
+                    c.get("Longitud", 0),
+                    errors="coerce"
+                )
+
+            if pd.isna(longitud_material) or longitud_material <= 0:
                 continue
 
-            if longitud <= 0:
+            longitud_material = float(longitud_material)
+
+            # ----------------------------------------------
+            # Limpiar calibre para la descripción
+            # ----------------------------------------------
+            calibre = str(
+                c.get(
+                    "Calibre",
+                    c.get("Descripcion", "")
+                )
+            ).upper().strip()
+
+            calibre = calibre.replace(
+                "CABLE DE ALUMINIO",
+                ""
+            )
+
+            calibre = calibre.replace(
+                "FORRADO",
+                ""
+            )
+
+            calibre = calibre.replace(
+                "ACSR",
+                ""
+            )
+
+            calibre = calibre.replace(
+                "#",
+                ""
+            )
+
+            while "  " in calibre:
+                calibre = calibre.replace("  ", " ")
+
+            calibre = calibre.strip()
+
+            # Por defecto, la cantidad de mano de obra
+            # corresponde a la cantidad registrada.
+            cantidad = longitud_material
+
+            # ----------------------------------------------
+            # MT
+            # ----------------------------------------------
+            if tipo.startswith("MT"):
+
+                calibre_mt = calibre.replace(
+                    "WP",
+                    ""
+                ).strip()
+
+                nombre = (
+                    f"CONDUCTOR MT {calibre_mt}"
+                )
+
+                precio = lista_precios.get(
+                    "CONDUCTOR MT GLOBAL",
+                    lista_precios.get(
+                        "CONDUCTOR MT 1/0 AWG RAVEN",
+                        0
+                    )
+                )
+
+            # ----------------------------------------------
+            # BT
+            # ----------------------------------------------
+            elif tipo.startswith("BT"):
+
+                nombre = (
+                    f"CONDUCTOR BT {calibre}"
+                )
+
+                # BT se cobra por longitud lineal.
+                longitud_lineal = pd.to_numeric(
+                    c.get("Longitud", 0),
+                    errors="coerce"
+                )
+
+                # Si no existe Longitud, se obtiene mediante
+                # metros-conductor / número de conductores.
+                if pd.isna(longitud_lineal) or longitud_lineal <= 0:
+
+                    conductores = pd.to_numeric(
+                        c.get("Conductores", 1),
+                        errors="coerce"
+                    )
+
+                    if pd.isna(conductores) or conductores <= 0:
+                        conductores = 1
+
+                    longitud_lineal = (
+                        longitud_material
+                        / float(conductores)
+                    )
+
+                cantidad = float(longitud_lineal)
+
+                precio = lista_precios.get(
+                    "CONDUCTOR BT GLOBAL",
+                    lista_precios.get(
+                        "CONDUCTOR BT WP 3/0 AWG FIG",
+                        0
+                    )
+                )
+
+            # ----------------------------------------------
+            # NEUTRO
+            # ----------------------------------------------
+            elif tipo.startswith("N"):
+
+                calibre_n = calibre.replace(
+                    "WP",
+                    ""
+                ).strip()
+
+                nombre = (
+                    f"CONDUCTOR N {calibre_n}"
+                )
+
+                precio = lista_precios.get(
+                    "CONDUCTOR N 2 AWG SPARROW",
+                    0
+                )
+
+            # ----------------------------------------------
+            # HILO PILOTO
+            # ----------------------------------------------
+            elif tipo.startswith("HP"):
+
+                nombre = (
+                    f"HILO PILOTO HP {calibre}"
+                )
+
+                precio = lista_precios.get(
+                    "HILO PILOTO HP WP 2 AWG PEACH",
+                    0
+                )
+
+            else:
                 continue
 
-            if tipo == "BT":
-
-                fases = str(c.get("Fases", "")).upper()
-
-                factor = 1
-                if "3" in fases:
-                    factor = 3
-                elif "2" in fases:
-                    factor = 2
-
-                longitud_real = longitud / factor
-                total_bt += longitud_real / 2
-
-            elif tipo == "MT":
-                total_mt += longitud
-
-            elif tipo == "N":
-                total_n += longitud
-
-        # 🔥 NEUTRO SOLO
-        n_bt = max(total_n - total_bt, 0)
-
-        # =========================
-        # 🔴 MT
-        # =========================
-        if total_mt > 0:
-            nombre = "CONDUCTOR MT 1/0 AWG RAVEN"
-            precio = lista_precios.get(nombre, 0)
-
             filas.append({
                 "Punto": None,
                 "Estructura": nombre,
-                "Cantidad": round(total_mt, 2),
-                "Precio": precio,
-                "Subtotal": round(total_mt * precio, 2),
+                "Cantidad": round(cantidad, 2),
+                "Precio": round(float(precio), 2),
+                "Subtotal": round(
+                    cantidad * float(precio),
+                    2
+                ),
             })
 
-        # =========================
-        # 🔵 BT
-        # =========================
-        if total_bt > 0:
-            nombre = "CONDUCTOR BT WP 3/0 AWG FIG"
-            precio = lista_precios.get(nombre, 0)
+    if not filas:
+        return df_detalle
 
-            filas.append({
-                "Punto": None,
-                "Estructura": nombre,
-                "Cantidad": round(total_bt, 2),
-                "Precio": precio,
-                "Subtotal": round(total_bt * precio, 2),
-            })
+    return pd.concat(
+        [
+            df_detalle,
+            pd.DataFrame(filas)
+        ],
+        ignore_index=True
+    )
 
-        # =========================
-        # ⚪ NEUTRO SOLO (N-BT)
-        # =========================
-        if n_bt > 0:
-            nombre = "CONDUCTOR N 2 AWG SPARROW"
-            precio = lista_precios.get(nombre, 0)
 
-            filas.append({
-                "Punto": None,
-                "Estructura": nombre,
-                "Cantidad": round(n_bt, 2),
-                "Precio": precio,
-                "Subtotal": round(n_bt * precio, 2),
-            })
 
-    return pd.concat([df_detalle, pd.DataFrame(filas)], ignore_index=True)
 # ==========================================================
 # DETALLE
 # ==========================================================
