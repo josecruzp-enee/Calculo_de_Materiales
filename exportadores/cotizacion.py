@@ -40,7 +40,7 @@ def _fmt_lps(valor) -> str:
         return "L 0.00"
 
 
-ddef _separar_cotizacion(
+def _separar_cotizacion(
     df_precios: pd.DataFrame,
     tasa_isv_materiales: float = 0.15,
 ) -> dict:
