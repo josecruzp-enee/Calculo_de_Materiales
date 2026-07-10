@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, Any, Optional
 import pandas as pd
-
+from costos_precios.costos_materiales import _norm_material
 from costos_precios.mano_obra_por_punto import obtener_lista_precios
 
 def _numero_seguro(valor, default=0.0) -> float:
@@ -272,12 +272,10 @@ def _calcular_material_unitario_cable(
             f"para leer el precio del cable: {sorted(faltantes)}"
         )
 
-    clave_cable = limpiar_calibre(calibre)
+    clave_cable = _norm_material(calibre)
 
-    df_busqueda = df_costos_materiales.copy()
-
-    df_busqueda = df_busqueda[
-        df_busqueda["Unidad"]
+    df_busqueda = df_costos_materiales[
+        df_costos_materiales["Unidad"]
         .astype(str)
         .str.strip()
         .str.upper()
@@ -287,7 +285,7 @@ def _calcular_material_unitario_cable(
     df_busqueda["_Clave Cable"] = (
         df_busqueda["Materiales"]
         .astype(str)
-        .apply(limpiar_calibre)
+        .apply(_norm_material)
     )
 
     coincidencias = df_busqueda[
