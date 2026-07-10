@@ -115,6 +115,18 @@ def renderizar_estructuras():
 
         st.info("➡️ Ahora puedes ir a 'Finalizar'")
 
+def renderizar_materiales_extra():
+
+    seccion_adicionar_material()
+
+    df_extra = st.session_state.get("materiales_extra")
+
+    if isinstance(df_extra, pd.DataFrame):
+        st.session_state["df_materiales_extra"] = df_extra.copy()
+    else:
+        st.session_state["df_materiales_extra"] = pd.DataFrame(
+            columns=["Materiales", "Unidad", "Cantidad"]
+        )
 
 def renderizar_final():
     st.subheader("⚙️ Finalizar cálculo")
