@@ -543,7 +543,7 @@ def seccion_cables() -> dict:
 
         df_edit = st.data_editor(
             df_base,
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
             num_rows="dynamic",
             column_config=colcfg_cables,
@@ -559,7 +559,7 @@ def seccion_cables() -> dict:
 
         df_circuitos_edit = st.data_editor(
             df_circuitos_base,
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
             num_rows="dynamic",
             column_config=colcfg_circuitos,
@@ -698,7 +698,7 @@ def seccion_cables() -> dict:
 
         st.dataframe(
             df_ok[cols_show],
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
 
@@ -706,7 +706,7 @@ def seccion_cables() -> dict:
 
         st.dataframe(
             df_circuitos_ok,
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
 
