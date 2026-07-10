@@ -27,15 +27,6 @@ def _int_seguro(valor, default=0) -> int:
 FACTOR_PIE_POR_METRO = 3.28084
 
 
-PRECIOS_CABLE_PIE = {
-    "CONDUCTOR MT 1/0 AWG RAVEN": 8.76,
-    "CONDUCTOR N 2 AWG SPARROW": 5.64,
-    "CONDUCTOR BT WP 3/0 AWG FIG": 55.00,
-    "HILO PILOTO HP WP 2 AWG PEACH": 5.23,
-    "CONDUCTOR BT WP 266.8 MCM MULBERRY": 81.00,
-}
-
-
 # =========================================================
 # MANO DE OBRA UNITARIA PARA ESTRUCTURAS
 # =========================================================
@@ -242,18 +233,94 @@ def _obtener_claves_cable(
 # CÁLCULO DE MATERIAL Y MANO DE OBRA DE CABLES
 # =========================================================
 def _calcular_material_unitario_cable(
-    clave_material: str
+    *,
+    calibre: str,
+    df_costos_materiales: pd.DataFrame
 ) -> float:
     """
-    El material del cable está en L/pie.
-    Se convierte a L/metro.
+    Lee el costo unitario ya evaluado contra el Excel.
+
+    No recalcula precios.
+    No vuelve a leer el catálogo.
+    No realiza otro merge.
+
+    El costo almacenado en df_costos_materiales está en L/pie.
+    Únicamente se convierte a L/metro para el presupuesto.
     """
 
-    precio_material_pie = float(
-        PRECIOS_CABLE_PIE.get(clave_material, 0.0)
+    if (
+        df_costos_materiales is None
+        or not isinstance(df_costos_materiales, pd.DataFrame)
+        or df_costos_materiales.empty
+    ):
+        raise ValueError(
+            "df_costos_materiales no está disponible para obtener "
+            "el precio del cable."
+        )
+
+    columnas_requeridas = {
+        "Materiales",
+        "Unidad",
+        "Costo Unitario",
+    }
+
+    faltantes = columnas_requeridas - set(df_costos_materiales.columns)
+
+    if faltantes:
+        raise ValueError(
+            "df_costos_materiales no contiene las columnas requeridas "
+            f"para leer el precio del cable: {sorted(faltantes)}"
+        )
+
+    clave_cable = limpiar_calibre(calibre)
+
+    df_busqueda = df_costos_materiales.copy()
+
+    df_busqueda = df_busqueda[
+        df_busqueda["Unidad"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .eq("PIE")
+    ].copy()
+
+    df_busqueda["_Clave Cable"] = (
+        df_busqueda["Materiales"]
+        .astype(str)
+        .apply(limpiar_calibre)
     )
 
-    return round(precio_material_pie * FACTOR_PIE_POR_METRO, 2)
+    coincidencias = df_busqueda[
+        df_busqueda["_Clave Cable"].eq(clave_cable)
+    ]
+
+    if coincidencias.empty:
+        raise ValueError(
+            "No se encontró en df_costos_materiales el precio ya evaluado "
+            f"para el cable: {calibre}"
+        )
+
+    if len(coincidencias) > 1:
+        raise ValueError(
+            "Se encontraron varios precios evaluados para el cable: "
+            f"{calibre}"
+        )
+
+    precio_material_pie = _numero_seguro(
+        coincidencias.iloc[0]["Costo Unitario"],
+        0.0
+    )
+
+    if precio_material_pie <= 0:
+        raise ValueError(
+            "El costo unitario evaluado del cable es inválido: "
+            f"{calibre}"
+        )
+
+    return round(
+        precio_material_pie * FACTOR_PIE_POR_METRO,
+        2
+    )
 
 
 def _obtener_mano_obra_cable(
@@ -381,7 +448,8 @@ def _procesar_fila_cable(
     contratista_norm: str,
     existe_bt: bool,
     lista_mano_obra: dict,
-    longitud_bt_mano_obra: float
+    longitud_bt_mano_obra: float,
+    df_costos_materiales: pd.DataFrame
 ) -> Optional[Dict[str, Any]]:
 
     tipo = _normalizar_tipo_cable(
@@ -415,7 +483,8 @@ def _procesar_fila_cable(
         return None
 
     material_unitario = _calcular_material_unitario_cable(
-        claves["clave_material"]
+        calibre=calibre,
+        df_costos_materiales=df_costos_materiales
     )
 
     mano_obra_unitaria = _obtener_mano_obra_cable(
@@ -495,6 +564,10 @@ def _agregar_cable_a_precios(
         df_cables
     )
 
+    df_costos_materiales = _obtener_df_costos_materiales_existente(
+        entrada
+    )
+
     longitud_bt_mano_obra = 0.0
 
     filas = []
@@ -506,7 +579,8 @@ def _agregar_cable_a_precios(
             contratista_norm=contratista_norm,
             existe_bt=existe_bt,
             lista_mano_obra=lista_mano_obra,
-            longitud_bt_mano_obra=longitud_bt_mano_obra
+            longitud_bt_mano_obra=longitud_bt_mano_obra,
+            df_costos_materiales=df_costos_materiales
         )
 
         if fila_precio is not None:
