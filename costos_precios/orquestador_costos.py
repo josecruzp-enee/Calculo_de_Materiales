@@ -139,7 +139,7 @@ def ejecutar_costos(entrada: EntradaCostos) -> Dict[str, Any]:
         debug["df_materiales_costos"] = _preview_df(
             df_materiales_costos
         )
-
+        entrada.df_costos_materiales = df_materiales_costos
         # =====================================================
         # 4. VALIDACIÓN ESTRUCTURAS
         # =====================================================
