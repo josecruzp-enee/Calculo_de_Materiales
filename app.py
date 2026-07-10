@@ -16,6 +16,7 @@ SECCIONES = [
     ("cables", "Cables"),
     ("modo", "Modo de Carga"),
     ("estructuras", "Estructuras"),
+    ("materiales", "Materiales Extra"),
     ("final", "Finalizar"),
     ("exportar", "Exportación"),
     ("debug", "Debug"),
