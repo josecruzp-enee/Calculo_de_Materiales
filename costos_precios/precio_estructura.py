@@ -458,6 +458,8 @@ def _procesar_fila_cable(
         fila_cable.get("Calibre", "")
     ).strip()
 
+    # Para BT, normalmente representa metros-conductor.
+    # Ejemplo: 160 m lineales × 2 conductores = 320 m.
     longitud_material = _leer_longitud_cable(
         fila_cable
     )
@@ -480,6 +482,8 @@ def _procesar_fila_cable(
     if claves is None:
         return None
 
+    # Precio original por metro-conductor.
+    # Este precio ya proviene de df_costos_materiales.
     material_unitario = _calcular_material_unitario_cable(
         calibre=calibre,
         df_costos_materiales=df_costos_materiales
@@ -493,26 +497,26 @@ def _procesar_fila_cable(
     )
 
     # =====================================================
-    # MANO DE OBRA
+    # CANTIDAD DE MANO DE OBRA
     # =====================================================
-    # Material se cobra por metro-conductor.
-    # Mano de obra se cobra por metro de línea.
+    # BT:
+    #   La mano de obra se cobra por longitud lineal.
     #
-    # Ejemplo:
-    # BT 2F = 320 m material, pero 160 m mano de obra.
-    # N = 160 m material, pero 0 m mano de obra si ya se cobró BT.
-    # HP = 160 m material, pero 0 m mano de obra si ya se cobró BT.
+    # N y HP:
+    #   Si existe BT, no vuelven a cobrar mano de obra.
     # =====================================================
 
     longitud_mano_obra = longitud_material
 
     if tipo.startswith("BT"):
+
         longitud_mano_obra = _calcular_longitud_linea_desde_cable(
             fila_cable,
             longitud_material
         )
 
     elif tipo.startswith("N") or tipo.startswith("HP"):
+
         if existe_bt:
             longitud_mano_obra = 0.0
         else:
@@ -522,11 +526,32 @@ def _procesar_fila_cable(
         longitud_mano_obra = 0.0
 
     # =====================================================
-    # DEBUG TEMPORAL — PUNTO 2
+    # VALORES QUE RECIBIRÁ EL PRESUPUESTO
     # =====================================================
-    # No modifica cantidades, precios ni resultados.
-    # Solamente permite verificar los datos disponibles
-    # antes de cambiar la presentación del cable BT.
+    # Por defecto, todos los cables mantienen el
+    # comportamiento anterior.
+    # =====================================================
+
+    descripcion_presupuesto = claves["descripcion"]
+    cantidad_material_presupuesto = float(longitud_material)
+    cantidad_mano_obra_presupuesto = float(longitud_mano_obra)
+    material_unitario_presupuesto = float(material_unitario)
+
+    # =====================================================
+    # PRESENTACIÓN ESPECIAL PARA BT
+    # =====================================================
+    # Ejemplo:
+    #
+    # Antes:
+    #   Cantidad material: 320 m-conductor
+    #   Material unitario: L 29.49
+    #
+    # Ahora:
+    #   Cantidad visual: 160 m lineales
+    #   Material unitario: L 29.49 × 2 = L 58.98
+    #
+    # Se conserva exactamente:
+    #   320 × 29.49 = 160 × 58.98
     # =====================================================
 
     if tipo.startswith("BT"):
@@ -536,20 +561,111 @@ def _procesar_fila_cable(
             0.0
         )
 
+        # Respaldo seguro:
+        # si la columna Conductores no trae un valor válido,
+        # se obtiene mediante metros-conductor / metros lineales.
+        if conductores <= 0 and longitud_mano_obra > 0:
+
+            conductores = (
+                float(longitud_material)
+                / float(longitud_mano_obra)
+            )
+
+        if conductores <= 0:
+            conductores = 1.0
+
+        cantidad_material_presupuesto = float(
+            longitud_mano_obra
+        )
+
+        cantidad_mano_obra_presupuesto = float(
+            longitud_mano_obra
+        )
+
+        material_unitario_presupuesto = (
+            float(material_unitario)
+            * float(conductores)
+        )
+
+        numero_conductores = int(round(conductores))
+
+        texto_fases = (
+            "FASE"
+            if numero_conductores == 1
+            else "FASES"
+        )
+
+        descripcion_presupuesto = (
+            f'{claves["descripcion"]}'
+            f'<br/>(1 x {numero_conductores} {texto_fases})'
+        )
+
         debug_guardar(
             "debug_cable_bt_punto_2",
             {
                 "tipo": tipo,
                 "calibre": calibre,
-                "longitud_lineal": float(longitud_mano_obra),
-                "cantidad_actual": float(longitud_material),
-                "conductores": conductores,
-                "precio_unitario": float(material_unitario),
-                "mano_obra_unitaria": float(mano_obra_unitaria),
-                "descripcion_actual": claves["descripcion"],
+
+                "longitud_lineal": float(
+                    longitud_mano_obra
+                ),
+
+                "metros_conductor_originales": float(
+                    longitud_material
+                ),
+
+                "conductores": float(
+                    conductores
+                ),
+
+                "precio_metro_conductor": float(
+                    material_unitario
+                ),
+
+                "cantidad_visual": float(
+                    cantidad_material_presupuesto
+                ),
+
+                "material_unitario_visual": float(
+                    material_unitario_presupuesto
+                ),
+
+                "mano_obra_unitaria": float(
+                    mano_obra_unitaria
+                ),
+
+                "material_total_anterior": round(
+                    float(longitud_material)
+                    * float(material_unitario),
+                    2
+                ),
+
+                "material_total_nuevo": round(
+                    float(cantidad_material_presupuesto)
+                    * float(material_unitario_presupuesto),
+                    2
+                ),
+
+                "descripcion_visual": descripcion_presupuesto,
             }
         )
 
+    return _crear_fila_cable_precio(
+        descripcion=descripcion_presupuesto,
+
+        # Para BT ambas cantidades serán 160.
+        # Para los demás cables se conserva la lógica anterior.
+        longitud_material=cantidad_material_presupuesto,
+        longitud_mano_obra=cantidad_mano_obra_presupuesto,
+
+        # Para BT incluye el número de conductores.
+        material_unitario=material_unitario_presupuesto,
+
+        # La mano de obra sigue cobrándose una sola vez
+        # por metro lineal.
+        mano_obra_unitaria=mano_obra_unitaria
+    )
+    
     return _crear_fila_cable_precio(
         descripcion=claves["descripcion"],
         longitud_material=float(longitud_material),
