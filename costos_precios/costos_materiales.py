@@ -30,34 +30,38 @@ def _norm_material(s) -> str:
 # =========================================================
 # 🔧 NORMALIZAR DATAFRAME DE MATERIALES DEL PROYECTO
 # =========================================================
-def _normalizar_materiales_df(df: pd.DataFrame) -> pd.DataFrame:
+def _norm_material(s) -> str:
+    """
+    Normaliza nombres de materiales para permitir cruces
+    consistentes entre el cálculo y el catálogo de precios.
 
-    if df is None or df.empty:
-        raise ValueError("df_materiales vacío")
+    Ejemplos equivalentes:
+        ACSR#1/0
+        ACSR #1/0
+        ACSR# 1/0
+        ACSR # 1/0
 
-    df = df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
+    Todos quedan como:
+        ACSR#1/0
+    """
 
-    columnas_requeridas = ["Materiales", "Unidad", "Cantidad"]
-    faltantes = [c for c in columnas_requeridas if c not in df.columns]
+    import re
 
-    if faltantes:
-        raise ValueError(
-            f"df_materiales no tiene las columnas requeridas: {faltantes}. "
-            f"Columnas recibidas: {list(df.columns)}"
-        )
+    texto = _norm_text(s)
 
-    df["Materiales"] = df["Materiales"].apply(_norm_material)
-    df["Unidad"] = df["Unidad"].apply(_norm_text)
+    # Unificar cualquier cantidad de espacios
+    texto = re.sub(r"\s+", " ", texto)
 
-    df["Cantidad"] = pd.to_numeric(
-        df["Cantidad"],
-        errors="coerce"
-    ).fillna(0.0)
+    # Normalizar espacios alrededor de #
+    texto = re.sub(r"\s*#\s*", "#", texto)
 
-    return df
+    # Normalizar espacios alrededor de barras
+    texto = re.sub(r"\s*/\s*", "/", texto)
 
+    # Normalizar espacios antes de comas
+    texto = re.sub(r"\s*,\s*", ", ", texto)
 
+    return texto.strip()
 # =========================================================
 # 🔧 NORMALIZAR CATÁLOGO DE COSTOS
 # =========================================================
