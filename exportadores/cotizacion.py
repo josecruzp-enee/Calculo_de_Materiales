@@ -40,36 +40,133 @@ def _fmt_lps(valor) -> str:
         return "L 0.00"
 
 
-def _sumar_base_cotizacion(df_precios: pd.DataFrame) -> float:
+ddef _separar_cotizacion(
+    df_precios: pd.DataFrame,
+    tasa_isv_materiales: float = 0.15,
+) -> dict:
     """
-    Suma el presupuesto base:
-    estructuras + materiales + instalación + conductores.
+    Separa los valores de la cotización en:
+
+    - Materiales y costos operativos.
+    - ISV aplicado únicamente a materiales.
+    - Suministro total con ISV.
+    - Mano de obra sin ISV.
+
+    Conserva las cantidades especiales de los cables.
     """
 
-    if df_precios is None or df_precios.empty:
-        return 0.0
+    resultado_vacio = {
+        "materiales_sin_isv": 0.0,
+        "isv_materiales": 0.0,
+        "suministro_con_isv": 0.0,
+        "mano_obra": 0.0,
+        "total_base": 0.0,
+    }
 
-    columnas_posibles = [
-        "Subtotal",
-        "Total Proyecto",
-        "TOTAL PROYECTO",
-        "Total",
-        "TOTAL",
+    if (
+        df_precios is None
+        or not isinstance(df_precios, pd.DataFrame)
+        or df_precios.empty
+    ):
+        return resultado_vacio
+
+    df = df_precios.copy()
+
+    columnas_numericas = [
+        "Cantidad",
+        "Cantidad Material",
+        "Cantidad Mano Obra",
+        "Material Unitario",
+        "Mano Obra Unitaria",
+        "Costo Operativo Unitario",
     ]
 
-    for col in columnas_posibles:
-        if col in df_precios.columns:
-            return float(
-                pd.to_numeric(
-                    df_precios[col],
-                    errors="coerce",
-                )
-                .fillna(0)
-                .sum()
-            )
+    for columna in columnas_numericas:
 
-    return 0.0
+        if columna not in df.columns:
+            df[columna] = 0.0
 
+        df[columna] = pd.to_numeric(
+            df[columna],
+            errors="coerce",
+        ).fillna(0.0)
+
+    # =====================================================
+    # CANTIDADES
+    # =====================================================
+    # Los cables pueden tener cantidades diferentes para
+    # material y mano de obra.
+    #
+    # Las estructuras utilizan la columna Cantidad.
+    cantidad_material = df["Cantidad Material"].where(
+        df["Cantidad Material"] > 0,
+        df["Cantidad"],
+    )
+
+    cantidad_mano_obra = df["Cantidad Mano Obra"].where(
+        df["Cantidad Mano Obra"] > 0,
+        df["Cantidad"],
+    )
+
+    # =====================================================
+    # MATERIALES
+    # =====================================================
+    materiales = float(
+        (
+            cantidad_material
+            * df["Material Unitario"]
+        ).sum()
+    )
+
+    # Los costos operativos ya forman parte del suministro
+    # presentado en la tabla anterior.
+    costos_operativos = float(
+        (
+            df["Cantidad"]
+            * df["Costo Operativo Unitario"]
+        ).sum()
+    )
+
+    materiales_sin_isv = (
+        materiales
+        + costos_operativos
+    )
+
+    # =====================================================
+    # MANO DE OBRA
+    # =====================================================
+    mano_obra = float(
+        (
+            cantidad_mano_obra
+            * df["Mano Obra Unitaria"]
+        ).sum()
+    )
+
+    # =====================================================
+    # ISV SOLO SOBRE MATERIALES
+    # =====================================================
+    isv_materiales = (
+        materiales_sin_isv
+        * tasa_isv_materiales
+    )
+
+    suministro_con_isv = (
+        materiales_sin_isv
+        + isv_materiales
+    )
+
+    total_base = (
+        suministro_con_isv
+        + mano_obra
+    )
+
+    return {
+        "materiales_sin_isv": round(materiales_sin_isv, 2),
+        "isv_materiales": round(isv_materiales, 2),
+        "suministro_con_isv": round(suministro_con_isv, 2),
+        "mano_obra": round(mano_obra, 2),
+        "total_base": round(total_base, 2),
+    }
 
 # =========================================================
 # LOGÍSTICA DESDE STREAMLIT
@@ -224,7 +321,11 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
     # =====================================================
     # BASE
     # =====================================================
-    total_base = _sumar_base_cotizacion(df_precios)
+    desglose = _separar_cotizacion(df_precios)
+
+    suministro_con_isv = desglose["suministro_con_isv"]
+    mano_obra = desglose["mano_obra"]
+    total_base = desglose["total_base"]
 
     # =====================================================
     # LOGÍSTICA STREAMLIT
@@ -256,9 +357,15 @@ def generar_seccion_cotizacion_final(doc, styles, df_precios):
     # =====================================================
     data = [
         ["Concepto", "Monto (L)"],
-        ["Instalación y Suministro", _fmt_lps(total_base)],
+        [
+            "Suministro de materiales (ISV incluido)",
+            _fmt_lps(suministro_con_isv),
+        ],
+        [
+            "Mano de obra e instalación",
+            _fmt_lps(mano_obra),
+        ],
     ]
-
     if total_grua > 0:
         data.append([
             f"Equipo Grúa ({horas_grua:,.0f} h x {_fmt_lps(precio_hora_grua)})",
