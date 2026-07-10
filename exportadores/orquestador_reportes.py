@@ -84,65 +84,157 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         # =====================================================
         # VALIDACIONES
         # =====================================================
-        _validar_df(entrada.df_estructuras, "df_estructuras")
-        _validar_df(entrada.df_materiales, "df_materiales")
-        _validar_df(entrada.df_materiales_por_punto, "df_materiales_por_punto")
+        _validar_df(
+            entrada.df_estructuras,
+            "df_estructuras"
+        )
+
+        _validar_df(
+            entrada.df_materiales,
+            "df_materiales"
+        )
+
+        _validar_df(
+            entrada.df_materiales_por_punto,
+            "df_materiales_por_punto"
+        )
 
         costos = entrada.costos or {}
         resultado_costos_proyecto = costos
 
-        df_costos_estructura = costos.get("df_costos_estructura")
-        df_precios_estructura = costos.get("df_precios_estructura")
+        df_costos_estructura = costos.get(
+            "df_costos_estructura"
+        )
+
+        df_precios_estructura = costos.get(
+            "df_precios_estructura"
+        )
+
+        # =====================================================
+        # LISTA DE MATERIALES CON COSTOS
+        # =====================================================
+        # No calcula ni modifica datos.
+        # Solo toma el DataFrame ya generado anteriormente.
+        # =====================================================
+        df_costos_materiales = entrada.df_costos_materiales
+
+        if (
+            df_costos_materiales is None
+            or not isinstance(df_costos_materiales, pd.DataFrame)
+            or df_costos_materiales.empty
+        ):
+            df_costos_materiales = costos.get(
+                "df_costos_materiales"
+            )
 
         nombre = entrada.nombre_proyecto
         datos_proyecto = entrada.datos_proyecto or {}
 
         # =====================================================
-        # 📄 TASKS
+        # DEBUG
+        # =====================================================
+        debug["df_costos_materiales"] = {
+            "desde_entrada": (
+                isinstance(
+                    entrada.df_costos_materiales,
+                    pd.DataFrame
+                )
+                and not entrada.df_costos_materiales.empty
+            ),
+            "desde_costos": (
+                isinstance(
+                    costos.get("df_costos_materiales"),
+                    pd.DataFrame
+                )
+                and not costos.get(
+                    "df_costos_materiales"
+                ).empty
+            ),
+            "filas_utilizadas": (
+                len(df_costos_materiales)
+                if isinstance(
+                    df_costos_materiales,
+                    pd.DataFrame
+                )
+                else 0
+            ),
+        }
+
+        # =====================================================
+        # TASKS
         # =====================================================
         tasks = [
 
-            ("estructuras_global.pdf", lambda: generar_pdf_estructuras_global(
-                entrada.df_estructuras,
-                nombre,
-                entrada.base_datos,
-                entrada.datos_proyecto
-            )),
+            (
+                "estructuras_global.pdf",
+                lambda: generar_pdf_estructuras_global(
+                    entrada.df_estructuras,
+                    nombre,
+                    entrada.base_datos,
+                    entrada.datos_proyecto
+                )
+            ),
 
-            ("estructuras_por_punto.pdf", lambda: generar_pdf_estructuras_por_punto(
-                entrada.df_estructuras_por_punto,
-                nombre,
-                entrada.datos_proyecto
-            )),
+            (
+                "estructuras_por_punto.pdf",
+                lambda: generar_pdf_estructuras_por_punto(
+                    entrada.df_estructuras_por_punto,
+                    nombre,
+                    entrada.datos_proyecto
+                )
+            ),
 
-            ("materiales.pdf", lambda: generar_pdf_materiales(
-                entrada.df_materiales,
-                nombre,
-                entrada.datos_proyecto
-            )),
+            (
+                "materiales.pdf",
+                lambda: generar_pdf_materiales(
+                    entrada.df_materiales,
+                    nombre,
+                    entrada.datos_proyecto
+                )
+            ),
 
-            ("materiales_por_punto.pdf", lambda: generar_pdf_materiales_por_punto(
-                entrada.df_materiales_por_punto,
-                nombre,
-                entrada.datos_proyecto
-            )),
+            (
+                "materiales_por_punto.pdf",
+                lambda: generar_pdf_materiales_por_punto(
+                    entrada.df_materiales_por_punto,
+                    nombre,
+                    entrada.datos_proyecto
+                )
+            ),
 
-            ("hoja_info.pdf", lambda: generar_pdf_hoja_info(
-                datos_proyecto=datos_proyecto,
-                df_estructuras=entrada.df_estructuras,
-            )),
-            
-            ("reporte_completo.pdf", lambda: generar_pdf_completo(
-                df_materiales=entrada.df_materiales,
-                df_estructuras=entrada.df_estructuras,
-                df_precios_estructura=df_precios_estructura,
-                datos_proyecto=datos_proyecto,
-                costos=resultado_costos_proyecto,
-            )),
+            (
+                "hoja_info.pdf",
+                lambda: generar_pdf_hoja_info(
+                    datos_proyecto=datos_proyecto,
+                    df_estructuras=entrada.df_estructuras,
+                )
+            ),
 
-            ("contratista.pdf", lambda: generar_pdf_contratista(entrada)),
+            (
+                "reporte_completo.pdf",
+                lambda: generar_pdf_completo(
+                    df_materiales=entrada.df_materiales,
+                    df_estructuras=entrada.df_estructuras,
+                    df_precios_estructura=df_precios_estructura,
+                    datos_proyecto=datos_proyecto,
+                    costos=resultado_costos_proyecto,
+                )
+            ),
 
-            ("lista_materiales.pdf", lambda: generar_pdf_lista_materiales(entrada.df_costos_materiales,nombre)),
+            (
+                "contratista.pdf",
+                lambda: generar_pdf_contratista(
+                    entrada
+                )
+            ),
+
+            (
+                "lista_materiales.pdf",
+                lambda: generar_pdf_lista_materiales(
+                    df_costos_materiales,
+                    nombre
+                )
+            ),
         ]
 
         # =====================================================
@@ -150,23 +242,37 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         # =====================================================
         for nombre_archivo, fn in tasks:
 
-            contenido, err = _safe_exec(nombre_archivo, fn)
+            contenido, err = _safe_exec(
+                nombre_archivo,
+                fn
+            )
 
             if err:
                 errores_lista.append(err)
                 continue
 
             if contenido:
-                _add_file(archivos, errores_lista, nombre_archivo, contenido)
+                _add_file(
+                    archivos,
+                    errores_lista,
+                    nombre_archivo,
+                    contenido
+                )
             else:
-                errores_lista.append(f"{nombre_archivo}: contenido vacío")
+                errores_lista.append(
+                    f"{nombre_archivo}: contenido vacío"
+                )
 
         # =====================================================
         # DEBUG SI TODO FALLA
         # =====================================================
         if not archivos:
-            debug["error_general"] = "No se generó ningún archivo"
-            debug["cantidad_errores"] = len(errores_lista)
+            debug["error_general"] = (
+                "No se generó ningún archivo"
+            )
+            debug["cantidad_errores"] = len(
+                errores_lista
+            )
 
         # =====================================================
         # SALIDA
@@ -178,6 +284,10 @@ def generar_reportes(entrada: EntradaReportes) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        return _fail(str(e), {
-            "traceback": traceback.format_exc()
-        })
+
+        return _fail(
+            str(e),
+            {
+                "traceback": traceback.format_exc()
+            }
+        )
