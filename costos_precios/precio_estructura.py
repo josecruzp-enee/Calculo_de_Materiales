@@ -521,6 +521,35 @@ def _procesar_fila_cable(
     if pd.isna(longitud_mano_obra):
         longitud_mano_obra = 0.0
 
+    # =====================================================
+    # DEBUG TEMPORAL — PUNTO 2
+    # =====================================================
+    # No modifica cantidades, precios ni resultados.
+    # Solamente permite verificar los datos disponibles
+    # antes de cambiar la presentación del cable BT.
+    # =====================================================
+
+    if tipo.startswith("BT"):
+
+        conductores = _numero_seguro(
+            fila_cable.get("Conductores", 0),
+            0.0
+        )
+
+        debug_guardar(
+            "debug_cable_bt_punto_2",
+            {
+                "tipo": tipo,
+                "calibre": calibre,
+                "longitud_lineal": float(longitud_mano_obra),
+                "cantidad_actual": float(longitud_material),
+                "conductores": conductores,
+                "precio_unitario": float(material_unitario),
+                "mano_obra_unitaria": float(mano_obra_unitaria),
+                "descripcion_actual": claves["descripcion"],
+            }
+        )
+
     return _crear_fila_cable_precio(
         descripcion=claves["descripcion"],
         longitud_material=float(longitud_material),
