@@ -791,6 +791,402 @@ def _agregar_cable_a_precios(
         ignore_index=True
     )
 
+# =========================================================
+# MATERIALES EXTRA DEL PROYECTO
+# =========================================================
+def _obtener_df_materiales_extra(
+    entrada
+) -> Optional[pd.DataFrame]:
+    """
+    Obtiene los materiales extra definidos para el proyecto.
+
+    No calcula ni inventa materiales.
+    Devuelve una copia para no modificar el DataFrame original.
+    """
+
+    df_materiales_extra = getattr(
+        entrada,
+        "df_materiales_extra",
+        None,
+    )
+
+    if (
+        df_materiales_extra is None
+        or not isinstance(df_materiales_extra, pd.DataFrame)
+        or df_materiales_extra.empty
+    ):
+        return None
+
+    columnas_requeridas = {
+        "Materiales",
+        "Unidad",
+        "Cantidad",
+    }
+
+    faltantes = (
+        columnas_requeridas
+        - set(df_materiales_extra.columns)
+    )
+
+    if faltantes:
+        raise ValueError(
+            "df_materiales_extra no contiene las columnas "
+            f"requeridas: {sorted(faltantes)}"
+        )
+
+    return df_materiales_extra.copy()
+
+
+def _buscar_precio_material_extra(
+    *,
+    material: str,
+    unidad: str,
+    df_costos_materiales: pd.DataFrame
+) -> float:
+    """
+    Obtiene el precio ya evaluado de un material extra.
+
+    El precio se lee desde df_costos_materiales.
+    No vuelve a leer Excel y no recalcula precios.
+    """
+
+    if (
+        df_costos_materiales is None
+        or not isinstance(df_costos_materiales, pd.DataFrame)
+        or df_costos_materiales.empty
+    ):
+        raise ValueError(
+            "df_costos_materiales no está disponible para "
+            f"obtener el precio de: {material}"
+        )
+
+    columnas_requeridas = {
+        "Materiales",
+        "Unidad",
+        "Costo Unitario",
+    }
+
+    faltantes = (
+        columnas_requeridas
+        - set(df_costos_materiales.columns)
+    )
+
+    if faltantes:
+        raise ValueError(
+            "df_costos_materiales no contiene las columnas "
+            f"requeridas: {sorted(faltantes)}"
+        )
+
+    clave_material = _norm_material(material)
+    clave_unidad = str(unidad).strip().upper()
+
+    df_busqueda = df_costos_materiales.copy()
+
+    df_busqueda["_Clave Material"] = (
+        df_busqueda["Materiales"]
+        .astype(str)
+        .apply(_norm_material)
+    )
+
+    df_busqueda["_Clave Unidad"] = (
+        df_busqueda["Unidad"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    coincidencias = df_busqueda[
+        df_busqueda["_Clave Material"].eq(clave_material)
+        & df_busqueda["_Clave Unidad"].eq(clave_unidad)
+    ]
+
+    if coincidencias.empty:
+        raise ValueError(
+            "No se encontró el precio evaluado del material "
+            f"extra: {material} [{unidad}]"
+        )
+
+    precios = (
+        pd.to_numeric(
+            coincidencias["Costo Unitario"],
+            errors="coerce",
+        )
+        .dropna()
+        .unique()
+    )
+
+    if len(precios) == 0:
+        raise ValueError(
+            "El precio evaluado del material extra es "
+            f"inválido: {material}"
+        )
+
+    if len(precios) > 1:
+        raise ValueError(
+            "Se encontraron varios precios diferentes para "
+            f"el material extra: {material} [{unidad}]"
+        )
+
+    precio_unitario = float(precios[0])
+
+    if precio_unitario < 0:
+        raise ValueError(
+            "El precio del material extra no puede ser "
+            f"negativo: {material}"
+        )
+
+    return precio_unitario
+
+
+def _crear_fila_material_extra(
+    *,
+    material: str,
+    unidad: str,
+    cantidad: float,
+    material_unitario: float,
+    mano_obra_unitaria: float = 0.0
+) -> Dict[str, Any]:
+    """
+    Convierte un material extra al contrato estándar de
+    df_precios.
+
+    Si Mano Obra Unitaria no viene definida, se utiliza cero.
+    """
+
+    material = str(material).strip().upper()
+    unidad = str(unidad).strip().upper()
+
+    cantidad = _numero_seguro(
+        cantidad,
+        0.0,
+    )
+
+    material_unitario = _numero_seguro(
+        material_unitario,
+        0.0,
+    )
+
+    mano_obra_unitaria = _numero_seguro(
+        mano_obra_unitaria,
+        0.0,
+    )
+
+    if cantidad <= 0:
+        raise ValueError(
+            f"Cantidad inválida para material extra: {material}"
+        )
+
+    total_material = (
+        cantidad
+        * material_unitario
+    )
+
+    total_mano_obra = (
+        cantidad
+        * mano_obra_unitaria
+    )
+
+    total_unitario = (
+        material_unitario
+        + mano_obra_unitaria
+    )
+
+    total_proyecto = (
+        total_material
+        + total_mano_obra
+    )
+
+    if mano_obra_unitaria > 0:
+        descripcion = (
+            f"SUMINISTRO E INSTALACIÓN DE {material}"
+        )
+    else:
+        descripcion = (
+            f"SUMINISTRO DE {material}"
+        )
+
+    return {
+        "Estructura": descripcion,
+        "Unidad": unidad,
+        "Cantidad": round(cantidad, 2),
+
+        "Material Unitario": round(
+            material_unitario,
+            2,
+        ),
+        "Mano Obra Unitaria": round(
+            mano_obra_unitaria,
+            2,
+        ),
+        "Costo Operativo Unitario": 0.0,
+
+        "Total Unitario": round(
+            total_unitario,
+            2,
+        ),
+        "Total Proyecto": round(
+            total_proyecto,
+            2,
+        ),
+        "Subtotal": round(
+            total_proyecto,
+            2,
+        ),
+
+        # Compatibilidad con reportes anteriores
+        "Costo Unitario": round(
+            material_unitario,
+            2,
+        ),
+        "Costo Operativo": 0.0,
+        "Precio Unitario": round(
+            total_unitario,
+            2,
+        ),
+        "Precio Total": round(
+            total_proyecto,
+            2,
+        ),
+
+        # Cantidades separadas para la cotización
+        "Cantidad Material": round(
+            cantidad,
+            2,
+        ),
+        "Cantidad Mano Obra": (
+            round(cantidad, 2)
+            if mano_obra_unitaria > 0
+            else 0.0
+        ),
+
+        # Ayuda para identificar el origen
+        "Tipo Partida": "MATERIAL EXTRA",
+    }
+
+
+def _agregar_materiales_extra_a_precios(
+    df_precios: pd.DataFrame,
+    entrada
+) -> pd.DataFrame:
+    """
+    Agrega al presupuesto los materiales extra existentes.
+
+    Fuente de cantidades:
+        entrada.df_materiales_extra
+
+    Fuente de precios:
+        entrada.df_costos_materiales
+
+    No vuelve a leer el catálogo y no agrega materiales a la
+    lista general, porque ejecutar_materiales() ya lo hace.
+    """
+
+    df_materiales_extra = (
+        _obtener_df_materiales_extra(entrada)
+    )
+
+    if df_materiales_extra is None:
+        return df_precios
+
+    df_costos_materiales = (
+        _obtener_df_costos_materiales_existente(entrada)
+    )
+
+    filas = []
+
+    for _, fila in df_materiales_extra.iterrows():
+
+        material = str(
+            fila.get("Materiales", "")
+        ).strip()
+
+        unidad = str(
+            fila.get("Unidad", "")
+        ).strip()
+
+        cantidad = _numero_seguro(
+            fila.get("Cantidad", 0.0),
+            0.0,
+        )
+
+        if not material or cantidad <= 0:
+            continue
+
+        material_unitario = (
+            _buscar_precio_material_extra(
+                material=material,
+                unidad=unidad,
+                df_costos_materiales=df_costos_materiales,
+            )
+        )
+
+        # Columna opcional.
+        # Si todavía no existe en la interfaz, utiliza cero.
+        mano_obra_unitaria = _numero_seguro(
+            fila.get("Mano Obra Unitaria", 0.0),
+            0.0,
+        )
+
+        fila_precio = _crear_fila_material_extra(
+            material=material,
+            unidad=unidad,
+            cantidad=cantidad,
+            material_unitario=material_unitario,
+            mano_obra_unitaria=mano_obra_unitaria,
+        )
+
+        filas.append(fila_precio)
+
+    if not filas:
+        return df_precios
+
+    df_extras_precios = pd.DataFrame(filas)
+
+    debug_guardar(
+        "MATERIALES_EXTRA_AGREGADOS_A_PRECIOS",
+        {
+            "cantidad_filas": len(df_extras_precios),
+            "materiales": (
+                df_materiales_extra[
+                    "Materiales"
+                ]
+                .astype(str)
+                .tolist()
+            ),
+            "total_materiales": round(
+                (
+                    df_extras_precios[
+                        "Cantidad Material"
+                    ]
+                    * df_extras_precios[
+                        "Material Unitario"
+                    ]
+                ).sum(),
+                2,
+            ),
+            "total_mano_obra": round(
+                (
+                    df_extras_precios[
+                        "Cantidad Mano Obra"
+                    ]
+                    * df_extras_precios[
+                        "Mano Obra Unitaria"
+                    ]
+                ).sum(),
+                2,
+            ),
+        },
+    )
+
+    return pd.concat(
+        [
+            df_precios,
+            df_extras_precios,
+        ],
+        ignore_index=True,
+    ) 
+
+
 
 
 # =========================================================
@@ -1053,57 +1449,87 @@ def ejecutar_costos(
 
     Flujo:
     1. Valida costos de estructura.
-    2. Obtiene lista de mano de obra según contratista.
+    2. Obtiene la lista de mano de obra.
     3. Calcula costos operativos.
     4. Genera precios de estructuras.
-    5. Agrega cables del proyecto.
-    6. Devuelve df_precios_estructura.
-    7. Conserva df_costos_materiales si ya existe.
+    5. Agrega cables.
+    6. Agrega materiales extra.
+    7. Conserva df_costos_materiales.
     """
 
     try:
 
-        df_costos_estructura = entrada.df_costos_estructura
+        df_costos_estructura = (
+            entrada.df_costos_estructura
+        )
 
-        error_validacion = _validar_df_costos_estructura(
-            df_costos_estructura
+        error_validacion = (
+            _validar_df_costos_estructura(
+                df_costos_estructura
+            )
         )
 
         if error_validacion is not None:
             return error_validacion
 
-        lista_mano_obra = obtener_lista_precios(contratista)
+        lista_mano_obra = obtener_lista_precios(
+            contratista
+        )
 
         material_total = float(
-            df_costos_estructura["Costo Total"].sum()
+            df_costos_estructura[
+                "Costo Total"
+            ].sum()
         )
 
         costos_op = calcular_costos_operativos(
             costo_material_total=material_total
         )
 
-        df_precios = _generar_df_precios_estructuras(
-            df_costos_estructura=df_costos_estructura,
-            lista_mano_obra=lista_mano_obra,
-            costos_op=costos_op,
-            porcentaje_utilidad=porcentaje_utilidad
+        # =================================================
+        # ESTRUCTURAS
+        # =================================================
+        df_precios = (
+            _generar_df_precios_estructuras(
+                df_costos_estructura=(
+                    df_costos_estructura
+                ),
+                lista_mano_obra=lista_mano_obra,
+                costos_op=costos_op,
+                porcentaje_utilidad=(
+                    porcentaje_utilidad
+                ),
+            )
         )
 
+        # =================================================
+        # CABLES
+        # =================================================
         df_precios = _agregar_cable_a_precios(
             df_precios,
             entrada,
-            contratista
+            contratista,
+        )
+
+        # =================================================
+        # MATERIALES EXTRA
+        # =================================================
+        df_precios = (
+            _agregar_materiales_extra_a_precios(
+                df_precios,
+                entrada,
+            )
         )
 
         return _respuesta_ok(
             entrada=entrada,
             df_precios=df_precios,
-            costos_op=costos_op
+            costos_op=costos_op,
         )
 
     except Exception as e:
 
         return _respuesta_error(
             e,
-            entrada=entrada
+            entrada=entrada,
         )
