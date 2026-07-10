@@ -18,15 +18,6 @@ def _norm_text(s) -> str:
     )
 
 
-def _norm_material(s) -> str:
-    texto = _norm_text(s)
-
-    while "  " in texto:
-        texto = texto.replace("  ", " ")
-
-    return texto
-
-
 # =========================================================
 # 🔧 NORMALIZAR DATAFRAME DE MATERIALES DEL PROYECTO
 # =========================================================
@@ -62,6 +53,84 @@ def _norm_material(s) -> str:
     texto = re.sub(r"\s*,\s*", ", ", texto)
 
     return texto.strip()
+
+
+# =========================================================
+# 🔧 NORMALIZAR DATAFRAME DE MATERIALES DEL PROYECTO
+# =========================================================
+def _normalizar_materiales_df(
+    df_materiales: pd.DataFrame
+) -> pd.DataFrame:
+
+    if df_materiales is None:
+        raise ValueError("df_materiales es None")
+
+    if not isinstance(df_materiales, pd.DataFrame):
+        raise TypeError(
+            "df_materiales debe ser un DataFrame. "
+            f"Recibido: {type(df_materiales).__name__}"
+        )
+
+    if df_materiales.empty:
+        raise ValueError("df_materiales vacío")
+
+    df = df_materiales.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+
+    columnas_requeridas = {
+        "Materiales",
+        "Unidad",
+        "Cantidad",
+    }
+
+    columnas_faltantes = columnas_requeridas - set(df.columns)
+
+    if columnas_faltantes:
+        raise ValueError(
+            "Faltan columnas requeridas en df_materiales: "
+            f"{sorted(columnas_faltantes)}. "
+            f"Columnas disponibles: {list(df.columns)}"
+        )
+
+    df["Materiales"] = df["Materiales"].apply(_norm_material)
+    df["Unidad"] = df["Unidad"].apply(_norm_text)
+
+    df["Cantidad"] = pd.to_numeric(
+        df["Cantidad"],
+        errors="coerce",
+    )
+
+    debug_guardar("materiales_antes_normalizar", {
+        "filas": len(df),
+        "cantidades_nulas": int(df["Cantidad"].isna().sum()),
+        "preview": df.head(20).to_dict(orient="records"),
+    })
+
+    df = df.dropna(
+        subset=["Materiales", "Unidad", "Cantidad"]
+    ).copy()
+
+    df = df[
+        (df["Materiales"].str.strip() != "")
+        & (df["Unidad"].str.strip() != "")
+        & (df["Cantidad"] > 0)
+    ].copy()
+
+    if df.empty:
+        raise ValueError(
+            "Todos los materiales fueron descartados después de normalizar. "
+            "Revisá Materiales, Unidad y Cantidad."
+        )
+
+    debug_guardar("materiales_normalizados", {
+        "filas": len(df),
+        "preview": df.head(20).to_dict(orient="records"),
+    })
+
+    return df.reset_index(drop=True)
+
+
+
 # =========================================================
 # 🔧 NORMALIZAR CATÁLOGO DE COSTOS
 # =========================================================
