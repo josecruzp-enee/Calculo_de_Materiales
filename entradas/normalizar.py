@@ -88,7 +88,7 @@ PATRON = re.compile(
     \b(CT-[A-Z])\b|
     \b(R-\d+[A-Z]?)\b|
     \b(LL-\d+(?:-[0-9A-Z]+)+)\b
-    \b(TM-[IVX]+-\d+[A-Z]?)\b|
+    \b(TM-[IVX]+-\d+[A-Z]?)\b
     """,
     re.VERBOSE
 )
