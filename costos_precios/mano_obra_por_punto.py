@@ -526,18 +526,83 @@ def calcular_totales_por_punto(df_detalle: pd.DataFrame):
 # FUNCIÓN PRINCIPAL
 # ==========================================================
 
-def calcular_mano_obra_proyecto(df_estructuras_por_punto: pd.DataFrame, df_cables=None, contratista="C2"):
-  
+def calcular_mano_obra_proyecto(
+    df_estructuras_por_punto: pd.DataFrame,
+    df_cables=None,
+    contratista="C2"
+):
+
     lista_precios = obtener_lista_precios(contratista)
 
-    df_detalle = calcular_detalle_mano_obra(df_estructuras_por_punto, lista_precios)
+    # ======================================================
+    # ESTRUCTURAS NORMALES
+    # ======================================================
+    df_detalle = calcular_detalle_mano_obra(
+        df_estructuras_por_punto,
+        lista_precios
+    )
 
-    df_detalle = _agregar_cable_resumen(df_detalle, df_cables, lista_precios, contratista)
+    # ======================================================
+    # CONDUCTORES
+    # ======================================================
+    df_detalle = _agregar_cable_resumen(
+        df_detalle,
+        df_cables,
+        lista_precios,
+        contratista
+    )
 
-    df_totales = calcular_totales_por_punto(df_detalle[df_detalle["Punto"].notna()])
+    # ======================================================
+    # DESMONTAJES HARDCODEADOS
+    # Solo para contratista C2
+    # ======================================================
+    if contratista == "C2" and DESMONTAJES:
 
-    df_detalle = df_detalle.sort_values(["Punto", "Estructura"])
-    df_totales = df_totales.sort_values("Punto")
+        filas_desmontaje = []
+
+        for estructura, datos in DESMONTAJES.items():
+
+            cantidad = int(datos["cantidad"])
+            precio = float(datos["precio"])
+            subtotal = cantidad * precio
+
+            filas_desmontaje.append({
+                "Punto": "DESMONTAJE",
+                "Estructura": f"DESMONTAJE {estructura}",
+                "Cantidad": cantidad,
+                "Precio": round(precio, 2),
+                "Subtotal": round(subtotal, 2),
+            })
+
+        if filas_desmontaje:
+
+            df_detalle = pd.concat(
+                [
+                    df_detalle,
+                    pd.DataFrame(filas_desmontaje)
+                ],
+                ignore_index=True
+            )
+
+    # ======================================================
+    # TOTALES POR PUNTO
+    # ======================================================
+    df_totales = calcular_totales_por_punto(
+        df_detalle[
+            df_detalle["Punto"].notna()
+        ]
+    )
+
+    # ======================================================
+    # ORDENAR
+    # ======================================================
+    df_detalle = df_detalle.sort_values(
+        ["Punto", "Estructura"]
+    )
+
+    df_totales = df_totales.sort_values(
+        "Punto"
+    )
 
     return {
         "df_detalle": df_detalle,
