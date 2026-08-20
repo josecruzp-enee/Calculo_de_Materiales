@@ -161,7 +161,7 @@ PRECIOS_FIJOS_2 = {
     "CS-2": 1200,
     "DESMONTAJE": 35000,
     "REUBICACION": 80000,
-
+}
   
   
 
