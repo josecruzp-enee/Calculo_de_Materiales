@@ -3,7 +3,61 @@ from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
 import pandas as pd
 
+# ======================================================
+# DESMONTAJES DEL PROYECTO
+# ======================================================
+DESMONTAJES = {
+    "A-III-1": {
+        "cantidad": 12,
+        "precio": 2000,
+    },
+    "A-III-2": {
+        "cantidad": 2,
+        "precio": 2500,
+    },
+    "A-III-5": {
+        "cantidad": 4,
+        "precio": 3000,
+    },
+    "A-III-6": {
+        "cantidad": 1,
+        "precio": 3500,
+    },
+    "A-I-4": {
+        "cantidad": 3,
+        "precio": 1500,
+    },
+    "A-I-1": {
+        "cantidad": 3,
+        "precio": 1200,
+    },
+}
 
+
+# ======================================================
+# DESMONTAJE DE CONDUCTORES
+# SIN CONSIDERAR NEUTRO
+# ======================================================
+DESMONTAJE_LINEA = [
+    {
+        "descripcion": "Línea primaria 3F",
+        "longitud": 417,
+        "conductores": 3,
+        "precio_m": 40,
+    },
+    {
+        "descripcion": "Línea primaria 2F",
+        "longitud": 236,
+        "conductores": 2,
+        "precio_m": 40,
+    },
+    {
+        "descripcion": "Línea primaria 1F",
+        "longitud": 149,
+        "conductores": 1,
+        "precio_m": 40,
+    },
+]
 # =========================================================
 # HELPERS
 # =========================================================
