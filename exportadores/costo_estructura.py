@@ -91,7 +91,10 @@ def generar_tabla_costos_estructura(
         or df_costos_estructura.empty
     ):
         return [
-            Paragraph("No hay datos de costos de estructuras", styles["Normal"])
+            Paragraph(
+                "No hay datos de costos de estructuras",
+                styles["Normal"]
+            )
         ]
 
     df = df_costos_estructura.copy()
@@ -132,60 +135,104 @@ def generar_tabla_costos_estructura(
         "CÓDIGO DE ESTRUCTURA": "Estructura",
     }
 
-    df.rename(columns=lambda c: rename_map.get(c.upper(), c), inplace=True)
+    df.rename(
+        columns=lambda c: rename_map.get(c.upper(), c),
+        inplace=True
+    )
 
     # =====================================================
     # VALIDAR COLUMNA ESTRUCTURA
     # =====================================================
     if "Estructura" not in df.columns:
         return [
-            Paragraph("No existe columna 'Estructura'", styles["Normal"])
+            Paragraph(
+                "No existe columna 'Estructura'",
+                styles["Normal"]
+            )
         ]
 
     # =====================================================
-    # ASEGURAR COLUMNAS NUMÉRICAS
+    # VALIDAR CANTIDAD
     # =====================================================
     if "Cantidad" not in df.columns:
         return [
-            Paragraph("No existe columna 'Cantidad'", styles["Normal"])
+            Paragraph(
+                "No existe columna 'Cantidad'",
+                styles["Normal"]
+            )
         ]
 
-    df["Cantidad"] = pd.to_numeric(df["Cantidad"], errors="coerce").fillna(0)
+    df["Cantidad"] = pd.to_numeric(
+        df["Cantidad"],
+        errors="coerce"
+    ).fillna(0)
 
-    # Si no viene Material Unitario, asumir 0
+    # =====================================================
+    # ASEGURAR COLUMNAS DE COSTO
+    # =====================================================
     if "Material Unitario" not in df.columns:
         df["Material Unitario"] = 0
 
-    # Si no viene Instalación Unitario, asumir 0
     if "Instalación Unitario" not in df.columns:
         df["Instalación Unitario"] = 0
 
     df["Material Unitario"] = pd.to_numeric(
-        df["Material Unitario"], errors="coerce"
+        df["Material Unitario"],
+        errors="coerce"
     ).fillna(0)
 
     df["Instalación Unitario"] = pd.to_numeric(
-        df["Instalación Unitario"], errors="coerce"
+        df["Instalación Unitario"],
+        errors="coerce"
     ).fillna(0)
 
     # =====================================================
-    # CALCULAR TOTAL UNITARIO Y TOTAL POR FILA
+    # CALCULAR TOTALES DE ESTRUCTURAS NORMALES
     # =====================================================
-    df["Total Unitario"] = df["Material Unitario"] + df["Instalación Unitario"]
+    df["Total Unitario"] = (
+        df["Material Unitario"]
+        + df["Instalación Unitario"]
+    )
 
-    df["Material Total"] = df["Material Unitario"] * df["Cantidad"]
-    df["Instalación Total"] = df["Instalación Unitario"] * df["Cantidad"]
-    df["Costo Total"] = df["Total Unitario"] * df["Cantidad"]
+    df["Material Total"] = (
+        df["Material Unitario"]
+        * df["Cantidad"]
+    )
 
-    df = df.sort_values("Estructura").reset_index(drop=True)
+    df["Instalación Total"] = (
+        df["Instalación Unitario"]
+        * df["Cantidad"]
+    )
+
+    df["Costo Total"] = (
+        df["Total Unitario"]
+        * df["Cantidad"]
+    )
+
+    df = (
+        df
+        .sort_values("Estructura")
+        .reset_index(drop=True)
+    )
 
     # =====================================================
-    # TOTALES POR COLUMNA
+    # TOTALES INICIALES
     # =====================================================
-    total_material = float(df["Material Total"].sum())
-    total_instalacion = float(df["Instalación Total"].sum())
-    total_cantidad = float(df["Cantidad"].sum())
-    total_general = float(df["Costo Total"].sum())
+    total_material = float(
+        df["Material Total"].sum()
+    )
+
+    total_instalacion = float(
+        df["Instalación Total"].sum()
+    )
+
+    total_cantidad = float(
+        df["Cantidad"].sum()
+    )
+
+    total_general = float(
+        df["Costo Total"].sum()
+    )
 
     # =====================================================
     # TABLA
@@ -199,23 +246,119 @@ def generar_tabla_costos_estructura(
         "TOTAL",
     ]]
 
+    # =====================================================
+    # ESTRUCTURAS NORMALES
+    # =====================================================
     for _, row in df.iterrows():
 
-        estructura = str(row["Estructura"]).strip()
+        estructura = str(
+            row["Estructura"]
+        ).strip()
 
-        descripcion = f"Suministro e instalación de estructura {estructura}"
+        descripcion = (
+            f"Suministro e instalación "
+            f"de estructura {estructura}"
+        )
 
-        cantidad = float(row["Cantidad"])
-        cantidad_txt = str(int(cantidad)) if cantidad.is_integer() else f"{cantidad:.2f}"
+        cantidad = float(
+            row["Cantidad"]
+        )
+
+        cantidad_txt = (
+            str(int(cantidad))
+            if cantidad.is_integer()
+            else f"{cantidad:.2f}"
+        )
 
         data.append([
             descripcion,
-            _fmt_moneda(float(row["Material Unitario"])),
-            _fmt_moneda(float(row["Instalación Unitario"])),
-            _fmt_moneda(float(row["Total Unitario"])),
+            _fmt_moneda(
+                float(row["Material Unitario"])
+            ),
+            _fmt_moneda(
+                float(row["Instalación Unitario"])
+            ),
+            _fmt_moneda(
+                float(row["Total Unitario"])
+            ),
             cantidad_txt,
-            _fmt_moneda(float(row["Costo Total"])),
+            _fmt_moneda(
+                float(row["Costo Total"])
+            ),
         ])
+
+    # =====================================================
+    # DESMONTAJE DE ESTRUCTURAS
+    # =====================================================
+    for estructura, datos in DESMONTAJES.items():
+
+        cantidad = float(
+            datos["cantidad"]
+        )
+
+        precio = float(
+            datos["precio"]
+        )
+
+        subtotal = (
+            cantidad
+            * precio
+        )
+
+        data.append([
+            f"Desmontaje de estructura {estructura}",
+            _fmt_moneda(0),
+            _fmt_moneda(precio),
+            _fmt_moneda(precio),
+            str(int(cantidad)),
+            _fmt_moneda(subtotal),
+        ])
+
+        # No hay material nuevo
+        total_instalacion += subtotal
+        total_cantidad += cantidad
+        total_general += subtotal
+
+    # =====================================================
+    # DESMONTAJE DE CONDUCTORES
+    # SIN NEUTRO
+    # =====================================================
+    for tramo in DESMONTAJE_LINEA:
+
+        longitud = float(
+            tramo["longitud"]
+        )
+
+        conductores = float(
+            tramo["conductores"]
+        )
+
+        precio_m = float(
+            tramo["precio_m"]
+        )
+
+        metros_conductor = (
+            longitud
+            * conductores
+        )
+
+        subtotal = (
+            metros_conductor
+            * precio_m
+        )
+
+        data.append([
+            f"Desmontaje de {tramo['descripcion']}",
+            _fmt_moneda(0),
+            _fmt_moneda(precio_m),
+            _fmt_moneda(precio_m),
+            f"{int(metros_conductor)} m",
+            _fmt_moneda(subtotal),
+        ])
+
+        # No sumar metros a total_cantidad
+        total_instalacion += subtotal
+        total_general += subtotal
 
     # =====================================================
     # FILA TOTAL GENERAL
@@ -251,32 +394,116 @@ def generar_tabla_costos_estructura(
         repeatRows=1,
     )
 
-    tabla.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 8),
-        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+    tabla.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor("#1F4E79")
+            ),
+            (
+                "TEXTCOLOR",
+                (0, 0),
+                (-1, 0),
+                colors.white
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, 0),
+                8
+            ),
+            (
+                "ALIGN",
+                (0, 0),
+                (-1, 0),
+                "CENTER"
+            ),
 
-        ("GRID", (0, 0), (-1, -1), 0.45, colors.black),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.45,
+                colors.black
+            ),
 
-        ("FONTSIZE", (0, 1), (-1, -1), 7),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            (
+                "FONTSIZE",
+                (0, 1),
+                (-1, -1),
+                7
+            ),
 
-        ("ALIGN", (1, 1), (3, -1), "RIGHT"),
-        ("ALIGN", (4, 1), (4, -1), "CENTER"),
-        ("ALIGN", (5, 1), (5, -1), "RIGHT"),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "MIDDLE"
+            ),
 
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFEFEF")),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-    ]))
+            (
+                "ALIGN",
+                (1, 1),
+                (3, -1),
+                "RIGHT"
+            ),
+
+            (
+                "ALIGN",
+                (4, 1),
+                (4, -1),
+                "CENTER"
+            ),
+
+            (
+                "ALIGN",
+                (5, 1),
+                (5, -1),
+                "RIGHT"
+            ),
+
+            (
+                "BACKGROUND",
+                (0, -1),
+                (-1, -1),
+                colors.HexColor("#EFEFEF")
+            ),
+
+            (
+                "FONTNAME",
+                (0, -1),
+                (-1, -1),
+                "Helvetica-Bold"
+            ),
+        ])
+    )
 
     # =====================================================
     # SALIDA
     # =====================================================
     elems = []
-    elems.append(Paragraph("<b>PRESUPUESTO DE ESTRUCTURAS</b>", styles["Heading2"]))
-    elems.append(Spacer(1, 8))
-    elems.append(tabla)
+
+    elems.append(
+        Paragraph(
+            "<b>PRESUPUESTO DE ESTRUCTURAS</b>",
+            styles["Heading2"]
+        )
+    )
+
+    elems.append(
+        Spacer(1, 8)
+    )
+
+    elems.append(
+        tabla
+    )
 
     return elems
