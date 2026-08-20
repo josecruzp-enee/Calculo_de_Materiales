@@ -190,16 +190,34 @@ def tabla_presupuesto(df_detalle):
 # ======================================================
 def tabla_desmontajes():
 
-    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
+    data = [
+        [
+            "DESCRIPCIÓN",
+            "P.U.",
+            "CANT",
+            "TOTAL"
+        ]
+    ]
 
-    total_general = 0
+    total_general = 0.0
 
+    # ======================================================
+    # DESMONTAJE DE ESTRUCTURAS
+    # ======================================================
     for estructura, datos in DESMONTAJES.items():
 
-        cantidad = datos["cantidad"]
-        precio = datos["precio"]
+        cantidad = float(
+            datos["cantidad"]
+        )
 
-        subtotal = cantidad * precio
+        precio = float(
+            datos["precio"]
+        )
+
+        subtotal = (
+            cantidad
+            * precio
+        )
 
         data.append([
             f"Desmontaje de {estructura}",
@@ -210,6 +228,46 @@ def tabla_desmontajes():
 
         total_general += subtotal
 
+    # ======================================================
+    # DESMONTAJE DE CONDUCTORES
+    # SIN NEUTRO
+    # ======================================================
+    for tramo in DESMONTAJE_LINEA:
+
+        longitud = float(
+            tramo["longitud"]
+        )
+
+        conductores = float(
+            tramo["conductores"]
+        )
+
+        precio_m = float(
+            tramo["precio_m"]
+        )
+
+        metros_conductor = (
+            longitud
+            * conductores
+        )
+
+        subtotal = (
+            metros_conductor
+            * precio_m
+        )
+
+        data.append([
+            f"Desmontaje de {tramo['descripcion']}",
+            f"L {precio_m:,.2f}/m",
+            f"{int(metros_conductor)} m",
+            f"L {subtotal:,.2f}",
+        ])
+
+        total_general += subtotal
+
+    # ======================================================
+    # TOTAL
+    # ======================================================
     data.append([
         "",
         "",
@@ -219,10 +277,17 @@ def tabla_desmontajes():
 
     tabla = Table(
         data,
-        colWidths=[320, 80, 60, 90]
+        colWidths=[
+            320,
+            80,
+            60,
+            90
+        ]
     )
 
-    tabla.setStyle(estilo_tabla())
+    tabla.setStyle(
+        estilo_tabla()
+    )
 
     return tabla
 # ======================================================
