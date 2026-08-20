@@ -409,7 +409,7 @@ def generar_seccion_cotizacion_final(
         ).fillna(0.0)
 
     # =====================================================
-    # CANTIDADES DE MATERIAL Y MANO DE OBRA
+    # CANTIDADES
     # =====================================================
     cantidad_material = df["Cantidad Material"].where(
         df["Cantidad Material"] > 0,
@@ -422,7 +422,7 @@ def generar_seccion_cotizacion_final(
     )
 
     # =====================================================
-    # SUMINISTRO DE MATERIALES SIN ISV
+    # MATERIALES
     # =====================================================
     total_materiales = float(
         (
@@ -431,9 +431,6 @@ def generar_seccion_cotizacion_final(
         ).sum()
     )
 
-    # =====================================================
-    # COSTOS OPERATIVOS
-    # =====================================================
     total_costos_operativos = float(
         (
             df["Cantidad"]
@@ -447,7 +444,7 @@ def generar_seccion_cotizacion_final(
     )
 
     # =====================================================
-    # ISV ÚNICAMENTE SOBRE SUMINISTRO
+    # ISV SOLO SOBRE MATERIALES
     # =====================================================
     tasa_isv_materiales = 0.15
 
@@ -462,7 +459,7 @@ def generar_seccion_cotizacion_final(
     )
 
     # =====================================================
-    # MANO DE OBRA SIN ISV
+    # MANO DE OBRA
     # =====================================================
     total_mano_obra = float(
         (
@@ -472,20 +469,43 @@ def generar_seccion_cotizacion_final(
     )
 
     # =====================================================
-    # DESMONTAJES
+    # DESMONTAJE DE ESTRUCTURAS
     # =====================================================
-    total_desmontaje = 0.0
+    total_desmontaje_estructuras = 0.0
 
-    if "DESMONTAJES" in globals() and DESMONTAJES:
+    if DESMONTAJES:
 
-        total_desmontaje = sum(
+        total_desmontaje_estructuras = sum(
             float(datos.get("cantidad", 0))
             * float(datos.get("precio", 0))
             for datos in DESMONTAJES.values()
         )
 
     # =====================================================
-    # LOGÍSTICA STREAMLIT
+    # DESMONTAJE DE CONDUCTORES
+    # SIN NEUTRO
+    # =====================================================
+    total_desmontaje_conductores = 0.0
+
+    if DESMONTAJE_LINEA:
+
+        total_desmontaje_conductores = sum(
+            float(tramo.get("longitud", 0))
+            * float(tramo.get("conductores", 0))
+            * float(tramo.get("precio_m", 0))
+            for tramo in DESMONTAJE_LINEA
+        )
+
+    # =====================================================
+    # TOTAL DESMONTAJE
+    # =====================================================
+    total_desmontaje = (
+        total_desmontaje_estructuras
+        + total_desmontaje_conductores
+    )
+
+    # =====================================================
+    # LOGÍSTICA
     # =====================================================
     logistica = _leer_logistica_streamlit()
 
@@ -529,21 +549,13 @@ def generar_seccion_cotizacion_final(
         ],
     ]
 
-    # =====================================================
-    # AGREGAR DESMONTAJE
-    # =====================================================
     if total_desmontaje > 0:
-
         data.append([
-            "Desmontaje de estructuras existentes",
+            "Desmontaje de red existente",
             _fmt_lps(total_desmontaje),
         ])
 
-    # =====================================================
-    # GRÚA
-    # =====================================================
     if total_grua > 0:
-
         data.append([
             (
                 f"Equipo Grúa "
@@ -553,11 +565,7 @@ def generar_seccion_cotizacion_final(
             _fmt_lps(total_grua),
         ])
 
-    # =====================================================
-    # FLETE
-    # =====================================================
     if total_flete > 0:
-
         data.append([
             (
                 f"Flete / rastra "
@@ -567,19 +575,12 @@ def generar_seccion_cotizacion_final(
             _fmt_lps(total_flete),
         ])
 
-    # =====================================================
-    # INGENIERÍA
-    # =====================================================
     if ingenieria > 0:
-
         data.append([
             "Gastos de Ingeniería",
             _fmt_lps(ingenieria),
         ])
 
-    # =====================================================
-    # TOTAL PROYECTO
-    # =====================================================
     data.append([
         "TOTAL PROYECTO",
         _fmt_lps(total_final),
@@ -617,4 +618,5 @@ def generar_seccion_cotizacion_final(
         styles,
     )
 
+    return elems
     return elems
