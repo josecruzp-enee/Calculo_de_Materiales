@@ -215,15 +215,32 @@ def tabla_logistica():
 # ======================================================
 def tabla_detalle_por_punto(df_detalle):
 
+    # ======================================================
+    # EXCLUIR DESMONTAJES DEL DETALLE POR PUNTO
+    # ======================================================
+    df_base = df_detalle[
+        ~df_detalle["Estructura"]
+        .astype(str)
+        .str.upper()
+        .str.startswith("DESMONTAJE")
+    ].copy()
+
     data = [["Punto", "Descripción", "P.U.", "Cant", "Subtotal"]]
 
-    for punto, grupo in df_detalle.groupby("Punto"):
+    for punto, grupo in df_base.groupby("Punto"):
 
-        data.append([punto, "", "", "", ""])
+        data.append([
+            punto,
+            "",
+            "",
+            "",
+            ""
+        ])
 
         subtotal_punto = 0
 
         for _, r in grupo.iterrows():
+
             data.append([
                 "",
                 f"Instalación de {r['Estructura']}",
@@ -231,6 +248,7 @@ def tabla_detalle_por_punto(df_detalle):
                 int(r["Cantidad"]),
                 f"L {r['Subtotal']:,.2f}",
             ])
+
             subtotal_punto += r["Subtotal"]
 
         data.append([
@@ -241,7 +259,11 @@ def tabla_detalle_por_punto(df_detalle):
             f"L {subtotal_punto:,.2f}",
         ])
 
-    tabla = Table(data, colWidths=[60, 210, 70, 50, 90])
+    tabla = Table(
+        data,
+        colWidths=[60, 210, 70, 50, 90]
+    )
+
     tabla.setStyle(estilo_tabla())
 
     return tabla
