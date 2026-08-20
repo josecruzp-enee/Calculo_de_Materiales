@@ -95,7 +95,17 @@ def tabla_presupuesto_general(df_detalle):
 # ======================================================
 def tabla_presupuesto(df_detalle):
 
-    df = df_detalle.groupby("Estructura", as_index=False).agg({
+    # ======================================================
+    # EXCLUIR DESMONTAJES DE ESTA TABLA
+    # ======================================================
+    df_base = df_detalle[
+        ~df_detalle["Estructura"]
+        .astype(str)
+        .str.upper()
+        .str.startswith("DESMONTAJE")
+    ].copy()
+
+    df = df_base.groupby("Estructura", as_index=False).agg({
         "Cantidad": "sum",
         "Precio": "first",
         "Subtotal": "sum"
@@ -105,28 +115,31 @@ def tabla_presupuesto(df_detalle):
     total = 0
 
     for _, r in df.iterrows():
+
         data.append([
             f"Instalación de {r['Estructura']}",
             f"L {r['Precio']:,.2f}",
             int(r["Cantidad"]),
             f"L {r['Subtotal']:,.2f}",
         ])
+
         total += r["Subtotal"]
 
-    # 🔴 HARDCODE
-    #data.append(["Desmontaje de Red Existente", "L 35,000.00", 1, "L 35,000.00"])
-    #total += 35000
+    data.append([
+        "",
+        "",
+        "TOTAL",
+        f"L {total:,.2f}"
+    ])
 
-    #data.append(["Reubicación de Transformador Existente", "L 80,000.00", 1, "L 80,000.00"])
-    #total += 80000
+    tabla = Table(
+        data,
+        colWidths=[320, 80, 60, 90]
+    )
 
-    data.append(["", "", "TOTAL", f"L {total:,.2f}"])
-
-    tabla = Table(data, colWidths=[320, 80, 60, 90])
     tabla.setStyle(estilo_tabla())
 
     return tabla
-
 # ======================================================
 # 🔴 TABLA DE DESMONTAJES
 # ======================================================
