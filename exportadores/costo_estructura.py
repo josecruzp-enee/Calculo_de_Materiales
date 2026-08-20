@@ -125,13 +125,11 @@ def generar_tabla_costos_estructura(
     # =====================================================
     # VALIDACIÓN SUAVE
     # =====================================================
-
     if (
         df_costos_estructura is None
         or not isinstance(df_costos_estructura, pd.DataFrame)
         or df_costos_estructura.empty
     ):
-
         return [
             Paragraph(
                 "No hay datos de costos de estructuras",
@@ -144,14 +142,12 @@ def generar_tabla_costos_estructura(
     # =====================================================
     # NORMALIZAR COLUMNAS
     # =====================================================
-
     df.columns = [
         c.strip()
         for c in df.columns
     ]
 
     rename_map = {
-
         "COSTO UNITARIO": "Total Unitario",
         "COSTO_UNITARIO": "Total Unitario",
         "COSTO": "Total Unitario",
@@ -193,9 +189,7 @@ def generar_tabla_costos_estructura(
     # =====================================================
     # VALIDAR ESTRUCTURA
     # =====================================================
-
     if "Estructura" not in df.columns:
-
         return [
             Paragraph(
                 "No existe columna 'Estructura'",
@@ -206,9 +200,7 @@ def generar_tabla_costos_estructura(
     # =====================================================
     # VALIDAR CANTIDAD
     # =====================================================
-
     if "Cantidad" not in df.columns:
-
         return [
             Paragraph(
                 "No existe columna 'Cantidad'",
@@ -224,7 +216,6 @@ def generar_tabla_costos_estructura(
     # =====================================================
     # ASEGURAR COLUMNAS DE COSTO
     # =====================================================
-
     if "Material Unitario" not in df.columns:
         df["Material Unitario"] = 0
 
@@ -242,9 +233,8 @@ def generar_tabla_costos_estructura(
     ).fillna(0)
 
     # =====================================================
-    # CALCULAR ESTRUCTURAS NORMALES
+    # CALCULAR TOTALES
     # =====================================================
-
     df["Total Unitario"] = (
         df["Material Unitario"]
         + df["Instalación Unitario"]
@@ -272,9 +262,8 @@ def generar_tabla_costos_estructura(
     )
 
     # =====================================================
-    # TOTALES INICIALES
+    # TOTALES
     # =====================================================
-
     total_material = float(
         df["Material Total"].sum()
     )
@@ -294,7 +283,6 @@ def generar_tabla_costos_estructura(
     # =====================================================
     # TABLA
     # =====================================================
-
     data = [[
         "DESCRIPCIÓN",
         "MATERIAL",
@@ -307,7 +295,6 @@ def generar_tabla_costos_estructura(
     # =====================================================
     # ESTRUCTURAS NORMALES
     # =====================================================
-
     for _, row in df.iterrows():
 
         estructura = str(
@@ -330,142 +317,25 @@ def generar_tabla_costos_estructura(
         )
 
         data.append([
-
             descripcion,
-
             _fmt_moneda(
                 float(row["Material Unitario"])
             ),
-
             _fmt_moneda(
                 float(row["Instalación Unitario"])
             ),
-
             _fmt_moneda(
                 float(row["Total Unitario"])
             ),
-
             cantidad_txt,
-
             _fmt_moneda(
                 float(row["Costo Total"])
             ),
         ])
 
     # =====================================================
-    # DESMONTAJES
-    # =====================================================
-    #
-    # SOLO se agregan cuando:
-    #
-    # INCLUIR_DESMONTAJES = True
-    #
-    # =====================================================
-
-    if INCLUIR_DESMONTAJES:
-
-        # =================================================
-        # DESMONTAJE DE ESTRUCTURAS
-        # =================================================
-
-        for estructura, datos in DESMONTAJES.items():
-
-            cantidad = float(
-                datos["cantidad"]
-            )
-
-            precio = float(
-                datos["precio"]
-            )
-
-            subtotal = (
-                cantidad
-                * precio
-            )
-
-            cantidad_txt = (
-                str(int(cantidad))
-                if cantidad.is_integer()
-                else f"{cantidad:.2f}"
-            )
-
-            data.append([
-
-                f"Desmontaje de estructura {estructura}",
-
-                _fmt_moneda(0),
-
-                _fmt_moneda(precio),
-
-                _fmt_moneda(precio),
-
-                cantidad_txt,
-
-                _fmt_moneda(subtotal),
-            ])
-
-            # Desmontaje = mano de obra
-            total_instalacion += subtotal
-
-            total_cantidad += cantidad
-
-            total_general += subtotal
-
-        # =================================================
-        # DESMONTAJE DE CONDUCTORES
-        # SIN NEUTRO
-        # =================================================
-
-        for tramo in DESMONTAJE_LINEA:
-
-            longitud = float(
-                tramo["longitud"]
-            )
-
-            conductores = float(
-                tramo["conductores"]
-            )
-
-            precio_m = float(
-                tramo["precio_m"]
-            )
-
-            metros_conductor = (
-                longitud
-                * conductores
-            )
-
-            subtotal = (
-                metros_conductor
-                * precio_m
-            )
-
-            data.append([
-
-                f"Desmontaje de {tramo['descripcion']}",
-
-                _fmt_moneda(0),
-
-                _fmt_moneda(precio_m),
-
-                _fmt_moneda(precio_m),
-
-                f"{int(metros_conductor)} m",
-
-                _fmt_moneda(subtotal),
-            ])
-
-            # Desmontaje = mano de obra
-            total_instalacion += subtotal
-
-            # NO agregamos metros de conductor
-            # a la cantidad de estructuras.
-            total_general += subtotal
-
-    # =====================================================
     # FILA TOTAL GENERAL
     # =====================================================
-
     cantidad_total_txt = (
         str(int(total_cantidad))
         if float(total_cantidad).is_integer()
@@ -473,34 +343,19 @@ def generar_tabla_costos_estructura(
     )
 
     data.append([
-
         "TOTAL",
-
-        _fmt_moneda(
-            total_material
-        ),
-
-        _fmt_moneda(
-            total_instalacion
-        ),
-
+        _fmt_moneda(total_material),
+        _fmt_moneda(total_instalacion),
         "",
-
         cantidad_total_txt,
-
-        _fmt_moneda(
-            total_general
-        ),
+        _fmt_moneda(total_general),
     ])
 
     # =====================================================
     # FORMATO
     # =====================================================
-
     tabla = Table(
-
         data,
-
         colWidths=[
             doc.width * 0.40,
             doc.width * 0.13,
@@ -509,49 +364,41 @@ def generar_tabla_costos_estructura(
             doc.width * 0.08,
             doc.width * 0.12,
         ],
-
         repeatRows=1,
     )
 
     tabla.setStyle(
-
         TableStyle([
-
             (
                 "BACKGROUND",
                 (0, 0),
                 (-1, 0),
                 colors.HexColor("#1F4E79")
             ),
-
             (
                 "TEXTCOLOR",
                 (0, 0),
                 (-1, 0),
                 colors.white
             ),
-
             (
                 "FONTNAME",
                 (0, 0),
                 (-1, 0),
                 "Helvetica-Bold"
             ),
-
             (
                 "FONTSIZE",
                 (0, 0),
                 (-1, 0),
                 8
             ),
-
             (
                 "ALIGN",
                 (0, 0),
                 (-1, 0),
                 "CENTER"
             ),
-
             (
                 "GRID",
                 (0, 0),
@@ -559,49 +406,42 @@ def generar_tabla_costos_estructura(
                 0.45,
                 colors.black
             ),
-
             (
                 "FONTSIZE",
                 (0, 1),
                 (-1, -1),
                 7
             ),
-
             (
                 "VALIGN",
                 (0, 0),
                 (-1, -1),
                 "MIDDLE"
             ),
-
             (
                 "ALIGN",
                 (1, 1),
                 (3, -1),
                 "RIGHT"
             ),
-
             (
                 "ALIGN",
                 (4, 1),
                 (4, -1),
                 "CENTER"
             ),
-
             (
                 "ALIGN",
                 (5, 1),
                 (5, -1),
                 "RIGHT"
             ),
-
             (
                 "BACKGROUND",
                 (0, -1),
                 (-1, -1),
                 colors.HexColor("#EFEFEF")
             ),
-
             (
                 "FONTNAME",
                 (0, -1),
@@ -614,7 +454,6 @@ def generar_tabla_costos_estructura(
     # =====================================================
     # SALIDA
     # =====================================================
-
     elems = []
 
     elems.append(
