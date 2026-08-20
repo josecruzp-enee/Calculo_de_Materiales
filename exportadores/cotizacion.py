@@ -24,6 +24,11 @@ DESMONTAJES = {
     "A-III-2": {
         "cantidad": 2,
         "precio": 2500,
+
+    "A-III-4": {
+        "cantidad": 1,
+        "precio": 3000,
+
     },
     "A-III-5": {
         "cantidad": 4,
