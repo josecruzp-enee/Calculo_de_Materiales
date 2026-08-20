@@ -220,92 +220,242 @@ def generar_pdf_estructuras_global(df_estructuras, nombre_proy, base_datos=None,
 # ==========================================================
 # PDF: ESTRUCTURAS POR PUNTO
 # ==========================================================
+# ==========================================================
+# PDF: ESTRUCTURAS POR PUNTO
+# ==========================================================
 def generar_pdf_estructuras_por_punto(df, nombre_proy, datos_proyecto=None):
     """
     SALIDA:
     -------
     bytes (PDF)
+
+    Los puntos se muestran en orden numérico:
+    P-01, P-2, P-03, P-04 ... P-10 ... P-54
     """
 
     from ayuda.debug import debug_guardar
 
-    debug_guardar("PDF", "ESTRUCTURAS_POR_PUNTO_IN", df.shape if isinstance(df, pd.DataFrame) else None)
+    debug_guardar(
+        "PDF",
+        "ESTRUCTURAS_POR_PUNTO_IN",
+        df.shape if isinstance(df, pd.DataFrame) else None
+    )
 
-    nombre_proy = nombre_proyecto_seguro(nombre_proy, datos_proyecto)
+    nombre_proy = nombre_proyecto_seguro(
+        nombre_proy,
+        datos_proyecto
+    )
 
     buffer = BytesIO()
-    doc = BaseDocTemplate(buffer, pagesize=letter)
+    doc = BaseDocTemplate(
+        buffer,
+        pagesize=letter
+    )
 
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height)
-    template = PageTemplate(id="fondo", frames=[frame], onPage=fondo_pagina)
+    frame = Frame(
+        doc.leftMargin,
+        doc.bottomMargin,
+        doc.width,
+        doc.height
+    )
+
+    template = PageTemplate(
+        id="fondo",
+        frames=[frame],
+        onPage=fondo_pagina
+    )
+
     doc.addPageTemplates([template])
 
-    elems = _header("ESTRUCTURAS POR PUNTO", nombre_proy)
+    elems = _header(
+        "ESTRUCTURAS POR PUNTO",
+        nombre_proy
+    )
 
     # =====================================================
     # VALIDACIÓN
     # =====================================================
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
-        elems.append(Paragraph("No hay datos.", styleN))
+
+    if (
+        df is None
+        or not isinstance(df, pd.DataFrame)
+        or df.empty
+    ):
+        elems.append(
+            Paragraph(
+                "No hay datos.",
+                styleN
+            )
+        )
+
         doc.build(elems)
         return buffer.getvalue()
 
-    # 🔥 DEBUG CLAVE
-    debug_guardar("PDF_ESTRUCTURAS_COLUMNAS", list(df.columns))
+    df = df.copy()
+
+    debug_guardar(
+        "PDF_ESTRUCTURAS_COLUMNAS",
+        list(df.columns)
+    )
 
     # =====================================================
     # ASEGURAR COLUMNA PUNTO
     # =====================================================
+
     if "Punto" not in df.columns:
-        debug_guardar("WARNING", {
-            "mensaje": "No existe columna Punto, se usará GLOBAL",
-            "columnas": list(df.columns)
-        })
-        df = df.copy()
+
+        debug_guardar(
+            "WARNING",
+            {
+                "mensaje": "No existe columna Punto, se usará GLOBAL",
+                "columnas": list(df.columns)
+            }
+        )
+
         df["Punto"] = "GLOBAL"
 
     # =====================================================
     # ASEGURAR COLUMNA ESTRUCTURA
     # =====================================================
-    if "Estructura" not in df.columns:
-        raise ValueError(f"Falta columna 'Estructura'. Columnas: {list(df.columns)}")
 
-    # =====================================================
-    # DEFINIR COLUMNA CÓDIGO
-    # =====================================================
+    if "Estructura" not in df.columns:
+
+        raise ValueError(
+            f"Falta columna 'Estructura'. "
+            f"Columnas: {list(df.columns)}"
+        )
+
     col_codigo = "Estructura"
 
     # =====================================================
-    # AGRUPAR POR PUNTO
+    # FUNCIÓN DE ORDEN NUMÉRICO DE PUNTOS
     # =====================================================
-    for punto, df_p in df.groupby("Punto"):
 
-        elems.append(Paragraph(f"<b>{punto}</b>", styles["Heading2"]))
+    def ordenar_punto(punto):
 
-        data = [["Estructura", "Descripción", "Cantidad"]]
+        try:
+
+            texto = (
+                str(punto)
+                .upper()
+                .strip()
+                .replace("P-", "")
+                .replace("P", "")
+            )
+
+            return int(texto)
+
+        except Exception:
+
+            return 999999
+
+    # =====================================================
+    # OBTENER PUNTOS Y ORDENAR NUMÉRICAMENTE
+    # =====================================================
+
+    puntos = (
+        df["Punto"]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
+
+    puntos = sorted(
+        puntos,
+        key=ordenar_punto
+    )
+
+    # =====================================================
+    # GENERAR TABLA POR PUNTO
+    # =====================================================
+
+    for punto in puntos:
+
+        df_p = df[
+            df["Punto"]
+            .astype(str)
+            == str(punto)
+        ]
+
+        elems.append(
+            Paragraph(
+                f"<b>{escape(str(punto))}</b>",
+                styles["Heading2"]
+            )
+        )
+
+        data = [
+            [
+                "Estructura",
+                "Descripción",
+                "Cantidad"
+            ]
+        ]
 
         for _, r in df_p.iterrows():
+
             data.append([
-                escape(str(r.get(col_codigo, ""))),
-                escape(str(r.get("Descripcion", ""))),
-                escape(str(r.get("Cantidad", ""))),
+                escape(
+                    str(
+                        r.get(
+                            col_codigo,
+                            ""
+                        )
+                    )
+                ),
+
+                escape(
+                    str(
+                        r.get(
+                            "Descripcion",
+                            ""
+                        )
+                    )
+                ),
+
+                escape(
+                    str(
+                        r.get(
+                            "Cantidad",
+                            ""
+                        )
+                    )
+                ),
             ])
 
         tabla = Table(
             data,
-            colWidths=[doc.width * 0.18, doc.width * 0.67, doc.width * 0.15],
+            colWidths=[
+                doc.width * 0.18,
+                doc.width * 0.67,
+                doc.width * 0.15
+            ],
             repeatRows=1
         )
 
-        tabla.setStyle(estilo_tabla())
+        tabla.setStyle(
+            estilo_tabla()
+        )
 
         elems.append(tabla)
-        elems.append(Spacer(1, 10))
+        elems.append(
+            Spacer(
+                1,
+                10
+            )
+        )
+
+    # =====================================================
+    # GENERAR PDF
+    # =====================================================
 
     doc.build(elems)
 
-    return buffer.getvalue()
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
 
+    return pdf_bytes
 # ==========================================================
 # PDF: MATERIALES POR PUNTO (FALTANTE)
 # ==========================================================
