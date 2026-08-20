@@ -18,7 +18,7 @@ INCLUIR_DESMONTAJES = True
 # ======================================================
 DESMONTAJES = {
     "A-III-1": {
-        "cantidad": 12,
+        "cantidad": 13,
         "precio": 2000,
     },
     "A-III-2": {
