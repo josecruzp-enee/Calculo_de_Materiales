@@ -16,6 +16,19 @@ from exportadores.pdf_base import fondo_pagina
 
 
 # ======================================================
+# 🔴 DESMONTAJES DEL PROYECTO
+# ======================================================
+DESMONTAJES = {
+    "A-III-1": {
+        "cantidad": 20,
+        "precio": 1200,
+    },
+    "A-III-5": {
+        "cantidad": 2,
+        "precio": 1500,
+    },
+}
+# ======================================================
 # 🎨 ESTILO TABLA
 # ======================================================
 def estilo_tabla():
@@ -114,7 +127,46 @@ def tabla_presupuesto(df_detalle):
 
     return tabla
 
+# ======================================================
+# 🔴 TABLA DE DESMONTAJES
+# ======================================================
+def tabla_desmontajes():
 
+    data = [["DESCRIPCIÓN", "P.U.", "CANT", "TOTAL"]]
+
+    total_general = 0
+
+    for estructura, datos in DESMONTAJES.items():
+
+        cantidad = datos["cantidad"]
+        precio = datos["precio"]
+
+        subtotal = cantidad * precio
+
+        data.append([
+            f"Desmontaje de {estructura}",
+            f"L {precio:,.2f}",
+            int(cantidad),
+            f"L {subtotal:,.2f}",
+        ])
+
+        total_general += subtotal
+
+    data.append([
+        "",
+        "",
+        "TOTAL",
+        f"L {total_general:,.2f}"
+    ])
+
+    tabla = Table(
+        data,
+        colWidths=[320, 80, 60, 90]
+    )
+
+    tabla.setStyle(estilo_tabla())
+
+    return tabla
 # ======================================================
 # 🔵 TABLA LOGÍSTICA
 # ======================================================
@@ -228,77 +280,178 @@ def generar_pdf_contratista(entrada):
     # ======================================================
     if contratista == "C1":
 
-        elementos.append(Paragraph("CUADRO GENERAL DE PRECIOS", styles["Title"]))
+        elementos.append(
+            Paragraph(
+                "CUADRO GENERAL DE PRECIOS",
+                styles["Title"]
+            )
+        )
+
         elementos.append(Spacer(1, 12))
-        elementos.append(tabla_presupuesto_general(df_detalle))
+        elementos.append(
+            tabla_presupuesto_general(df_detalle)
+        )
         elementos.append(PageBreak())
 
     else:
 
-        elementos.append(Paragraph("ESTRUCTURAS Y CONDUCTORES", styles["Title"]))
-        elementos.append(tabla_presupuesto(df_detalle))
+        elementos.append(
+            Paragraph(
+                "ESTRUCTURAS Y CONDUCTORES",
+                styles["Title"]
+            )
+        )
+
+        elementos.append(
+            tabla_presupuesto(df_detalle)
+        )
+
         elementos.append(PageBreak())
 
         tabla_log = tabla_logistica()
+
         if tabla_log:
-            elementos.append(Paragraph("LOGÍSTICA", styles["Title"]))
+
+            elementos.append(
+                Paragraph(
+                    "LOGÍSTICA",
+                    styles["Title"]
+                )
+            )
+
             elementos.append(Spacer(1, 12))
             elementos.append(tabla_log)
             elementos.append(PageBreak())
+
     '''
     # ======================================================
-    # 🔥 RESUMEN COMPLETO
+    # RESUMEN COMPLETO
     # ======================================================
-    elementos.append(Paragraph("RESUMEN GENERAL", styles["Title"]))
+    elementos.append(
+        Paragraph(
+            "RESUMEN GENERAL",
+            styles["Title"]
+        )
+    )
+
     elementos.append(Spacer(1, 12))
 
     data = [["Concepto", "Total (L)"]]
 
-    # 🔹 TOTAL PUNTOS
+    # TOTAL PUNTOS
     total_puntos = 0
+
     for _, r in df_totales.iterrows():
         total_puntos += r["TOTAL_PUNTO"]
 
-    data.append(["TOTAL POR PUNTOS", f"L {total_puntos:,.2f}"])
+    data.append([
+        "TOTAL POR PUNTOS",
+        f"L {total_puntos:,.2f}"
+    ])
 
-    # 🔹 CONDUCTORES
+    # CONDUCTORES
     total_conductores = 0
+
     for _, r in df_detalle.iterrows():
-        nombre = str(r["Estructura"]).upper()
+
+        nombre = str(
+            r["Estructura"]
+        ).upper()
+
         if "CONDUCTOR" in nombre:
             total_conductores += r["Subtotal"]
 
-    data.append(["CONDUCTORES", f"L {total_conductores:,.2f}"])
+    data.append([
+        "CONDUCTORES",
+        f"L {total_conductores:,.2f}"
+    ])
 
-    # 🔹 ACTIVIDADES
+    # ACTIVIDADES
     total_actividades = 0
+
     if contratista != "C1":
         total_actividades = 35000 + 80000
 
     if total_actividades > 0:
-        data.append(["ACTIVIDADES", f"L {total_actividades:,.2f}"])
 
-    # 🔹 TOTAL GENERAL
-    total_general = total_puntos + total_conductores + total_actividades
-    data.append(["TOTAL GENERAL", f"L {total_general:,.2f}"])
+        data.append([
+            "ACTIVIDADES",
+            f"L {total_actividades:,.2f}"
+        ])
 
-    tabla = Table(data, colWidths=[250, 150])
-    tabla.setStyle(estilo_tabla())
+    # TOTAL GENERAL
+    total_general = (
+        total_puntos
+        + total_conductores
+        + total_actividades
+    )
+
+    data.append([
+        "TOTAL GENERAL",
+        f"L {total_general:,.2f}"
+    ])
+
+    tabla = Table(
+        data,
+        colWidths=[250, 150]
+    )
+
+    tabla.setStyle(
+        estilo_tabla()
+    )
 
     elementos.append(tabla)
     elementos.append(PageBreak())
     '''
+
+    # ======================================================
+    # DESMONTAJE DE ESTRUCTURAS
+    # ======================================================
+    if DESMONTAJES:
+
+        elementos.append(
+            Paragraph(
+                "DESMONTAJE DE ESTRUCTURAS",
+                styles["Title"]
+            )
+        )
+
+        elementos.append(Spacer(1, 12))
+
+        elementos.append(
+            tabla_desmontajes()
+        )
+
+        elementos.append(PageBreak())
+
     # ======================================================
     # DETALLE POR PUNTO
     # ======================================================
-    elementos.append(Paragraph("DETALLE DE PRECIOS POR PUNTO", styles["Title"]))
+    elementos.append(
+        Paragraph(
+            "DETALLE DE PRECIOS POR PUNTO",
+            styles["Title"]
+        )
+    )
+
     elementos.append(Spacer(1, 12))
-    elementos.append(tabla_detalle_por_punto(df_detalle))
+
+    elementos.append(
+        tabla_detalle_por_punto(df_detalle)
+    )
+
     elementos.append(PageBreak())
 
-    doc.build(elementos, onFirstPage=fondo_pagina)
+    # ======================================================
+    # GENERAR PDF
+    # ======================================================
+    doc.build(
+        elementos,
+        onFirstPage=fondo_pagina
+    )
 
     pdf = buffer.getvalue()
+
     buffer.close()
 
     return pdf
