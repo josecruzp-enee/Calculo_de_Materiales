@@ -9,7 +9,10 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 
 from exportadores.pdf_base import estilo_tabla
-
+# ======================================================
+# ACTIVAR / DESACTIVAR DESMONTAJES
+# ======================================================
+INCLUIR_DESMONTAJES = True
 # ======================================================
 # DESMONTAJES DEL PROYECTO
 # ======================================================
@@ -373,6 +376,7 @@ def generar_seccion_cotizacion_final(
     styleTitulo = styles["Heading1"].clone(
         "titulo_cotizacion"
     )
+
     styleTitulo.alignment = TA_CENTER
 
     elems.append(
@@ -382,7 +386,9 @@ def generar_seccion_cotizacion_final(
         )
     )
 
-    elems.append(Spacer(1, 10))
+    elems.append(
+        Spacer(1, 10)
+    )
 
     # =====================================================
     # PREPARAR DATAFRAME
@@ -469,40 +475,44 @@ def generar_seccion_cotizacion_final(
     )
 
     # =====================================================
-    # DESMONTAJE DE ESTRUCTURAS
+    # DESMONTAJES
     # =====================================================
-    total_desmontaje_estructuras = 0.0
+    total_desmontaje = 0.0
 
-    if DESMONTAJES:
+    if INCLUIR_DESMONTAJES:
 
-        total_desmontaje_estructuras = sum(
-            float(datos.get("cantidad", 0))
-            * float(datos.get("precio", 0))
-            for datos in DESMONTAJES.values()
+        # ---------------------------------------------
+        # Desmontaje de estructuras
+        # ---------------------------------------------
+        total_desmontaje_estructuras = 0.0
+
+        if DESMONTAJES:
+
+            total_desmontaje_estructuras = sum(
+                float(datos.get("cantidad", 0))
+                * float(datos.get("precio", 0))
+                for datos in DESMONTAJES.values()
+            )
+
+        # ---------------------------------------------
+        # Desmontaje de conductores
+        # SIN NEUTRO
+        # ---------------------------------------------
+        total_desmontaje_conductores = 0.0
+
+        if DESMONTAJE_LINEA:
+
+            total_desmontaje_conductores = sum(
+                float(tramo.get("longitud", 0))
+                * float(tramo.get("conductores", 0))
+                * float(tramo.get("precio_m", 0))
+                for tramo in DESMONTAJE_LINEA
+            )
+
+        total_desmontaje = (
+            total_desmontaje_estructuras
+            + total_desmontaje_conductores
         )
-
-    # =====================================================
-    # DESMONTAJE DE CONDUCTORES
-    # SIN NEUTRO
-    # =====================================================
-    total_desmontaje_conductores = 0.0
-
-    if DESMONTAJE_LINEA:
-
-        total_desmontaje_conductores = sum(
-            float(tramo.get("longitud", 0))
-            * float(tramo.get("conductores", 0))
-            * float(tramo.get("precio_m", 0))
-            for tramo in DESMONTAJE_LINEA
-        )
-
-    # =====================================================
-    # TOTAL DESMONTAJE
-    # =====================================================
-    total_desmontaje = (
-        total_desmontaje_estructuras
-        + total_desmontaje_conductores
-    )
 
     # =====================================================
     # LOGÍSTICA
@@ -549,13 +559,24 @@ def generar_seccion_cotizacion_final(
         ],
     ]
 
-    if total_desmontaje > 0:
+    # =====================================================
+    # DESMONTAJE
+    # =====================================================
+    if (
+        INCLUIR_DESMONTAJES
+        and total_desmontaje > 0
+    ):
+
         data.append([
             "Desmontaje de red existente",
             _fmt_lps(total_desmontaje),
         ])
 
+    # =====================================================
+    # GRÚA
+    # =====================================================
     if total_grua > 0:
+
         data.append([
             (
                 f"Equipo Grúa "
@@ -565,7 +586,11 @@ def generar_seccion_cotizacion_final(
             _fmt_lps(total_grua),
         ])
 
+    # =====================================================
+    # FLETE
+    # =====================================================
     if total_flete > 0:
+
         data.append([
             (
                 f"Flete / rastra "
@@ -575,12 +600,19 @@ def generar_seccion_cotizacion_final(
             _fmt_lps(total_flete),
         ])
 
+    # =====================================================
+    # INGENIERÍA
+    # =====================================================
     if ingenieria > 0:
+
         data.append([
             "Gastos de Ingeniería",
             _fmt_lps(ingenieria),
         ])
 
+    # =====================================================
+    # TOTAL PROYECTO
+    # =====================================================
     data.append([
         "TOTAL PROYECTO",
         _fmt_lps(total_final),
@@ -618,5 +650,4 @@ def generar_seccion_cotizacion_final(
         styles,
     )
 
-    return elems
     return elems
