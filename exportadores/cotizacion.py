@@ -10,6 +10,16 @@ from reportlab.lib.enums import TA_CENTER
 
 from exportadores.pdf_base import estilo_tabla
 
+DESMONTAJES = {
+    "A-III-1": {
+        "cantidad": 20,
+        "precio": 1200,
+    },
+    "A-III-5": {
+        "cantidad": 2,
+        "precio": 1500,
+    },
+}
 
 # =========================================================
 # HELPERS NUMÉRICOS
@@ -326,6 +336,7 @@ def generar_seccion_cotizacion_final(
             styleTitulo,
         )
     )
+
     elems.append(Spacer(1, 10))
 
     # =====================================================
@@ -355,8 +366,6 @@ def generar_seccion_cotizacion_final(
     # =====================================================
     # CANTIDADES DE MATERIAL Y MANO DE OBRA
     # =====================================================
-    # Para estructuras se utiliza Cantidad.
-    # Para cables se utilizan las cantidades específicas.
     cantidad_material = df["Cantidad Material"].where(
         df["Cantidad Material"] > 0,
         df["Cantidad"],
@@ -377,8 +386,9 @@ def generar_seccion_cotizacion_final(
         ).sum()
     )
 
-    # Los costos operativos forman parte del suministro
-    # mostrado en la tabla detallada anterior.
+    # =====================================================
+    # COSTOS OPERATIVOS
+    # =====================================================
     total_costos_operativos = float(
         (
             df["Cantidad"]
@@ -417,6 +427,19 @@ def generar_seccion_cotizacion_final(
     )
 
     # =====================================================
+    # DESMONTAJES
+    # =====================================================
+    total_desmontaje = 0.0
+
+    if "DESMONTAJES" in globals() and DESMONTAJES:
+
+        total_desmontaje = sum(
+            float(datos.get("cantidad", 0))
+            * float(datos.get("precio", 0))
+            for datos in DESMONTAJES.values()
+        )
+
+    # =====================================================
     # LOGÍSTICA STREAMLIT
     # =====================================================
     logistica = _leer_logistica_streamlit()
@@ -437,6 +460,7 @@ def generar_seccion_cotizacion_final(
     total_final = (
         suministro_con_isv
         + total_mano_obra
+        + total_desmontaje
         + total_grua
         + total_flete
         + ingenieria
@@ -460,7 +484,21 @@ def generar_seccion_cotizacion_final(
         ],
     ]
 
+    # =====================================================
+    # AGREGAR DESMONTAJE
+    # =====================================================
+    if total_desmontaje > 0:
+
+        data.append([
+            "Desmontaje de estructuras existentes",
+            _fmt_lps(total_desmontaje),
+        ])
+
+    # =====================================================
+    # GRÚA
+    # =====================================================
     if total_grua > 0:
+
         data.append([
             (
                 f"Equipo Grúa "
@@ -470,7 +508,11 @@ def generar_seccion_cotizacion_final(
             _fmt_lps(total_grua),
         ])
 
+    # =====================================================
+    # FLETE
+    # =====================================================
     if total_flete > 0:
+
         data.append([
             (
                 f"Flete / rastra "
@@ -480,12 +522,19 @@ def generar_seccion_cotizacion_final(
             _fmt_lps(total_flete),
         ])
 
+    # =====================================================
+    # INGENIERÍA
+    # =====================================================
     if ingenieria > 0:
+
         data.append([
             "Gastos de Ingeniería",
             _fmt_lps(ingenieria),
         ])
 
+    # =====================================================
+    # TOTAL PROYECTO
+    # =====================================================
     data.append([
         "TOTAL PROYECTO",
         _fmt_lps(total_final),
@@ -503,10 +552,17 @@ def generar_seccion_cotizacion_final(
         repeatRows=1,
     )
 
-    tabla.setStyle(estilo_tabla())
-    _estilo_cotizacion(tabla)
+    tabla.setStyle(
+        estilo_tabla()
+    )
 
-    elems.append(tabla)
+    _estilo_cotizacion(
+        tabla
+    )
+
+    elems.append(
+        tabla
+    )
 
     # =====================================================
     # NOTAS
