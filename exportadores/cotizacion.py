@@ -12,7 +12,7 @@ from exportadores.pdf_base import estilo_tabla
 # ======================================================
 # ACTIVAR / DESACTIVAR DESMONTAJES
 # ======================================================
-INCLUIR_DESMONTAJES = True
+INCLUIR_DESMONTAJES = False
 # ======================================================
 # DESMONTAJES DEL PROYECTO
 # ======================================================
