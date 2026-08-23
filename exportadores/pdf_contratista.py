@@ -41,7 +41,7 @@ from exportadores.pdf_base import fondo_pagina
 #
 # ======================================================
 
-INCLUIR_DESMONTAJES = True
+INCLUIR_DESMONTAJES = False
 
 
 # ======================================================
