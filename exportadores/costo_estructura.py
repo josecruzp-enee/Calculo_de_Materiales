@@ -14,7 +14,7 @@ import pandas as pd
 #
 # ======================================================
 
-INCLUIR_DESMONTAJES = True
+INCLUIR_DESMONTAJES = False
 
 
 # ======================================================
