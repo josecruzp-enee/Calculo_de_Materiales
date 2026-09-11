@@ -1476,7 +1476,6 @@ def _calcular_costos_actividades(
 # =========================================================
 # CALCULAR TIEMPOS / CRONOGRAMA
 # =========================================================
-
 def _calcular_tiempos(
     longitud_primario_m: float,
     longitud_secundario_m: float,
@@ -1484,20 +1483,15 @@ def _calcular_tiempos(
     entrada=None,
 ) -> Dict[str, Any]:
     """
-    Cronograma secuencial para una cuadrilla.
+    Calcula el cronograma secuencial de una cuadrilla.
 
-    Actividades:
-        levantamiento
-        agujeros
-        postes
-        retenidas
-        estructuras MT
-        tendido MT
-        transformadores
-        estructuras BT
-        tendido BT
-        luminarias
-        otras estructuras
+    Criterios:
+    - Una cuadrilla.
+    - Actividades secuenciales.
+    - Rendimiento de agujeros = rendimiento REAL de campo.
+    - Los agujeros NO reciben nuevamente factor de eficiencia.
+    - Actividades expresadas en horas sí utilizan eficiencia.
+    - Tendidos continúan utilizando rendimiento nominal x eficiencia.
     """
 
     params = _leer_parametros_operativos(
@@ -1505,6 +1499,10 @@ def _calcular_tiempos(
     )
 
     ss = _leer_session_state()
+
+    # =====================================================
+    # PARÁMETROS GENERALES
+    # =====================================================
 
     horas_jornada = max(
         _to_float(
@@ -1535,45 +1533,38 @@ def _calcular_tiempos(
         1.00,
     )
 
-    # Se mantiene por compatibilidad,
-    # aunque el modelo normal usa una cuadrilla.
-    num_cuadrillas = int(
-        max(
-            1,
-            _to_float(
-                _get_valor(
-                    entrada,
-                    ss,
-                    "num_cuadrillas",
-                    1,
-                ),
-                1,
-            ),
-        )
-    )
+    num_cuadrillas = 1
 
+    # =====================================================
+    # RENDIMIENTOS
+    # =====================================================
+
+    # Rendimiento REAL observado en campo.
+    # NO aplicar nuevamente eficiencia.
     rendimiento_agujeros_dia = max(
         _to_float(
             _get_valor(
                 entrada,
                 ss,
                 "rendimiento_agujeros_dia",
-                10,
+                4,
             ),
-            10,
+            4,
         ),
         0.01,
     )
 
+    # Rendimientos nominales.
+    # A estos sí se aplica eficiencia.
     rendimiento_mt_dia = max(
         _to_float(
             _get_valor(
                 entrada,
                 ss,
                 "rendimiento_mt_dia",
-                500,
+                400,
             ),
-            500,
+            400,
         ),
         0.01,
     )
@@ -1608,6 +1599,553 @@ def _calcular_tiempos(
         )
     )
 
+    # =====================================================
+    # FUNCIONES AUXILIARES
+    # =====================================================
+
+    def dias_por_horas(
+        cantidad: float,
+        horas_unitarias: float,
+    ) -> int:
+
+        if (
+            cantidad <= 0
+            or horas_unitarias <= 0
+        ):
+            return 0
+
+        capacidad_diaria = (
+            horas_jornada
+            * eficiencia
+        )
+
+        if capacidad_diaria <= 0:
+            return 0
+
+        return int(
+            math.ceil(
+                cantidad
+                * horas_unitarias
+                / capacidad_diaria
+            )
+        )
+
+    def dias_por_rendimiento_real(
+        cantidad: float,
+        rendimiento_real_dia: float,
+    ) -> int:
+        """
+        Rendimiento observado directamente en campo.
+
+        NO aplica factor de eficiencia.
+        """
+
+        if (
+            cantidad <= 0
+            or rendimiento_real_dia <= 0
+        ):
+            return 0
+
+        return int(
+            math.ceil(
+                cantidad
+                / rendimiento_real_dia
+            )
+        )
+
+    def dias_por_rendimiento_nominal(
+        cantidad: float,
+        rendimiento_nominal_dia: float,
+    ) -> int:
+        """
+        Rendimiento teórico/nominal.
+
+        Sí aplica eficiencia.
+        """
+
+        if (
+            cantidad <= 0
+            or rendimiento_nominal_dia <= 0
+        ):
+            return 0
+
+        rendimiento_efectivo = (
+            rendimiento_nominal_dia
+            * eficiencia
+        )
+
+        if rendimiento_efectivo <= 0:
+            return 0
+
+        return int(
+            math.ceil(
+                cantidad
+                / rendimiento_efectivo
+            )
+        )
+
+    def rendimiento_por_horas(
+        horas_unitarias: float,
+    ) -> float:
+
+        if horas_unitarias <= 0:
+            return 0.0
+
+        return (
+            horas_jornada
+            / horas_unitarias
+            * eficiencia
+        )
+
+    # =====================================================
+    # CANTIDADES
+    # =====================================================
+
+    num_postes = metricas[
+        "num_postes"
+    ]
+
+    num_retenidas = metricas[
+        "num_retenidas"
+    ]
+
+    num_mt = metricas[
+        "num_estructuras_mt"
+    ]
+
+    num_bt = metricas[
+        "num_estructuras_bt"
+    ]
+
+    num_transformadores = metricas[
+        "num_transformadores"
+    ]
+
+    num_luminarias = metricas[
+        "num_luminarias"
+    ]
+
+    num_otras = metricas[
+        "num_otras_estructuras"
+    ]
+
+    cantidad_agujeros = (
+        num_postes
+        + num_retenidas
+    )
+
+    # =====================================================
+    # DURACIONES
+    # =====================================================
+
+    # Rendimiento real: 4 agujeros/día.
+    dias_agujeros = dias_por_rendimiento_real(
+        cantidad_agujeros,
+        rendimiento_agujeros_dia,
+    )
+
+    dias_postes = dias_por_horas(
+        num_postes,
+        params["horas_por_poste"],
+    )
+
+    dias_retenidas = dias_por_horas(
+        num_retenidas,
+        params["horas_por_retenida"],
+    )
+
+    dias_mt = dias_por_horas(
+        num_mt,
+        params["horas_por_estructura_mt"],
+    )
+
+    dias_transformadores = dias_por_horas(
+        num_transformadores,
+        params["horas_por_transformador"],
+    )
+
+    dias_bt = dias_por_horas(
+        num_bt,
+        params["horas_por_estructura_bt"],
+    )
+
+    dias_luminarias = dias_por_horas(
+        num_luminarias,
+        params["horas_por_luminaria"],
+    )
+
+    dias_otras = dias_por_horas(
+        num_otras,
+        params["horas_por_otra_estructura"],
+    )
+
+    dias_primario = dias_por_rendimiento_nominal(
+        longitud_primario_m,
+        rendimiento_mt_dia,
+    )
+
+    dias_secundario = dias_por_rendimiento_nominal(
+        longitud_secundario_m,
+        rendimiento_bt_dia,
+    )
+
+    # =====================================================
+    # RENDIMIENTOS EFECTIVOS
+    # =====================================================
+
+    rendimiento_postes = rendimiento_por_horas(
+        params["horas_por_poste"]
+    )
+
+    rendimiento_retenidas = rendimiento_por_horas(
+        params["horas_por_retenida"]
+    )
+
+    rendimiento_estructuras_mt = rendimiento_por_horas(
+        params["horas_por_estructura_mt"]
+    )
+
+    rendimiento_transformadores = rendimiento_por_horas(
+        params["horas_por_transformador"]
+    )
+
+    rendimiento_estructuras_bt = rendimiento_por_horas(
+        params["horas_por_estructura_bt"]
+    )
+
+    rendimiento_luminarias = rendimiento_por_horas(
+        params["horas_por_luminaria"]
+    )
+
+    rendimiento_otras = rendimiento_por_horas(
+        params["horas_por_otra_estructura"]
+    )
+
+    rendimiento_mt_efectivo = (
+        rendimiento_mt_dia
+        * eficiencia
+    )
+
+    rendimiento_bt_efectivo = (
+        rendimiento_bt_dia
+        * eficiencia
+    )
+
+    # =====================================================
+    # ACTIVIDADES
+    # =====================================================
+
+    actividades = [
+        {
+            "actividad": "Levantamiento",
+            "duracion_dias": dias_levantamiento,
+            "cantidad": (
+                1
+                if dias_levantamiento > 0
+                else 0
+            ),
+            "unidad": "global",
+            "rendimiento": None,
+        },
+
+        {
+            "actividad": "Agujeros",
+            "duracion_dias": dias_agujeros,
+            "cantidad": cantidad_agujeros,
+            "unidad": "agujero",
+            "rendimiento": rendimiento_agujeros_dia,
+        },
+
+        {
+            "actividad": "Postes",
+            "duracion_dias": dias_postes,
+            "cantidad": num_postes,
+            "unidad": "poste",
+            "rendimiento": rendimiento_postes,
+        },
+
+        {
+            "actividad": "Retenidas",
+            "duracion_dias": dias_retenidas,
+            "cantidad": num_retenidas,
+            "unidad": "retenida",
+            "rendimiento": rendimiento_retenidas,
+        },
+
+        {
+            "actividad": "Estructuras MT",
+            "duracion_dias": dias_mt,
+            "cantidad": num_mt,
+            "unidad": "estructura",
+            "rendimiento": rendimiento_estructuras_mt,
+        },
+
+        {
+            "actividad": "Tendido MT",
+            "duracion_dias": dias_primario,
+            "cantidad": max(
+                _to_float(
+                    longitud_primario_m
+                ),
+                0.0,
+            ),
+            "unidad": "m",
+            "rendimiento": rendimiento_mt_efectivo,
+        },
+
+        {
+            "actividad": "Transformadores",
+            "duracion_dias": dias_transformadores,
+            "cantidad": num_transformadores,
+            "unidad": "transformador",
+            "rendimiento": rendimiento_transformadores,
+        },
+
+        {
+            "actividad": "Estructuras BT",
+            "duracion_dias": dias_bt,
+            "cantidad": num_bt,
+            "unidad": "estructura",
+            "rendimiento": rendimiento_estructuras_bt,
+        },
+
+        {
+            "actividad": "Tendido BT",
+            "duracion_dias": dias_secundario,
+            "cantidad": max(
+                _to_float(
+                    longitud_secundario_m
+                ),
+                0.0,
+            ),
+            "unidad": "m",
+            "rendimiento": rendimiento_bt_efectivo,
+        },
+
+        {
+            "actividad": "Luminarias",
+            "duracion_dias": dias_luminarias,
+            "cantidad": num_luminarias,
+            "unidad": "luminaria",
+            "rendimiento": rendimiento_luminarias,
+        },
+
+        {
+            "actividad": "Otras estructuras",
+            "duracion_dias": dias_otras,
+            "cantidad": num_otras,
+            "unidad": "estructura",
+            "rendimiento": rendimiento_otras,
+        },
+    ]
+
+    # =====================================================
+    # CRONOGRAMA SECUENCIAL
+    # =====================================================
+
+    cronograma = []
+
+    dia_actual = 1
+
+    for item in actividades:
+
+        duracion = int(
+            item.get(
+                "duracion_dias",
+                0,
+            )
+        )
+
+        if duracion <= 0:
+
+            cronograma.append({
+                **item,
+                "inicio": None,
+                "fin": None,
+            })
+
+            continue
+
+        inicio = dia_actual
+
+        fin = (
+            inicio
+            + duracion
+            - 1
+        )
+
+        cronograma.append({
+            **item,
+            "inicio": int(inicio),
+            "fin": int(fin),
+        })
+
+        dia_actual = fin + 1
+
+    dias_totales = max(
+        (
+            item["fin"] or 0
+            for item in cronograma
+        ),
+        default=0,
+    )
+
+    # =====================================================
+    # RESUMEN DE RENDIMIENTOS
+    # =====================================================
+
+    rendimientos = {
+        "agujeros_dia": round(
+            rendimiento_agujeros_dia,
+            2,
+        ),
+
+        "postes_dia": round(
+            rendimiento_postes,
+            2,
+        ),
+
+        "retenidas_dia": round(
+            rendimiento_retenidas,
+            2,
+        ),
+
+        "estructuras_mt_dia": round(
+            rendimiento_estructuras_mt,
+            2,
+        ),
+
+        "transformadores_dia": round(
+            rendimiento_transformadores,
+            2,
+        ),
+
+        "estructuras_bt_dia": round(
+            rendimiento_estructuras_bt,
+            2,
+        ),
+
+        "luminarias_dia": round(
+            rendimiento_luminarias,
+            2,
+        ),
+
+        "otras_estructuras_dia": round(
+            rendimiento_otras,
+            2,
+        ),
+
+        "mt_m_dia": round(
+            rendimiento_mt_efectivo,
+            2,
+        ),
+
+        "bt_m_dia": round(
+            rendimiento_bt_efectivo,
+            2,
+        ),
+    }
+
+    # =====================================================
+    # SALIDA
+    # =====================================================
+
+    return {
+        "dias_levantamiento": dias_levantamiento,
+        "dias_agujeros": dias_agujeros,
+
+        "dias_postes": dias_postes,
+        "dias_retenidas": dias_retenidas,
+
+        "dias_estructuras_mt": dias_mt,
+        "dias_transformadores": dias_transformadores,
+        "dias_estructuras_bt": dias_bt,
+
+        "dias_primario": dias_primario,
+        "dias_secundario": dias_secundario,
+
+        "dias_luminarias": dias_luminarias,
+        "dias_otras_estructuras": dias_otras,
+
+        # Compatibilidad temporal
+        "dias_estructuras": (
+            dias_mt
+            + dias_bt
+            + dias_otras
+        ),
+
+        "dias_totales": int(
+            dias_totales
+        ),
+
+        "cronograma_resumen": cronograma,
+
+        "rendimientos": rendimientos,
+
+        "parametros_cronograma": {
+            "horas_jornada": round(
+                horas_jornada,
+                2,
+            ),
+
+            "eficiencia": round(
+                eficiencia,
+                4,
+            ),
+
+            "num_cuadrillas": 1,
+
+            "rendimiento_agujeros_dia": round(
+                rendimiento_agujeros_dia,
+                2,
+            ),
+
+            "horas_por_poste": round(
+                params["horas_por_poste"],
+                4,
+            ),
+
+            "horas_por_retenida": round(
+                params["horas_por_retenida"],
+                4,
+            ),
+
+            "horas_por_estructura_mt": round(
+                params["horas_por_estructura_mt"],
+                4,
+            ),
+
+            "horas_por_transformador": round(
+                params["horas_por_transformador"],
+                4,
+            ),
+
+            "horas_por_estructura_bt": round(
+                params["horas_por_estructura_bt"],
+                4,
+            ),
+
+            "horas_por_luminaria": round(
+                params["horas_por_luminaria"],
+                4,
+            ),
+
+            "horas_por_otra_estructura": round(
+                params["horas_por_otra_estructura"],
+                4,
+            ),
+
+            "rendimiento_mt_dia": round(
+                rendimiento_mt_dia,
+                2,
+            ),
+
+            "rendimiento_bt_dia": round(
+                rendimiento_bt_dia,
+                2,
+            ),
+        },
+    }
     # -----------------------------------------------------
     # FUNCIONES DE DURACIÓN
     # -----------------------------------------------------
