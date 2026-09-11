@@ -1,4 +1,47 @@
 # -*- coding: utf-8 -*-
+"""
+costos_precios/orquestador_costos.py
+
+ROL:
+    Orquestador principal de la rama económica del proyecto.
+
+QUÉ HACE:
+    - Prepara el catálogo de costos.
+    - Valoriza los materiales del proyecto.
+    - Calcula el costo material por estructura.
+    - Obtiene la mano de obra según el contratista seleccionado.
+    - Combina materiales + mano de obra por estructura.
+    - Incorpora el costo de cables.
+    - Genera df_precios_estructura para los reportes posteriores.
+
+DEPENDE DE:
+    - costos_materiales.py
+    - costos_estructuras.py
+    - mano_obra_por_punto.py
+    - precio_estructura.py
+
+PDF CONTRATISTA:
+    No genera el PDF.
+    Su cálculo de mano de obra utiliza el contratista seleccionado
+    y puede alimentar resultados relacionados con contratistas.
+
+REPORTE COMPLETO:
+    Sí. Es una pieza central de la preparación económica.
+
+NO HACE:
+    - No genera PDF.
+    - No debe contener estilos ni lógica de presentación.
+    - No debe contener precios hardcodeados.
+    - No debe contener datos específicos de un proyecto.
+
+SALIDA PRINCIPAL:
+    - df_costos_materiales
+    - df_costos_estructura
+    - df_mano_obra
+    - df_precios_estructura
+    - total_proyecto
+"""
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from dataclasses import dataclass
