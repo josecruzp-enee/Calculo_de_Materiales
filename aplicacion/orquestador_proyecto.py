@@ -349,6 +349,7 @@ def ejecutar_proyecto(salida_interfaz: SalidaInterfaz) -> ResultadoProyecto:
         entrada_cp.df_estructuras = df_estructuras
         entrada_cp.df_cables = salida.df_cables
         entrada_cp.df_costos_materiales = res_costos.get("df_costos_materiales")
+        entrada_cp.df_precios_estructura = df_precios
         entrada_cp.precio_venta_proyecto = total
 
         res_cp = calcular_costos_proyecto(entrada_cp)
