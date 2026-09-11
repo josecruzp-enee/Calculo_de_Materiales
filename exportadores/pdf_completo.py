@@ -85,6 +85,29 @@ def _extraer_costos(costos):
 
     return resultado, df_materiales_costos, None
 
+cronograma = []
+
+if not isinstance(entrada, pd.DataFrame):
+
+    costos = getattr(
+        entrada,
+        "costos",
+        {},
+    )
+
+    if isinstance(costos, dict):
+
+        resultado_costos = costos.get(
+            "resultado_costos_proyecto",
+            {}
+        )
+
+        if isinstance(resultado_costos, dict):
+
+            cronograma = resultado_costos.get(
+                "cronograma_resumen",
+                []
+            )
 
 # =========================================================
 # PDF COMPLETO
