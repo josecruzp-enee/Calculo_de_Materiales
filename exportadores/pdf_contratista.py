@@ -17,7 +17,6 @@ from io import BytesIO
 import pandas as pd
 import streamlit as st
 
-
 from materiales.calculos.calculo_estructuras import (
     calcular_estructuras_por_punto
 )
@@ -30,315 +29,87 @@ from exportadores.pdf_base import fondo_pagina
 
 
 # ======================================================
-# ACTIVAR / DESACTIVAR DESMONTAJES
+# DESMONTAJES OPCIONALES DEL PROYECTO
 # ======================================================
 #
-# True  = mostrar desmontajes
-# False = NO mostrar desmontajes
+# Activar únicamente cuando el proyecto incluya
+# trabajos de desmontaje.
 #
-# PARA OTRO PROYECTO:
-# INCLUIR_DESMONTAJES = False
+# True  = incluir desmontajes en el PDF
+# False = no incluir desmontajes
 #
+# Los datos definidos en esta sección son específicos
+# del proyecto y deben dejarse vacíos al iniciar uno nuevo.
 # ======================================================
 
 INCLUIR_DESMONTAJES = False
 
 
 # ======================================================
-# DESMONTAJES GLOBALES DEL PROYECTO
+# DESMONTAJES GLOBALES DE ESTRUCTURAS
+# ======================================================
+#
+# Ejemplo:
+#
+# DESMONTAJES = {
+#     "A-III-1": {
+#         "cantidad": 2,
+#         "precio": 2000,
+#     },
+# }
+#
 # ======================================================
 
-DESMONTAJES = {
-
-    "A-III-1": {
-        "cantidad": 13,
-        "precio": 2000,
-    },
-
-    "A-III-2": {
-        "cantidad": 2,
-        "precio": 2500,
-    },
-
-    "A-III-4": {
-        "cantidad": 1,
-        "precio": 3000,
-    },
-
-    "A-III-5": {
-        "cantidad": 4,
-        "precio": 3000,
-    },
-
-    "A-III-6": {
-        "cantidad": 1,
-        "precio": 3500,
-    },
-
-    "A-I-4": {
-        "cantidad": 3,
-        "precio": 1500,
-    },
-
-    "A-I-1": {
-        "cantidad": 3,
-        "precio": 1200,
-    },
-}
+DESMONTAJES = {}
 
 
 # ======================================================
 # DESMONTAJE DE CONDUCTORES
-# SIN CONSIDERAR NEUTRO
+# ======================================================
+#
+# La cantidad económica se calcula como:
+#
+# metros_conductor = longitud × conductores
+# subtotal = metros_conductor × precio_m
+#
+# Ejemplo:
+#
+# DESMONTAJE_LINEA = [
+#     {
+#         "descripcion": "Línea primaria 3F",
+#         "longitud": 100,
+#         "conductores": 3,
+#         "precio_m": 40,
+#     },
+# ]
+#
 # ======================================================
 
-DESMONTAJE_LINEA = [
-
-    {
-        "descripcion": "Línea primaria 3F",
-        "longitud": 417,
-        "conductores": 3,
-        "precio_m": 40,
-    },
-
-    {
-        "descripcion": "Línea primaria 2F",
-        "longitud": 236,
-        "conductores": 2,
-        "precio_m": 40,
-    },
-
-    {
-        "descripcion": "Línea primaria 1F",
-        "longitud": 149,
-        "conductores": 1,
-        "precio_m": 40,
-    },
-]
+DESMONTAJE_LINEA = []
 
 
 # ======================================================
 # DESMONTAJES POR PUNTO
 # ======================================================
 #
-# Esto solamente afecta el DETALLE POR PUNTO.
+# Se utiliza únicamente para mostrar el desmontaje
+# correspondiente dentro del DETALLE POR PUNTO.
 #
-# El resumen global se controla arriba con DESMONTAJES.
+# Ejemplo:
+#
+# DESMONTAJES_POR_PUNTO = {
+#     "P-01": [
+#         {
+#             "estructura": "A-III-1",
+#             "cantidad": 1,
+#             "precio": 2000,
+#         },
+#     ],
+# }
 #
 # ======================================================
 
-DESMONTAJES_POR_PUNTO = {
-
-    "P-18": [
-        {
-            "estructura": "A-III-4",
-            "cantidad": 1,
-            "precio": 3000,
-        },
-    ],
-
-    "P-19": [
-        {
-            "estructura": "A-III-5",
-            "cantidad": 1,
-            "precio": 3000,
-        },
-    ],
-
-    "P-20": [
-        {
-            "estructura": "A-III-2",
-            "cantidad": 1,
-            "precio": 2500,
-        },
-    ],
-
-    "P-22": [
-        {
-            "estructura": "A-III-2",
-            "cantidad": 1,
-            "precio": 2500,
-        },
-    ],
-
-    "P-23": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-24": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-25": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-26": [
-        {
-            "estructura": "A-III-5",
-            "cantidad": 1,
-            "precio": 3000,
-        },
-    ],
-
-    "P-27": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-28": [
-        {
-            "estructura": "A-III-6",
-            "cantidad": 1,
-            "precio": 3500,
-        },
-    ],
-
-    "P-29": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-30": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-31": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-32": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-        {
-            "estructura": "A-I-4",
-            "cantidad": 1,
-            "precio": 1500,
-        },
-    ],
-
-    "P-33": [
-        {
-            "estructura": "A-III-5",
-            "cantidad": 1,
-            "precio": 3000,
-        },
-    ],
-
-    "P-34": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-35": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-36": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-37": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-38": [
-        {
-            "estructura": "A-III-5",
-            "cantidad": 1,
-            "precio": 3000,
-        },
-    ],
-
-    "P-39": [
-        {
-            "estructura": "A-III-1",
-            "cantidad": 1,
-            "precio": 2000,
-        },
-    ],
-
-    "P-50": [
-        {
-            "estructura": "A-I-4",
-            "cantidad": 1,
-            "precio": 1500,
-        },
-    ],
-
-    "P-51": [
-        {
-            "estructura": "A-I-4",
-            "cantidad": 1,
-            "precio": 1500,
-        },
-        {
-            "estructura": "A-I-1",
-            "cantidad": 1,
-            "precio": 1200,
-        },
-    ],
-
-    "P-52": [
-        {
-            "estructura": "A-I-1",
-            "cantidad": 1,
-            "precio": 1200,
-        },
-    ],
-
-    "P-53": [
-        {
-            "estructura": "A-I-1",
-            "cantidad": 1,
-            "precio": 1200,
-        },
-    ],
-}
+DESMONTAJES_POR_PUNTO = {}
 
 
 # ======================================================
@@ -644,7 +415,6 @@ def tabla_desmontajes():
 
     # ==================================================
     # CONDUCTORES
-    # SIN NEUTRO
     # ==================================================
 
     for tramo in DESMONTAJE_LINEA:
@@ -1206,7 +976,7 @@ def generar_pdf_contratista(entrada):
 
     if (
         INCLUIR_DESMONTAJES
-        and DESMONTAJES
+        and (DESMONTAJES or DESMONTAJE_LINEA)
     ):
 
         elementos.append(
