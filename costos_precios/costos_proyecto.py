@@ -721,6 +721,10 @@ def _leer_parametros_operativos(
 
     ss = _leer_session_state()
 
+    # =====================================================
+    # COSTOS BASE
+    # =====================================================
+
     costo_agujero_unitario = _to_float(
         _get_valor(
             entrada,
@@ -751,18 +755,18 @@ def _leer_parametros_operativos(
         8,
     )
 
-    # -----------------------------------------------------
-    # PARÁMETROS DE PRODUCTIVIDAD
-    # -----------------------------------------------------
+    # =====================================================
+    # PRODUCTIVIDAD DE CUADRILLA
+    # =====================================================
 
     horas_por_poste = _to_float(
         _get_valor(
             entrada,
             ss,
             "horas_por_poste",
-            0.75,
+            1.00,
         ),
-        0.75,
+        1.00,
     )
 
     horas_por_retenida = _to_float(
@@ -770,12 +774,65 @@ def _leer_parametros_operativos(
             entrada,
             ss,
             "horas_por_retenida",
+            0.75,
+        ),
+        0.75,
+    )
+
+    horas_por_estructura_mt = _to_float(
+        _get_valor(
+            entrada,
+            ss,
+            "horas_por_estructura_mt",
+            0.75,
+        ),
+        0.75,
+    )
+
+    horas_por_estructura_bt = _to_float(
+        _get_valor(
+            entrada,
+            ss,
+            "horas_por_estructura_bt",
             0.50,
         ),
         0.50,
     )
 
-    # Valor histórico como respaldo.
+    horas_por_transformador = _to_float(
+        _get_valor(
+            entrada,
+            ss,
+            "horas_por_transformador",
+            2.00,
+        ),
+        2.00,
+    )
+
+    horas_por_luminaria = _to_float(
+        _get_valor(
+            entrada,
+            ss,
+            "horas_por_luminaria",
+            0.50,
+        ),
+        0.50,
+    )
+
+    horas_por_otra_estructura = _to_float(
+        _get_valor(
+            entrada,
+            ss,
+            "horas_por_otra_estructura",
+            0.75,
+        ),
+        0.75,
+    )
+
+    # =====================================================
+    # COMPATIBILIDAD TEMPORAL
+    # =====================================================
+
     horas_por_estructura = _to_float(
         _get_valor(
             entrada,
@@ -786,59 +843,9 @@ def _leer_parametros_operativos(
         0.50,
     )
 
-    horas_por_estructura_mt = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_estructura_mt",
-            horas_por_estructura,
-        ),
-        horas_por_estructura,
-    )
-
-    horas_por_estructura_bt = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_estructura_bt",
-            horas_por_estructura,
-        ),
-        horas_por_estructura,
-    )
-
-    horas_por_transformador = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_transformador",
-            horas_por_estructura,
-        ),
-        horas_por_estructura,
-    )
-
-    horas_por_luminaria = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_luminaria",
-            horas_por_estructura,
-        ),
-        horas_por_estructura,
-    )
-
-    horas_por_otra_estructura = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_otra_estructura",
-            horas_por_estructura,
-        ),
-        horas_por_estructura,
-    )
-
-    # -----------------------------------------------------
-    # TENDIDO
-    # -----------------------------------------------------
+    # =====================================================
+    # COSTO DE TENDIDO
+    # =====================================================
 
     costo_tendido_mt_m = _to_float(
         _get_valor(
@@ -860,9 +867,9 @@ def _leer_parametros_operativos(
         0,
     )
 
-    # -----------------------------------------------------
-    # GRÚA / LOGÍSTICA
-    # -----------------------------------------------------
+    # =====================================================
+    # GRÚA
+    # =====================================================
 
     horas_grua = _to_float(
         _get_valor(
@@ -887,6 +894,10 @@ def _leer_parametros_operativos(
         1500,
     )
 
+    # =====================================================
+    # FLETE
+    # =====================================================
+
     costo_flete_unitario = _to_float(
         _get_valor(
             entrada,
@@ -909,6 +920,10 @@ def _leer_parametros_operativos(
         ),
         1,
     )
+
+    # =====================================================
+    # GESTIONES / INGENIERÍA
+    # =====================================================
 
     costo_enee = _to_float(
         _get_valor(
@@ -943,6 +958,10 @@ def _leer_parametros_operativos(
         5,
     )
 
+    # =====================================================
+    # BANDERAS
+    # =====================================================
+
     incluir_logistica_en_venta = bool(
         _get_valor(
             entrada,
@@ -967,6 +986,10 @@ def _leer_parametros_operativos(
         costo_flete_unitario = 0.0
         viajes_flete = 0.0
         costo_ingenieria = 0.0
+
+    # =====================================================
+    # DERIVADOS
+    # =====================================================
 
     total_grua = (
         horas_grua
@@ -994,15 +1017,15 @@ def _leer_parametros_operativos(
         "horas_por_poste": horas_por_poste,
         "horas_por_retenida": horas_por_retenida,
 
-        # Compatibilidad
-        "horas_por_estructura": horas_por_estructura,
-
-        # Nuevos parámetros
         "horas_por_estructura_mt": horas_por_estructura_mt,
         "horas_por_estructura_bt": horas_por_estructura_bt,
+
         "horas_por_transformador": horas_por_transformador,
         "horas_por_luminaria": horas_por_luminaria,
         "horas_por_otra_estructura": horas_por_otra_estructura,
+
+        # Compatibilidad temporal
+        "horas_por_estructura": horas_por_estructura,
 
         "costo_tendido_mt_m": costo_tendido_mt_m,
         "costo_tendido_bt_m": costo_tendido_bt_m,
@@ -1024,7 +1047,6 @@ def _leer_parametros_operativos(
         "incluir_logistica": incluir_logistica,
         "incluir_logistica_en_venta": incluir_logistica_en_venta,
     }
-
 
 # =========================================================
 # CREAR ACTIVIDAD HORARIA
