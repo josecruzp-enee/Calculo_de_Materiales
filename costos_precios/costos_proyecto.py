@@ -4,61 +4,24 @@ costos_precios/costos_proyecto.py
 
 Motor interno de costos reales, productividad y cronograma.
 
-OBJETIVO
---------
-Calcular:
+Criterios del modelo
+--------------------
+- Una cuadrilla principal.
+- Cronograma secuencial, sin solapamientos.
+- Los agujeros usan rendimiento REAL de campo (4 agujeros/día por defecto).
+- Postes, retenidas, estructuras MT/BT, transformadores y luminarias
+  se calculan por horas unitarias y eficiencia.
+- MT y BT se separan tanto en cronograma como en costos.
+- El costo de cuadrilla se basa en DÍAS EFECTIVOS DE OCUPACIÓN de la cuadrilla,
+  no en horas teóricas aisladas. Así cronograma y costo hablan el mismo idioma.
+- Agujeros, grúa, flete, permisos e ingeniería se mantienen como costos externos
+  o específicos para evitar duplicación con la cuadrilla.
+- Se conservan claves de salida antiguas que consumen los reportes actuales.
 
-- costo real estimado del proyecto;
-- costo de cuadrilla por actividad;
-- logística;
-- contingencia;
-- utilidad y margen;
-- indicadores operativos;
-- cronograma secuencial de una cuadrilla.
-
-CLASIFICACIÓN DE ACTIVIDADES
-----------------------------
-El modelo separa físicamente:
-
-    POSTES
-        PC-
-        PCA-
-        PM-
-
-    RETENIDAS
-        R-
-
-    ESTRUCTURAS MT
-        A-
-        CT-
-        CA-
-        CS-
-        ER-
-
-    ESTRUCTURAS BT
-        B-
-
-    TRANSFORMADORES
-        TS-
-        TT-
-
-    LUMINARIAS
-        LL-
-
-    OTRAS ESTRUCTURAS
-        cualquier código no clasificado anteriormente.
-
-CRONOGRAMA
-----------
-Se mantiene secuencial porque el modelo de ejecución actual
-considera una cuadrilla trabajando una actividad a la vez.
-
-Los tiempos específicos de MT, BT, transformadores y luminarias
-pueden parametrizarse independientemente.
-
-Si no existen parámetros específicos, utilizan como respaldo el
-antiguo parámetro "horas_por_estructura", preservando la lógica
-actual hasta que los rendimientos sean calibrados.
+Este archivo alimenta:
+- exportadores/reporte_costos_proyecto.py
+- PDF completo / dashboard ejecutivo
+- indicadores internos de rentabilidad y cronograma
 """
 
 from __future__ import annotations
@@ -75,109 +38,42 @@ import pandas as pd
 
 PREFIJOS_POSTES = ("PC-", "PCA-", "PM-")
 PREFIJOS_RETENIDAS = ("R-",)
-
-PREFIJOS_ESTRUCTURAS_MT = (
-    "A-",
-    "CT-",
-    "CA-",
-    "CS-",
-    "ER-",
-)
-
-PREFIJOS_ESTRUCTURAS_BT = (
-    "B-",
-)
-
-PREFIJOS_TRANSFORMADORES = (
-    "TS-",
-    "TT-",
-)
-
-PREFIJOS_LUMINARIAS = (
-    "LL-",
-)
+PREFIJOS_ESTRUCTURAS_MT = ("A-", "CT-", "CA-", "CS-", "ER-")
+PREFIJOS_ESTRUCTURAS_BT = ("B-",)
+PREFIJOS_TRANSFORMADORES = ("TS-", "TT-")
+PREFIJOS_LUMINARIAS = ("LL-",)
 
 
 # =========================================================
-# UTILIDADES SEGURAS
+# UTILIDADES
 # =========================================================
 
 def _to_float(valor, default: float = 0.0) -> float:
     try:
         if valor is None:
             return default
-
         if isinstance(valor, str):
-            valor = (
-                valor.replace("L", "")
-                .replace(",", "")
-                .replace("%", "")
-                .strip()
-            )
-
+            valor = valor.replace("L", "").replace(",", "").replace("%", "").strip()
         return float(valor)
-
     except Exception:
         return default
 
 
-def _safe_sum(series: pd.Series) -> float:
-    try:
-        return float(
-            pd.to_numeric(
-                series,
-                errors="coerce",
-            )
-            .fillna(0)
-            .sum()
-        )
-    except Exception:
-        return 0.0
-
-
 def _normalizar_texto(valor) -> str:
-    if valor is None:
-        return ""
-
-    texto = str(valor).upper().strip()
-
-    reemplazos = {
-        "Á": "A",
-        "É": "E",
-        "Í": "I",
-        "Ó": "O",
-        "Ú": "U",
-        "Ñ": "N",
-    }
-
-    for origen, destino in reemplazos.items():
-        texto = texto.replace(
-            origen,
-            destino,
-        )
-
+    texto = "" if valor is None else str(valor).upper().strip()
+    for origen, destino in {"Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ñ": "N"}.items():
+        texto = texto.replace(origen, destino)
     return texto
 
 
-def _obtener_columna(
-    df: pd.DataFrame,
-    posibles: list[str],
-) -> Optional[str]:
-
+def _obtener_columna(df: pd.DataFrame, posibles: list[str]) -> Optional[str]:
     if df is None or df.empty:
         return None
-
-    columnas_norm = {
-        _normalizar_texto(col): col
-        for col in df.columns
-    }
-
+    columnas = {_normalizar_texto(c): c for c in df.columns}
     for nombre in posibles:
-        nombre_norm = _normalizar_texto(nombre)
-
-        if nombre_norm in columnas_norm:
-            return columnas_norm[nombre_norm]
-
+        encontrado = columnas.get(_normalizar_texto(nombre))
+        if encontrado:
+            return encontrado
     return None
 
 
@@ -196,211 +92,103 @@ def _get_valor(
     default=0,
     alternativas: Optional[list[str]] = None,
 ):
-    """
-    Orden de búsqueda:
-
-    1. entrada
-    2. session_state
-    3. nombres alternativos
-    4. default
-    """
-
     alternativas = alternativas or []
 
     if entrada is not None and hasattr(entrada, nombre):
-        return getattr(
-            entrada,
-            nombre,
-        )
+        valor = getattr(entrada, nombre)
+        if valor is not None:
+            return valor
 
-    if nombre in ss:
+    if nombre in ss and ss.get(nombre) is not None:
         return ss.get(nombre)
 
     for alt in alternativas:
-
         if entrada is not None and hasattr(entrada, alt):
-            return getattr(
-                entrada,
-                alt,
-            )
-
-        if alt in ss:
+            valor = getattr(entrada, alt)
+            if valor is not None:
+                return valor
+        if alt in ss and ss.get(alt) is not None:
             return ss.get(alt)
 
     return default
 
 
-def _empieza_con(
-    codigo: str,
-    prefijos: tuple[str, ...],
-) -> bool:
-
-    codigo = _normalizar_texto(codigo)
-
-    return codigo.startswith(prefijos)
+def costs_or_zero(costos: Dict[str, float], key: str) -> float:
+    return _to_float(costos.get(key, 0))
 
 
 # =========================================================
-# CLASIFICAR ESTRUCTURA
+# CLASIFICACIÓN Y MÉTRICAS
 # =========================================================
 
-def _clasificar_codigo_estructura(
-    codigo: str,
-) -> str:
-    """
-    Clasifica un código dentro del modelo operativo.
+def _clasificar_codigo_estructura(codigo: str) -> str:
+    cod = _normalizar_texto(codigo)
 
-    Retorna:
-        poste
-        retenida
-        estructura_mt
-        estructura_bt
-        transformador
-        luminaria
-        otra
-    """
-
-    codigo = _normalizar_texto(codigo)
-
-    if _empieza_con(codigo, PREFIJOS_POSTES):
+    if cod.startswith(PREFIJOS_POSTES):
         return "poste"
-
-    if _empieza_con(codigo, PREFIJOS_RETENIDAS):
+    if cod.startswith(PREFIJOS_RETENIDAS):
         return "retenida"
-
-    if _empieza_con(codigo, PREFIJOS_TRANSFORMADORES):
+    if cod.startswith(PREFIJOS_TRANSFORMADORES):
         return "transformador"
-
-    if _empieza_con(codigo, PREFIJOS_LUMINARIAS):
+    if cod.startswith(PREFIJOS_LUMINARIAS):
         return "luminaria"
-
-    if _empieza_con(codigo, PREFIJOS_ESTRUCTURAS_MT):
+    if cod.startswith(PREFIJOS_ESTRUCTURAS_MT):
         return "estructura_mt"
-
-    if _empieza_con(codigo, PREFIJOS_ESTRUCTURAS_BT):
+    if cod.startswith(PREFIJOS_ESTRUCTURAS_BT):
         return "estructura_bt"
-
     return "otra"
 
-
-# =========================================================
-# EXTRAER MÉTRICAS DE ESTRUCTURAS
-# =========================================================
 
 def _extraer_metricas_estructuras(
     df_estructuras_global: Optional[pd.DataFrame],
 ) -> Dict[str, int]:
-    """
-    Extrae cantidades físicas por familia.
-
-    Ya NO utiliza una única cantidad genérica para todas
-    las estructuras.
-    """
-
     metricas = {
         "total_elementos": 0,
         "total_estructuras": 0,
-
         "num_postes": 0,
         "num_retenidas": 0,
-
         "num_estructuras_mt": 0,
         "num_estructuras_bt": 0,
-
         "num_transformadores": 0,
         "num_luminarias": 0,
-
         "num_otras_estructuras": 0,
     }
 
-    if (
-        df_estructuras_global is None
-        or df_estructuras_global.empty
-    ):
+    if df_estructuras_global is None or df_estructuras_global.empty:
         return metricas
 
     df = df_estructuras_global.copy()
-
-    col_estructura = _obtener_columna(
-        df,
-        [
-            "Estructura",
-            "Codigo",
-            "Código",
-            "codigodeestructura",
-        ],
+    col_codigo = _obtener_columna(
+        df, ["Estructura", "Codigo", "Código", "CODIGO", "codigodeestructura"]
     )
+    col_cantidad = _obtener_columna(df, ["Cantidad", "Cant", "CANT"])
 
-    col_cantidad = _obtener_columna(
-        df,
-        [
-            "Cantidad",
-            "Cant",
-            "CANT",
-        ],
-    )
-
-    if not col_estructura or not col_cantidad:
+    if not col_codigo or not col_cantidad:
         return metricas
 
-    df[col_estructura] = (
-        df[col_estructura]
-        .astype(str)
-        .str.upper()
-        .str.strip()
-    )
+    df[col_cantidad] = pd.to_numeric(df[col_cantidad], errors="coerce").fillna(0)
 
-    df[col_cantidad] = pd.to_numeric(
-        df[col_cantidad],
-        errors="coerce",
-    ).fillna(0)
+    mapa = {
+        "poste": "num_postes",
+        "retenida": "num_retenidas",
+        "estructura_mt": "num_estructuras_mt",
+        "estructura_bt": "num_estructuras_bt",
+        "transformador": "num_transformadores",
+        "luminaria": "num_luminarias",
+        "otra": "num_otras_estructuras",
+    }
 
     for _, row in df.iterrows():
-
-        codigo = str(
-            row[col_estructura]
-        ).strip().upper()
-
-        cantidad = int(
-            max(
-                _to_float(
-                    row[col_cantidad],
-                    0,
-                ),
-                0,
-            )
-        )
-
+        cantidad = int(max(_to_float(row[col_cantidad]), 0))
         if cantidad <= 0:
             continue
 
+        familia = _clasificar_codigo_estructura(row[col_codigo])
         metricas["total_elementos"] += cantidad
+        metricas[mapa[familia]] += cantidad
 
-        familia = _clasificar_codigo_estructura(
-            codigo
-        )
-
-        if familia == "poste":
-            metricas["num_postes"] += cantidad
-
-        elif familia == "retenida":
-            metricas["num_retenidas"] += cantidad
-
-        elif familia == "estructura_mt":
-            metricas["num_estructuras_mt"] += cantidad
-
-        elif familia == "estructura_bt":
-            metricas["num_estructuras_bt"] += cantidad
-
-        elif familia == "transformador":
-            metricas["num_transformadores"] += cantidad
-
-        elif familia == "luminaria":
-            metricas["num_luminarias"] += cantidad
-
-        else:
-            metricas["num_otras_estructuras"] += cantidad
-
+    # "Total estructuras" se conserva para reportes actuales,
+    # pero significa únicamente estructuras de armado MT/BT + otras.
     metricas["total_estructuras"] = (
         metricas["num_estructuras_mt"]
         + metricas["num_estructuras_bt"]
@@ -411,37 +199,28 @@ def _extraer_metricas_estructuras(
 
 
 # =========================================================
-# EXTRAER LONGITUDES DE CABLE
-# MISMA LÓGICA UTILIZADA PARA CONTRATISTA C2
+# LONGITUDES DE CABLE
 # =========================================================
 
 def _extraer_longitudes(
     df_cables: Optional[pd.DataFrame],
 ) -> tuple[float, float]:
+    """
+    Devuelve longitud física aproximada de trazado MT y BT.
 
+    Mantiene la lógica usada actualmente por el proyecto:
+    - MT: suma Total Cable (m).
+    - BT: corrige por número de fases y por duplicación del tramo.
+    """
     if df_cables is None or df_cables.empty:
         return 0.0, 0.0
 
     total_mt = 0.0
     total_bt = 0.0
-    total_n = 0.0
 
     for _, cable in df_cables.iterrows():
-
-        tipo = str(
-            cable.get("Tipo", "")
-        ).upper().strip()
-
-        try:
-            longitud = float(
-                cable.get(
-                    "Total Cable (m)",
-                    0,
-                )
-            )
-        except Exception:
-            continue
-
+        tipo = str(cable.get("Tipo", "")).upper().strip()
+        longitud = _to_float(cable.get("Total Cable (m)", 0))
         if longitud <= 0:
             continue
 
@@ -449,126 +228,46 @@ def _extraer_longitudes(
             total_mt += longitud
 
         elif tipo == "BT":
+            fases = str(cable.get("Fases", "")).upper().strip()
+            factor_fases = 3 if "3" in fases else 2 if "2" in fases else 1
+            total_bt += (longitud / factor_fases) / 2
 
-            fases = str(
-                cable.get("Fases", "")
-            ).upper().strip()
-
-            factor = 1
-
-            if "3" in fases:
-                factor = 3
-
-            elif "2" in fases:
-                factor = 2
-
-            longitud_real = (
-                longitud / factor
-            )
-
-            total_bt += (
-                longitud_real / 2
-            )
-
-        elif tipo == "N":
-            total_n += longitud
-
-    # Se conserva cálculo para futura separación del neutro.
-    _n_extra = max(
-        total_n - total_bt,
-        0,
-    )
-
-    return (
-        round(total_mt, 2),
-        round(total_bt, 2),
-    )
+    return round(total_mt, 2), round(total_bt, 2)
 
 
 # =========================================================
-# VALIDAR MATERIALES
+# VALIDACIÓN / CLASIFICACIÓN DE COSTOS DE MATERIALES
 # =========================================================
 
-def _validar_materiales(
-    df_materiales_costos: Optional[pd.DataFrame],
-) -> None:
+def _validar_materiales(df_materiales_costos: Optional[pd.DataFrame]) -> None:
+    if df_materiales_costos is None or df_materiales_costos.empty:
+        raise ValueError("No hay materiales con costos.")
 
-    if (
-        df_materiales_costos is None
-        or df_materiales_costos.empty
-    ):
+    if not _obtener_columna(df_materiales_costos, ["Costo Total", "Total", "Importe", "Monto"]):
         raise ValueError(
-            "No hay materiales con costos."
+            "df_materiales_costos debe tener una columna de costo: "
+            "'Costo Total', 'Total', 'Importe' o 'Monto'."
         )
 
-    col_costo = _obtener_columna(
-        df_materiales_costos,
-        [
-            "Costo Total",
-            "Total",
-            "Importe",
-            "Monto",
-        ],
-    )
-
-    if not col_costo:
-        raise ValueError(
-            "df_materiales_costos debe tener una columna "
-            "de costo: 'Costo Total', 'Total', "
-            "'Importe' o 'Monto'."
-        )
-
-
-# =========================================================
-# CLASIFICAR COSTOS DESDE TABLA DE MATERIALES
-# =========================================================
 
 def _clasificar_costos_desde_materiales(
     df_materiales_costos: pd.DataFrame,
 ) -> Dict[str, float]:
-
+    """
+    La tabla principal normalmente contiene materiales.
+    Si aparecen rubros explícitos (grúa, flete, etc.) los separa.
+    """
     df = df_materiales_costos.copy()
-
-    col_costo = _obtener_columna(
-        df,
-        [
-            "Costo Total",
-            "Total",
-            "Importe",
-            "Monto",
-        ],
-    )
-
+    col_costo = _obtener_columna(df, ["Costo Total", "Total", "Importe", "Monto"])
     col_desc = _obtener_columna(
         df,
-        [
-            "Descripción",
-            "Descripcion",
-            "Material",
-            "Materiales",
-            "Concepto",
-            "Estructura",
-            "Codigo",
-            "Código",
-        ],
+        ["Descripción", "Descripcion", "Material", "Materiales", "Concepto", "Estructura", "Codigo", "Código"],
     )
-
     col_categoria = _obtener_columna(
-        df,
-        [
-            "Categoria",
-            "Categoría",
-            "Rubro",
-            "Tipo",
-            "Clasificacion",
-            "Clasificación",
-        ],
+        df, ["Categoria", "Categoría", "Rubro", "Tipo", "Clasificacion", "Clasificación"]
     )
 
-    df[col_costo] = pd.to_numeric(
-        df[col_costo],
-        errors="coerce",
-    ).fillna(0)
+    df[col_costo] = pd.to_numeric(df[col_costo], errors="coerce").fillna(0)
 
     costos = {
         "costo_materiales": 0.0,
@@ -582,900 +281,115 @@ def _clasificar_costos_desde_materiales(
     }
 
     for _, row in df.iterrows():
-
-        monto = _to_float(
-            row.get(col_costo, 0)
-        )
-
+        monto = _to_float(row.get(col_costo, 0))
         texto = ""
-
         if col_desc:
-            texto += " " + _normalizar_texto(
-                row.get(col_desc, "")
-            )
-
+            texto += " " + _normalizar_texto(row.get(col_desc, ""))
         if col_categoria:
-            texto += " " + _normalizar_texto(
-                row.get(col_categoria, "")
-            )
+            texto += " " + _normalizar_texto(row.get(col_categoria, ""))
 
         if "GRUA" in texto:
             costos["costo_grua"] += monto
-
-        elif (
-            "FLETE" in texto
-            or "TRANSPORTE" in texto
-        ):
+        elif "FLETE" in texto or "TRANSPORTE" in texto:
             costos["costo_flete"] += monto
-
-        elif (
-            "AGUJERO" in texto
-            or "EXCAVACION" in texto
-        ):
+        elif "AGUJERO" in texto or "EXCAVACION" in texto:
             costos["costo_agujeros"] += monto
-
-        elif (
-            "CUADRILLA" in texto
-            or "MANO DE OBRA" in texto
-            or "INSTALACION" in texto
-        ):
+        elif "CUADRILLA" in texto or "MANO DE OBRA" in texto or "INSTALACION" in texto:
             costos["costo_cuadrilla"] += monto
-
         elif "INGENIERIA" in texto:
             costos["costo_ingenieria"] += monto
-
-        elif (
-            "ENEE" in texto
-            or "PERMISO" in texto
-            or "GESTION" in texto
-        ):
+        elif "ENEE" in texto or "PERMISO" in texto or "GESTION" in texto:
             costos["costo_enee"] += monto
-
-        elif (
-            "MATERIAL" in texto
-            or "SUMINISTRO" in texto
-        ):
-            costos["costo_materiales"] += monto
-
         else:
             costos["costo_materiales"] += monto
 
+    return costos
+
+
+def _extraer_costos_manuales(entrada) -> Dict[str, float]:
+    if entrada is None:
+        return {}
+
     return {
-        clave: float(valor)
-        for clave, valor in costos.items()
+        "costo_cuadrilla_manual": _to_float(getattr(entrada, "costo_cuadrilla", 0)),
+        "costo_agujeros_manual": _to_float(getattr(entrada, "costo_agujeros", 0)),
+        "costo_grua_manual": _to_float(getattr(entrada, "costo_grua_manual", 0)),
+        "costo_flete_manual": _to_float(getattr(entrada, "costo_flete_manual", 0)),
+        "costo_enee_manual": _to_float(getattr(entrada, "costo_enee_manual", 0)),
+        "costo_ingenieria_manual": _to_float(getattr(entrada, "costo_ingenieria_manual", 0)),
     }
 
 
 # =========================================================
-# COSTOS MANUALES ADICIONALES
+# PARÁMETROS OPERATIVOS
 # =========================================================
 
-def _extraer_costos_manuales(
-    entrada,
-) -> Dict[str, float]:
-    """
-    Costos adicionales manuales.
-
-    Se mantienen separados de los parámetros principales
-    para evitar duplicaciones.
-    """
-
-    return {
-        "costo_cuadrilla_manual": _to_float(
-            getattr(
-                entrada,
-                "costo_cuadrilla",
-                0,
-            )
-        ),
-
-        "costo_agujeros_manual": _to_float(
-            getattr(
-                entrada,
-                "costo_agujeros",
-                0,
-            )
-        ),
-
-        "costo_grua_manual": _to_float(
-            getattr(
-                entrada,
-                "costo_grua_manual",
-                0,
-            )
-        ),
-
-        "costo_flete_manual": _to_float(
-            getattr(
-                entrada,
-                "costo_flete_manual",
-                0,
-            )
-        ),
-
-        "costo_enee_manual": _to_float(
-            getattr(
-                entrada,
-                "costo_enee_manual",
-                0,
-            )
-        ),
-
-        "costo_ingenieria_manual": _to_float(
-            getattr(
-                entrada,
-                "costo_ingenieria_manual",
-                0,
-            )
-        ),
-    }
-
-
-# =========================================================
-# LEER PARÁMETROS COMERCIALES / OPERATIVOS
-# =========================================================
-
-def _leer_parametros_operativos(
-    entrada=None,
-) -> Dict[str, Any]:
-
+def _leer_parametros_operativos(entrada=None) -> Dict[str, Any]:
     ss = _leer_session_state()
 
-    # =====================================================
-    # COSTOS BASE
-    # =====================================================
+    def valor(nombre, default, alternativas=None):
+        return _to_float(_get_valor(entrada, ss, nombre, default, alternativas), default)
 
-    costo_agujero_unitario = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "costo_agujero_unitario",
-            500,
-        ),
-        500,
-    )
+    costo_agujero_unitario = valor("costo_agujero_unitario", 500)
+    costo_cuadrilla_dia = valor("costo_cuadrilla_dia", 10000)
+    horas_jornada = max(valor("horas_jornada", 8), 0.01)
 
-    costo_cuadrilla_dia = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "costo_cuadrilla_dia",
-            10000,
-        ),
-        10000,
-    )
-
-    horas_jornada = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_jornada",
-            8,
-        ),
-        8,
-    )
-
-    # =====================================================
-    # PRODUCTIVIDAD DE CUADRILLA
-    # =====================================================
-
-    horas_por_poste = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_poste",
-            1.00,
-        ),
-        1.00,
-    )
-
-    horas_por_retenida = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_retenida",
-            0.75,
-        ),
-        0.75,
-    )
-
-    horas_por_estructura_mt = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_estructura_mt",
-            0.75,
-        ),
-        0.75,
-    )
-
-    horas_por_estructura_bt = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_estructura_bt",
-            0.50,
-        ),
-        0.50,
-    )
-
-    horas_por_transformador = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_transformador",
-            2.00,
-        ),
-        2.00,
-    )
-
-    horas_por_luminaria = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_luminaria",
-            0.50,
-        ),
-        0.50,
-    )
-
-    horas_por_otra_estructura = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_otra_estructura",
-            0.75,
-        ),
-        0.75,
-    )
-
-    # =====================================================
-    # COMPATIBILIDAD TEMPORAL
-    # =====================================================
-
-    horas_por_estructura = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_por_estructura",
-            0.50,
-        ),
-        0.50,
-    )
-
-    # =====================================================
-    # COSTO DE TENDIDO
-    # =====================================================
-
-    costo_tendido_mt_m = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "costo_tendido_mt_m",
-            0,
-        ),
-        0,
-    )
-
-    costo_tendido_bt_m = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "costo_tendido_bt_m",
-            0,
-        ),
-        0,
-    )
-
-    # =====================================================
-    # GRÚA
-    # =====================================================
-
-    horas_grua = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "horas_grua",
-            0,
-        ),
-        0,
-    )
-
-    precio_hora_grua = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "precio_hora_grua",
-            1500,
-            alternativas=[
-                "costo_hora_grua",
-            ],
-        ),
-        1500,
-    )
-
-    # =====================================================
-    # FLETE
-    # =====================================================
-
-    costo_flete_unitario = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "costo_flete",
-            0,
-            alternativas=[
-                "flete_rastra",
-            ],
-        ),
-        0,
-    )
-
-    viajes_flete = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "viajes_flete",
-            1,
-        ),
-        1,
-    )
-
-    # =====================================================
-    # GESTIONES / INGENIERÍA
-    # =====================================================
-
-    costo_enee = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "costo_enee",
-            0,
-        ),
-        0,
-    )
-
-    costo_ingenieria = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "gastos_ingenieria",
-            0,
-            alternativas=[
-                "ingenieria",
-            ],
-        ),
-        0,
-    )
-
-    porcentaje_contingencia = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "porcentaje_contingencia",
-            5,
-        ),
-        5,
-    )
-
-    # =====================================================
-    # BANDERAS
-    # =====================================================
-
-    incluir_logistica_en_venta = bool(
-        _get_valor(
-            entrada,
-            ss,
-            "incluir_logistica_en_venta",
-            True,
-        )
-    )
-
-    incluir_logistica = bool(
-        _get_valor(
-            entrada,
-            ss,
-            "incluir_logistica",
-            True,
-        )
-    )
-
-    if not incluir_logistica:
-        horas_grua = 0.0
-        precio_hora_grua = 0.0
-        costo_flete_unitario = 0.0
-        viajes_flete = 0.0
-        costo_ingenieria = 0.0
-
-    # =====================================================
-    # DERIVADOS
-    # =====================================================
-
-    total_grua = (
-        horas_grua
-        * precio_hora_grua
-    )
-
-    total_flete = (
-        costo_flete_unitario
-        * viajes_flete
-    )
-
-    costo_hora_cuadrilla = (
-        costo_cuadrilla_dia / horas_jornada
-        if horas_jornada > 0
-        else 0.0
-    )
-
-    return {
+    params = {
         "costo_agujero_unitario": costo_agujero_unitario,
-
         "costo_cuadrilla_dia": costo_cuadrilla_dia,
         "horas_jornada": horas_jornada,
-        "costo_hora_cuadrilla": costo_hora_cuadrilla,
+        "costo_hora_cuadrilla": costo_cuadrilla_dia / horas_jornada,
 
-        "horas_por_poste": horas_por_poste,
-        "horas_por_retenida": horas_por_retenida,
+        # Productividad
+        "horas_por_poste": valor("horas_por_poste", 1.00),
+        "horas_por_retenida": valor("horas_por_retenida", 0.75),
+        "horas_por_estructura_mt": valor("horas_por_estructura_mt", 0.75),
+        "horas_por_estructura_bt": valor("horas_por_estructura_bt", 0.50),
+        "horas_por_transformador": valor("horas_por_transformador", 2.00),
+        "horas_por_luminaria": valor("horas_por_luminaria", 0.50),
+        "horas_por_otra_estructura": valor("horas_por_otra_estructura", 0.75),
 
-        "horas_por_estructura_mt": horas_por_estructura_mt,
-        "horas_por_estructura_bt": horas_por_estructura_bt,
+        # Compatibilidad de reportes actuales
+        "horas_por_estructura": valor("horas_por_estructura", 0.50),
 
-        "horas_por_transformador": horas_por_transformador,
-        "horas_por_luminaria": horas_por_luminaria,
-        "horas_por_otra_estructura": horas_por_otra_estructura,
+        # Se conservan como parámetros opcionales de referencia.
+        # El costo base del tendido ahora se obtiene de los días de cuadrilla.
+        "costo_tendido_mt_m": valor("costo_tendido_mt_m", 0),
+        "costo_tendido_bt_m": valor("costo_tendido_bt_m", 0),
 
-        # Compatibilidad temporal
-        "horas_por_estructura": horas_por_estructura,
-
-        "costo_tendido_mt_m": costo_tendido_mt_m,
-        "costo_tendido_bt_m": costo_tendido_bt_m,
-
-        "horas_grua": horas_grua,
-        "precio_hora_grua": precio_hora_grua,
-        "costo_hora_grua": precio_hora_grua,
-        "costo_grua": total_grua,
-
-        "costo_flete_unitario": costo_flete_unitario,
-        "viajes_flete": viajes_flete,
-        "costo_flete": total_flete,
-
-        "costo_enee": costo_enee,
-        "costo_ingenieria": costo_ingenieria,
-
-        "porcentaje_contingencia": porcentaje_contingencia,
-
-        "incluir_logistica": incluir_logistica,
-        "incluir_logistica_en_venta": incluir_logistica_en_venta,
-    }
-
-# =========================================================
-# CREAR ACTIVIDAD HORARIA
-# =========================================================
-
-def _actividad_horas(
-    nombre: str,
-    cantidad_elementos: int,
-    horas_unitarias: float,
-    costo_hora: float,
-    nombre_elemento: str,
-) -> Dict[str, Any]:
-
-    horas = (
-        cantidad_elementos
-        * horas_unitarias
-    )
-
-    return {
-        "actividad": nombre,
-        "unidad": "hora",
-        "cantidad": horas,
-        "precio_unitario": costo_hora,
-        "total": horas * costo_hora,
-        "criterio": (
-            f"{cantidad_elementos} {nombre_elemento} "
-            f"x {horas_unitarias} h/{nombre_elemento.rstrip('s')}"
+        "horas_grua": valor("horas_grua", 0),
+        "precio_hora_grua": valor("precio_hora_grua", 1500, ["costo_hora_grua"]),
+        "costo_flete_unitario": valor("costo_flete", 0, ["flete_rastra"]),
+        "viajes_flete": valor("viajes_flete", 1),
+        "costo_enee": valor("costo_enee", 0),
+        "costo_ingenieria": valor("gastos_ingenieria", 0, ["ingenieria"]),
+        "porcentaje_contingencia": valor("porcentaje_contingencia", 5),
+        "incluir_logistica": bool(_get_valor(entrada, ss, "incluir_logistica", True)),
+        "incluir_logistica_en_venta": bool(
+            _get_valor(entrada, ss, "incluir_logistica_en_venta", True)
         ),
     }
 
-
-# =========================================================
-# CALCULAR COSTOS REALES POR ACTIVIDAD
-# =========================================================
-
-def _calcular_costos_actividades(
-    entrada,
-    longitud_primario_m: float,
-    longitud_secundario_m: float,
-    metricas: Dict[str, int],
-) -> Dict[str, Any]:
-
-    params = _leer_parametros_operativos(
-        entrada
-    )
-
-    costo_agujero_unitario = params[
-        "costo_agujero_unitario"
-    ]
-
-    costo_hora_cuadrilla = params[
-        "costo_hora_cuadrilla"
-    ]
-
-    num_postes = metricas["num_postes"]
-    num_retenidas = metricas["num_retenidas"]
-
-    num_mt = metricas["num_estructuras_mt"]
-    num_bt = metricas["num_estructuras_bt"]
-
-    num_transformadores = metricas[
-        "num_transformadores"
-    ]
-
-    num_luminarias = metricas[
-        "num_luminarias"
-    ]
-
-    num_otras = metricas[
-        "num_otras_estructuras"
-    ]
-
-    cantidad_agujeros = (
-        num_postes
-        + num_retenidas
-    )
-
-    costo_agujeros = (
-        cantidad_agujeros
-        * costo_agujero_unitario
-    )
-
-    actividades = [
-        {
-            "actividad": "Apertura de agujeros",
-            "unidad": "agujero",
-            "cantidad": cantidad_agujeros,
-            "precio_unitario": costo_agujero_unitario,
-            "total": costo_agujeros,
-            "criterio": (
-                f"{num_postes} postes + "
-                f"{num_retenidas} retenidas"
-            ),
-        },
-
-        _actividad_horas(
-            "Hincado y aplomado de postes",
-            num_postes,
-            params["horas_por_poste"],
-            costo_hora_cuadrilla,
-            "postes",
-        ),
-
-        _actividad_horas(
-            "Instalación de retenidas",
-            num_retenidas,
-            params["horas_por_retenida"],
-            costo_hora_cuadrilla,
-            "retenidas",
-        ),
-
-        _actividad_horas(
-            "Armado e instalación de estructuras MT",
-            num_mt,
-            params["horas_por_estructura_mt"],
-            costo_hora_cuadrilla,
-            "estructuras MT",
-        ),
-
-        _actividad_horas(
-            "Montaje de transformadores",
-            num_transformadores,
-            params["horas_por_transformador"],
-            costo_hora_cuadrilla,
-            "transformadores",
-        ),
-
-        _actividad_horas(
-            "Armado e instalación de estructuras BT",
-            num_bt,
-            params["horas_por_estructura_bt"],
-            costo_hora_cuadrilla,
-            "estructuras BT",
-        ),
-
-        _actividad_horas(
-            "Instalación de luminarias",
-            num_luminarias,
-            params["horas_por_luminaria"],
-            costo_hora_cuadrilla,
-            "luminarias",
-        ),
-
-        _actividad_horas(
-            "Otras estructuras",
-            num_otras,
-            params["horas_por_otra_estructura"],
-            costo_hora_cuadrilla,
-            "estructuras",
-        ),
-
-        {
-            "actividad": "Tendido de conductor primario MT",
-            "unidad": "m",
-            "cantidad": longitud_primario_m,
-            "precio_unitario": params["costo_tendido_mt_m"],
-            "total": (
-                longitud_primario_m
-                * params["costo_tendido_mt_m"]
-            ),
-            "criterio": (
-                "Longitud primaria x costo por metro"
-            ),
-        },
-
-        {
-            "actividad": "Tendido de conductor secundario BT",
-            "unidad": "m",
-            "cantidad": longitud_secundario_m,
-            "precio_unitario": params["costo_tendido_bt_m"],
-            "total": (
-                longitud_secundario_m
-                * params["costo_tendido_bt_m"]
-            ),
-            "criterio": (
-                "Longitud secundaria x costo por metro"
-            ),
-        },
-
-        {
-            "actividad": "Equipo grúa",
-            "unidad": "hora",
-            "cantidad": params["horas_grua"],
-            "precio_unitario": params["precio_hora_grua"],
-            "total": params["costo_grua"],
-            "criterio": (
-                "Horas grúa x precio hora"
-            ),
-        },
-
-        {
-            "actividad": "Flete / transporte",
-            "unidad": "viaje",
-            "cantidad": params["viajes_flete"],
-            "precio_unitario": params["costo_flete_unitario"],
-            "total": params["costo_flete"],
-            "criterio": (
-                "Viajes x costo por viaje"
-            ),
-        },
-
-        {
-            "actividad": "Gestiones ENEE / permisos",
-            "unidad": "global",
-            "cantidad": (
-                1
-                if params["costo_enee"] > 0
-                else 0
-            ),
-            "precio_unitario": params["costo_enee"],
-            "total": params["costo_enee"],
-            "criterio": (
-                "Gestión administrativa / permisos"
-            ),
-        },
-
-        {
-            "actividad": "Ingeniería y administración técnica",
-            "unidad": "global",
-            "cantidad": (
-                1
-                if params["costo_ingenieria"] > 0
-                else 0
-            ),
-            "precio_unitario": params["costo_ingenieria"],
-            "total": params["costo_ingenieria"],
-            "criterio": (
-                "Diseño, revisión y coordinación técnica"
-            ),
-        },
-    ]
-
-    actividades = [
-        item
-        for item in actividades
-        if _to_float(
-            item.get("total", 0)
-        ) > 0
-    ]
-
-    # -----------------------------------------------------
-    # COSTOS DE CUADRILLA
-    # -----------------------------------------------------
-
-    nombres_cuadrilla = {
-        "Hincado y aplomado de postes",
-        "Instalación de retenidas",
-        "Armado e instalación de estructuras MT",
-        "Montaje de transformadores",
-        "Armado e instalación de estructuras BT",
-        "Instalación de luminarias",
-        "Otras estructuras",
-        "Tendido de conductor primario MT",
-        "Tendido de conductor secundario BT",
-    }
-
-    costo_cuadrilla = sum(
-        _to_float(
-            item.get("total", 0)
+    if not params["incluir_logistica"]:
+        params.update(
+            horas_grua=0.0,
+            precio_hora_grua=0.0,
+            costo_flete_unitario=0.0,
+            viajes_flete=0.0,
+            costo_ingenieria=0.0,
         )
-        for item in actividades
-        if item.get("actividad") in nombres_cuadrilla
-    )
 
-    return {
-        "detalle_costos_actividades": actividades,
+    params["costo_hora_grua"] = params["precio_hora_grua"]
+    params["costo_grua"] = params["horas_grua"] * params["precio_hora_grua"]
+    params["costo_flete"] = params["costo_flete_unitario"] * params["viajes_flete"]
 
-        "costo_agujeros": float(
-            costo_agujeros
-        ),
-
-        "costo_cuadrilla": float(
-            costo_cuadrilla
-        ),
-
-        "costo_grua": float(
-            params["costo_grua"]
-        ),
-
-        "costo_flete": float(
-            params["costo_flete"]
-        ),
-
-        "costo_enee": float(
-            params["costo_enee"]
-        ),
-
-        "costo_ingenieria": float(
-            params["costo_ingenieria"]
-        ),
-
-        "parametros_actividades": {
-            "costo_agujero_unitario": round(
-                params["costo_agujero_unitario"],
-                2,
-            ),
-
-            "costo_cuadrilla_dia": round(
-                params["costo_cuadrilla_dia"],
-                2,
-            ),
-
-            "horas_jornada": round(
-                params["horas_jornada"],
-                2,
-            ),
-
-            "costo_hora_cuadrilla": round(
-                params["costo_hora_cuadrilla"],
-                2,
-            ),
-
-            "horas_por_poste": round(
-                params["horas_por_poste"],
-                2,
-            ),
-
-            "horas_por_retenida": round(
-                params["horas_por_retenida"],
-                2,
-            ),
-
-            "horas_por_estructura_mt": round(
-                params["horas_por_estructura_mt"],
-                2,
-            ),
-
-            "horas_por_estructura_bt": round(
-                params["horas_por_estructura_bt"],
-                2,
-            ),
-
-            "horas_por_transformador": round(
-                params["horas_por_transformador"],
-                2,
-            ),
-
-            "horas_por_luminaria": round(
-                params["horas_por_luminaria"],
-                2,
-            ),
-
-            "horas_por_otra_estructura": round(
-                params["horas_por_otra_estructura"],
-                2,
-            ),
-
-            # Compatibilidad temporal
-            "horas_por_estructura": round(
-                params["horas_por_estructura"],
-                2,
-            ),
-
-            "costo_tendido_mt_m": round(
-                params["costo_tendido_mt_m"],
-                2,
-            ),
-
-            "costo_tendido_bt_m": round(
-                params["costo_tendido_bt_m"],
-                2,
-            ),
-
-            "horas_grua": round(
-                params["horas_grua"],
-                2,
-            ),
-
-            "precio_hora_grua": round(
-                params["precio_hora_grua"],
-                2,
-            ),
-
-            "costo_hora_grua": round(
-                params["costo_hora_grua"],
-                2,
-            ),
-
-            "costo_grua": round(
-                params["costo_grua"],
-                2,
-            ),
-
-            "costo_flete_unitario": round(
-                params["costo_flete_unitario"],
-                2,
-            ),
-
-            "viajes_flete": round(
-                params["viajes_flete"],
-                2,
-            ),
-
-            "costo_flete": round(
-                params["costo_flete"],
-                2,
-            ),
-
-            "costo_enee": round(
-                params["costo_enee"],
-                2,
-            ),
-
-            "costo_ingenieria": round(
-                params["costo_ingenieria"],
-                2,
-            ),
-
-            "porcentaje_contingencia": round(
-                params["porcentaje_contingencia"],
-                2,
-            ),
-
-            "incluir_logistica": (
-                params["incluir_logistica"]
-            ),
-
-            "incluir_logistica_en_venta": (
-                params[
-                    "incluir_logistica_en_venta"
-                ]
-            ),
-        },
-    }
+    return params
 
 
 # =========================================================
-# CALCULAR TIEMPOS / CRONOGRAMA
+# CRONOGRAMA
 # =========================================================
+
 def _calcular_tiempos(
     longitud_primario_m: float,
     longitud_secundario_m: float,
@@ -1483,1190 +397,367 @@ def _calcular_tiempos(
     entrada=None,
 ) -> Dict[str, Any]:
     """
-    Calcula el cronograma secuencial de una cuadrilla.
+    Cronograma secuencial de una cuadrilla.
 
-    Criterios:
-    - Una cuadrilla.
-    - Actividades secuenciales.
-    - Rendimiento de agujeros = rendimiento REAL de campo.
-    - Los agujeros NO reciben nuevamente factor de eficiencia.
-    - Actividades expresadas en horas sí utilizan eficiencia.
-    - Tendidos continúan utilizando rendimiento nominal x eficiencia.
+    Agujeros:
+        rendimiento REAL = 4 agujeros/día por defecto.
+        No se vuelve a castigar con eficiencia.
+
+    Resto:
+        rendimiento nominal/hora x eficiencia.
     """
-
-    params = _leer_parametros_operativos(
-        entrada
-    )
-
+    params = _leer_parametros_operativos(entrada)
     ss = _leer_session_state()
 
-    # =====================================================
-    # PARÁMETROS GENERALES
-    # =====================================================
-
-    horas_jornada = max(
-        _to_float(
-            params.get(
-                "horas_jornada",
-                8,
-            ),
-            8,
-        ),
-        0.01,
-    )
-
-    eficiencia = _to_float(
-        _get_valor(
-            entrada,
-            ss,
-            "eficiencia_cronograma",
-            0.85,
-        ),
-        0.85,
-    )
-
+    horas_jornada = params["horas_jornada"]
     eficiencia = min(
-        max(
-            eficiencia,
-            0.10,
-        ),
+        max(_to_float(_get_valor(entrada, ss, "eficiencia_cronograma", 0.85), 0.85), 0.10),
         1.00,
     )
 
-    num_cuadrillas = 1
-
-    # =====================================================
-    # RENDIMIENTOS
-    # =====================================================
-
-    # Rendimiento REAL observado en campo.
-    # NO aplicar nuevamente eficiencia.
     rendimiento_agujeros_dia = max(
-        _to_float(
-            _get_valor(
-                entrada,
-                ss,
-                "rendimiento_agujeros_dia",
-                4,
-            ),
-            4,
-        ),
-        0.01,
+        _to_float(_get_valor(entrada, ss, "rendimiento_agujeros_dia", 4), 4), 0.01
     )
-
-    # Rendimientos nominales.
-    # A estos sí se aplica eficiencia.
     rendimiento_mt_dia = max(
-        _to_float(
-            _get_valor(
-                entrada,
-                ss,
-                "rendimiento_mt_dia",
-                400,
-            ),
-            400,
-        ),
-        0.01,
+        _to_float(_get_valor(entrada, ss, "rendimiento_mt_dia", 400), 400), 0.01
     )
-
     rendimiento_bt_dia = max(
-        _to_float(
-            _get_valor(
-                entrada,
-                ss,
-                "rendimiento_bt_dia",
-                300,
-            ),
-            300,
-        ),
-        0.01,
+        _to_float(_get_valor(entrada, ss, "rendimiento_bt_dia", 300), 300), 0.01
+    )
+    dias_levantamiento = max(
+        0, int(math.ceil(_to_float(_get_valor(entrada, ss, "dias_levantamiento", 1), 1)))
     )
 
-    dias_levantamiento = int(
-        max(
-            0,
-            math.ceil(
-                _to_float(
-                    _get_valor(
-                        entrada,
-                        ss,
-                        "dias_levantamiento",
-                        1,
-                    ),
-                    1,
-                )
-            ),
-        )
-    )
-
-    # =====================================================
-    # FUNCIONES AUXILIARES
-    # =====================================================
-
-    def dias_por_horas(
-        cantidad: float,
-        horas_unitarias: float,
-    ) -> int:
-
-        if (
-            cantidad <= 0
-            or horas_unitarias <= 0
-        ):
+    def dias_por_horas(cantidad: float, horas_unitarias: float) -> int:
+        if cantidad <= 0 or horas_unitarias <= 0:
             return 0
+        return int(math.ceil(cantidad * horas_unitarias / (horas_jornada * eficiencia)))
 
-        capacidad_diaria = (
-            horas_jornada
-            * eficiencia
-        )
-
-        if capacidad_diaria <= 0:
+    def dias_por_rendimiento_real(cantidad: float, rendimiento: float) -> int:
+        if cantidad <= 0 or rendimiento <= 0:
             return 0
+        return int(math.ceil(cantidad / rendimiento))
 
-        return int(
-            math.ceil(
-                cantidad
-                * horas_unitarias
-                / capacidad_diaria
-            )
-        )
-
-    def dias_por_rendimiento_real(
-        cantidad: float,
-        rendimiento_real_dia: float,
-    ) -> int:
-        """
-        Rendimiento observado directamente en campo.
-
-        NO aplica factor de eficiencia.
-        """
-
-        if (
-            cantidad <= 0
-            or rendimiento_real_dia <= 0
-        ):
+    def dias_por_rendimiento_nominal(cantidad: float, rendimiento: float) -> int:
+        if cantidad <= 0 or rendimiento <= 0:
             return 0
+        return int(math.ceil(cantidad / (rendimiento * eficiencia)))
 
-        return int(
-            math.ceil(
-                cantidad
-                / rendimiento_real_dia
-            )
-        )
+    def rendimiento_por_horas(horas_unitarias: float) -> float:
+        return 0.0 if horas_unitarias <= 0 else (horas_jornada / horas_unitarias) * eficiencia
 
-    def dias_por_rendimiento_nominal(
-        cantidad: float,
-        rendimiento_nominal_dia: float,
-    ) -> int:
-        """
-        Rendimiento teórico/nominal.
-
-        Sí aplica eficiencia.
-        """
-
-        if (
-            cantidad <= 0
-            or rendimiento_nominal_dia <= 0
-        ):
-            return 0
-
-        rendimiento_efectivo = (
-            rendimiento_nominal_dia
-            * eficiencia
-        )
-
-        if rendimiento_efectivo <= 0:
-            return 0
-
-        return int(
-            math.ceil(
-                cantidad
-                / rendimiento_efectivo
-            )
-        )
-
-    def rendimiento_por_horas(
-        horas_unitarias: float,
-    ) -> float:
-
-        if horas_unitarias <= 0:
-            return 0.0
-
-        return (
-            horas_jornada
-            / horas_unitarias
-            * eficiencia
-        )
-
-    # =====================================================
-    # CANTIDADES
-    # =====================================================
-
-    num_postes = metricas[
-        "num_postes"
-    ]
-
-    num_retenidas = metricas[
-        "num_retenidas"
-    ]
-
-    num_mt = metricas[
-        "num_estructuras_mt"
-    ]
-
-    num_bt = metricas[
-        "num_estructuras_bt"
-    ]
-
-    num_transformadores = metricas[
-        "num_transformadores"
-    ]
-
-    num_luminarias = metricas[
-        "num_luminarias"
-    ]
-
-    num_otras = metricas[
-        "num_otras_estructuras"
-    ]
-
-    cantidad_agujeros = (
-        num_postes
-        + num_retenidas
-    )
-
-    # =====================================================
-    # DURACIONES
-    # =====================================================
-
-    # Rendimiento real: 4 agujeros/día.
-    dias_agujeros = dias_por_rendimiento_real(
-        cantidad_agujeros,
-        rendimiento_agujeros_dia,
-    )
-
-    dias_postes = dias_por_horas(
-        num_postes,
-        params["horas_por_poste"],
-    )
-
-    dias_retenidas = dias_por_horas(
-        num_retenidas,
-        params["horas_por_retenida"],
-    )
-
-    dias_mt = dias_por_horas(
-        num_mt,
-        params["horas_por_estructura_mt"],
-    )
-
-    dias_transformadores = dias_por_horas(
-        num_transformadores,
-        params["horas_por_transformador"],
-    )
-
-    dias_bt = dias_por_horas(
-        num_bt,
-        params["horas_por_estructura_bt"],
-    )
-
-    dias_luminarias = dias_por_horas(
-        num_luminarias,
-        params["horas_por_luminaria"],
-    )
-
-    dias_otras = dias_por_horas(
-        num_otras,
-        params["horas_por_otra_estructura"],
-    )
-
-    dias_primario = dias_por_rendimiento_nominal(
-        longitud_primario_m,
-        rendimiento_mt_dia,
-    )
-
-    dias_secundario = dias_por_rendimiento_nominal(
-        longitud_secundario_m,
-        rendimiento_bt_dia,
-    )
-
-    # =====================================================
-    # RENDIMIENTOS EFECTIVOS
-    # =====================================================
-
-    rendimiento_postes = rendimiento_por_horas(
-        params["horas_por_poste"]
-    )
-
-    rendimiento_retenidas = rendimiento_por_horas(
-        params["horas_por_retenida"]
-    )
-
-    rendimiento_estructuras_mt = rendimiento_por_horas(
-        params["horas_por_estructura_mt"]
-    )
-
-    rendimiento_transformadores = rendimiento_por_horas(
-        params["horas_por_transformador"]
-    )
-
-    rendimiento_estructuras_bt = rendimiento_por_horas(
-        params["horas_por_estructura_bt"]
-    )
-
-    rendimiento_luminarias = rendimiento_por_horas(
-        params["horas_por_luminaria"]
-    )
-
-    rendimiento_otras = rendimiento_por_horas(
-        params["horas_por_otra_estructura"]
-    )
-
-    rendimiento_mt_efectivo = (
-        rendimiento_mt_dia
-        * eficiencia
-    )
-
-    rendimiento_bt_efectivo = (
-        rendimiento_bt_dia
-        * eficiencia
-    )
-
-    # =====================================================
-    # ACTIVIDADES
-    # =====================================================
+    n_postes = metricas["num_postes"]
+    n_retenidas = metricas["num_retenidas"]
+    n_mt = metricas["num_estructuras_mt"]
+    n_bt = metricas["num_estructuras_bt"]
+    n_trafos = metricas["num_transformadores"]
+    n_luminarias = metricas["num_luminarias"]
+    n_otras = metricas["num_otras_estructuras"]
+    n_agujeros = n_postes + n_retenidas
 
     actividades = [
-        {
-            "actividad": "Levantamiento",
-            "duracion_dias": dias_levantamiento,
-            "cantidad": (
-                1
-                if dias_levantamiento > 0
-                else 0
-            ),
-            "unidad": "global",
-            "rendimiento": None,
-        },
-
-        {
-            "actividad": "Agujeros",
-            "duracion_dias": dias_agujeros,
-            "cantidad": cantidad_agujeros,
-            "unidad": "agujero",
-            "rendimiento": rendimiento_agujeros_dia,
-        },
-
-        {
-            "actividad": "Postes",
-            "duracion_dias": dias_postes,
-            "cantidad": num_postes,
-            "unidad": "poste",
-            "rendimiento": rendimiento_postes,
-        },
-
-        {
-            "actividad": "Retenidas",
-            "duracion_dias": dias_retenidas,
-            "cantidad": num_retenidas,
-            "unidad": "retenida",
-            "rendimiento": rendimiento_retenidas,
-        },
-
-        {
-            "actividad": "Estructuras MT",
-            "duracion_dias": dias_mt,
-            "cantidad": num_mt,
-            "unidad": "estructura",
-            "rendimiento": rendimiento_estructuras_mt,
-        },
-
-        {
-            "actividad": "Tendido MT",
-            "duracion_dias": dias_primario,
-            "cantidad": max(
-                _to_float(
-                    longitud_primario_m
-                ),
-                0.0,
-            ),
-            "unidad": "m",
-            "rendimiento": rendimiento_mt_efectivo,
-        },
-
-        {
-            "actividad": "Transformadores",
-            "duracion_dias": dias_transformadores,
-            "cantidad": num_transformadores,
-            "unidad": "transformador",
-            "rendimiento": rendimiento_transformadores,
-        },
-
-        {
-            "actividad": "Estructuras BT",
-            "duracion_dias": dias_bt,
-            "cantidad": num_bt,
-            "unidad": "estructura",
-            "rendimiento": rendimiento_estructuras_bt,
-        },
-
-        {
-            "actividad": "Tendido BT",
-            "duracion_dias": dias_secundario,
-            "cantidad": max(
-                _to_float(
-                    longitud_secundario_m
-                ),
-                0.0,
-            ),
-            "unidad": "m",
-            "rendimiento": rendimiento_bt_efectivo,
-        },
-
-        {
-            "actividad": "Luminarias",
-            "duracion_dias": dias_luminarias,
-            "cantidad": num_luminarias,
-            "unidad": "luminaria",
-            "rendimiento": rendimiento_luminarias,
-        },
-
-        {
-            "actividad": "Otras estructuras",
-            "duracion_dias": dias_otras,
-            "cantidad": num_otras,
-            "unidad": "estructura",
-            "rendimiento": rendimiento_otras,
-        },
+        ("Levantamiento", 1 if dias_levantamiento else 0, "global", dias_levantamiento, None),
+        ("Agujeros", n_agujeros, "agujero",
+         dias_por_rendimiento_real(n_agujeros, rendimiento_agujeros_dia),
+         rendimiento_agujeros_dia),
+        ("Postes", n_postes, "poste",
+         dias_por_horas(n_postes, params["horas_por_poste"]),
+         rendimiento_por_horas(params["horas_por_poste"])),
+        ("Retenidas", n_retenidas, "retenida",
+         dias_por_horas(n_retenidas, params["horas_por_retenida"]),
+         rendimiento_por_horas(params["horas_por_retenida"])),
+        ("Estructuras MT", n_mt, "estructura",
+         dias_por_horas(n_mt, params["horas_por_estructura_mt"]),
+         rendimiento_por_horas(params["horas_por_estructura_mt"])),
+        ("Tendido MT", max(longitud_primario_m, 0), "m",
+         dias_por_rendimiento_nominal(longitud_primario_m, rendimiento_mt_dia),
+         rendimiento_mt_dia * eficiencia),
+        ("Transformadores", n_trafos, "transformador",
+         dias_por_horas(n_trafos, params["horas_por_transformador"]),
+         rendimiento_por_horas(params["horas_por_transformador"])),
+        ("Estructuras BT", n_bt, "estructura",
+         dias_por_horas(n_bt, params["horas_por_estructura_bt"]),
+         rendimiento_por_horas(params["horas_por_estructura_bt"])),
+        ("Tendido BT", max(longitud_secundario_m, 0), "m",
+         dias_por_rendimiento_nominal(longitud_secundario_m, rendimiento_bt_dia),
+         rendimiento_bt_dia * eficiencia),
+        ("Luminarias", n_luminarias, "luminaria",
+         dias_por_horas(n_luminarias, params["horas_por_luminaria"]),
+         rendimiento_por_horas(params["horas_por_luminaria"])),
+        ("Otras estructuras", n_otras, "estructura",
+         dias_por_horas(n_otras, params["horas_por_otra_estructura"]),
+         rendimiento_por_horas(params["horas_por_otra_estructura"])),
     ]
 
-    # =====================================================
-    # CRONOGRAMA SECUENCIAL
-    # =====================================================
-
     cronograma = []
-
     dia_actual = 1
 
-    for item in actividades:
-
-        duracion = int(
-            item.get(
-                "duracion_dias",
-                0,
-            )
-        )
-
+    for nombre, cantidad, unidad, duracion, rendimiento in actividades:
         if duracion <= 0:
-
-            cronograma.append({
-                **item,
-                "inicio": None,
-                "fin": None,
-            })
-
-            continue
-
-        inicio = dia_actual
-
-        fin = (
-            inicio
-            + duracion
-            - 1
-        )
+            inicio = fin = None
+        else:
+            inicio = dia_actual
+            fin = inicio + duracion - 1
+            dia_actual = fin + 1
 
         cronograma.append({
-            **item,
-            "inicio": int(inicio),
-            "fin": int(fin),
+            "actividad": nombre,
+            "duracion_dias": int(duracion),
+            "cantidad": cantidad,
+            "unidad": unidad,
+            "rendimiento": rendimiento,
+            "inicio": inicio,
+            "fin": fin,
         })
 
-        dia_actual = fin + 1
-
-    dias_totales = max(
-        (
-            item["fin"] or 0
-            for item in cronograma
-        ),
-        default=0,
-    )
-
-    # =====================================================
-    # RESUMEN DE RENDIMIENTOS
-    # =====================================================
+    dias_totales = max((x["fin"] or 0 for x in cronograma), default=0)
+    dur = {x["actividad"]: x["duracion_dias"] for x in cronograma}
 
     rendimientos = {
-        "agujeros_dia": round(
-            rendimiento_agujeros_dia,
-            2,
-        ),
-
-        "postes_dia": round(
-            rendimiento_postes,
-            2,
-        ),
-
-        "retenidas_dia": round(
-            rendimiento_retenidas,
-            2,
-        ),
-
-        "estructuras_mt_dia": round(
-            rendimiento_estructuras_mt,
-            2,
-        ),
-
-        "transformadores_dia": round(
-            rendimiento_transformadores,
-            2,
-        ),
-
-        "estructuras_bt_dia": round(
-            rendimiento_estructuras_bt,
-            2,
-        ),
-
-        "luminarias_dia": round(
-            rendimiento_luminarias,
-            2,
-        ),
-
-        "otras_estructuras_dia": round(
-            rendimiento_otras,
-            2,
-        ),
-
-        "mt_m_dia": round(
-            rendimiento_mt_efectivo,
-            2,
-        ),
-
-        "bt_m_dia": round(
-            rendimiento_bt_efectivo,
-            2,
-        ),
+        "agujeros_dia": round(rendimiento_agujeros_dia, 2),
+        "postes_dia": round(rendimiento_por_horas(params["horas_por_poste"]), 2),
+        "retenidas_dia": round(rendimiento_por_horas(params["horas_por_retenida"]), 2),
+        "estructuras_mt_dia": round(rendimiento_por_horas(params["horas_por_estructura_mt"]), 2),
+        "estructuras_bt_dia": round(rendimiento_por_horas(params["horas_por_estructura_bt"]), 2),
+        "transformadores_dia": round(rendimiento_por_horas(params["horas_por_transformador"]), 2),
+        "luminarias_dia": round(rendimiento_por_horas(params["horas_por_luminaria"]), 2),
+        "otras_estructuras_dia": round(rendimiento_por_horas(params["horas_por_otra_estructura"]), 2),
+        "mt_m_dia": round(rendimiento_mt_dia * eficiencia, 2),
+        "bt_m_dia": round(rendimiento_bt_dia * eficiencia, 2),
     }
 
-    # =====================================================
-    # SALIDA
-    # =====================================================
-
     return {
-        "dias_levantamiento": dias_levantamiento,
-        "dias_agujeros": dias_agujeros,
-
-        "dias_postes": dias_postes,
-        "dias_retenidas": dias_retenidas,
-
-        "dias_estructuras_mt": dias_mt,
-        "dias_transformadores": dias_transformadores,
-        "dias_estructuras_bt": dias_bt,
-
-        "dias_primario": dias_primario,
-        "dias_secundario": dias_secundario,
-
-        "dias_luminarias": dias_luminarias,
-        "dias_otras_estructuras": dias_otras,
-
-        # Compatibilidad temporal
-        "dias_estructuras": (
-            dias_mt
-            + dias_bt
-            + dias_otras
-        ),
-
-        "dias_totales": int(
-            dias_totales
-        ),
-
+        "dias_levantamiento": dur["Levantamiento"],
+        "dias_agujeros": dur["Agujeros"],
+        "dias_postes": dur["Postes"],
+        "dias_retenidas": dur["Retenidas"],
+        "dias_estructuras_mt": dur["Estructuras MT"],
+        "dias_transformadores": dur["Transformadores"],
+        "dias_estructuras_bt": dur["Estructuras BT"],
+        "dias_primario": dur["Tendido MT"],
+        "dias_secundario": dur["Tendido BT"],
+        "dias_luminarias": dur["Luminarias"],
+        "dias_otras_estructuras": dur["Otras estructuras"],
+        "dias_estructuras": dur["Estructuras MT"] + dur["Estructuras BT"] + dur["Otras estructuras"],
+        "dias_totales": int(dias_totales),
         "cronograma_resumen": cronograma,
-
         "rendimientos": rendimientos,
-
         "parametros_cronograma": {
-            "horas_jornada": round(
-                horas_jornada,
-                2,
-            ),
-
-            "eficiencia": round(
-                eficiencia,
-                4,
-            ),
-
+            "horas_jornada": round(horas_jornada, 2),
+            "eficiencia": round(eficiencia, 4),
             "num_cuadrillas": 1,
-
-            "rendimiento_agujeros_dia": round(
-                rendimiento_agujeros_dia,
-                2,
-            ),
-
-            "horas_por_poste": round(
-                params["horas_por_poste"],
-                4,
-            ),
-
-            "horas_por_retenida": round(
-                params["horas_por_retenida"],
-                4,
-            ),
-
-            "horas_por_estructura_mt": round(
-                params["horas_por_estructura_mt"],
-                4,
-            ),
-
-            "horas_por_transformador": round(
-                params["horas_por_transformador"],
-                4,
-            ),
-
-            "horas_por_estructura_bt": round(
-                params["horas_por_estructura_bt"],
-                4,
-            ),
-
-            "horas_por_luminaria": round(
-                params["horas_por_luminaria"],
-                4,
-            ),
-
-            "horas_por_otra_estructura": round(
-                params["horas_por_otra_estructura"],
-                4,
-            ),
-
-            "rendimiento_mt_dia": round(
-                rendimiento_mt_dia,
-                2,
-            ),
-
-            "rendimiento_bt_dia": round(
-                rendimiento_bt_dia,
-                2,
-            ),
-        },
-    }
-    # -----------------------------------------------------
-    # FUNCIONES DE DURACIÓN
-    # -----------------------------------------------------
-
-    def dias_por_horas(
-        cantidad: float,
-        horas_unitarias: float,
-    ) -> int:
-
-        if (
-            cantidad <= 0
-            or horas_unitarias <= 0
-        ):
-            return 0
-
-        capacidad_diaria = (
-            horas_jornada
-            * num_cuadrillas
-            * eficiencia
-        )
-
-        if capacidad_diaria <= 0:
-            return 0
-
-        return int(
-            math.ceil(
-                cantidad
-                * horas_unitarias
-                / capacidad_diaria
-            )
-        )
-
-    def dias_por_rendimiento(
-        cantidad: float,
-        rendimiento_dia: float,
-    ) -> int:
-
-        if (
-            cantidad <= 0
-            or rendimiento_dia <= 0
-        ):
-            return 0
-
-        capacidad_diaria = (
-            rendimiento_dia
-            * num_cuadrillas
-            * eficiencia
-        )
-
-        if capacidad_diaria <= 0:
-            return 0
-
-        return int(
-            math.ceil(
-                cantidad
-                / capacidad_diaria
-            )
-        )
-
-    def rendimiento_por_horas(
-        horas_unitarias: float,
-    ) -> float:
-
-        if horas_unitarias <= 0:
-            return 0.0
-
-        return (
-            horas_jornada
-            / horas_unitarias
-            * num_cuadrillas
-            * eficiencia
-        )
-
-    # -----------------------------------------------------
-    # CANTIDADES
-    # -----------------------------------------------------
-
-    num_postes = metricas["num_postes"]
-    num_retenidas = metricas["num_retenidas"]
-
-    num_mt = metricas["num_estructuras_mt"]
-    num_bt = metricas["num_estructuras_bt"]
-
-    num_transformadores = metricas[
-        "num_transformadores"
-    ]
-
-    num_luminarias = metricas[
-        "num_luminarias"
-    ]
-
-    num_otras = metricas[
-        "num_otras_estructuras"
-    ]
-
-    cantidad_agujeros = (
-        num_postes
-        + num_retenidas
-    )
-
-    # -----------------------------------------------------
-    # DURACIONES
-    # -----------------------------------------------------
-
-    dias_agujeros = dias_por_rendimiento(
-        cantidad_agujeros,
-        rendimiento_agujeros_dia,
-    )
-
-    dias_postes = dias_por_horas(
-        num_postes,
-        params["horas_por_poste"],
-    )
-
-    dias_retenidas = dias_por_horas(
-        num_retenidas,
-        params["horas_por_retenida"],
-    )
-
-    dias_mt = dias_por_horas(
-        num_mt,
-        params["horas_por_estructura_mt"],
-    )
-
-    dias_bt = dias_por_horas(
-        num_bt,
-        params["horas_por_estructura_bt"],
-    )
-
-    dias_transformadores = dias_por_horas(
-        num_transformadores,
-        params["horas_por_transformador"],
-    )
-
-    dias_luminarias = dias_por_horas(
-        num_luminarias,
-        params["horas_por_luminaria"],
-    )
-
-    dias_otras = dias_por_horas(
-        num_otras,
-        params["horas_por_otra_estructura"],
-    )
-
-    dias_primario = dias_por_rendimiento(
-        longitud_primario_m,
-        rendimiento_mt_dia,
-    )
-
-    dias_secundario = dias_por_rendimiento(
-        longitud_secundario_m,
-        rendimiento_bt_dia,
-    )
-
-    # -----------------------------------------------------
-    # ACTIVIDADES
-    # -----------------------------------------------------
-
-    actividades = [
-        {
-            "actividad": "Levantamiento",
-            "duracion_dias": dias_levantamiento,
-            "cantidad": (
-                1
-                if dias_levantamiento > 0
-                else 0
-            ),
-            "unidad": "global",
-            "rendimiento": None,
-        },
-
-        {
-            "actividad": "Agujeros",
-            "duracion_dias": dias_agujeros,
-            "cantidad": cantidad_agujeros,
-            "unidad": "agujero",
-            "rendimiento": (
-                rendimiento_agujeros_dia
-                * num_cuadrillas
-                * eficiencia
-            ),
-        },
-
-        {
-            "actividad": "Postes",
-            "duracion_dias": dias_postes,
-            "cantidad": num_postes,
-            "unidad": "poste",
-            "rendimiento": rendimiento_por_horas(
-                params["horas_por_poste"]
-            ),
-        },
-
-        {
-            "actividad": "Retenidas",
-            "duracion_dias": dias_retenidas,
-            "cantidad": num_retenidas,
-            "unidad": "retenida",
-            "rendimiento": rendimiento_por_horas(
-                params["horas_por_retenida"]
-            ),
-        },
-
-        {
-            "actividad": "Estructuras MT",
-            "duracion_dias": dias_mt,
-            "cantidad": num_mt,
-            "unidad": "estructura",
-            "rendimiento": rendimiento_por_horas(
-                params["horas_por_estructura_mt"]
-            ),
-        },
-
-        {
-            "actividad": "Tendido MT",
-            "duracion_dias": dias_primario,
-            "cantidad": max(
-                _to_float(
-                    longitud_primario_m
-                ),
-                0.0,
-            ),
-            "unidad": "m",
-            "rendimiento": (
-                rendimiento_mt_dia
-                * num_cuadrillas
-                * eficiencia
-            ),
-        },
-
-        {
-            "actividad": "Transformadores",
-            "duracion_dias": dias_transformadores,
-            "cantidad": num_transformadores,
-            "unidad": "transformador",
-            "rendimiento": rendimiento_por_horas(
-                params["horas_por_transformador"]
-            ),
-        },
-
-        {
-            "actividad": "Estructuras BT",
-            "duracion_dias": dias_bt,
-            "cantidad": num_bt,
-            "unidad": "estructura",
-            "rendimiento": rendimiento_por_horas(
-                params["horas_por_estructura_bt"]
-            ),
-        },
-
-        {
-            "actividad": "Tendido BT",
-            "duracion_dias": dias_secundario,
-            "cantidad": max(
-                _to_float(
-                    longitud_secundario_m
-                ),
-                0.0,
-            ),
-            "unidad": "m",
-            "rendimiento": (
-                rendimiento_bt_dia
-                * num_cuadrillas
-                * eficiencia
-            ),
-        },
-
-        {
-            "actividad": "Luminarias",
-            "duracion_dias": dias_luminarias,
-            "cantidad": num_luminarias,
-            "unidad": "luminaria",
-            "rendimiento": rendimiento_por_horas(
-                params["horas_por_luminaria"]
-            ),
-        },
-
-        {
-            "actividad": "Otras estructuras",
-            "duracion_dias": dias_otras,
-            "cantidad": num_otras,
-            "unidad": "estructura",
-            "rendimiento": rendimiento_por_horas(
-                params["horas_por_otra_estructura"]
-            ),
-        },
-    ]
-
-    # -----------------------------------------------------
-    # CRONOGRAMA SECUENCIAL
-    # -----------------------------------------------------
-
-    cronograma = []
-    dia_actual = 1
-
-    for item in actividades:
-
-        duracion = int(
-            item.get(
-                "duracion_dias",
-                0,
-            )
-        )
-
-        if duracion <= 0:
-
-            cronograma.append({
-                **item,
-                "inicio": None,
-                "fin": None,
-            })
-
-            continue
-
-        inicio = dia_actual
-        fin = (
-            inicio
-            + duracion
-            - 1
-        )
-
-        cronograma.append({
-            **item,
-            "inicio": int(inicio),
-            "fin": int(fin),
-        })
-
-        dia_actual = fin + 1
-
-    dias_totales = max(
-        (
-            item["fin"] or 0
-            for item in cronograma
-        ),
-        default=0,
-    )
-
-    # -----------------------------------------------------
-    # RENDIMIENTOS EFECTIVOS
-    # -----------------------------------------------------
-
-    rendimientos = {
-        "agujeros_dia": round(
-            rendimiento_agujeros_dia
-            * num_cuadrillas
-            * eficiencia,
-            2,
-        ),
-
-        "postes_dia": round(
-            rendimiento_por_horas(
-                params["horas_por_poste"]
-            ),
-            2,
-        ),
-
-        "retenidas_dia": round(
-            rendimiento_por_horas(
-                params["horas_por_retenida"]
-            ),
-            2,
-        ),
-
-        "estructuras_mt_dia": round(
-            rendimiento_por_horas(
-                params["horas_por_estructura_mt"]
-            ),
-            2,
-        ),
-
-        "estructuras_bt_dia": round(
-            rendimiento_por_horas(
-                params["horas_por_estructura_bt"]
-            ),
-            2,
-        ),
-
-        "transformadores_dia": round(
-            rendimiento_por_horas(
-                params["horas_por_transformador"]
-            ),
-            2,
-        ),
-
-        "luminarias_dia": round(
-            rendimiento_por_horas(
-                params["horas_por_luminaria"]
-            ),
-            2,
-        ),
-
-        "otras_estructuras_dia": round(
-            rendimiento_por_horas(
-                params["horas_por_otra_estructura"]
-            ),
-            2,
-        ),
-
-        "mt_m_dia": round(
-            rendimiento_mt_dia
-            * num_cuadrillas
-            * eficiencia,
-            2,
-        ),
-
-        "bt_m_dia": round(
-            rendimiento_bt_dia
-            * num_cuadrillas
-            * eficiencia,
-            2,
-        ),
-    }
-
-    return {
-        "dias_levantamiento": dias_levantamiento,
-        "dias_agujeros": dias_agujeros,
-        "dias_postes": dias_postes,
-        "dias_retenidas": dias_retenidas,
-
-        "dias_estructuras_mt": dias_mt,
-        "dias_estructuras_bt": dias_bt,
-
-        "dias_transformadores": (
-            dias_transformadores
-        ),
-
-        "dias_luminarias": dias_luminarias,
-
-        "dias_otras_estructuras": dias_otras,
-
-        "dias_primario": dias_primario,
-        "dias_secundario": dias_secundario,
-
-        # Compatibilidad con consumidores antiguos.
-        "dias_estructuras": (
-            dias_mt
-            + dias_bt
-            + dias_otras
-        ),
-
-        "dias_totales": int(
-            dias_totales
-        ),
-
-        "cronograma_resumen": cronograma,
-        "rendimientos": rendimientos,
-
-        "parametros_cronograma": {
-            "horas_jornada": round(
-                horas_jornada,
-                2,
-            ),
-
-            "eficiencia": round(
-                eficiencia,
-                4,
-            ),
-
-            "num_cuadrillas": num_cuadrillas,
-
-            "horas_por_poste": round(
-                params["horas_por_poste"],
-                4,
-            ),
-
-            "horas_por_retenida": round(
-                params["horas_por_retenida"],
-                4,
-            ),
-
-            "horas_por_estructura_mt": round(
-                params["horas_por_estructura_mt"],
-                4,
-            ),
-
-            "horas_por_estructura_bt": round(
-                params["horas_por_estructura_bt"],
-                4,
-            ),
-
-            "horas_por_transformador": round(
-                params["horas_por_transformador"],
-                4,
-            ),
-
-            "horas_por_luminaria": round(
-                params["horas_por_luminaria"],
-                4,
-            ),
-
-            "horas_por_otra_estructura": round(
-                params["horas_por_otra_estructura"],
-                4,
-            ),
-
-            # Compatibilidad
-            "horas_por_estructura": round(
-                params["horas_por_estructura"],
-                4,
-            ),
-
-            "rendimiento_agujeros_dia": round(
-                rendimiento_agujeros_dia,
-                2,
-            ),
-
-            "rendimiento_mt_dia": round(
-                rendimiento_mt_dia,
-                2,
-            ),
-
-            "rendimiento_bt_dia": round(
-                rendimiento_bt_dia,
-                2,
-            ),
+            "rendimiento_agujeros_dia": round(rendimiento_agujeros_dia, 2),
+            "horas_por_poste": round(params["horas_por_poste"], 4),
+            "horas_por_retenida": round(params["horas_por_retenida"], 4),
+            "horas_por_estructura_mt": round(params["horas_por_estructura_mt"], 4),
+            "horas_por_transformador": round(params["horas_por_transformador"], 4),
+            "horas_por_estructura_bt": round(params["horas_por_estructura_bt"], 4),
+            "horas_por_luminaria": round(params["horas_por_luminaria"], 4),
+            "horas_por_otra_estructura": round(params["horas_por_otra_estructura"], 4),
+            "rendimiento_mt_dia": round(rendimiento_mt_dia, 2),
+            "rendimiento_bt_dia": round(rendimiento_bt_dia, 2),
         },
     }
 
 
 # =========================================================
-# CALCULAR KPIs
+# COSTOS OPERATIVOS POR ACTIVIDAD
+# =========================================================
+
+ACTIVIDADES_CUADRILLA = {
+    "Postes": "Hincado y aplomado de postes",
+    "Retenidas": "Instalación de retenidas",
+    "Estructuras MT": "Armado e instalación de estructuras MT",
+    "Tendido MT": "Tendido de conductor primario MT",
+    "Transformadores": "Montaje de transformadores",
+    "Estructuras BT": "Armado e instalación de estructuras BT",
+    "Tendido BT": "Tendido de conductor secundario BT",
+    "Luminarias": "Instalación de luminarias",
+    "Otras estructuras": "Otras estructuras",
+}
+
+
+def _actividad_cuadrilla(
+    nombre_reporte: str,
+    dias: int,
+    costo_dia: float,
+    criterio: str,
+) -> Dict[str, Any]:
+    return {
+        "actividad": nombre_reporte,
+        "unidad": "día",
+        "cantidad": float(dias),
+        "precio_unitario": float(costo_dia),
+        "total": float(dias * costo_dia),
+        "criterio": criterio,
+    }
+
+
+def _calcular_costos_actividades(
+    entrada,
+    longitud_primario_m: float,
+    longitud_secundario_m: float,
+    metricas: Dict[str, int],
+    tiempos: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Alinea costo y cronograma.
+
+    La cuadrilla se costea por días realmente ocupados:
+        costo actividad = días actividad x costo cuadrilla/día
+
+    No se carga cuadrilla en:
+    - apertura de agujeros (se trata como costo unitario externo);
+    - grúa;
+    - flete;
+    - permisos;
+    - ingeniería.
+
+    Así se evita que una actividad de 5 días sea costeada como si fueran
+    únicamente 28 horas teóricas.
+    """
+    params = _leer_parametros_operativos(entrada)
+    tiempos = tiempos or _calcular_tiempos(
+        longitud_primario_m, longitud_secundario_m, metricas, entrada
+    )
+
+    n_postes = metricas["num_postes"]
+    n_retenidas = metricas["num_retenidas"]
+    n_mt = metricas["num_estructuras_mt"]
+    n_bt = metricas["num_estructuras_bt"]
+    n_trafos = metricas["num_transformadores"]
+    n_luminarias = metricas["num_luminarias"]
+    n_otras = metricas["num_otras_estructuras"]
+    n_agujeros = n_postes + n_retenidas
+
+    costo_agujeros = n_agujeros * params["costo_agujero_unitario"]
+    actividades = [{
+        "actividad": "Apertura de agujeros",
+        "unidad": "agujero",
+        "cantidad": float(n_agujeros),
+        "precio_unitario": params["costo_agujero_unitario"],
+        "total": costo_agujeros,
+        "criterio": f"{n_postes} postes + {n_retenidas} retenidas",
+    }]
+
+    cantidades = {
+        "Postes": f"{n_postes} postes",
+        "Retenidas": f"{n_retenidas} retenidas",
+        "Estructuras MT": f"{n_mt} estructuras MT",
+        "Tendido MT": f"{longitud_primario_m:.0f} m MT",
+        "Transformadores": f"{n_trafos} transformadores",
+        "Estructuras BT": f"{n_bt} estructuras BT",
+        "Tendido BT": f"{longitud_secundario_m:.0f} m BT",
+        "Luminarias": f"{n_luminarias} luminarias",
+        "Otras estructuras": f"{n_otras} otras estructuras",
+    }
+
+    cronograma_por_nombre = {x["actividad"]: x for x in tiempos["cronograma_resumen"]}
+
+    for nombre_crono, nombre_reporte in ACTIVIDADES_CUADRILLA.items():
+        item = cronograma_por_nombre[nombre_crono]
+        dias = int(item["duracion_dias"])
+        if dias <= 0:
+            continue
+
+        actividades.append(
+            _actividad_cuadrilla(
+                nombre_reporte,
+                dias,
+                params["costo_cuadrilla_dia"],
+                f"{cantidades[nombre_crono]} → {dias} día(s) de cuadrilla",
+            )
+        )
+
+    if params["costo_grua"] > 0:
+        actividades.append({
+            "actividad": "Equipo grúa",
+            "unidad": "hora",
+            "cantidad": params["horas_grua"],
+            "precio_unitario": params["precio_hora_grua"],
+            "total": params["costo_grua"],
+            "criterio": "Horas grúa x precio hora",
+        })
+
+    if params["costo_flete"] > 0:
+        actividades.append({
+            "actividad": "Flete / transporte",
+            "unidad": "viaje",
+            "cantidad": params["viajes_flete"],
+            "precio_unitario": params["costo_flete_unitario"],
+            "total": params["costo_flete"],
+            "criterio": "Viajes x costo por viaje",
+        })
+
+    if params["costo_enee"] > 0:
+        actividades.append({
+            "actividad": "Gestiones ENEE / permisos",
+            "unidad": "global",
+            "cantidad": 1.0,
+            "precio_unitario": params["costo_enee"],
+            "total": params["costo_enee"],
+            "criterio": "Gestión administrativa / permisos",
+        })
+
+    if params["costo_ingenieria"] > 0:
+        actividades.append({
+            "actividad": "Ingeniería y administración técnica",
+            "unidad": "global",
+            "cantidad": 1.0,
+            "precio_unitario": params["costo_ingenieria"],
+            "total": params["costo_ingenieria"],
+            "criterio": "Diseño, revisión y coordinación técnica",
+        })
+
+    nombres_cuadrilla = set(ACTIVIDADES_CUADRILLA.values())
+    costo_cuadrilla = sum(
+        _to_float(x["total"]) for x in actividades if x["actividad"] in nombres_cuadrilla
+    )
+
+    parametros = {
+        "costo_agujero_unitario": round(params["costo_agujero_unitario"], 2),
+        "costo_cuadrilla_dia": round(params["costo_cuadrilla_dia"], 2),
+        "horas_jornada": round(params["horas_jornada"], 2),
+        "costo_hora_cuadrilla": round(params["costo_hora_cuadrilla"], 2),
+        "horas_por_estructura": round(params["horas_por_estructura"], 2),
+        "horas_por_poste": round(params["horas_por_poste"], 2),
+        "horas_por_retenida": round(params["horas_por_retenida"], 2),
+        "horas_por_estructura_mt": round(params["horas_por_estructura_mt"], 2),
+        "horas_por_estructura_bt": round(params["horas_por_estructura_bt"], 2),
+        "horas_por_transformador": round(params["horas_por_transformador"], 2),
+        "horas_por_luminaria": round(params["horas_por_luminaria"], 2),
+        "horas_por_otra_estructura": round(params["horas_por_otra_estructura"], 2),
+        "costo_tendido_mt_m": round(params["costo_tendido_mt_m"], 2),
+        "costo_tendido_bt_m": round(params["costo_tendido_bt_m"], 2),
+        "horas_grua": round(params["horas_grua"], 2),
+        "precio_hora_grua": round(params["precio_hora_grua"], 2),
+        "costo_hora_grua": round(params["costo_hora_grua"], 2),
+        "costo_grua": round(params["costo_grua"], 2),
+        "costo_flete_unitario": round(params["costo_flete_unitario"], 2),
+        "viajes_flete": round(params["viajes_flete"], 2),
+        "costo_flete": round(params["costo_flete"], 2),
+        "costo_enee": round(params["costo_enee"], 2),
+        "costo_ingenieria": round(params["costo_ingenieria"], 2),
+        "porcentaje_contingencia": round(params["porcentaje_contingencia"], 2),
+        "incluir_logistica": params["incluir_logistica"],
+        "incluir_logistica_en_venta": params["incluir_logistica_en_venta"],
+        "criterio_costo_cuadrilla": "días de ocupación x costo cuadrilla/día",
+    }
+
+    return {
+        "detalle_costos_actividades": actividades,
+        "costo_agujeros": float(costo_agujeros),
+        "costo_cuadrilla": float(costo_cuadrilla),
+        "costo_grua": float(params["costo_grua"]),
+        "costo_flete": float(params["costo_flete"]),
+        "costo_enee": float(params["costo_enee"]),
+        "costo_ingenieria": float(params["costo_ingenieria"]),
+        "parametros_actividades": parametros,
+    }
+
+
+# =========================================================
+# KPIs / DISTRIBUCIÓN / EVALUACIÓN
 # =========================================================
 
 def _calcular_kpis(
@@ -2676,239 +767,80 @@ def _calcular_kpis(
     num_postes: int,
     dias_totales: float,
 ) -> Dict[str, float]:
+    """
+    Conserva claves antiguas por compatibilidad.
 
-    costo_por_estructura = (
-        costo_total_real
-        / total_estructuras
-        if total_estructuras
-        else 0
-    )
-
-    utilidad_por_estructura = (
-        utilidad
-        / total_estructuras
-        if total_estructuras
-        else 0
-    )
-
-    costo_por_poste = (
-        costo_total_real
-        / num_postes
-        if num_postes
-        else 0
-    )
-
-    utilidad_diaria = (
-        utilidad
-        / dias_totales
-        if dias_totales
-        else 0
-    )
-
+    Semánticamente:
+    - costo_por_estructura = costo global equivalente por estructura MT/BT.
+    - costo_por_poste = costo global equivalente por poste.
+    """
     return {
-        "costo_por_estructura": round(
-            costo_por_estructura,
-            2,
-        ),
-
-        "utilidad_por_estructura": round(
-            utilidad_por_estructura,
-            2,
-        ),
-
-        "costo_por_poste": round(
-            costo_por_poste,
-            2,
-        ),
-
-        "utilidad_diaria": round(
-            utilidad_diaria,
-            2,
-        ),
+        "costo_por_estructura": round(costo_total_real / total_estructuras, 2) if total_estructuras else 0.0,
+        "utilidad_por_estructura": round(utilidad / total_estructuras, 2) if total_estructuras else 0.0,
+        "costo_por_poste": round(costo_total_real / num_postes, 2) if num_postes else 0.0,
+        "utilidad_diaria": round(utilidad / dias_totales, 2) if dias_totales else 0.0,
+        "costo_global_equivalente_por_estructura": round(costo_total_real / total_estructuras, 2) if total_estructuras else 0.0,
+        "costo_global_equivalente_por_poste": round(costo_total_real / num_postes, 2) if num_postes else 0.0,
     }
-
-
-# =========================================================
-# DISTRIBUCIÓN DE COSTOS
-# =========================================================
-
-def costs_or_zero(
-    costos: Dict[str, float],
-    key: str,
-) -> float:
-
-    return _to_float(
-        costos.get(
-            key,
-            0,
-        )
-    )
 
 
 def _crear_distribucion_costos(
     costo_total_real: float,
     costos: Dict[str, float],
 ) -> list[Dict[str, Any]]:
-
     rubros = [
-        (
-            "Materiales",
-            costos.get(
-                "costo_materiales",
-                0,
-            ),
-        ),
-
-        (
-            "Cuadrilla",
-            costs_or_zero(
-                costos,
-                "costo_cuadrilla",
-            ),
-        ),
-
-        (
-            "Agujeros",
-            costs_or_zero(
-                costos,
-                "costo_agujeros",
-            ),
-        ),
-
-        (
-            "Grúa",
-            costs_or_zero(
-                costos,
-                "costo_grua",
-            ),
-        ),
-
-        (
-            "Flete",
-            costs_or_zero(
-                costos,
-                "costo_flete",
-            ),
-        ),
-
-        (
-            "ENEE / Permisos",
-            costs_or_zero(
-                costos,
-                "costo_enee",
-            ),
-        ),
-
-        (
-            "Ingeniería",
-            costs_or_zero(
-                costos,
-                "costo_ingenieria",
-            ),
-        ),
-
-        (
-            "Otros",
-            costs_or_zero(
-                costos,
-                "costo_otros",
-            ),
-        ),
-
-        (
-            "Contingencia",
-            costs_or_zero(
-                costos,
-                "contingencia",
-            ),
-        ),
+        ("Materiales", costos.get("costo_materiales", 0)),
+        ("Cuadrilla", costos.get("costo_cuadrilla", 0)),
+        ("Agujeros", costos.get("costo_agujeros", 0)),
+        ("Grúa", costos.get("costo_grua", 0)),
+        ("Flete", costos.get("costo_flete", 0)),
+        ("ENEE / Permisos", costos.get("costo_enee", 0)),
+        ("Ingeniería", costos.get("costo_ingenieria", 0)),
+        ("Otros", costos.get("costo_otros", 0)),
+        ("Contingencia", costos.get("contingencia", 0)),
     ]
 
     salida = []
-
     for rubro, monto in rubros:
-
-        monto = _to_float(
-            monto
-        )
-
-        if abs(monto) <= 0:
+        monto = _to_float(monto)
+        if monto <= 0:
             continue
-
-        porcentaje = (
-            monto
-            / costo_total_real
-            * 100
-            if costo_total_real
-            else 0
-        )
-
         salida.append({
             "rubro": rubro,
-            "monto": round(
-                monto,
-                2,
-            ),
-            "porcentaje": round(
-                porcentaje,
-                2,
-            ),
+            "monto": round(monto, 2),
+            "porcentaje": round((monto / costo_total_real * 100) if costo_total_real else 0, 2),
         })
-
     return salida
 
 
-# =========================================================
-# EVALUACIÓN EJECUTIVA
-# =========================================================
-
-def _evaluar_proyecto(
-    utilidad: float,
-    margen_pct: float,
-) -> Dict[str, str]:
-
+def _evaluar_proyecto(utilidad: float, margen_pct: float) -> Dict[str, str]:
     if utilidad < 0:
         return {
             "estado": "NO RENTABLE",
-            "mensaje": (
-                "El costo total estimado supera "
-                "el valor de venta pactado del proyecto."
-            ),
+            "mensaje": "El costo total estimado supera el valor de venta neta del proyecto.",
             "nivel": "critico",
         }
-
     if margen_pct < 10:
         return {
             "estado": "RENTABILIDAD BAJA",
-            "mensaje": (
-                "El proyecto tiene utilidad positiva, "
-                "pero el margen es bajo."
-            ),
+            "mensaje": "El proyecto tiene utilidad positiva, pero el margen es bajo.",
             "nivel": "advertencia",
         }
-
     if margen_pct < 20:
         return {
             "estado": "RENTABLE",
-            "mensaje": (
-                "El proyecto presenta utilidad positiva "
-                "con margen aceptable."
-            ),
+            "mensaje": "El proyecto presenta utilidad positiva con margen aceptable.",
             "nivel": "aceptable",
         }
-
     return {
         "estado": "RENTABLE ALTO",
-        "mensaje": (
-            "El proyecto presenta una "
-            "rentabilidad favorable."
-        ),
+        "mensaje": "El proyecto presenta una rentabilidad favorable.",
         "nivel": "bueno",
     }
 
 
 # =========================================================
-# MOTOR DE COSTOS REAL DEL CONTRATISTA
+# MOTOR PRINCIPAL
 # =========================================================
 
 def _motor_costos(
@@ -2919,205 +851,83 @@ def _motor_costos(
     precio_total_proyecto: float,
     entrada=None,
 ) -> Dict[str, Any]:
+    costos_tabla = _clasificar_costos_desde_materiales(df_materiales_costos)
+    costos_manuales = _extraer_costos_manuales(entrada)
 
-    # -----------------------------------------------------
-    # COSTOS BASE
-    # -----------------------------------------------------
-
-    costos_tabla = (
-        _clasificar_costos_desde_materiales(
-            df_materiales_costos
-        )
+    # Primero cronograma; después costos. Así ambos usan exactamente
+    # las mismas duraciones y no divergen.
+    tiempos = _calcular_tiempos(
+        longitud_primario_m, longitud_secundario_m, metricas, entrada
+    )
+    costos_actividades = _calcular_costos_actividades(
+        entrada,
+        longitud_primario_m,
+        longitud_secundario_m,
+        metricas,
+        tiempos=tiempos,
     )
 
-    costos_actividades = (
-        _calcular_costos_actividades(
-            entrada=entrada,
-            longitud_primario_m=(
-                longitud_primario_m
-            ),
-            longitud_secundario_m=(
-                longitud_secundario_m
-            ),
-            metricas=metricas,
-        )
-    )
-
-    costos_manuales = (
-        _extraer_costos_manuales(
-            entrada
-        )
-        if entrada is not None
-        else {
-            "costo_cuadrilla_manual": 0,
-            "costo_agujeros_manual": 0,
-            "costo_grua_manual": 0,
-            "costo_flete_manual": 0,
-            "costo_enee_manual": 0,
-            "costo_ingenieria_manual": 0,
-        }
-    )
-
-    # -----------------------------------------------------
-    # CONSOLIDACIÓN
-    # -----------------------------------------------------
-
-    costo_materiales = (
-        costos_tabla["costo_materiales"]
-    )
-
+    costo_materiales = costos_tabla["costo_materiales"]
     costo_cuadrilla = (
         costos_tabla["costo_cuadrilla"]
         + costos_actividades["costo_cuadrilla"]
-        + costs_or_zero(
-            costos_manuales,
-            "costo_cuadrilla_manual",
-        )
+        + costs_or_zero(costos_manuales, "costo_cuadrilla_manual")
     )
-
     costo_agujeros = (
         costos_tabla["costo_agujeros"]
         + costos_actividades["costo_agujeros"]
-        + costs_or_zero(
-            costos_manuales,
-            "costo_agujeros_manual",
-        )
+        + costs_or_zero(costos_manuales, "costo_agujeros_manual")
     )
-
     costo_grua = (
         costos_tabla["costo_grua"]
         + costos_actividades["costo_grua"]
-        + costs_or_zero(
-            costos_manuales,
-            "costo_grua_manual",
-        )
+        + costs_or_zero(costos_manuales, "costo_grua_manual")
     )
-
     costo_flete = (
         costos_tabla["costo_flete"]
         + costos_actividades["costo_flete"]
-        + costs_or_zero(
-            costos_manuales,
-            "costo_flete_manual",
-        )
+        + costs_or_zero(costos_manuales, "costo_flete_manual")
     )
-
     costo_enee = (
         costos_tabla["costo_enee"]
         + costos_actividades["costo_enee"]
-        + costs_or_zero(
-            costos_manuales,
-            "costo_enee_manual",
-        )
+        + costs_or_zero(costos_manuales, "costo_enee_manual")
     )
-
     costo_ingenieria = (
         costos_tabla["costo_ingenieria"]
         + costos_actividades["costo_ingenieria"]
-        + costs_or_zero(
-            costos_manuales,
-            "costo_ingenieria_manual",
-        )
+        + costs_or_zero(costos_manuales, "costo_ingenieria_manual")
     )
+    costo_otros = costos_tabla["costo_otros"]
 
-    costo_otros = (
-        costos_tabla["costo_otros"]
-    )
-
-    # -----------------------------------------------------
-    # CRONOGRAMA
-    # -----------------------------------------------------
-
-    tiempos = _calcular_tiempos(
-        longitud_primario_m=(
-            longitud_primario_m
-        ),
-        longitud_secundario_m=(
-            longitud_secundario_m
-        ),
-        metricas=metricas,
-        entrada=entrada,
-    )
-
-    dias_totales = tiempos[
-        "dias_totales"
-    ]
-
-    # -----------------------------------------------------
-    # TOTAL DE COSTOS
-    # -----------------------------------------------------
-
-    subtotal = (
-        costo_materiales
-        + costo_cuadrilla
-        + costo_agujeros
-        + costo_grua
-        + costo_flete
-        + costo_enee
-        + costo_ingenieria
-        + costo_otros
-    )
-
-    params = costos_actividades.get(
-        "parametros_actividades",
-        {},
-    )
+    subtotal = sum([
+        costo_materiales,
+        costo_cuadrilla,
+        costo_agujeros,
+        costo_grua,
+        costo_flete,
+        costo_enee,
+        costo_ingenieria,
+        costo_otros,
+    ])
 
     porcentaje_contingencia = _to_float(
-        params.get(
-            "porcentaje_contingencia",
-            5,
-        ),
-        5,
+        costos_actividades["parametros_actividades"].get("porcentaje_contingencia", 5), 5
     )
+    contingencia = subtotal * porcentaje_contingencia / 100
+    costo_total_real = subtotal + contingencia
 
-    contingencia = (
-        subtotal
-        * porcentaje_contingencia
-        / 100
-    )
-
-    costo_total_real = (
-        subtotal
-        + contingencia
-    )
-
-    utilidad = (
-        precio_total_proyecto
-        - costo_total_real
-    )
-
-    margen_pct = (
-        utilidad
-        / precio_total_proyecto
-        * 100
-        if precio_total_proyecto
-        else 0
-    )
-
-    # -----------------------------------------------------
-    # KPIs
-    # -----------------------------------------------------
-
-    total_estructuras = metricas[
-        "total_estructuras"
-    ]
-
-    num_postes = metricas[
-        "num_postes"
-    ]
+    # precio_total_proyecto se trata como VENTA NETA para rentabilidad.
+    utilidad = precio_total_proyecto - costo_total_real
+    margen_pct = (utilidad / precio_total_proyecto * 100) if precio_total_proyecto else 0.0
 
     kpis = _calcular_kpis(
-        costo_total_real=costo_total_real,
-        utilidad=utilidad,
-        total_estructuras=total_estructuras,
-        num_postes=num_postes,
-        dias_totales=dias_totales,
+        costo_total_real,
+        utilidad,
+        metricas["total_estructuras"],
+        metricas["num_postes"],
+        tiempos["dias_totales"],
     )
-
-    # -----------------------------------------------------
-    # DISTRIBUCIÓN
-    # -----------------------------------------------------
 
     costos_consolidados = {
         "costo_materiales": costo_materiales,
@@ -3131,474 +941,140 @@ def _motor_costos(
         "contingencia": contingencia,
     }
 
-    distribucion_costos = (
-        _crear_distribucion_costos(
-            costo_total_real=(
-                costo_total_real
-            ),
-            costos=(
-                costos_consolidados
-            ),
-        )
-    )
-
-    evaluacion = _evaluar_proyecto(
-        utilidad=utilidad,
-        margen_pct=margen_pct,
-    )
-
-    porcentaje_materiales = (
-        costo_materiales
-        / costo_total_real
-        * 100
-        if costo_total_real
-        else 0
-    )
-
-    porcentaje_cuadrilla = (
-        costo_cuadrilla
-        / costo_total_real
-        * 100
-        if costo_total_real
-        else 0
-    )
-
-    porcentaje_grua = (
-        costo_grua
-        / costo_total_real
-        * 100
-        if costo_total_real
-        else 0
-    )
-
-    # -----------------------------------------------------
-    # SALIDA
-    # -----------------------------------------------------
+    evaluacion = _evaluar_proyecto(utilidad, margen_pct)
 
     return {
-        "costo_materiales": round(
-            costo_materiales,
-            2,
-        ),
+        "costo_materiales": round(costo_materiales, 2),
+        "costo_cuadrilla": round(costo_cuadrilla, 2),
+        "costo_agujeros": round(costo_agujeros, 2),
+        "costo_grua": round(costo_grua, 2),
+        "costo_flete": round(costo_flete, 2),
+        "costo_enee": round(costo_enee, 2),
+        "costo_ingenieria": round(costo_ingenieria, 2),
+        "costo_otros": round(costo_otros, 2),
+        "contingencia": round(contingencia, 2),
+        "porcentaje_contingencia": round(porcentaje_contingencia, 2),
+        "detalle_costos_actividades": costos_actividades["detalle_costos_actividades"],
+        "parametros_actividades": costos_actividades["parametros_actividades"],
+        "subtotal_costos": round(subtotal, 2),
+        "costo_total_real": round(costo_total_real, 2),
 
-        "costo_cuadrilla": round(
-            costo_cuadrilla,
-            2,
-        ),
+        # Compatibilidad + nombre semánticamente correcto
+        "precio_venta": round(precio_total_proyecto, 2),
+        "precio_venta_neta": round(precio_total_proyecto, 2),
 
-        "costo_agujeros": round(
-            costo_agujeros,
-            2,
-        ),
+        "utilidad": round(utilidad, 2),
+        "margen_pct": round(margen_pct, 2),
+        "dias_totales": int(tiempos["dias_totales"]),
 
-        "costo_grua": round(
-            costo_grua,
-            2,
-        ),
+        "num_postes": int(metricas["num_postes"]),
+        "num_retenidas": int(metricas["num_retenidas"]),
+        "total_estructuras": int(metricas["total_estructuras"]),
+        "total_elementos": int(metricas["total_elementos"]),
+        "num_estructuras_mt": int(metricas["num_estructuras_mt"]),
+        "num_estructuras_bt": int(metricas["num_estructuras_bt"]),
+        "num_transformadores": int(metricas["num_transformadores"]),
+        "num_luminarias": int(metricas["num_luminarias"]),
+        "num_otras_estructuras": int(metricas["num_otras_estructuras"]),
+        "metricas_estructuras": dict(metricas),
 
-        "costo_flete": round(
-            costo_flete,
-            2,
-        ),
+        "longitud_primario": round(longitud_primario_m, 2),
+        "longitud_secundario": round(longitud_secundario_m, 2),
 
-        "costo_enee": round(
-            costo_enee,
-            2,
-        ),
+        "porcentaje_materiales": round((costo_materiales / costo_total_real * 100) if costo_total_real else 0, 2),
+        "porcentaje_cuadrilla": round((costo_cuadrilla / costo_total_real * 100) if costo_total_real else 0, 2),
+        "porcentaje_grua": round((costo_grua / costo_total_real * 100) if costo_total_real else 0, 2),
 
-        "costo_ingenieria": round(
-            costo_ingenieria,
-            2,
-        ),
-
-        "costo_otros": round(
-            costo_otros,
-            2,
-        ),
-
-        "contingencia": round(
-            contingencia,
-            2,
-        ),
-
-        "porcentaje_contingencia": round(
-            porcentaje_contingencia,
-            2,
-        ),
-
-        "detalle_costos_actividades": (
-            costos_actividades[
-                "detalle_costos_actividades"
-            ]
-        ),
-
-        "parametros_actividades": (
-            costos_actividades[
-                "parametros_actividades"
-            ]
-        ),
-
-        "subtotal_costos": round(
-            subtotal,
-            2,
-        ),
-
-        "costo_total_real": round(
-            costo_total_real,
-            2,
-        ),
-
-        "precio_venta": round(
-            precio_total_proyecto,
-            2,
-        ),
-
-        "utilidad": round(
-            utilidad,
-            2,
-        ),
-
-        "margen_pct": round(
-            margen_pct,
-            2,
-        ),
-
-        "dias_totales": round(
-            dias_totales,
-            2,
-        ),
-
-        # -------------------------------------------------
-        # MÉTRICAS COMPATIBLES
-        # -------------------------------------------------
-
-        "num_postes": int(
-            metricas["num_postes"]
-        ),
-
-        "num_retenidas": int(
-            metricas["num_retenidas"]
-        ),
-
-        "total_estructuras": int(
-            metricas["total_estructuras"]
-        ),
-
-        # -------------------------------------------------
-        # NUEVAS MÉTRICAS
-        # -------------------------------------------------
-
-        "total_elementos": int(
-            metricas["total_elementos"]
-        ),
-
-        "num_estructuras_mt": int(
-            metricas["num_estructuras_mt"]
-        ),
-
-        "num_estructuras_bt": int(
-            metricas["num_estructuras_bt"]
-        ),
-
-        "num_transformadores": int(
-            metricas["num_transformadores"]
-        ),
-
-        "num_luminarias": int(
-            metricas["num_luminarias"]
-        ),
-
-        "num_otras_estructuras": int(
-            metricas["num_otras_estructuras"]
-        ),
-
-        "metricas_estructuras": dict(
-            metricas
-        ),
-
-        "longitud_primario": round(
-            longitud_primario_m,
-            2,
-        ),
-
-        "longitud_secundario": round(
-            longitud_secundario_m,
-            2,
-        ),
-
-        "porcentaje_materiales": round(
-            porcentaje_materiales,
-            2,
-        ),
-
-        "porcentaje_cuadrilla": round(
-            porcentaje_cuadrilla,
-            2,
-        ),
-
-        "porcentaje_grua": round(
-            porcentaje_grua,
-            2,
-        ),
-
-        "distribucion_costos": (
-            distribucion_costos
-        ),
-
-        "cronograma_resumen": (
-            tiempos["cronograma_resumen"]
-        ),
-
+        "distribucion_costos": _crear_distribucion_costos(costo_total_real, costos_consolidados),
+        "cronograma_resumen": tiempos["cronograma_resumen"],
         "tiempos": tiempos,
 
         "evaluacion": evaluacion,
-
-        "estado_proyecto": (
-            evaluacion["estado"]
-        ),
-
-        "mensaje_evaluacion": (
-            evaluacion["mensaje"]
-        ),
-
-        "nivel_evaluacion": (
-            evaluacion["nivel"]
-        ),
+        "estado_proyecto": evaluacion["estado"],
+        "mensaje_evaluacion": evaluacion["mensaje"],
+        "nivel_evaluacion": evaluacion["nivel"],
 
         **kpis,
     }
 
 
 # =========================================================
-# FUNCIÓN PRINCIPAL
+# FUNCIÓN PÚBLICA
 # =========================================================
 
-def calcular_costos_proyecto(
-    entrada,
-) -> Dict[str, Any]:
-
+def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
     try:
-
-        # -------------------------------------------------
-        # ESTRUCTURAS
-        # -------------------------------------------------
-
-        df_estructuras_global = getattr(
-            entrada,
-            "df_estructuras",
-            None,
+        metricas = _extraer_metricas_estructuras(
+            getattr(entrada, "df_estructuras", None)
         )
 
-        metricas = (
-            _extraer_metricas_estructuras(
-                df_estructuras_global
-            )
+        longitud_primario, longitud_secundario = _extraer_longitudes(
+            getattr(entrada, "df_cables", None)
         )
 
-        # -------------------------------------------------
-        # CABLES
-        # -------------------------------------------------
-
-        (
-            longitud_primario,
-            longitud_secundario,
-        ) = _extraer_longitudes(
-            getattr(
-                entrada,
-                "df_cables",
-                None,
-            )
-        )
-
-        # -------------------------------------------------
-        # MATERIALES CON COSTOS
-        # -------------------------------------------------
-
-        df_costos_materiales = getattr(
-            entrada,
-            "df_costos_materiales",
-            None,
-        )
-
+        df_costos_materiales = getattr(entrada, "df_costos_materiales", None)
         if df_costos_materiales is None:
-            df_costos_materiales = getattr(
-                entrada,
-                "df_materiales_costos",
-                None,
+            df_costos_materiales = getattr(entrada, "df_materiales_costos", None)
+
+        _validar_materiales(df_costos_materiales)
+
+        precio_base = _to_float(getattr(entrada, "precio_venta_proyecto", 0))
+        params = _leer_parametros_operativos(entrada)
+
+        # Este valor representa la venta neta usada para medir rentabilidad.
+        # Se mantiene la regla vigente de agregar logística/ingeniería
+        # cuando el proyecto así lo configura.
+        precio_venta_neta = precio_base
+        if params["incluir_logistica_en_venta"]:
+            precio_venta_neta += (
+                params["costo_grua"]
+                + params["costo_flete"]
+                + params["costo_ingenieria"]
             )
-
-        _validar_materiales(
-            df_costos_materiales
-        )
-
-        # -------------------------------------------------
-        # PRECIO DE VENTA
-        # -------------------------------------------------
-
-        precio_base = _to_float(
-            getattr(
-                entrada,
-                "precio_venta_proyecto",
-                0,
-            )
-        )
-
-        params = _leer_parametros_operativos(
-            entrada
-        )
-
-        costo_grua = params[
-            "costo_grua"
-        ]
-
-        costo_flete = params[
-            "costo_flete"
-        ]
-
-        gastos_ingenieria = params[
-            "costo_ingenieria"
-        ]
-
-        incluir_logistica_en_venta = params[
-            "incluir_logistica_en_venta"
-        ]
-
-        if incluir_logistica_en_venta:
-
-            precio_total = (
-                precio_base
-                + costo_grua
-                + costo_flete
-                + gastos_ingenieria
-            )
-
-        else:
-            precio_total = precio_base
-
-        # -------------------------------------------------
-        # MOTOR PRINCIPAL
-        # -------------------------------------------------
 
         resultado = _motor_costos(
-            df_materiales_costos=(
-                df_costos_materiales
-            ),
-            longitud_primario_m=(
-                longitud_primario
-            ),
-            longitud_secundario_m=(
-                longitud_secundario
-            ),
+            df_materiales_costos=df_costos_materiales,
+            longitud_primario_m=longitud_primario,
+            longitud_secundario_m=longitud_secundario,
             metricas=metricas,
-            precio_total_proyecto=(
-                precio_total
-            ),
+            precio_total_proyecto=precio_venta_neta,
             entrada=entrada,
         )
-
-        # -------------------------------------------------
-        # DEBUG
-        # -------------------------------------------------
 
         debug_costos_proyecto = {
             "entrada": {
                 "precio_base": precio_base,
-                "precio_total": precio_total,
-
-                "horas_grua": (
-                    params["horas_grua"]
-                ),
-
-                "precio_hora_grua": (
-                    params["precio_hora_grua"]
-                ),
-
-                "costo_grua": costo_grua,
-
-                "costo_flete_unitario": (
-                    params[
-                        "costo_flete_unitario"
-                    ]
-                ),
-
-                "viajes_flete": (
-                    params["viajes_flete"]
-                ),
-
-                "costo_flete": costo_flete,
-
-                "gastos_ingenieria": (
-                    gastos_ingenieria
-                ),
-
-                "incluir_logistica": (
-                    params["incluir_logistica"]
-                ),
-
-                "incluir_logistica_en_venta": (
-                    incluir_logistica_en_venta
-                ),
-
-                "porcentaje_contingencia": (
-                    params[
-                        "porcentaje_contingencia"
-                    ]
-                ),
-
-                "metricas_estructuras": dict(
-                    metricas
-                ),
-
-                "longitud_primario": (
-                    longitud_primario
-                ),
-
-                "longitud_secundario": (
-                    longitud_secundario
-                ),
-
-                "columnas_df_costos_materiales": (
-                    list(
-                        df_costos_materiales.columns
-                    )
-                ),
-
-                "filas_df_costos_materiales": (
-                    len(
-                        df_costos_materiales
-                    )
-                ),
+                "precio_venta_neta": precio_venta_neta,
+                "horas_grua": params["horas_grua"],
+                "precio_hora_grua": params["precio_hora_grua"],
+                "costo_grua": params["costo_grua"],
+                "costo_flete_unitario": params["costo_flete_unitario"],
+                "viajes_flete": params["viajes_flete"],
+                "costo_flete": params["costo_flete"],
+                "gastos_ingenieria": params["costo_ingenieria"],
+                "incluir_logistica": params["incluir_logistica"],
+                "incluir_logistica_en_venta": params["incluir_logistica_en_venta"],
+                "porcentaje_contingencia": params["porcentaje_contingencia"],
+                "metricas_estructuras": dict(metricas),
+                "longitud_primario": longitud_primario,
+                "longitud_secundario": longitud_secundario,
+                "columnas_df_costos_materiales": list(df_costos_materiales.columns),
+                "filas_df_costos_materiales": len(df_costos_materiales),
             },
-
             "resultado": resultado,
         }
 
         return {
             "ok": True,
-
-            "resultado_costos_proyecto": (
-                resultado
-            ),
-
-            "df_costos_materiales": (
-                df_costos_materiales
-            ),
-
-            "debug_costos_proyecto": (
-                debug_costos_proyecto
-            ),
+            "resultado_costos_proyecto": resultado,
+            "df_costos_materiales": df_costos_materiales,
+            "debug_costos_proyecto": debug_costos_proyecto,
         }
 
     except Exception as error:
-
         return {
             "ok": False,
-
             "error": str(error),
-
             "resultado_costos_proyecto": None,
-
-            "debug_costos_proyecto": {
-                "error": str(error),
-            },
+            "debug_costos_proyecto": {"error": str(error)},
         }
