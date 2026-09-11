@@ -1,4 +1,40 @@
 # -*- coding: utf-8 -*-
+"""
+costos_precios/costos_materiales.py
+
+ROL:
+    Motor base de valorización de materiales.
+
+QUÉ HACE:
+    - Normaliza nombres y unidades de materiales.
+    - Consolida materiales repetidos.
+    - Cruza materiales del proyecto con el catálogo de costos.
+    - Asigna costo unitario.
+    - Calcula Costo Total = Cantidad × Costo Unitario.
+    - Detecta materiales sin precio y genera información de diagnóstico.
+
+ALIMENTA:
+    - Cálculo de costos por estructura.
+    - Motor general de costos del proyecto.
+    - Reportes que requieran materiales valorizados.
+
+PDF CONTRATISTA:
+    No directamente.
+
+REPORTE COMPLETO:
+    Sí, indirectamente como fuente del costo de materiales.
+
+RESPONSABILIDAD:
+    Este módulo calcula costos de materiales.
+    NO genera PDF.
+    NO calcula mano de obra.
+    NO calcula precio de venta.
+    NO debe contener lógica de presentación.
+"""
+
+
+
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import pandas as pd
