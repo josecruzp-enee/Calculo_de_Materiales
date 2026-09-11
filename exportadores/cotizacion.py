@@ -1,82 +1,55 @@
 # -*- coding: utf-8 -*-
+"""
+exportadores/cotizacion.py
+
+Genera la sección de cotización comercial del proyecto.
+
+Responsabilidades:
+- Preparar datos recibidos.
+- Consolidar suministro, mano de obra y costos comerciales.
+- Renderizar la tabla de cotización en PDF.
+
+No calcula materiales ni cantidades de estructuras.
+"""
+
 from __future__ import annotations
+
+from typing import Any
 
 import pandas as pd
 import streamlit as st
 
-from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
 from exportadores.pdf_base import estilo_tabla
-# ======================================================
-# ACTIVAR / DESACTIVAR DESMONTAJES
-# ======================================================
-INCLUIR_DESMONTAJES = False
-# ======================================================
-# DESMONTAJES DEL PROYECTO
-# ======================================================
-DESMONTAJES = {
-    "A-III-1": {
-        "cantidad": 13,
-        "precio": 2000,
-    },
-    "A-III-2": {
-        "cantidad": 2,
-        "precio": 2500,
-    },
-    "A-III-4": {
-        "cantidad": 1,
-        "precio": 3000,
-
-    },
-    "A-III-5": {
-        "cantidad": 4,
-        "precio": 3000,
-    },
-    "A-III-6": {
-        "cantidad": 1,
-        "precio": 3500,
-    },
-    "A-I-4": {
-        "cantidad": 3,
-        "precio": 1500,
-    },
-    "A-I-1": {
-        "cantidad": 3,
-        "precio": 1200,
-    },
-}
 
 
-# ======================================================
-# DESMONTAJE DE CONDUCTORES
-# SIN CONSIDERAR NEUTRO
-# ======================================================
-DESMONTAJE_LINEA = [
-    {
-        "descripcion": "Línea primaria 3F",
-        "longitud": 417,
-        "conductores": 3,
-        "precio_m": 40,
-    },
-    {
-        "descripcion": "Línea primaria 2F",
-        "longitud": 236,
-        "conductores": 2,
-        "precio_m": 40,
-    },
-    {
-        "descripcion": "Línea primaria 1F",
-        "longitud": 149,
-        "conductores": 1,
-        "precio_m": 40,
-    },
+# ==========================================================
+# CONFIGURACIÓN
+# ==========================================================
+
+TASA_ISV_MATERIALES = 0.15
+
+# Espacio temporal para trabajos adicionales/desmontajes.
+# No contiene datos específicos de ningún proyecto.
+INCLUIR_ADICIONALES = False
+
+ADICIONALES: list[dict[str, Any]] = [
+    # Ejemplo:
+    # {
+    #     "descripcion": "Desmontaje de poste PC-35",
+    #     "cantidad": 1,
+    #     "precio_unitario": 2500,
+    # },
 ]
 
-# =========================================================
-# HELPERS NUMÉRICOS
-# =========================================================
+
+# ==========================================================
+# UTILIDADES
+# ==========================================================
+
 def _to_float(valor, default: float = 0.0) -> float:
     try:
         if valor is None:
@@ -92,60 +65,41 @@ def _to_float(valor, default: float = 0.0) -> float:
 
         return float(valor)
 
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 
 def _fmt_lps(valor) -> str:
-    try:
-        return f"L {float(valor):,.2f}"
-    except Exception:
-        return "L 0.00"
+    return f"L {_to_float(valor):,.2f}"
 
 
-def _separar_cotizacion(
-    df_precios: pd.DataFrame,
-    tasa_isv_materiales: float = 0.15,
-) -> dict:
-    """
-    Separa los valores de la cotización en:
+def _df_valido(df) -> bool:
+    return isinstance(df, pd.DataFrame) and not df.empty
 
-    - Materiales y costos operativos.
-    - ISV aplicado únicamente a materiales.
-    - Suministro total con ISV.
-    - Mano de obra sin ISV.
 
-    Conserva las cantidades especiales de los cables.
-    """
+# ==========================================================
+# PREPARACIÓN DE DATOS
+# ==========================================================
 
-    resultado_vacio = {
-        "materiales_sin_isv": 0.0,
-        "isv_materiales": 0.0,
-        "suministro_con_isv": 0.0,
-        "mano_obra": 0.0,
-        "total_base": 0.0,
-    }
+COLUMNAS_NUMERICAS = (
+    "Cantidad",
+    "Cantidad Material",
+    "Cantidad Mano Obra",
+    "Material Unitario",
+    "Mano Obra Unitaria",
+    "Costo Operativo Unitario",
+)
 
-    if (
-        df_precios is None
-        or not isinstance(df_precios, pd.DataFrame)
-        or df_precios.empty
-    ):
-        return resultado_vacio
+
+def _preparar_dataframe(df_precios: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza únicamente las columnas requeridas por la cotización."""
+
+    if not _df_valido(df_precios):
+        raise ValueError("df_precios inválido o vacío")
 
     df = df_precios.copy()
 
-    columnas_numericas = [
-        "Cantidad",
-        "Cantidad Material",
-        "Cantidad Mano Obra",
-        "Material Unitario",
-        "Mano Obra Unitaria",
-        "Costo Operativo Unitario",
-    ]
-
-    for columna in columnas_numericas:
-
+    for columna in COLUMNAS_NUMERICAS:
         if columna not in df.columns:
             df[columna] = 0.0
 
@@ -154,13 +108,17 @@ def _separar_cotizacion(
             errors="coerce",
         ).fillna(0.0)
 
-    # =====================================================
-    # CANTIDADES
-    # =====================================================
-    # Los cables pueden tener cantidades diferentes para
-    # material y mano de obra.
-    #
-    # Las estructuras utilizan la columna Cantidad.
+    return df
+
+
+def _obtener_cantidades(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """
+    Obtiene cantidades comerciales.
+
+    Permite que cables u otros conceptos tengan cantidades distintas
+    para materiales y mano de obra.
+    """
+
     cantidad_material = df["Cantidad Material"].where(
         df["Cantidad Material"] > 0,
         df["Cantidad"],
@@ -171,81 +129,105 @@ def _separar_cotizacion(
         df["Cantidad"],
     )
 
-    # =====================================================
-    # MATERIALES
-    # =====================================================
+    return cantidad_material, cantidad_mano_obra
+
+
+# ==========================================================
+# SUMINISTRO Y MANO DE OBRA
+# ==========================================================
+
+def _calcular_suministro(
+    df: pd.DataFrame,
+    cantidad_material: pd.Series,
+) -> dict:
+    """Calcula materiales, costos operativos e ISV."""
+
     materiales = float(
-        (
-            cantidad_material
-            * df["Material Unitario"]
-        ).sum()
+        (cantidad_material * df["Material Unitario"]).sum()
     )
 
-    # Los costos operativos ya forman parte del suministro
-    # presentado en la tabla anterior.
     costos_operativos = float(
-        (
-            df["Cantidad"]
-            * df["Costo Operativo Unitario"]
-        ).sum()
+        (df["Cantidad"] * df["Costo Operativo Unitario"]).sum()
     )
 
-    materiales_sin_isv = (
-        materiales
-        + costos_operativos
-    )
-
-    # =====================================================
-    # MANO DE OBRA
-    # =====================================================
-    mano_obra = float(
-        (
-            cantidad_mano_obra
-            * df["Mano Obra Unitaria"]
-        ).sum()
-    )
-
-    # =====================================================
-    # ISV SOLO SOBRE MATERIALES
-    # =====================================================
-    isv_materiales = (
-        materiales_sin_isv
-        * tasa_isv_materiales
-    )
-
-    suministro_con_isv = (
-        materiales_sin_isv
-        + isv_materiales
-    )
-
-    total_base = (
-        suministro_con_isv
-        + mano_obra
-    )
+    suministro_sin_isv = materiales + costos_operativos
+    isv = suministro_sin_isv * TASA_ISV_MATERIALES
+    suministro_con_isv = suministro_sin_isv + isv
 
     return {
-        "materiales_sin_isv": round(materiales_sin_isv, 2),
-        "isv_materiales": round(isv_materiales, 2),
+        "materiales": round(materiales, 2),
+        "costos_operativos": round(costos_operativos, 2),
+        "suministro_sin_isv": round(suministro_sin_isv, 2),
+        "isv": round(isv, 2),
         "suministro_con_isv": round(suministro_con_isv, 2),
-        "mano_obra": round(mano_obra, 2),
-        "total_base": round(total_base, 2),
     }
 
-# =========================================================
-# LOGÍSTICA DESDE STREAMLIT
-# =========================================================
+
+def _calcular_mano_obra(
+    df: pd.DataFrame,
+    cantidad_mano_obra: pd.Series,
+) -> float:
+    """Calcula el total comercial de mano de obra."""
+
+    total = (
+        cantidad_mano_obra
+        * df["Mano Obra Unitaria"]
+    ).sum()
+
+    return round(float(total), 2)
+
+
+# ==========================================================
+# ADICIONALES / DESMONTAJES
+# ==========================================================
+
+def _calcular_adicionales() -> tuple[float, list[dict]]:
+    """
+    Calcula conceptos manuales adicionales.
+
+    Se deja como punto controlado para desmontajes,
+    reubicaciones u otros trabajos extraordinarios.
+    """
+
+    if not INCLUIR_ADICIONALES:
+        return 0.0, []
+
+    detalle = []
+    total = 0.0
+
+    for item in ADICIONALES:
+        descripcion = str(item.get("descripcion", "Trabajo adicional")).strip()
+        cantidad = _to_float(item.get("cantidad"))
+        precio_unitario = _to_float(item.get("precio_unitario"))
+
+        if cantidad <= 0 or precio_unitario < 0:
+            continue
+
+        subtotal = cantidad * precio_unitario
+        total += subtotal
+
+        detalle.append({
+            "descripcion": descripcion,
+            "cantidad": cantidad,
+            "precio_unitario": precio_unitario,
+            "total": subtotal,
+        })
+
+    return round(total, 2), detalle
+
+
+# ==========================================================
+# LOGÍSTICA / COSTOS COMERCIALES
+# ==========================================================
+
 def _leer_logistica_streamlit() -> dict:
     """
-    Lee los valores comerciales definidos en la interfaz.
-    Usa los mismos nombres que tu reporte de contratista.
+    Lee los parámetros comerciales definidos en la interfaz.
+
+    Mantiene compatibilidad con el estado actual de la aplicación.
     """
 
-    incluir_logistica = st.session_state.get(
-        "incluir_logistica",
-        True,
-    )
-
-    if not incluir_logistica:
+    if not st.session_state.get("incluir_logistica", True):
         return {
             "horas_grua": 0.0,
             "precio_hora_grua": 0.0,
@@ -256,10 +238,7 @@ def _leer_logistica_streamlit() -> dict:
             "ingenieria": 0.0,
         }
 
-    horas_grua = _to_float(
-        st.session_state.get("horas_grua", 12)
-    )
-
+    horas_grua = _to_float(st.session_state.get("horas_grua", 12))
     precio_hora_grua = _to_float(
         st.session_state.get("precio_hora_grua", 1700)
     )
@@ -279,94 +258,222 @@ def _leer_logistica_streamlit() -> dict:
         )
     )
 
-    total_grua = horas_grua * precio_hora_grua
-    total_flete = costo_flete * viajes_flete
-
     return {
         "horas_grua": horas_grua,
         "precio_hora_grua": precio_hora_grua,
-        "total_grua": total_grua,
+        "total_grua": round(horas_grua * precio_hora_grua, 2),
         "costo_flete": costo_flete,
         "viajes_flete": viajes_flete,
-        "total_flete": total_flete,
-        "ingenieria": ingenieria,
+        "total_flete": round(costo_flete * viajes_flete, 2),
+        "ingenieria": round(ingenieria, 2),
     }
 
 
-# =========================================================
-# HELPERS VISUALES
-# =========================================================
-def _agregar_notas(elems, styles):
+# ==========================================================
+# CONSOLIDACIÓN COMERCIAL
+# ==========================================================
 
-    elems.append(Spacer(1, 12))
+def _calcular_cotizacion(df_precios: pd.DataFrame) -> dict:
+    """
+    Consolida todos los componentes económicos de la cotización.
 
-    elems.append(Paragraph("<b>Notas:</b>", styles["Normal"]))
-    elems.append(Spacer(1, 4))
+    Esta es la única función que arma el resultado comercial completo.
+    """
 
-    elems.append(Paragraph(
-        "- Los precios incluyen la instalación y suministro de los materiales, estructuras y equipos descritos en el presente documento.",
-        styles["Normal"],
-    ))
+    df = _preparar_dataframe(df_precios)
 
-    elems.append(Paragraph(
-        "- El total del proyecto incluye los costos comerciales de grúa, flete/rastra e ingeniería cuando apliquen.",
-        styles["Normal"],
-    ))
+    cantidad_material, cantidad_mano_obra = _obtener_cantidades(df)
 
-    elems.append(Paragraph(
-        "- La gestión de permisos ante ENEE está incluida dentro del alcance definido para el proyecto.",
-        styles["Normal"],
-    ))
+    suministro = _calcular_suministro(
+        df,
+        cantidad_material,
+    )
 
-    elems.append(Paragraph(
-        "- La presente oferta tiene una validez de 30 días calendario a partir de la fecha de emisión.",
-        styles["Normal"],
-    ))
+    mano_obra = _calcular_mano_obra(
+        df,
+        cantidad_mano_obra,
+    )
+
+    total_adicionales, adicionales = _calcular_adicionales()
+    logistica = _leer_logistica_streamlit()
+
+    total_final = (
+        suministro["suministro_con_isv"]
+        + mano_obra
+        + total_adicionales
+        + logistica["total_grua"]
+        + logistica["total_flete"]
+        + logistica["ingenieria"]
+    )
+
+    return {
+        **suministro,
+        "mano_obra": mano_obra,
+        "adicionales": adicionales,
+        "total_adicionales": total_adicionales,
+        "logistica": logistica,
+        "total_final": round(total_final, 2),
+    }
 
 
-def _estilo_cotizacion(tabla):
+# ==========================================================
+# CONSTRUCCIÓN DE FILAS
+# ==========================================================
+
+def _filas_cotizacion(resultado: dict) -> list:
+    """Convierte el resultado comercial en filas para el PDF."""
+
+    logistica = resultado["logistica"]
+
+    filas = [
+        ["Concepto", "Monto (L)"],
+        [
+            "Suministro de materiales (ISV incluido)",
+            _fmt_lps(resultado["suministro_con_isv"]),
+        ],
+        [
+            "Mano de obra e instalación",
+            _fmt_lps(resultado["mano_obra"]),
+        ],
+    ]
+
+    # ------------------------------------------------------
+    # Adicionales / desmontajes
+    # ------------------------------------------------------
+    if resultado["total_adicionales"] > 0:
+        filas.append([
+            "Trabajos adicionales / desmontajes",
+            _fmt_lps(resultado["total_adicionales"]),
+        ])
+
+    # ------------------------------------------------------
+    # Grúa
+    # ------------------------------------------------------
+    if logistica["total_grua"] > 0:
+        descripcion = (
+            f"Equipo Grúa "
+            f"({logistica['horas_grua']:,.0f} h x "
+            f"{_fmt_lps(logistica['precio_hora_grua'])})"
+        )
+
+        filas.append([
+            descripcion,
+            _fmt_lps(logistica["total_grua"]),
+        ])
+
+    # ------------------------------------------------------
+    # Flete
+    # ------------------------------------------------------
+    if logistica["total_flete"] > 0:
+        descripcion = (
+            f"Flete / rastra "
+            f"({logistica['viajes_flete']:,.0f} viaje(s) x "
+            f"{_fmt_lps(logistica['costo_flete'])})"
+        )
+
+        filas.append([
+            descripcion,
+            _fmt_lps(logistica["total_flete"]),
+        ])
+
+    # ------------------------------------------------------
+    # Ingeniería
+    # ------------------------------------------------------
+    if logistica["ingenieria"] > 0:
+        filas.append([
+            "Gastos de Ingeniería",
+            _fmt_lps(logistica["ingenieria"]),
+        ])
+
+    filas.append([
+        "TOTAL PROYECTO",
+        _fmt_lps(resultado["total_final"]),
+    ])
+
+    return filas
+
+
+# ==========================================================
+# ESTILOS
+# ==========================================================
+
+def _estilo_cotizacion(tabla: Table) -> None:
+    """Aplica únicamente los estilos particulares de la cotización."""
 
     tabla.setStyle(TableStyle([
-
-        # Encabezado
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("ALIGN", (0, 0), (-1, 0), "CENTER"),
 
-        # Alineación de montos
         ("ALIGN", (1, 1), (1, -1), "RIGHT"),
 
-        # Total final
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#1F4E79")),
         ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ("FONTSIZE", (0, -1), (-1, -1), 9),
         ("TOPPADDING", (0, -1), (-1, -1), 6),
         ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
-
     ]))
 
 
-# =========================================================
-# FUNCIÓN PRINCIPAL
-# =========================================================
+def _titulo_cotizacion(styles):
+    """Crea el estilo del título sin modificar los estilos globales."""
+
+    estilo = styles["Heading1"].clone("titulo_cotizacion")
+    estilo.alignment = TA_CENTER
+    return estilo
+
+
+# ==========================================================
+# NOTAS
+# ==========================================================
+
+NOTAS_COTIZACION = (
+    "Los precios incluyen la instalación y suministro de los materiales, "
+    "estructuras y equipos descritos en el presente documento.",
+
+    "El total del proyecto incluye los costos comerciales de grúa, "
+    "flete/rastra e ingeniería cuando apliquen.",
+
+    "La gestión de permisos ante ENEE está incluida dentro del alcance "
+    "definido para el proyecto.",
+
+    "La presente oferta tiene una validez de 30 días calendario a partir "
+    "de la fecha de emisión.",
+)
+
+
+def _agregar_notas(elems, styles) -> None:
+    elems.append(Spacer(1, 12))
+    elems.append(Paragraph("<b>Notas:</b>", styles["Normal"]))
+    elems.append(Spacer(1, 4))
+
+    for nota in NOTAS_COTIZACION:
+        elems.append(
+            Paragraph(f"- {nota}", styles["Normal"])
+        )
+
+
+# ==========================================================
+# FUNCIÓN PÚBLICA
+# ==========================================================
+
 def generar_seccion_cotizacion_final(
     doc,
     styles,
-    df_precios
+    df_precios: pd.DataFrame,
 ):
+    """
+    Genera los flowables ReportLab correspondientes a la cotización.
+
+    Esta función coordina:
+        datos -> cálculo comercial -> filas -> tabla -> notas
+    """
 
     elems = []
 
-    # =====================================================
-    # VALIDACIÓN
-    # =====================================================
-    if (
-        df_precios is None
-        or not isinstance(df_precios, pd.DataFrame)
-        or df_precios.empty
-    ):
+    if not _df_valido(df_precios):
         elems.append(
             Paragraph(
                 "SIN DATOS PARA COTIZACIÓN",
@@ -375,284 +482,43 @@ def generar_seccion_cotizacion_final(
         )
         return elems
 
-    # =====================================================
-    # TÍTULO CENTRADO
-    # =====================================================
-    styleTitulo = styles["Heading1"].clone(
-        "titulo_cotizacion"
-    )
-
-    styleTitulo.alignment = TA_CENTER
-
+    # ------------------------------------------------------
+    # Título
+    # ------------------------------------------------------
     elems.append(
         Paragraph(
             "COTIZACIÓN DEL PROYECTO",
-            styleTitulo,
+            _titulo_cotizacion(styles),
         )
     )
+    elems.append(Spacer(1, 10))
 
-    elems.append(
-        Spacer(1, 10)
-    )
+    # ------------------------------------------------------
+    # Resultado comercial
+    # ------------------------------------------------------
+    resultado = _calcular_cotizacion(df_precios)
+    data = _filas_cotizacion(resultado)
 
-    # =====================================================
-    # PREPARAR DATAFRAME
-    # =====================================================
-    df = df_precios.copy()
-
-    columnas_numericas = [
-        "Cantidad",
-        "Cantidad Material",
-        "Cantidad Mano Obra",
-        "Material Unitario",
-        "Mano Obra Unitaria",
-        "Costo Operativo Unitario",
-    ]
-
-    for columna in columnas_numericas:
-
-        if columna not in df.columns:
-            df[columna] = 0.0
-
-        df[columna] = pd.to_numeric(
-            df[columna],
-            errors="coerce",
-        ).fillna(0.0)
-
-    # =====================================================
-    # CANTIDADES
-    # =====================================================
-    cantidad_material = df["Cantidad Material"].where(
-        df["Cantidad Material"] > 0,
-        df["Cantidad"],
-    )
-
-    cantidad_mano_obra = df["Cantidad Mano Obra"].where(
-        df["Cantidad Mano Obra"] > 0,
-        df["Cantidad"],
-    )
-
-    # =====================================================
-    # MATERIALES
-    # =====================================================
-    total_materiales = float(
-        (
-            cantidad_material
-            * df["Material Unitario"]
-        ).sum()
-    )
-
-    total_costos_operativos = float(
-        (
-            df["Cantidad"]
-            * df["Costo Operativo Unitario"]
-        ).sum()
-    )
-
-    suministro_sin_isv = (
-        total_materiales
-        + total_costos_operativos
-    )
-
-    # =====================================================
-    # ISV SOLO SOBRE MATERIALES
-    # =====================================================
-    tasa_isv_materiales = 0.15
-
-    isv_materiales = (
-        suministro_sin_isv
-        * tasa_isv_materiales
-    )
-
-    suministro_con_isv = (
-        suministro_sin_isv
-        + isv_materiales
-    )
-
-    # =====================================================
-    # MANO DE OBRA
-    # =====================================================
-    total_mano_obra = float(
-        (
-            cantidad_mano_obra
-            * df["Mano Obra Unitaria"]
-        ).sum()
-    )
-
-    # =====================================================
-    # DESMONTAJES
-    # =====================================================
-    total_desmontaje = 0.0
-
-    if INCLUIR_DESMONTAJES:
-
-        # ---------------------------------------------
-        # Desmontaje de estructuras
-        # ---------------------------------------------
-        total_desmontaje_estructuras = 0.0
-
-        if DESMONTAJES:
-
-            total_desmontaje_estructuras = sum(
-                float(datos.get("cantidad", 0))
-                * float(datos.get("precio", 0))
-                for datos in DESMONTAJES.values()
-            )
-
-        # ---------------------------------------------
-        # Desmontaje de conductores
-        # SIN NEUTRO
-        # ---------------------------------------------
-        total_desmontaje_conductores = 0.0
-
-        if DESMONTAJE_LINEA:
-
-            total_desmontaje_conductores = sum(
-                float(tramo.get("longitud", 0))
-                * float(tramo.get("conductores", 0))
-                * float(tramo.get("precio_m", 0))
-                for tramo in DESMONTAJE_LINEA
-            )
-
-        total_desmontaje = (
-            total_desmontaje_estructuras
-            + total_desmontaje_conductores
-        )
-
-    # =====================================================
-    # LOGÍSTICA
-    # =====================================================
-    logistica = _leer_logistica_streamlit()
-
-    horas_grua = logistica["horas_grua"]
-    precio_hora_grua = logistica["precio_hora_grua"]
-    total_grua = logistica["total_grua"]
-
-    costo_flete = logistica["costo_flete"]
-    viajes_flete = logistica["viajes_flete"]
-    total_flete = logistica["total_flete"]
-
-    ingenieria = logistica["ingenieria"]
-
-    # =====================================================
-    # TOTAL FINAL
-    # =====================================================
-    total_final = (
-        suministro_con_isv
-        + total_mano_obra
-        + total_desmontaje
-        + total_grua
-        + total_flete
-        + ingenieria
-    )
-
-    # =====================================================
-    # DATA
-    # =====================================================
-    data = [
-        [
-            "Concepto",
-            "Monto (L)",
-        ],
-        [
-            "Suministro de materiales (ISV incluido)",
-            _fmt_lps(suministro_con_isv),
-        ],
-        [
-            "Mano de obra e instalación",
-            _fmt_lps(total_mano_obra),
-        ],
-    ]
-
-    # =====================================================
-    # DESMONTAJE
-    # =====================================================
-    if (
-        INCLUIR_DESMONTAJES
-        and total_desmontaje > 0
-    ):
-
-        data.append([
-            "Desmontaje de red existente",
-            _fmt_lps(total_desmontaje),
-        ])
-
-    # =====================================================
-    # GRÚA
-    # =====================================================
-    if total_grua > 0:
-
-        data.append([
-            (
-                f"Equipo Grúa "
-                f"({horas_grua:,.0f} h x "
-                f"{_fmt_lps(precio_hora_grua)})"
-            ),
-            _fmt_lps(total_grua),
-        ])
-
-    # =====================================================
-    # FLETE
-    # =====================================================
-    if total_flete > 0:
-
-        data.append([
-            (
-                f"Flete / rastra "
-                f"({viajes_flete:,.0f} viaje(s) x "
-                f"{_fmt_lps(costo_flete)})"
-            ),
-            _fmt_lps(total_flete),
-        ])
-
-    # =====================================================
-    # INGENIERÍA
-    # =====================================================
-    if ingenieria > 0:
-
-        data.append([
-            "Gastos de Ingeniería",
-            _fmt_lps(ingenieria),
-        ])
-
-    # =====================================================
-    # TOTAL PROYECTO
-    # =====================================================
-    data.append([
-        "TOTAL PROYECTO",
-        _fmt_lps(total_final),
-    ])
-
-    # =====================================================
-    # TABLA
-    # =====================================================
+    # ------------------------------------------------------
+    # Tabla
+    # ------------------------------------------------------
     tabla = Table(
         data,
         colWidths=[
-            doc.width * 0.7,
-            doc.width * 0.3,
+            doc.width * 0.70,
+            doc.width * 0.30,
         ],
         repeatRows=1,
     )
 
-    tabla.setStyle(
-        estilo_tabla()
-    )
+    tabla.setStyle(estilo_tabla())
+    _estilo_cotizacion(tabla)
 
-    _estilo_cotizacion(
-        tabla
-    )
+    elems.append(tabla)
 
-    elems.append(
-        tabla
-    )
-
-    # =====================================================
-    # NOTAS
-    # =====================================================
-    _agregar_notas(
-        elems,
-        styles,
-    )
+    # ------------------------------------------------------
+    # Notas
+    # ------------------------------------------------------
+    _agregar_notas(elems, styles)
 
     return elems
