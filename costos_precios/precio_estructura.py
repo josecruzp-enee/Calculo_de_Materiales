@@ -56,6 +56,24 @@ from ayuda.debug import debug_guardar
 from costos_precios.costos_materiales import _norm_material
 from costos_precios.mano_obra_por_punto import obtener_lista_precios
 
+# =========================================================
+# COMPATIBILIDAD CON ORQUESTADOR_COSTOS
+# =========================================================
+def _agregar_cable_a_precios(
+    df_precios: pd.DataFrame,
+    entrada,
+    contratista: str,
+) -> pd.DataFrame:
+    """
+    Punto de entrada utilizado por orquestador_costos.py.
+
+    Delega el procesamiento a la función interna consolidada.
+    """
+    return _agregar_cables_a_precios(
+        df_precios,
+        entrada,
+        contratista,
+    )
 
 # =========================================================
 # CONSTANTES
