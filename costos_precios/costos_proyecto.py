@@ -410,10 +410,7 @@ def _calcular_tiempos(
     ss = _leer_session_state()
 
     horas_jornada = params["horas_jornada"]
-    eficiencia = min(
-        max(_to_float(_get_valor(entrada, ss, "eficiencia_cronograma", 0.85), 0.85), 0.10),
-        1.00,
-    )
+    eficiencia = 1.00
 
     rendimiento_agujeros_dia = max(
         _to_float(_get_valor(entrada, ss, "rendimiento_agujeros_dia", 4), 4), 0.01
