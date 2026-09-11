@@ -1,4 +1,53 @@
 # -*- coding: utf-8 -*-
+"""
+costos_precios/costos_estructuras.py
+
+ROL:
+    Motor de costo de materiales por estructura.
+
+QUÉ HACE:
+    - Recibe las estructuras utilizadas en el proyecto.
+    - Obtiene los materiales correspondientes a cada estructura.
+    - Valoriza esos materiales mediante costos_materiales.py.
+    - Calcula el costo unitario de materiales de cada estructura.
+    - Multiplica el costo unitario por la cantidad instalada.
+
+ENTRADA PRINCIPAL:
+    - df_estructuras
+    - df_materiales_por_estructura
+    - df_precios_materiales
+
+SALIDA:
+    DataFrame:
+        codigodeestructura
+        Costo Unitario
+        Cantidad
+        Costo Total
+
+DEPENDE DE:
+    costos_precios.costos_materiales
+
+PDF CONTRATISTA:
+    No directamente.
+
+REPORTE COMPLETO:
+    Sí. Alimenta el análisis interno de costos del proyecto.
+
+NO HACE:
+    - No genera PDF.
+    - No calcula mano de obra.
+    - No calcula precio de venta.
+    - No calcula utilidad.
+    - No calcula ISV.
+
+NOTA:
+    "Costo Unitario" en este módulo significa costo de los
+    MATERIALES que componen una unidad de estructura.
+"""
+
+
+
+# -*- coding: utf-8 -*-
 #costos_estructuras.py
 from __future__ import annotations
 
