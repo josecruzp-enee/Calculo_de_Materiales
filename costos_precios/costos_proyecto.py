@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import math
+
 from typing import Dict, Any, Optional, Tuple
 import pandas as pd
 
@@ -804,86 +806,222 @@ def _calcular_tiempos(
     total_estructuras: int,
     num_postes: int,
     num_retenidas: int,
+    entrada=None,
 ) -> Dict[str, Any]:
+    """
+    Calcula la duración estimada del proyecto usando una sola lógica
+    de productividad para costos y cronograma.
 
-    dias_levantamiento = 1
+    - Postes, estructuras y retenidas usan las horas unitarias ya
+      definidas en los parámetros operativos.
+    - Agujeros y tendidos usan rendimientos físicos por jornada.
+    - Se aplica un factor de eficiencia.
+    - Se admite más de una cuadrilla.
+    - Las duraciones se redondean hacia arriba.
+    - Por compatibilidad, el cronograma sigue siendo secuencial.
+    """
 
-    dias_agujeros = max(
-        0,
-        round(num_postes / 10),
+    params = _leer_parametros_operativos(entrada)
+    ss = _leer_session_state()
+
+    horas_jornada = max(_to_float(params.get("horas_jornada", 8), 8), 0.01)
+    horas_por_poste = max(_to_float(params.get("horas_por_poste", 0.75), 0.75), 0.0)
+    horas_por_estructura = max(_to_float(params.get("horas_por_estructura", 0.50), 0.50), 0.0)
+    horas_por_retenida = max(_to_float(params.get("horas_por_retenida", 0.50), 0.50), 0.0)
+
+    eficiencia = _to_float(
+        _get_valor(entrada, ss, "eficiencia_cronograma", 0.85),
+        0.85,
+    )
+    eficiencia = min(max(eficiencia, 0.10), 1.00)
+
+    num_cuadrillas = int(
+        max(
+            1,
+            _to_float(
+                _get_valor(entrada, ss, "num_cuadrillas", 1),
+                1,
+            ),
+        )
     )
 
-    dias_postes = max(
-        0,
-        round(num_postes / 7),
+    rendimiento_agujeros_dia = max(
+        _to_float(
+            _get_valor(entrada, ss, "rendimiento_agujeros_dia", 10),
+            10,
+        ),
+        0.01,
     )
 
-    dias_retenidas = max(
-        0,
-        round(num_retenidas / 6),
+    rendimiento_mt_dia = max(
+        _to_float(
+            _get_valor(entrada, ss, "rendimiento_mt_dia", 500),
+            500,
+        ),
+        0.01,
     )
 
-    dias_estructuras = max(
-        0,
-        round(total_estructuras / 8),
+    rendimiento_bt_dia = max(
+        _to_float(
+            _get_valor(entrada, ss, "rendimiento_bt_dia", 300),
+            300,
+        ),
+        0.01,
     )
 
-    dias_primario = (
-        max(0, round(longitud_primario_m / 500))
-        if longitud_primario_m
-        else 0
+    dias_levantamiento = int(
+        max(
+            0,
+            math.ceil(
+                _to_float(
+                    _get_valor(entrada, ss, "dias_levantamiento", 1),
+                    1,
+                )
+            ),
+        )
     )
 
-    dias_secundario = (
-        max(0, round(longitud_secundario_m / 300))
-        if longitud_secundario_m
-        else 0
+    def dias_por_horas(cantidad: float, horas_unitarias: float) -> int:
+        if cantidad <= 0 or horas_unitarias <= 0:
+            return 0
+
+        capacidad_diaria = horas_jornada * num_cuadrillas * eficiencia
+        if capacidad_diaria <= 0:
+            return 0
+
+        return int(math.ceil((cantidad * horas_unitarias) / capacidad_diaria))
+
+    def dias_por_rendimiento(cantidad: float, rendimiento_dia: float) -> int:
+        if cantidad <= 0 or rendimiento_dia <= 0:
+            return 0
+
+        capacidad_diaria = rendimiento_dia * num_cuadrillas * eficiencia
+        if capacidad_diaria <= 0:
+            return 0
+
+        return int(math.ceil(cantidad / capacidad_diaria))
+
+    cantidad_agujeros = int(max(num_postes + num_retenidas, 0))
+
+    dias_agujeros = dias_por_rendimiento(cantidad_agujeros, rendimiento_agujeros_dia)
+    dias_postes = dias_por_horas(num_postes, horas_por_poste)
+    dias_retenidas = dias_por_horas(num_retenidas, horas_por_retenida)
+    dias_estructuras = dias_por_horas(total_estructuras, horas_por_estructura)
+    dias_primario = dias_por_rendimiento(longitud_primario_m, rendimiento_mt_dia)
+    dias_secundario = dias_por_rendimiento(longitud_secundario_m, rendimiento_bt_dia)
+
+    rendimiento_postes_nominal = (
+        horas_jornada / horas_por_poste if horas_por_poste > 0 else 0.0
     )
+    rendimiento_retenidas_nominal = (
+        horas_jornada / horas_por_retenida if horas_por_retenida > 0 else 0.0
+    )
+    rendimiento_estructuras_nominal = (
+        horas_jornada / horas_por_estructura if horas_por_estructura > 0 else 0.0
+    )
+
+    actividades = [
+        {
+            "actividad": "Levantamiento",
+            "duracion_dias": dias_levantamiento,
+            "cantidad": 1 if dias_levantamiento > 0 else 0,
+            "unidad": "global",
+            "rendimiento": None,
+        },
+        {
+            "actividad": "Agujeros",
+            "duracion_dias": dias_agujeros,
+            "cantidad": cantidad_agujeros,
+            "unidad": "agujero",
+            "rendimiento": rendimiento_agujeros_dia,
+        },
+        {
+            "actividad": "Postes",
+            "duracion_dias": dias_postes,
+            "cantidad": int(max(num_postes, 0)),
+            "unidad": "poste",
+            "rendimiento": rendimiento_postes_nominal,
+        },
+        {
+            "actividad": "Retenidas",
+            "duracion_dias": dias_retenidas,
+            "cantidad": int(max(num_retenidas, 0)),
+            "unidad": "retenida",
+            "rendimiento": rendimiento_retenidas_nominal,
+        },
+        {
+            "actividad": "Estructuras",
+            "duracion_dias": dias_estructuras,
+            "cantidad": int(max(total_estructuras, 0)),
+            "unidad": "estructura",
+            "rendimiento": rendimiento_estructuras_nominal,
+        },
+        {
+            "actividad": "Tendido MT",
+            "duracion_dias": dias_primario,
+            "cantidad": max(_to_float(longitud_primario_m), 0.0),
+            "unidad": "m",
+            "rendimiento": rendimiento_mt_dia,
+        },
+        {
+            "actividad": "Tendido BT",
+            "duracion_dias": dias_secundario,
+            "cantidad": max(_to_float(longitud_secundario_m), 0.0),
+            "unidad": "m",
+            "rendimiento": rendimiento_bt_dia,
+        },
+    ]
 
     cronograma = []
     dia_actual = 1
 
-    actividades = [
-        ("Levantamiento", dias_levantamiento),
-        ("Agujeros", dias_agujeros),
-        ("Postes", dias_postes),
-        ("Retenidas", dias_retenidas),
-        ("Estructuras", dias_estructuras),
-        ("Tendido MT", dias_primario),
-        ("Tendido BT", dias_secundario),
-    ]
+    for item in actividades:
+        duracion = int(item.get("duracion_dias", 0))
 
-    for actividad, duracion in actividades:
         if duracion <= 0:
-            cronograma.append(
-                {
-                    "actividad": actividad,
-                    "duracion_dias": 0,
-                    "inicio": None,
-                    "fin": None,
-                }
-            )
+            cronograma.append({
+                **item,
+                "inicio": None,
+                "fin": None,
+            })
             continue
 
         inicio = dia_actual
-        fin = dia_actual + duracion - 1
+        fin = inicio + duracion - 1
 
-        cronograma.append(
-            {
-                "actividad": actividad,
-                "duracion_dias": int(duracion),
-                "inicio": int(inicio),
-                "fin": int(fin),
-            }
-        )
+        cronograma.append({
+            **item,
+            "inicio": int(inicio),
+            "fin": int(fin),
+        })
 
         dia_actual = fin + 1
 
-    dias_totales = (
-        max([item["fin"] or 0 for item in cronograma])
-        if cronograma
-        else 0
+    dias_totales = max(
+        (item["fin"] or 0 for item in cronograma),
+        default=0,
     )
+
+    rendimientos = {
+        "agujeros_dia": round(
+            rendimiento_agujeros_dia * num_cuadrillas * eficiencia, 2
+        ),
+        "postes_dia": round(
+            rendimiento_postes_nominal * num_cuadrillas * eficiencia, 2
+        ),
+        "retenidas_dia": round(
+            rendimiento_retenidas_nominal * num_cuadrillas * eficiencia, 2
+        ),
+        "estructuras_dia": round(
+            rendimiento_estructuras_nominal * num_cuadrillas * eficiencia, 2
+        ),
+        "mt_m_dia": round(
+            rendimiento_mt_dia * num_cuadrillas * eficiencia, 2
+        ),
+        "bt_m_dia": round(
+            rendimiento_bt_dia * num_cuadrillas * eficiencia, 2
+        ),
+    }
 
     return {
         "dias_levantamiento": dias_levantamiento,
@@ -893,8 +1031,20 @@ def _calcular_tiempos(
         "dias_estructuras": dias_estructuras,
         "dias_primario": dias_primario,
         "dias_secundario": dias_secundario,
-        "dias_totales": dias_totales,
+        "dias_totales": int(dias_totales),
         "cronograma_resumen": cronograma,
+        "rendimientos": rendimientos,
+        "parametros_cronograma": {
+            "horas_jornada": round(horas_jornada, 2),
+            "eficiencia": round(eficiencia, 4),
+            "num_cuadrillas": num_cuadrillas,
+            "horas_por_poste": round(horas_por_poste, 4),
+            "horas_por_estructura": round(horas_por_estructura, 4),
+            "horas_por_retenida": round(horas_por_retenida, 4),
+            "rendimiento_agujeros_dia": round(rendimiento_agujeros_dia, 2),
+            "rendimiento_mt_dia": round(rendimiento_mt_dia, 2),
+            "rendimiento_bt_dia": round(rendimiento_bt_dia, 2),
+        },
     }
 
 
@@ -1118,6 +1268,7 @@ def _motor_costos(
         total_estructuras=total_estructuras,
         num_postes=num_postes,
         num_retenidas=num_retenidas,
+        entrada=entrada,
     )
 
     dias_totales = tiempos["dias_totales"]
