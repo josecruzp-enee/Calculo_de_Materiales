@@ -140,7 +140,12 @@ def _calcular_suministro(
     df: pd.DataFrame,
     cantidad_material: pd.Series,
 ) -> dict:
-    """Calcula materiales, costos operativos e ISV."""
+    """
+    Calcula el suministro del proyecto.
+
+    El ISV del 15 % se aplica EXCLUSIVAMENTE
+    al costo de materiales.
+    """
 
     materiales = float(
         (cantidad_material * df["Material Unitario"]).sum()
@@ -150,18 +155,20 @@ def _calcular_suministro(
         (df["Cantidad"] * df["Costo Operativo Unitario"]).sum()
     )
 
+    # ISV únicamente sobre materiales
+    isv_materiales = materiales * TASA_ISV_MATERIALES
+
+    # Suministro comercial
     suministro_sin_isv = materiales + costos_operativos
-    isv = suministro_sin_isv * TASA_ISV_MATERIALES
-    suministro_con_isv = suministro_sin_isv + isv
+    suministro_con_isv = materiales + isv_materiales + costos_operativos
 
     return {
         "materiales": round(materiales, 2),
         "costos_operativos": round(costos_operativos, 2),
         "suministro_sin_isv": round(suministro_sin_isv, 2),
-        "isv": round(isv, 2),
+        "isv": round(isv_materiales, 2),
         "suministro_con_isv": round(suministro_con_isv, 2),
     }
-
 
 def _calcular_mano_obra(
     df: pd.DataFrame,
