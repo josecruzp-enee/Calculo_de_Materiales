@@ -838,6 +838,337 @@ def _evaluar_proyecto(utilidad: float, margen_pct: float) -> Dict[str, str]:
         "nivel": "bueno",
     }
 
+# =========================================================
+# ECONOMÍA: CLIENTE VS CONTRATISTA
+# =========================================================
+
+def _sumar_columna_segura(
+    df: Optional[pd.DataFrame],
+    columnas: list[str],
+) -> Optional[float]:
+    """
+    Suma la primera columna existente de la lista.
+    Devuelve None si ninguna existe.
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return None
+
+    col = _obtener_columna(df, columnas)
+    if not col:
+        return None
+
+    return float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
+
+
+def _resolver_base_materiales_cliente(
+    entrada,
+    df_materiales_costos: pd.DataFrame,
+) -> float:
+    """
+    Obtiene la base de materiales que forma parte del costo global del cliente.
+
+    Prioridad:
+    1. valor explícito en entrada;
+    2. df_precios_estructura, si está disponible;
+    3. costo valorizado de materiales como respaldo.
+    """
+    for nombre in (
+        "materiales_cliente",
+        "total_materiales_cliente",
+        "precio_materiales_proyecto",
+        "subtotal_materiales",
+    ):
+        valor = _to_float(getattr(entrada, nombre, 0))
+        if valor > 0:
+            return valor
+
+    df_precios = getattr(entrada, "df_precios_estructura", None)
+
+    # Intentamos primero columnas de total material del proyecto.
+    total = _sumar_columna_segura(
+        df_precios,
+        [
+            "Material Proyecto",
+            "Total Material",
+            "Material Total",
+            "TOTAL MATERIAL",
+        ],
+    )
+    if total is not None and total > 0:
+        return total
+
+    # Si solo existe material unitario + cantidad, lo calculamos.
+    if isinstance(df_precios, pd.DataFrame) and not df_precios.empty:
+        col_mat = _obtener_columna(
+            df_precios,
+            ["Material Unitario", "Costo Material Unitario", "Material"],
+        )
+        col_cant = _obtener_columna(
+            df_precios,
+            ["Cantidad", "Cant", "CANT"],
+        )
+        if col_mat and col_cant:
+            material = pd.to_numeric(df_precios[col_mat], errors="coerce").fillna(0)
+            cantidad = pd.to_numeric(df_precios[col_cant], errors="coerce").fillna(0)
+            total = float((material * cantidad).sum())
+            if total > 0:
+                return total
+
+    # Respaldo compatible con el flujo actual.
+    costos = _clasificar_costos_desde_materiales(df_materiales_costos)
+    return float(costos.get("costo_materiales", 0.0))
+
+
+def _resolver_ingreso_contratista(
+    entrada,
+    precio_base_cliente: float,
+    base_materiales_cliente: float,
+) -> float:
+    """
+    Ingreso pactado por ejecución del contratista.
+
+    Prioridad:
+    1. ingreso explícito;
+    2. dataframe de precios, si expone mano de obra;
+    3. diferencia entre subtotal cliente sin ISV y materiales.
+
+    El tercer caso mantiene funcionando el flujo actual, donde
+    precio_venta_proyecto contiene materiales + instalación.
+    """
+    for nombre in (
+        "ingreso_contratista",
+        "precio_contratista",
+        "precio_ejecucion_contratista",
+        "mano_obra_venta",
+        "total_mano_obra_venta",
+    ):
+        valor = _to_float(getattr(entrada, nombre, 0))
+        if valor > 0:
+            return valor
+
+    df_precios = getattr(entrada, "df_precios_estructura", None)
+
+    total = _sumar_columna_segura(
+        df_precios,
+        [
+            "Mano Obra Proyecto",
+            "Total Mano Obra",
+            "Instalacion Total",
+            "Instalación Total",
+        ],
+    )
+    if total is not None and total > 0:
+        return total
+
+    if isinstance(df_precios, pd.DataFrame) and not df_precios.empty:
+        col_mo = _obtener_columna(
+            df_precios,
+            ["Mano Obra Unitaria", "Instalación", "Instalacion"],
+        )
+        col_cant = _obtener_columna(df_precios, ["Cantidad", "Cant", "CANT"])
+        if col_mo and col_cant:
+            mo = pd.to_numeric(df_precios[col_mo], errors="coerce").fillna(0)
+            cantidad = pd.to_numeric(df_precios[col_cant], errors="coerce").fillna(0)
+            total = float((mo * cantidad).sum())
+            if total > 0:
+                return total
+
+    # Fallback para el flujo actual.
+    return max(precio_base_cliente - base_materiales_cliente, 0.0)
+
+
+def _calcular_economia_cliente(
+    *,
+    precio_base_cliente: float,
+    base_materiales_cliente: float,
+    params: Dict[str, Any],
+    entrada,
+) -> Dict[str, float]:
+    """
+    Mundo 1: inversión total requerida al cliente.
+
+    El cliente absorbe:
+    - materiales;
+    - ISV sobre materiales;
+    - ejecución contratada;
+    - grúa;
+    - flete;
+    - ingeniería;
+    - permisos / gestiones;
+    - otros cargos explícitos del cliente.
+    """
+    ss = _leer_session_state()
+
+    tasa_isv = _to_float(
+        _get_valor(
+            entrada,
+            ss,
+            "tasa_isv_materiales",
+            0.15,
+            alternativas=["isv_materiales"],
+        ),
+        0.15,
+    )
+
+    # Acepta 15 o 0.15.
+    if tasa_isv > 1:
+        tasa_isv /= 100.0
+
+    isv_materiales = base_materiales_cliente * max(tasa_isv, 0.0)
+
+    otros_cliente = _to_float(
+        _get_valor(
+            entrada,
+            ss,
+            "otros_costos_cliente",
+            0,
+        )
+    )
+
+    inversion_total = (
+        precio_base_cliente
+        + isv_materiales
+        + params["costo_grua"]
+        + params["costo_flete"]
+        + params["costo_ingenieria"]
+        + params["costo_enee"]
+        + otros_cliente
+    )
+
+    ejecucion_contratada = max(
+        precio_base_cliente - base_materiales_cliente,
+        0.0,
+    )
+
+    return {
+        "materiales_sin_isv": round(base_materiales_cliente, 2),
+        "isv_materiales": round(isv_materiales, 2),
+        "ejecucion_contratada": round(ejecucion_contratada, 2),
+        "grua": round(params["costo_grua"], 2),
+        "flete": round(params["costo_flete"], 2),
+        "ingenieria": round(params["costo_ingenieria"], 2),
+        "permisos_enee": round(params["costo_enee"], 2),
+        "otros": round(otros_cliente, 2),
+        "inversion_total_cliente": round(inversion_total, 2),
+        "tasa_isv_materiales": round(tasa_isv, 4),
+    }
+
+
+def _calcular_economia_contratista(
+    *,
+    ingreso_contratista: float,
+    costo_cuadrilla: float,
+    costo_agujeros: float,
+    costos_manuales: Dict[str, float],
+    porcentaje_contingencia: float,
+    entrada,
+) -> Dict[str, float]:
+    """
+    Mundo 2: costo real y rentabilidad del contratista.
+
+    Por defecto NO incluye:
+    - materiales;
+    - grúa;
+    - flete;
+    - ingeniería facturada al cliente;
+    - permisos del cliente.
+
+    Esos rubros solo entran aquí si se registran explícitamente
+    como costos propios del contratista.
+    """
+    ss = _leer_session_state()
+
+    herramientas = _to_float(
+        _get_valor(entrada, ss, "costo_herramientas_contratista", 0)
+    )
+    combustible = _to_float(
+        _get_valor(entrada, ss, "costo_combustible_contratista", 0)
+    )
+    movilizacion = _to_float(
+        _get_valor(entrada, ss, "costo_movilizacion_contratista", 0)
+    )
+    viaticos = _to_float(
+        _get_valor(entrada, ss, "costo_viaticos_contratista", 0)
+    )
+    supervision = _to_float(
+        _get_valor(entrada, ss, "costo_supervision_contratista", 0)
+    )
+    administracion = _to_float(
+        _get_valor(entrada, ss, "costo_administracion_contratista", 0)
+    )
+    otros = _to_float(
+        _get_valor(entrada, ss, "otros_costos_contratista", 0)
+    )
+
+    # Costos externos solo si realmente los absorbe el contratista.
+    grua_propia = _to_float(
+        _get_valor(entrada, ss, "costo_grua_contratista", 0)
+    )
+    flete_propio = _to_float(
+        _get_valor(entrada, ss, "costo_flete_contratista", 0)
+    )
+    ingenieria_propia = _to_float(
+        _get_valor(entrada, ss, "costo_ingenieria_contratista", 0)
+    )
+
+    # Manuales que ya existían: solo sumamos los que representan
+    # costo propio de ejecución, evitando reutilizar grúa/flete/ingeniería
+    # del cliente automáticamente.
+    costo_manual_cuadrilla = costs_or_zero(
+        costos_manuales, "costo_cuadrilla_manual"
+    )
+    costo_manual_agujeros = costs_or_zero(
+        costos_manuales, "costo_agujeros_manual"
+    )
+
+    base_ejecucion = sum([
+        costo_cuadrilla,
+        costo_agujeros,
+        costo_manual_cuadrilla,
+        costo_manual_agujeros,
+        herramientas,
+        combustible,
+        movilizacion,
+        viaticos,
+        supervision,
+        administracion,
+        otros,
+        grua_propia,
+        flete_propio,
+        ingenieria_propia,
+    ])
+
+    contingencia = base_ejecucion * max(porcentaje_contingencia, 0.0) / 100.0
+    costo_total = base_ejecucion + contingencia
+
+    utilidad = ingreso_contratista - costo_total
+    margen = (
+        utilidad / ingreso_contratista * 100
+        if ingreso_contratista > 0
+        else 0.0
+    )
+
+    return {
+        "ingreso_contratista": round(ingreso_contratista, 2),
+        "costo_cuadrilla": round(costo_cuadrilla + costo_manual_cuadrilla, 2),
+        "costo_agujeros": round(costo_agujeros + costo_manual_agujeros, 2),
+        "herramientas": round(herramientas, 2),
+        "combustible": round(combustible, 2),
+        "movilizacion": round(movilizacion, 2),
+        "viaticos": round(viaticos, 2),
+        "supervision": round(supervision, 2),
+        "administracion": round(administracion, 2),
+        "grua_propia": round(grua_propia, 2),
+        "flete_propio": round(flete_propio, 2),
+        "ingenieria_propia": round(ingenieria_propia, 2),
+        "otros": round(otros, 2),
+        "subtotal_ejecucion": round(base_ejecucion, 2),
+        "contingencia_contratista": round(contingencia, 2),
+        "costo_real_contratista": round(costo_total, 2),
+        "utilidad_contratista": round(utilidad, 2),
+        "margen_contratista_pct": round(margen, 2),
+    }
+
 
 # =========================================================
 # MOTOR PRINCIPAL
@@ -848,17 +1179,27 @@ def _motor_costos(
     longitud_primario_m: float,
     longitud_secundario_m: float,
     metricas: Dict[str, int],
-    precio_total_proyecto: float,
+    precio_base_cliente: float,
     entrada=None,
 ) -> Dict[str, Any]:
+    """
+    Consolida DOS mundos independientes:
+
+    1. Economía global del cliente.
+    2. Economía / rentabilidad real del contratista.
+
+    El cronograma y la productividad son comunes a ambos.
+    """
     costos_tabla = _clasificar_costos_desde_materiales(df_materiales_costos)
     costos_manuales = _extraer_costos_manuales(entrada)
 
-    # Primero cronograma; después costos. Así ambos usan exactamente
-    # las mismas duraciones y no divergen.
     tiempos = _calcular_tiempos(
-        longitud_primario_m, longitud_secundario_m, metricas, entrada
+        longitud_primario_m,
+        longitud_secundario_m,
+        metricas,
+        entrada,
     )
+
     costos_actividades = _calcular_costos_actividades(
         entrada,
         longitud_primario_m,
@@ -867,104 +1208,142 @@ def _motor_costos(
         tiempos=tiempos,
     )
 
-    costo_materiales = costos_tabla["costo_materiales"]
-    costo_cuadrilla = (
-        costos_tabla["costo_cuadrilla"]
-        + costos_actividades["costo_cuadrilla"]
-        + costs_or_zero(costos_manuales, "costo_cuadrilla_manual")
-    )
-    costo_agujeros = (
-        costos_tabla["costo_agujeros"]
-        + costos_actividades["costo_agujeros"]
-        + costs_or_zero(costos_manuales, "costo_agujeros_manual")
-    )
-    costo_grua = (
-        costos_tabla["costo_grua"]
-        + costos_actividades["costo_grua"]
-        + costs_or_zero(costos_manuales, "costo_grua_manual")
-    )
-    costo_flete = (
-        costos_tabla["costo_flete"]
-        + costos_actividades["costo_flete"]
-        + costs_or_zero(costos_manuales, "costo_flete_manual")
-    )
-    costo_enee = (
-        costos_tabla["costo_enee"]
-        + costos_actividades["costo_enee"]
-        + costs_or_zero(costos_manuales, "costo_enee_manual")
-    )
-    costo_ingenieria = (
-        costos_tabla["costo_ingenieria"]
-        + costos_actividades["costo_ingenieria"]
-        + costs_or_zero(costos_manuales, "costo_ingenieria_manual")
-    )
-    costo_otros = costos_tabla["costo_otros"]
+    params = _leer_parametros_operativos(entrada)
 
-    subtotal = sum([
-        costo_materiales,
-        costo_cuadrilla,
-        costo_agujeros,
-        costo_grua,
-        costo_flete,
-        costo_enee,
-        costo_ingenieria,
-        costo_otros,
-    ])
+    # -----------------------------------------------------
+    # MUNDO CLIENTE
+    # -----------------------------------------------------
+    base_materiales_cliente = _resolver_base_materiales_cliente(
+        entrada,
+        df_materiales_costos,
+    )
+
+    economia_cliente = _calcular_economia_cliente(
+        precio_base_cliente=precio_base_cliente,
+        base_materiales_cliente=base_materiales_cliente,
+        params=params,
+        entrada=entrada,
+    )
+
+    # -----------------------------------------------------
+    # MUNDO CONTRATISTA
+    # -----------------------------------------------------
+    ingreso_contratista = _resolver_ingreso_contratista(
+        entrada,
+        precio_base_cliente,
+        base_materiales_cliente,
+    )
 
     porcentaje_contingencia = _to_float(
-        costos_actividades["parametros_actividades"].get("porcentaje_contingencia", 5), 5
+        costos_actividades["parametros_actividades"].get(
+            "porcentaje_contingencia",
+            5,
+        ),
+        5,
     )
-    contingencia = subtotal * porcentaje_contingencia / 100
-    costo_total_real = subtotal + contingencia
 
-    # precio_total_proyecto se trata como VENTA NETA para rentabilidad.
-    utilidad = precio_total_proyecto - costo_total_real
-    margen_pct = (utilidad / precio_total_proyecto * 100) if precio_total_proyecto else 0.0
+    economia_contratista = _calcular_economia_contratista(
+        ingreso_contratista=ingreso_contratista,
+        costo_cuadrilla=costos_actividades["costo_cuadrilla"],
+        costo_agujeros=costos_actividades["costo_agujeros"],
+        costos_manuales=costos_manuales,
+        porcentaje_contingencia=porcentaje_contingencia,
+        entrada=entrada,
+    )
+
+    utilidad = economia_contratista["utilidad_contratista"]
+    margen_pct = economia_contratista["margen_contratista_pct"]
+    costo_real_contratista = economia_contratista["costo_real_contratista"]
+
+    evaluacion = _evaluar_proyecto(utilidad, margen_pct)
 
     kpis = _calcular_kpis(
-        costo_total_real,
+        costo_real_contratista,
         utilidad,
         metricas["total_estructuras"],
         metricas["num_postes"],
         tiempos["dias_totales"],
     )
 
-    costos_consolidados = {
-        "costo_materiales": costo_materiales,
-        "costo_cuadrilla": costo_cuadrilla,
-        "costo_agujeros": costo_agujeros,
-        "costo_grua": costo_grua,
-        "costo_flete": costo_flete,
-        "costo_enee": costo_enee,
-        "costo_ingenieria": costo_ingenieria,
-        "costo_otros": costo_otros,
-        "contingencia": contingencia,
+    # Distribución SOLO del contratista.
+    costos_contratista_distribucion = {
+        "costo_materiales": 0.0,
+        "costo_cuadrilla": economia_contratista["costo_cuadrilla"],
+        "costo_agujeros": economia_contratista["costo_agujeros"],
+        "costo_grua": economia_contratista["grua_propia"],
+        "costo_flete": economia_contratista["flete_propio"],
+        "costo_enee": 0.0,
+        "costo_ingenieria": economia_contratista["ingenieria_propia"],
+        "costo_otros": sum([
+            economia_contratista["herramientas"],
+            economia_contratista["combustible"],
+            economia_contratista["movilizacion"],
+            economia_contratista["viaticos"],
+            economia_contratista["supervision"],
+            economia_contratista["administracion"],
+            economia_contratista["otros"],
+        ]),
+        "contingencia": economia_contratista["contingencia_contratista"],
     }
 
-    evaluacion = _evaluar_proyecto(utilidad, margen_pct)
-
+    # -----------------------------------------------------
+    # SALIDA
+    # -----------------------------------------------------
     return {
-        "costo_materiales": round(costo_materiales, 2),
-        "costo_cuadrilla": round(costo_cuadrilla, 2),
-        "costo_agujeros": round(costo_agujeros, 2),
-        "costo_grua": round(costo_grua, 2),
-        "costo_flete": round(costo_flete, 2),
-        "costo_enee": round(costo_enee, 2),
-        "costo_ingenieria": round(costo_ingenieria, 2),
-        "costo_otros": round(costo_otros, 2),
-        "contingencia": round(contingencia, 2),
+        # =============================
+        # NUEVOS BLOQUES CONCEPTUALES
+        # =============================
+        "economia_cliente": economia_cliente,
+        "economia_contratista": economia_contratista,
+
+        "inversion_total_cliente": economia_cliente["inversion_total_cliente"],
+        "materiales_cliente_sin_isv": economia_cliente["materiales_sin_isv"],
+        "isv_materiales_cliente": economia_cliente["isv_materiales"],
+        "ejecucion_contratada_cliente": economia_cliente["ejecucion_contratada"],
+
+        "ingreso_contratista": economia_contratista["ingreso_contratista"],
+        "costo_real_contratista": costo_real_contratista,
+        "utilidad_contratista": utilidad,
+        "margen_contratista_pct": margen_pct,
+        "contingencia_contratista": economia_contratista["contingencia_contratista"],
+
+        # =============================
+        # COMPATIBILIDAD CON REPORTES
+        # Ahora estas claves representan al CONTRATISTA.
+        # =============================
+        "precio_venta": economia_contratista["ingreso_contratista"],
+        "precio_venta_neta": economia_contratista["ingreso_contratista"],
+        "subtotal_costos": economia_contratista["subtotal_ejecucion"],
+        "costo_total_real": costo_real_contratista,
+        "contingencia": economia_contratista["contingencia_contratista"],
         "porcentaje_contingencia": round(porcentaje_contingencia, 2),
-        "detalle_costos_actividades": costos_actividades["detalle_costos_actividades"],
-        "parametros_actividades": costos_actividades["parametros_actividades"],
-        "subtotal_costos": round(subtotal, 2),
-        "costo_total_real": round(costo_total_real, 2),
+        "utilidad": utilidad,
+        "margen_pct": margen_pct,
 
-        # Compatibilidad + nombre semánticamente correcto
-        "precio_venta": round(precio_total_proyecto, 2),
-        "precio_venta_neta": round(precio_total_proyecto, 2),
+        # Costos propios del contratista
+        "costo_materiales": 0.0,
+        "costo_cuadrilla": economia_contratista["costo_cuadrilla"],
+        "costo_agujeros": economia_contratista["costo_agujeros"],
+        "costo_grua": economia_contratista["grua_propia"],
+        "costo_flete": economia_contratista["flete_propio"],
+        "costo_enee": 0.0,
+        "costo_ingenieria": economia_contratista["ingenieria_propia"],
+        "costo_otros": costos_contratista_distribucion["costo_otros"],
 
-        "utilidad": round(utilidad, 2),
-        "margen_pct": round(margen_pct, 2),
+        # Referencias globales del cliente, sin mezclarlas con rentabilidad
+        "costo_materiales_global": round(costos_tabla["costo_materiales"], 2),
+        "costo_grua_cliente": round(params["costo_grua"], 2),
+        "costo_flete_cliente": round(params["costo_flete"], 2),
+        "costo_ingenieria_cliente": round(params["costo_ingenieria"], 2),
+        "costo_enee_cliente": round(params["costo_enee"], 2),
+
+        "detalle_costos_actividades": costos_actividades[
+            "detalle_costos_actividades"
+        ],
+        "parametros_actividades": costos_actividades[
+            "parametros_actividades"
+        ],
+
         "dias_totales": int(tiempos["dias_totales"]),
 
         "num_postes": int(metricas["num_postes"]),
@@ -981,11 +1360,33 @@ def _motor_costos(
         "longitud_primario": round(longitud_primario_m, 2),
         "longitud_secundario": round(longitud_secundario_m, 2),
 
-        "porcentaje_materiales": round((costo_materiales / costo_total_real * 100) if costo_total_real else 0, 2),
-        "porcentaje_cuadrilla": round((costo_cuadrilla / costo_total_real * 100) if costo_total_real else 0, 2),
-        "porcentaje_grua": round((costo_grua / costo_total_real * 100) if costo_total_real else 0, 2),
+        "porcentaje_materiales": 0.0,
+        "porcentaje_cuadrilla": round(
+            (
+                economia_contratista["costo_cuadrilla"]
+                / costo_real_contratista
+                * 100
+            )
+            if costo_real_contratista
+            else 0,
+            2,
+        ),
+        "porcentaje_grua": round(
+            (
+                economia_contratista["grua_propia"]
+                / costo_real_contratista
+                * 100
+            )
+            if costo_real_contratista
+            else 0,
+            2,
+        ),
 
-        "distribucion_costos": _crear_distribucion_costos(costo_total_real, costos_consolidados),
+        "distribucion_costos": _crear_distribucion_costos(
+            costo_real_contratista,
+            costos_contratista_distribucion,
+        ),
+
         "cronograma_resumen": tiempos["cronograma_resumen"],
         "tiempos": tiempos,
 
@@ -1012,55 +1413,60 @@ def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
             getattr(entrada, "df_cables", None)
         )
 
-        df_costos_materiales = getattr(entrada, "df_costos_materiales", None)
+        df_costos_materiales = getattr(
+            entrada,
+            "df_costos_materiales",
+            None,
+        )
         if df_costos_materiales is None:
-            df_costos_materiales = getattr(entrada, "df_materiales_costos", None)
+            df_costos_materiales = getattr(
+                entrada,
+                "df_materiales_costos",
+                None,
+            )
 
         _validar_materiales(df_costos_materiales)
 
-        precio_base = _to_float(getattr(entrada, "precio_venta_proyecto", 0))
-        params = _leer_parametros_operativos(entrada)
-
-        # Este valor representa la venta neta usada para medir rentabilidad.
-        # Se mantiene la regla vigente de agregar logística/ingeniería
-        # cuando el proyecto así lo configura.
-        precio_venta_neta = precio_base
-        if params["incluir_logistica_en_venta"]:
-            precio_venta_neta += (
-                params["costo_grua"]
-                + params["costo_flete"]
-                + params["costo_ingenieria"]
+        # En el flujo actual este subtotal representa:
+        # materiales sin ISV + ejecución contratada.
+        precio_base_cliente = _to_float(
+            getattr(
+                entrada,
+                "precio_venta_proyecto",
+                0,
             )
+        )
 
         resultado = _motor_costos(
             df_materiales_costos=df_costos_materiales,
             longitud_primario_m=longitud_primario,
             longitud_secundario_m=longitud_secundario,
             metricas=metricas,
-            precio_total_proyecto=precio_venta_neta,
+            precio_base_cliente=precio_base_cliente,
             entrada=entrada,
         )
 
         debug_costos_proyecto = {
             "entrada": {
-                "precio_base": precio_base,
-                "precio_venta_neta": precio_venta_neta,
-                "horas_grua": params["horas_grua"],
-                "precio_hora_grua": params["precio_hora_grua"],
-                "costo_grua": params["costo_grua"],
-                "costo_flete_unitario": params["costo_flete_unitario"],
-                "viajes_flete": params["viajes_flete"],
-                "costo_flete": params["costo_flete"],
-                "gastos_ingenieria": params["costo_ingenieria"],
-                "incluir_logistica": params["incluir_logistica"],
-                "incluir_logistica_en_venta": params["incluir_logistica_en_venta"],
-                "porcentaje_contingencia": params["porcentaje_contingencia"],
+                "precio_base_cliente": precio_base_cliente,
                 "metricas_estructuras": dict(metricas),
                 "longitud_primario": longitud_primario,
                 "longitud_secundario": longitud_secundario,
-                "columnas_df_costos_materiales": list(df_costos_materiales.columns),
-                "filas_df_costos_materiales": len(df_costos_materiales),
+                "columnas_df_costos_materiales": list(
+                    df_costos_materiales.columns
+                ),
+                "filas_df_costos_materiales": len(
+                    df_costos_materiales
+                ),
             },
+            "economia_cliente": resultado.get(
+                "economia_cliente",
+                {},
+            ),
+            "economia_contratista": resultado.get(
+                "economia_contratista",
+                {},
+            ),
             "resultado": resultado,
         }
 
@@ -1076,5 +1482,7 @@ def calcular_costos_proyecto(entrada) -> Dict[str, Any]:
             "ok": False,
             "error": str(error),
             "resultado_costos_proyecto": None,
-            "debug_costos_proyecto": {"error": str(error)},
+            "debug_costos_proyecto": {
+                "error": str(error),
+            },
         }
