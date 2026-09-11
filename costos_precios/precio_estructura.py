@@ -62,19 +62,16 @@ from costos_precios.mano_obra_por_punto import obtener_lista_precios
 def _agregar_cable_a_precios(
     df_precios: pd.DataFrame,
     entrada,
-    contratista: str,
+    contratista: str = "C1",
 ) -> pd.DataFrame:
     """
-    Punto de entrada utilizado por orquestador_costos.py.
-
-    Delega el procesamiento a la función interna consolidada.
+    Compatibilidad con orquestador_costos.py.
     """
     return _agregar_cables_a_precios(
         df_precios,
         entrada,
         contratista,
     )
-
 # =========================================================
 # CONSTANTES
 # =========================================================
