@@ -109,6 +109,277 @@ if not isinstance(entrada, pd.DataFrame):
                 []
             )
 
+# ======================================================
+# PLAN DIARIO DE EJECUCIÓN
+# ======================================================
+
+def _responsable_actividad(actividad: str) -> str:
+    actividad = str(actividad).strip().upper()
+
+    if actividad == "AGUJEROS":
+        return "Subcontrato local"
+
+    if actividad == "LEVANTAMIENTO":
+        return "Contratista"
+
+    return "Cuadrilla principal"
+
+
+def _descripcion_meta(
+    actividad: str,
+    cantidad: float,
+    unidad: str,
+) -> str:
+
+    actividad = str(actividad).strip()
+    unidad = str(unidad or "").strip().lower()
+
+    if actividad == "Levantamiento":
+        return "Replanteo general del proyecto"
+
+    if unidad == "m":
+        return f"{cantidad:,.0f} m"
+
+    if unidad == "agujero":
+        texto = "agujero" if cantidad == 1 else "agujeros"
+        return f"{cantidad:,.0f} {texto}"
+
+    if unidad == "poste":
+        texto = "poste" if cantidad == 1 else "postes"
+        return f"{cantidad:,.0f} {texto}"
+
+    if unidad == "retenida":
+        texto = "retenida" if cantidad == 1 else "retenidas"
+        return f"{cantidad:,.0f} {texto}"
+
+    if unidad == "transformador":
+        texto = "transformador" if cantidad == 1 else "transformadores"
+        return f"{cantidad:,.0f} {texto}"
+
+    if unidad == "luminaria":
+        texto = "luminaria" if cantidad == 1 else "luminarias"
+        return f"{cantidad:,.0f} {texto}"
+
+    if unidad == "estructura":
+        texto = "estructura" if cantidad == 1 else "estructuras"
+        return f"{cantidad:,.0f} {texto}"
+
+    return f"{cantidad:,.0f} {unidad}".strip()
+
+
+def _repartir_cantidad_diaria(
+    cantidad: float,
+    dias: int,
+) -> list[float]:
+    """
+    Reparte la cantidad total entre los días sin perder unidades.
+
+    Ejemplos:
+        28 / 4  -> [7, 7, 7, 7]
+        31 / 3  -> [11, 10, 10]
+        722 / 3 -> [241, 241, 240]
+        38 / 10 -> [4, 4, 4, 4, 4, 4, 4, 4, 3, 3]
+    """
+
+    if dias <= 0:
+        return []
+
+    cantidad = max(float(cantidad), 0)
+
+    # Para este modelo las cantidades físicas se trabajan
+    # normalmente como unidades o metros enteros.
+    total = int(round(cantidad))
+
+    base = total // dias
+    resto = total % dias
+
+    return [
+        float(base + (1 if i < resto else 0))
+        for i in range(dias)
+    ]
+
+
+def construir_plan_diario(cronograma: list) -> list[dict]:
+    """
+    Expande el cronograma por actividad a una fila por día.
+    """
+
+    if not isinstance(cronograma, list):
+        return []
+
+    filas = []
+
+    for item in cronograma:
+
+        if not isinstance(item, dict):
+            continue
+
+        actividad = str(item.get("actividad", "")).strip()
+
+        duracion = int(
+            float(item.get("duracion_dias", 0) or 0)
+        )
+
+        inicio = item.get("inicio")
+        cantidad = float(item.get("cantidad", 0) or 0)
+        unidad = str(item.get("unidad", "") or "")
+
+        if duracion <= 0 or not inicio:
+            continue
+
+        reparto = _repartir_cantidad_diaria(
+            cantidad,
+            duracion,
+        )
+
+        for offset in range(duracion):
+
+            dia = int(inicio) + offset
+
+            cantidad_dia = (
+                reparto[offset]
+                if offset < len(reparto)
+                else 0
+            )
+
+            filas.append({
+                "dia": dia,
+                "actividad": actividad,
+                "meta": _descripcion_meta(
+                    actividad,
+                    cantidad_dia,
+                    unidad,
+                ),
+                "responsable": _responsable_actividad(
+                    actividad
+                ),
+            })
+
+    return sorted(
+        filas,
+        key=lambda x: x["dia"],
+    )
+
+
+def tabla_plan_diario(cronograma):
+
+    plan = construir_plan_diario(
+        cronograma
+    )
+
+    if not plan:
+        return None
+
+    data = [
+        [
+            "DÍA",
+            "ACTIVIDAD",
+            "META DEL DÍA",
+            "RESPONSABLE",
+        ]
+    ]
+
+    for fila in plan:
+
+        data.append([
+            f"Día {fila['dia']}",
+            fila["actividad"],
+            fila["meta"],
+            fila["responsable"],
+        ])
+
+    tabla = Table(
+        data,
+        colWidths=[
+            55,
+            165,
+            150,
+            150,
+        ],
+        repeatRows=1,
+    )
+
+    tabla.setStyle([
+        (
+            "BACKGROUND",
+            (0, 0),
+            (-1, 0),
+            colors.HexColor("#1F3A5F"),
+        ),
+        (
+            "TEXTCOLOR",
+            (0, 0),
+            (-1, 0),
+            colors.white,
+        ),
+        (
+            "FONTNAME",
+            (0, 0),
+            (-1, 0),
+            "Helvetica-Bold",
+        ),
+        (
+            "FONTNAME",
+            (0, 1),
+            (-1, -1),
+            "Helvetica",
+        ),
+        (
+            "FONTSIZE",
+            (0, 0),
+            (-1, -1),
+            8,
+        ),
+        (
+            "ALIGN",
+            (0, 0),
+            (0, -1),
+            "CENTER",
+        ),
+        (
+            "ALIGN",
+            (1, 0),
+            (-1, 0),
+            "CENTER",
+        ),
+        (
+            "VALIGN",
+            (0, 0),
+            (-1, -1),
+            "MIDDLE",
+        ),
+        (
+            "GRID",
+            (0, 0),
+            (-1, -1),
+            0.4,
+            colors.grey,
+        ),
+        (
+            "ROWBACKGROUNDS",
+            (0, 1),
+            (-1, -1),
+            [
+                colors.white,
+                colors.HexColor("#F5F7FA"),
+            ],
+        ),
+        (
+            "TOPPADDING",
+            (0, 0),
+            (-1, -1),
+            4,
+        ),
+        (
+            "BOTTOMPADDING",
+            (0, 0),
+            (-1, -1),
+            4,
+        ),
+    ])
+
+    return tabla
+
 # =========================================================
 # PDF COMPLETO
 # =========================================================
