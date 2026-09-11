@@ -650,60 +650,151 @@ def _obtener_cronograma(resultado):
 
 
 def _bloque_cronograma(elementos, resultado):
-
     st = _estilos()
 
-    elementos.append(
-        Paragraph(
-            "Cronograma estimado de ejecución",
-            st["subtitulo"],
-        )
-    )
+    elementos.append(Paragraph("Cronograma estimado de ejecución", st["subtitulo"]))
 
     cronograma = _obtener_cronograma(resultado)
 
-    max_dia = 1
+    if not cronograma:
+        elementos.append(
+            Paragraph("No se dispone de información de cronograma.", st["nota"])
+        )
+        elementos.append(Spacer(1, 14))
+        return
 
-    for item in cronograma:
-        fin = item.get("fin")
-
-        if fin:
-            max_dia = max(max_dia, int(fin))
-
-    max_visible = min(max_dia, 45)
-
-    encabezado = [
+    # =====================================================
+    # 1. TABLA DE PLANIFICACIÓN
+    # =====================================================
+    data_resumen = [[
         "Actividad",
-        "Dur.",
+        "Cantidad",
+        "Rendimiento",
+        "Duración",
         "Inicio",
         "Fin",
-    ] + [str(i) for i in range(1, max_visible + 1)]
-
-    data = [encabezado]
+    ]]
 
     for item in cronograma:
-        actividad = item.get("actividad", "")
-        duracion = item.get("duracion_dias", 0)
+        actividad = str(item.get("actividad", ""))
+        cantidad = _to_float(item.get("cantidad", 0))
+        unidad = str(item.get("unidad", "")).strip()
+        rendimiento = item.get("rendimiento")
+        duracion = int(_to_float(item.get("duracion_dias", 0)))
         inicio = item.get("inicio")
         fin = item.get("fin")
 
-        fila = [
+        # Cantidad
+        if unidad == "m":
+            cantidad_txt = f"{cantidad:,.0f} m"
+        elif unidad:
+            cantidad_txt = f"{cantidad:,.0f} {unidad}"
+        else:
+            cantidad_txt = f"{cantidad:,.0f}"
+
+        # Rendimiento
+        if rendimiento is None:
+            rendimiento_txt = "—"
+        else:
+            rendimiento = _to_float(rendimiento)
+
+            if unidad == "m":
+                rendimiento_txt = f"{rendimiento:,.1f} m/día"
+            elif unidad:
+                rendimiento_txt = f"{rendimiento:,.1f} {unidad}/día"
+            else:
+                rendimiento_txt = f"{rendimiento:,.1f}/día"
+
+        duracion_txt = f"{duracion} día" if duracion == 1 else f"{duracion} días"
+        inicio_txt = f"Día {inicio}" if inicio else "—"
+        fin_txt = f"Día {fin}" if fin else "—"
+
+        data_resumen.append([
             actividad,
-            str(duracion or 0),
-            f"Día {inicio}" if inicio else "—",
-            f"Día {fin}" if fin else "—",
-        ]
+            cantidad_txt,
+            rendimiento_txt,
+            duracion_txt,
+            inicio_txt,
+            fin_txt,
+        ])
 
-        for _ in range(1, max_visible + 1):
-            fila.append("")
+    tabla_resumen = Table(
+        data_resumen,
+        colWidths=[145, 72, 100, 70, 65, 65],
+        repeatRows=1,
+    )
 
-        data.append(fila)
+    tabla_resumen.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B3B63")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 7),
 
-    ancho_dia = 6.2 if max_visible > 35 else 7.8
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 6.8),
+        ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#263238")),
 
-    tabla = Table(
-        data,
-        colWidths=[110, 28, 38, 38] + [ancho_dia] * max_visible,
+        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+        ("ALIGN", (0, 1), (0, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+        ("GRID", (0, 0), (-1, -1), 0.30, colors.HexColor("#D9E2EC")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [
+            colors.white,
+            colors.HexColor("#F7F9FB"),
+        ]),
+
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+    ]))
+
+    elementos.append(tabla_resumen)
+    elementos.append(Spacer(1, 10))
+
+    # =====================================================
+    # 2. DURACIÓN TOTAL
+    # =====================================================
+    max_dia = max(
+        (int(item.get("fin") or 0) for item in cronograma),
+        default=0,
+    )
+
+    if max_dia <= 0:
+        elementos.append(Spacer(1, 14))
+        return
+
+    # =====================================================
+    # 3. ESCALA DEL GANTT
+    # =====================================================
+    if max_dia <= 30:
+        paso = 1
+    elif max_dia <= 60:
+        paso = 2
+    elif max_dia <= 90:
+        paso = 3
+    else:
+        paso = 5
+
+    periodos = list(range(1, max_dia + 1, paso))
+
+    # =====================================================
+    # 4. TABLA GANTT
+    # =====================================================
+    data_gantt = [["Actividad"] + [str(dia) for dia in periodos]]
+
+    for item in cronograma:
+        actividad = str(item.get("actividad", ""))
+        data_gantt.append([actividad] + [""] * len(periodos))
+
+    ancho_actividad = 120
+    ancho_disponible = 415
+    ancho_periodo = min(ancho_disponible / len(periodos), 16) if periodos else 10
+
+    tabla_gantt = Table(
+        data_gantt,
+        colWidths=[ancho_actividad] + [ancho_periodo] * len(periodos),
         rowHeights=16,
         repeatRows=1,
     )
@@ -712,16 +803,16 @@ def _bloque_cronograma(elementos, resultado):
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B3B63")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 5.2),
+        ("FONTSIZE", (0, 0), (-1, 0), 5.5),
 
         ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 1), (-1, -1), 5.2),
+        ("FONTSIZE", (0, 1), (-1, -1), 5.8),
 
         ("ALIGN", (1, 0), (-1, -1), "CENTER"),
         ("ALIGN", (0, 1), (0, -1), "LEFT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
 
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D9E2EC")),
+        ("GRID", (0, 0), (-1, -1), 0.20, colors.HexColor("#D9E2EC")),
 
         ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
         ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
@@ -729,6 +820,9 @@ def _bloque_cronograma(elementos, resultado):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
     ]
 
+    # =====================================================
+    # 5. BARRAS DEL GANTT
+    # =====================================================
     for fila_idx, item in enumerate(cronograma, start=1):
         inicio = item.get("inicio")
         fin = item.get("fin")
@@ -739,37 +833,58 @@ def _bloque_cronograma(elementos, resultado):
         inicio = int(inicio)
         fin = int(fin)
 
-        if inicio > max_visible:
-            continue
+        periodo_inicio = (inicio - 1) // paso
+        periodo_fin = (fin - 1) // paso
 
-        fin_visible = min(fin, max_visible)
+        col_inicio = min(1 + periodo_inicio, len(periodos))
+        col_fin = min(1 + periodo_fin, len(periodos))
 
-        col_inicio = 4 + inicio - 1
-        col_fin = 4 + fin_visible - 1
-
-        style.append((
-            "BACKGROUND",
-            (col_inicio, fila_idx),
-            (col_fin, fila_idx),
-            colors.HexColor("#1565C0"),
-        ))
-
-    tabla.setStyle(TableStyle(style))
-
-    elementos.append(tabla)
-
-    if max_dia > max_visible:
-        elementos.append(Spacer(1, 4))
-        elementos.append(
-            Paragraph(
-                f"Nota: el cronograma tiene {max_dia} días. "
-                f"Se muestran los primeros {max_visible} días.",
-                st["nota"],
-            )
+        style.append(
+            ("BACKGROUND",
+             (col_inicio, fila_idx),
+             (col_fin, fila_idx),
+             colors.HexColor("#1565C0"))
         )
 
-    elementos.append(Spacer(1, 14))
+    tabla_gantt.setStyle(TableStyle(style))
 
+    elementos.append(Paragraph("Diagrama de ejecución", st["nota"]))
+    elementos.append(Spacer(1, 4))
+    elementos.append(tabla_gantt)
+    elementos.append(Spacer(1, 5))
+
+    # =====================================================
+    # 6. NOTA DEL CRONOGRAMA
+    # =====================================================
+    if paso == 1:
+        escala_txt = "Cada columna representa 1 día."
+    else:
+        escala_txt = (
+            f"Cada columna representa aproximadamente {paso} días. "
+            "Los números del encabezado indican el día inicial de cada período."
+        )
+
+    parametros = resultado.get("parametros_cronograma", {})
+
+    eficiencia = _to_float(parametros.get("eficiencia", 0))
+    cuadrillas = int(_to_float(parametros.get("num_cuadrillas", 1), 1))
+
+    texto_nota = (
+        f"<b>Duración total estimada:</b> {max_dia} días. "
+        f"{escala_txt}"
+    )
+
+    if parametros:
+        texto_nota += (
+            f" Cálculo realizado con {cuadrillas} "
+            f"cuadrilla{'s' if cuadrillas != 1 else ''}"
+        )
+
+        if eficiencia > 0:
+            texto_nota += f" y una eficiencia de {eficiencia * 100:,.0f}%."
+
+    elementos.append(Paragraph(texto_nota, st["nota"]))
+    elementos.append(Spacer(1, 14))
 
 # =====================================================
 # EVALUACIÓN EJECUTIVA
