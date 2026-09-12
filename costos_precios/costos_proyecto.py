@@ -576,6 +576,24 @@ def _calcular_tiempos(
         },
     }
 
+# =========================================================
+# ACTIVIDADES EJECUTADAS POR LA CUADRILLA PRINCIPAL
+# =========================================================
+
+ACTIVIDADES_CUADRILLA = {
+    "Postes": "Hincado y aplomado de postes",
+    "Retenidas": "Instalación de retenidas",
+    "Estructuras MT": "Armado e instalación de estructuras MT",
+    "Tendido MT": "Tendido de conductor primario MT",
+    "Transformadores": "Montaje de transformadores",
+    "Estructuras BT": "Armado e instalación de estructuras BT",
+    "Tendido BT": "Tendido de conductor secundario BT",
+    "Luminarias": "Instalación de luminarias",
+    "Otras estructuras": "Otras estructuras",
+}
+
+
+
 def _actividad_cuadrilla(
     nombre_reporte: str,
     dias: int,
