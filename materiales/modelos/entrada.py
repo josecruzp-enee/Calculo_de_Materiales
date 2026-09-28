@@ -17,7 +17,7 @@ class EntradaMateriales:
     df_cables: Optional[pd.DataFrame] = None
     df_materiales_extra: Optional[pd.DataFrame] = None
     calibre_mt: Optional[str] = None
-    tabla_conectores_mt: Optional[Dict[str, Any]] = None
+    tabla_conectores_mt: Optional[pd.DataFrame] = None
 
     # ======================================================
     # VALIDACIÓN AUTOMÁTICA
@@ -120,5 +120,5 @@ class EntradaMateriales:
         # tabla conectores
         # --------------------------
         if self.tabla_conectores_mt is not None:
-            if not isinstance(self.tabla_conectores_mt, dict):
-                raise TypeError("tabla_conectores_mt debe ser dict")
+            if not isinstance(self.tabla_conectores_mt, pd.DataFrame):
+                raise TypeError("tabla_conectores_mt debe ser DataFrame")
