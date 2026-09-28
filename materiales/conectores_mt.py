@@ -2,65 +2,92 @@
 """
 materiales/conectores_mt.py
 
-Regla:
-- En MT (estructuras A/TH/ER/TM), el ÚNICO conector que puede reemplazarse es:
-    YC 25A25 (1/0-1/0)
-- Si calibre_mt_global == 1/0 => NO reemplazar nada.
-- Si calibre_mt_global != 1/0 => reemplazar SOLO ese YC 25A25 por el conector
-  correspondiente al calibre_mt_global desde la hoja 'conectores'.
+Ajuste del conector base de MT según calibre global.
 
-Casos:
-- 1/0 ACSR  -> YC 25A25 (sin cambio)
-- 3/0 ACSR  -> YC 28A28 (3/0-3/0)
-- 266.8 MCM -> YPC 33R33R (266.8-266.8)
-- 477 MCM   -> YHN-525 (4/0-477)
+SOLO reemplaza:
+    CONECTOR DE COMPRESIÓN YC 25A25 (1/0-1/0)
 
-NO toca:
-- YC 28A25, YC 28A28 existentes, bimetálicos, YG, pines, etc.
+Reglas:
+    1/0 ACSR  -> sin cambio
+    3/0 ACSR  -> YC 28A28 (3/0-3/0)
+    266.8 MCM -> YPC 33R33R (266.8-266.8)
+    477 MCM   -> YHN-525 (4/0-477)
+
+No modifica ningún otro conector.
 """
 
 from __future__ import annotations
+
 import re
 import unicodedata
-from typing import Optional, List
+from typing import Optional, List, Any
+
 import pandas as pd
 
 
-# -------------------------
-# Normalización
-# -------------------------
+# =========================================================
+# REGLAS MT
+# =========================================================
+CONECTORES_MT = {
+    "3/0": "CONECTOR DE COMPRESIÓN YC 28A28 (3/0-3/0)",
+    "266.8": "CONECTOR DE COMPRESIÓN YPC 33R33R (266.8-266.8)",
+    "477": "CONECTOR DE COMPRESIÓN YHN-525 (4/0-477)",
+}
+
+
+# =========================================================
+# NORMALIZACIÓN
+# =========================================================
 def _norm(s: str) -> str:
-    s = str(s)
-    s = "".join(c for c in unicodedata.normalize("NFD", s)
-                if unicodedata.category(c) != "Mn")
+    s = str(s or "")
+
+    s = "".join(
+        c for c in unicodedata.normalize("NFD", s)
+        if unicodedata.category(c) != "Mn"
+    )
+
     return s.upper().strip()
 
 
 def _token_calibre(cal: str) -> str:
     """
-    Extrae:
-      "1/0" -> "1/0"
-      "3/0 AWG" -> "3/0"
-      "Cable ... 266.8 MCM" -> "266.8"
-      "Cable ... 477 MCM" -> "477"
+    Convierte diferentes formas del calibre a un token estándar.
+
+    Ejemplos:
+        1/0 ACSR     -> 1/0
+        3/0 ACSR     -> 3/0
+        266.8 MCM    -> 266.8
+        477 MCM      -> 477
     """
+
     s = _norm(cal)
 
+    # MCM
     m = re.search(r"(\d+(?:\.\d+)?)\s*MCM", s)
     if m:
         return m.group(1)
 
+    # #1/0, #3/0, etc.
     m = re.search(r"#\s*([0-9]+\/0|[0-9]+)", s)
     if m:
         return m.group(1)
 
+    # 1/0 AWG, 3/0 AWG
     m = re.search(r"\b([0-9]+\/0|[0-9]+)\s*AWG\b", s)
     if m:
         return m.group(1)
 
+    # 1/0 ACSR, 3/0 ACSR
+    m = re.search(r"\b([0-9]+\/0)\s*(?:ACSR|ASCR|AAC)?\b", s)
+    if m:
+        return m.group(1)
+
+    # fallback
     t = s.replace(" ", "")
-    for suf in ("ACSR", "AAC", "MCM", "AWG"):
+
+    for suf in ("ACSR", "ASCR", "AAC", "MCM", "AWG"):
         t = t.replace(suf, "")
+
     return t.strip()
 
 
@@ -69,151 +96,297 @@ def _es_1_0(calibre_mt: str) -> bool:
 
 
 def _es_estructura_mt(estructura: str) -> bool:
-    return _norm(estructura).startswith(("A", "TH", "ER", "TM")) or _norm(estructura) == "MT"
+    e = _norm(estructura)
+
+    return (
+        e == "MT"
+        or e.startswith("A")
+        or e.startswith("TH")
+        or e.startswith("ER")
+        or e.startswith("TM")
+    )
 
 
-# -------------------------
-# Cargar hoja "conectores"
-# -------------------------
+# =========================================================
+# ADAPTADOR DE TABLA
+# =========================================================
+def _a_dataframe(tabla: Any) -> pd.DataFrame:
+    """
+    Hace compatible este módulo con el contrato actual.
+
+    Acepta:
+        - DataFrame
+        - dict de columnas
+        - dict que contiene uno o más DataFrames
+
+    Si no puede obtener una tabla válida, devuelve DataFrame vacío.
+    """
+
+    if tabla is None:
+        return pd.DataFrame()
+
+    # Ya viene como DataFrame
+    if isinstance(tabla, pd.DataFrame):
+        return tabla.copy()
+
+    # Viene como dict
+    if isinstance(tabla, dict):
+
+        # -------------------------------------------------
+        # 1. Buscar específicamente una hoja "conectores"
+        # -------------------------------------------------
+        for clave, valor in tabla.items():
+
+            if _norm(clave) == "CONECTORES":
+
+                if isinstance(valor, pd.DataFrame):
+                    return valor.copy()
+
+                try:
+                    df = pd.DataFrame(valor)
+                    if not df.empty:
+                        return df
+                except Exception:
+                    pass
+
+        # -------------------------------------------------
+        # 2. Puede ser directamente un dict de columnas
+        # -------------------------------------------------
+        try:
+            df = pd.DataFrame(tabla)
+
+            if not df.empty:
+                return df
+
+        except Exception:
+            pass
+
+        # -------------------------------------------------
+        # 3. Buscar cualquier DataFrame que parezca tabla
+        #    de conectores
+        # -------------------------------------------------
+        for valor in tabla.values():
+
+            if not isinstance(valor, pd.DataFrame):
+                continue
+
+            columnas = [_norm(c) for c in valor.columns]
+
+            tiene_calibre = any("CALIBRE" in c for c in columnas)
+            tiene_codigo = any(
+                "CODIGO" in c or c.startswith("COD")
+                for c in columnas
+            )
+            tiene_desc = any("DESC" in c for c in columnas)
+
+            if tiene_calibre and (tiene_codigo or tiene_desc):
+                return valor.copy()
+
+    return pd.DataFrame()
+
+
+def _normalizar_tabla(tabla: Any) -> pd.DataFrame:
+
+    df = _a_dataframe(tabla)
+
+    if df.empty:
+        return pd.DataFrame(
+            columns=[
+                "Calibre",
+                "Código",
+                "Descripción",
+                "Estructuras aplicables",
+            ]
+        )
+
+    df = df.copy()
+
+    rename_map = {}
+
+    for col in df.columns:
+
+        c = _norm(col)
+
+        if c.startswith("CALIBRE"):
+            rename_map[col] = "Calibre"
+
+        elif c.startswith("COD") or c == "CODIGO":
+            rename_map[col] = "Código"
+
+        elif "DESC" in c:
+            rename_map[col] = "Descripción"
+
+        elif "APLIC" in c or "ESTRUCT" in c:
+            rename_map[col] = "Estructuras aplicables"
+
+    df = df.rename(columns=rename_map)
+
+    for c in (
+        "Calibre",
+        "Código",
+        "Descripción",
+        "Estructuras aplicables",
+    ):
+        if c not in df.columns:
+            df[c] = ""
+
+    return df[
+        [
+            "Calibre",
+            "Código",
+            "Descripción",
+            "Estructuras aplicables",
+        ]
+    ].copy()
+
+
+# =========================================================
+# CARGA DESDE EXCEL
+# =========================================================
 def cargar_conectores_mt(archivo_materiales: str) -> pd.DataFrame:
+
     try:
-        df = pd.read_excel(archivo_materiales, sheet_name="conectores")
-        df.columns = [str(c).strip() for c in df.columns]
 
-        rename_map = {}
-        for col in df.columns:
-            c = _norm(col)
-            if c.startswith("CALIBRE"):
-                rename_map[col] = "Calibre"
-            elif c.startswith("COD") or c == "CODIGO":
-                rename_map[col] = "Código"
-            elif "DESC" in c:
-                rename_map[col] = "Descripción"
-            elif "APLIC" in c or "ESTRUCT" in c:
-                rename_map[col] = "Estructuras aplicables"
+        df = pd.read_excel(
+            archivo_materiales,
+            sheet_name="conectores"
+        )
 
-        df = df.rename(columns=rename_map)
-
-        for c in ("Calibre", "Código", "Descripción", "Estructuras aplicables"):
-            if c not in df.columns:
-                df[c] = ""
-
-        return df[["Calibre", "Código", "Descripción",
-                   "Estructuras aplicables"]].copy()
+        return _normalizar_tabla(df)
 
     except Exception:
-        return pd.DataFrame(columns=[
-            "Calibre", "Código", "Descripción", "Estructuras aplicables"
-        ])
+
+        return _normalizar_tabla(None)
 
 
-# -------------------------
-# Caso específico 477 MCM
-# -------------------------
-def _buscar_conector_477(tabla_conectores: pd.DataFrame) -> Optional[str]:
-    """
-    Para 477 MCM busca específicamente:
-      Calibre = 477 MCM
-      Código  = YHN-525
-    """
-    for _, row in tabla_conectores.iterrows():
-        calibre = _token_calibre(str(row.get("Calibre", "") or ""))
-        codigo = _norm(str(row.get("Código", "") or ""))
-        desc = str(row.get("Descripción", "") or "").strip()
-
-        if calibre == "477" and codigo == "YHN-525" and desc:
-            return desc
-
-    return None
-
-
-# -------------------------
-# Buscar conector por calibre MT global
-# -------------------------
+# =========================================================
+# BÚSQUEDA EN TABLA
+# =========================================================
 def buscar_conector_por_calibre(
     calibre_mt: str,
-    tabla_conectores: pd.DataFrame
+    tabla_conectores: Any = None,
 ) -> Optional[str]:
-    """
-    Preferencia general:
-      1) (X-X)
-      2) (X-*)
-
-    Caso específico:
-      477 MCM -> YHN-525
-    """
-    if tabla_conectores is None or getattr(tabla_conectores, "empty", True):
-        return None
 
     tok = _token_calibre(calibre_mt)
+
     if not tok:
         return None
 
-    # Caso ENEE 477 MCM
-    if tok == "477":
-        return _buscar_conector_477(tabla_conectores)
+    # 1/0 nunca se reemplaza
+    if tok == "1/0":
+        return None
 
-    # Lógica original para 3/0, 266.8, etc.
-    pat_sim = re.compile(
-        rf"\(\s*{re.escape(tok)}\s*[-–]\s*{re.escape(tok)}\s*\)"
+    # -----------------------------------------------------
+    # PRIMERO intentar usar la tabla recibida
+    # -----------------------------------------------------
+    df = _normalizar_tabla(tabla_conectores)
+
+    if not df.empty:
+
+        # Caso específico 477
+        if tok == "477":
+
+            for _, row in df.iterrows():
+
+                calibre = _token_calibre(
+                    str(row.get("Calibre", "") or "")
+                )
+
+                codigo = _norm(
+                    str(row.get("Código", "") or "")
+                )
+
+                desc = str(
+                    row.get("Descripción", "") or ""
+                ).strip()
+
+                if (
+                    calibre == "477"
+                    and codigo == "YHN-525"
+                    and desc
+                ):
+                    return desc
+
+        # Casos generales
+        for _, row in df.iterrows():
+
+            calibre_fila = _token_calibre(
+                str(row.get("Calibre", "") or "")
+            )
+
+            desc = str(
+                row.get("Descripción", "") or ""
+            ).strip()
+
+            if calibre_fila == tok and desc:
+                return desc
+
+    # -----------------------------------------------------
+    # FALLBACK CONTROLADO
+    #
+    # Si la tabla no llegó o no encontró el registro,
+    # utilizamos las reglas MT conocidas.
+    # -----------------------------------------------------
+    return CONECTORES_MT.get(tok)
+
+
+# =========================================================
+# DETECTOR DEL CONECTOR BASE
+# =========================================================
+def _es_yc25a25_base(material: str) -> bool:
+
+    m = _norm(material)
+
+    # Debe ser YC25A25
+    tiene_codigo = (
+        re.search(r"\bYC\s*25A25\b", m) is not None
+        or "YC25A25" in m.replace(" ", "")
     )
-    pat_any = re.compile(
-        rf"\(\s*{re.escape(tok)}\s*[-–].*?\)"
+
+    # Debe corresponder a 1/0 - 1/0
+    tiene_calibre = (
+        re.search(
+            r"\(\s*1/0\s*[-–]\s*1/0\s*\)",
+            m
+        ) is not None
     )
 
-    candidato = None
-
-    for _, row in tabla_conectores.iterrows():
-        desc = str(row.get("Descripción", "") or "")
-        d = _norm(desc).replace(" ", "")
-
-        if pat_sim.search(d):
-            return desc
-
-        if candidato is None and pat_any.search(d):
-            candidato = desc
-
-    return candidato
+    return tiene_codigo and tiene_calibre
 
 
-# -------------------------
-# Reemplazo específico: SOLO YC 25A25
-# -------------------------
+# =========================================================
+# REEMPLAZO
+# =========================================================
 def reemplazar_solo_yc25a25_mt(
     lista_materiales: List[str],
     estructura: str,
     calibre_mt_global: str,
-    tabla_conectores: pd.DataFrame,
+    tabla_conectores: Any = None,
 ) -> List[str]:
-    """
-    Reemplaza SOLO:
-      YC 25A25 (1/0-1/0)
 
-    No modifica ningún otro conector.
-    """
     mats = list(lista_materiales or [])
 
-    # Solo estructuras MT y solo cuando el calibre sea distinto de 1/0
-    if not _es_estructura_mt(estructura) or _es_1_0(calibre_mt_global):
+    # No es MT
+    if not _es_estructura_mt(estructura):
+        return mats
+
+    # 1/0 mantiene el material original
+    if _es_1_0(calibre_mt_global):
         return mats
 
     reemplazo = buscar_conector_por_calibre(
-        calibre_mt_global, tabla_conectores
+        calibre_mt=calibre_mt_global,
+        tabla_conectores=tabla_conectores,
     )
 
     if not reemplazo:
         return mats
 
-    # Detectar exclusivamente YC 25A25 (1/0-1/0)
-    pat_yc25 = re.compile(r"\bYC\b.*\b25A25\b")
-    pat_10_10 = re.compile(r"\(\s*1/0\s*[-–]\s*1/0\s*\)")
-
     out: List[str] = []
 
     for mat in mats:
-        m = _norm(mat)
 
-        if pat_yc25.search(m) and pat_10_10.search(m):
+        if _es_yc25a25_base(mat):
             out.append(reemplazo)
         else:
             out.append(mat)
