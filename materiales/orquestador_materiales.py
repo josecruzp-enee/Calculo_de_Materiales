@@ -138,6 +138,7 @@ def ejecutar_materiales(
             tabla_conectores_mt=entrada.tabla_conectores_mt,
             df_cables=entrada.df_cables,
         )
+       
 
         debug["calculo_materiales"] = {
             "tipo_resultado": str(type(resultado_calc))
