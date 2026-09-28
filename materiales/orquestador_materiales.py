@@ -134,7 +134,9 @@ def ejecutar_materiales(
             df_estructuras=df_norm,
             hojas_base=hojas_base,
             tension=float(tension) if tension is not None else None,
-            df_cables=entrada.df_cables, 
+            calibre_mt=entrada.calibre_mt,
+            tabla_conectores_mt=entrada.tabla_conectores_mt,
+            df_cables=entrada.df_cables,
         )
 
         debug["calculo_materiales"] = {
