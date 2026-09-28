@@ -5,6 +5,8 @@ import pandas as pd
 from materiales.calculos.materiales_puntos import calcular_materiales_por_punto
 from ayuda.debug import debug_guardar
 from materiales.cables.cables_materiales import materiales_desde_cables
+from materiales.conectores_mt import reemplazar_solo_yc25a25_mt
+from materiales.varillas_armar_mt import reemplazar_varilla_armar_mt
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
