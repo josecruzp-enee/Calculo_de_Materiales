@@ -50,7 +50,7 @@ def _token_calibre(cal: str) -> str:
 
 
 def _es_estructura_mt(estructura: str) -> bool:
-    return _norm(estructura).startswith(("A", "TH", "ER", "TM"))
+    return _norm(estructura).startswith(("A", "TH", "ER", "TM")) or _norm(estructura) == "MT"
 
 
 # -------------------------
