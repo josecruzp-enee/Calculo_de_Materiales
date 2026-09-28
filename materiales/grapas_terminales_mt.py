@@ -36,20 +36,17 @@ def _norm(s: str) -> str:
 def _token_calibre(cal: str) -> str:
     s = _norm(cal)
 
-    m = re.search(r"(\d+(?:\.\d+)?)\s*MCM", s)
+    m = re.search(r"(?<!\d)(1/0|3/0)(?!\d)", s)
     if m:
         return m.group(1)
 
-    m = re.search(r"#\s*([0-9]+\/0|[0-9]+)", s)
-    if m:
-        return m.group(1)
+    if re.search(r"(?<!\d)266\.8(?!\d)", s):
+        return "266.8"
 
-    m = re.search(r"\b([0-9]+\/0|[0-9]+)\s*AWG\b", s)
-    if m:
-        return m.group(1)
+    if re.search(r"(?<!\d)477(?:\.0)?(?!\d)", s):
+        return "477"
 
     return ""
-
 
 def _es_estructura_mt(estructura: str) -> bool:
     s = _norm(estructura)
