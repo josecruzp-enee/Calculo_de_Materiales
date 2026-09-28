@@ -74,17 +74,13 @@ def buscar_varilla_por_calibre(calibre_mt: str) -> Optional[str]:
 # Detectar varilla base 1/0
 # -------------------------
 def _es_varilla_base_1_0(material: str) -> bool:
-    """
-    Detecta únicamente la varilla de armar base para 1/0.
-    Tolera ACSR/ASCR por compatibilidad con la descripción existente.
-    """
     m = _norm(material)
 
     return (
         "VARILLA" in m
         and "ARMAR" in m
         and ("ACSR" in m or "ASCR" in m)
-        and "# 1/0" in m
+        and re.search(r"#\s*1/0\b", m) is not None
     )
 
 
