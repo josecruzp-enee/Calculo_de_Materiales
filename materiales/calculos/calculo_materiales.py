@@ -7,6 +7,7 @@ from ayuda.debug import debug_guardar
 from materiales.cables.cables_materiales import materiales_desde_cables
 from materiales.conectores_mt import reemplazar_solo_yc25a25_mt
 from materiales.varillas_armar_mt import reemplazar_varilla_armar_mt
+from materiales.grapas_terminales_mt import reemplazar_grapas_terminales_mt
 COLUMNAS_STD = ["Materiales", "Unidad", "Cantidad"]
 
 
@@ -233,6 +234,14 @@ def calcular_materiales_proyecto(
             calibre_mt_global=calibre_mt,
         )
 
+        # 3. GRAPAS TERMINALES MT
+        materiales = reemplazar_grapas_terminales_mt(
+            lista_materiales=materiales,
+            estructura="MT",
+            calibre_mt_global=calibre_mt,
+        )
+
+        
         df_detalle["Materiales"] = materiales
 
         debug_guardar("CALCULO::ajustes_mt", {
