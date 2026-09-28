@@ -96,7 +96,10 @@ def ejecutar_materiales(
             "columnas_estructuras": list(entrada.estructuras_df.columns)
             if isinstance(entrada.estructuras_df, pd.DataFrame) else [],
             "tension": entrada.tension,
-            "tiene_materiales_extra": isinstance(entrada.df_materiales_extra, pd.DataFrame),
+            "tiene_materiales_extra": isinstance(
+                entrada.df_materiales_extra,
+                pd.DataFrame
+            ),
         }
     }
 
@@ -105,6 +108,44 @@ def ejecutar_materiales(
     tension = entrada.tension
     df_materiales_extra = entrada.df_materiales_extra
     datos = entrada.datos_proyecto or {}
+
+    # =====================================================
+    # RESOLVER CALIBRE MT REAL DESDE df_cables
+    # =====================================================
+    calibre_mt = entrada.calibre_mt
+
+    if isinstance(entrada.df_cables, pd.DataFrame) and not entrada.df_cables.empty:
+
+        if {"Tipo", "Calibre"}.issubset(entrada.df_cables.columns):
+
+            filas_mt = entrada.df_cables[
+                entrada.df_cables["Tipo"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+                .eq("MT")
+            ]
+
+            if not filas_mt.empty:
+
+                calibre_mt_df = str(
+                    filas_mt.iloc[0]["Calibre"]
+                ).strip()
+
+                if calibre_mt_df:
+                    calibre_mt = calibre_mt_df
+
+    # DEBUG PARA VER EL CALIBRE QUE REALMENTE SE USÓ
+    debug["input"]["calibre_mt_entrada"] = entrada.calibre_mt
+    debug["input"]["calibre_mt_resuelto"] = calibre_mt
+
+    debug_guardar(
+        "ORQUESTADOR_MATERIALES::CALIBRE_MT",
+        {
+            "calibre_entrada": entrada.calibre_mt,
+            "calibre_resuelto": calibre_mt,
+        }
+    )
 
     # =====================================================
     # VALIDACIÓN
@@ -134,17 +175,23 @@ def ejecutar_materiales(
             df_estructuras=df_norm,
             hojas_base=hojas_base,
             tension=float(tension) if tension is not None else None,
-            calibre_mt=entrada.calibre_mt,
+
+            # CALIBRE MT RESUELTO DESDE df_cables
+            calibre_mt=calibre_mt,
+
             tabla_conectores_mt=entrada.tabla_conectores_mt,
             df_cables=entrada.df_cables,
         )
-       
 
         debug["calculo_materiales"] = {
             "tipo_resultado": str(type(resultado_calc))
         }
 
-        debug["calc_keys"] = list(resultado_calc.keys()) if isinstance(resultado_calc, dict) else "no_dict"
+        debug["calc_keys"] = (
+            list(resultado_calc.keys())
+            if isinstance(resultado_calc, dict)
+            else "no_dict"
+        )
 
     except Exception as e:
 
@@ -165,13 +212,16 @@ def ejecutar_materiales(
         )
 
     # =====================================================
-    # 🔥 NUEVO: MATERIALES POR ESTRUCTURA
+    # MATERIALES POR ESTRUCTURA
     # =====================================================
     materiales_por_estructura = calcular_materiales_por_estructura(
         hojas_base=hojas_base,
         df_estructuras=df_norm,
         tension=tension,
-        calibre_mt=entrada.calibre_mt,
+
+        # MISMO CALIBRE MT RESUELTO
+        calibre_mt=calibre_mt,
+
         tabla_conectores_mt=entrada.tabla_conectores_mt,
     )
 
@@ -187,10 +237,14 @@ def ejecutar_materiales(
         resultado_estructuras = calcular_estructuras_proyecto(df_norm)
 
         df_estructuras = resultado_estructuras.get("df_estructuras")
-        df_estructuras_por_punto = resultado_estructuras.get("df_estructuras_por_punto")
+        df_estructuras_por_punto = resultado_estructuras.get(
+            "df_estructuras_por_punto"
+        )
 
         debug["calculo_estructuras"] = {
-            "filas": len(df_estructuras) if isinstance(df_estructuras, pd.DataFrame) else 0
+            "filas": len(df_estructuras)
+            if isinstance(df_estructuras, pd.DataFrame)
+            else 0
         }
 
     except Exception as e:
@@ -200,8 +254,16 @@ def ejecutar_materiales(
             "ok": False,
             "error": str(e),
             "traceback": traceback.format_exc(),
-            "df_norm_shape": df_norm.shape if isinstance(df_norm, pd.DataFrame) else None,
-            "df_norm_columns": list(df_norm.columns) if isinstance(df_norm, pd.DataFrame) else None,
+            "df_norm_shape": (
+                df_norm.shape
+                if isinstance(df_norm, pd.DataFrame)
+                else None
+            ),
+            "df_norm_columns": (
+                list(df_norm.columns)
+                if isinstance(df_norm, pd.DataFrame)
+                else None
+            ),
             "df_norm_preview": (
                 df_norm.head(30).to_dict("records")
                 if isinstance(df_norm, pd.DataFrame)
@@ -209,12 +271,16 @@ def ejecutar_materiales(
             ),
         }
 
-        debug_guardar("ERROR_CALCULO_ESTRUCTURAS", debug["calculo_estructuras"])
+        debug_guardar(
+            "ERROR_CALCULO_ESTRUCTURAS",
+            debug["calculo_estructuras"]
+        )
 
         raise RuntimeError(
             f"Falló calcular_estructuras_proyecto(). "
             f"Error real: {e}"
         ) from e
+
     # =====================================================
     # 3. EXTRAER RESULTADOS
     # =====================================================
@@ -226,8 +292,16 @@ def ejecutar_materiales(
         df_detalle = resultado_calc.get("df_materiales_por_punto")
 
     elif isinstance(resultado_calc, tuple):
-        df_materiales = resultado_calc[0] if len(resultado_calc) >= 1 else None
-        df_detalle = resultado_calc[1] if len(resultado_calc) >= 2 else None
+        df_materiales = (
+            resultado_calc[0]
+            if len(resultado_calc) >= 1
+            else None
+        )
+        df_detalle = (
+            resultado_calc[1]
+            if len(resultado_calc) >= 2
+            else None
+        )
 
     debug["raw_materiales"] = {
         "df_materiales_none": df_materiales is None,
@@ -248,11 +322,19 @@ def ejecutar_materiales(
     # =====================================================
     # 4. MATERIALES EXTRA
     # =====================================================
-    if isinstance(df_materiales_extra, pd.DataFrame) and not df_materiales_extra.empty:
+    if (
+        isinstance(df_materiales_extra, pd.DataFrame)
+        and not df_materiales_extra.empty
+    ):
         try:
-            df_materiales = _merge_materiales(df_materiales, df_materiales_extra)
+            df_materiales = _merge_materiales(
+                df_materiales,
+                df_materiales_extra
+            )
         except Exception as e:
-            warnings.append(f"Error integrando materiales extra: {e}")
+            warnings.append(
+                f"Error integrando materiales extra: {e}"
+            )
 
     # =====================================================
     # 5. OUTPUT FINAL
@@ -265,10 +347,7 @@ def ejecutar_materiales(
         df_materiales_por_punto=df_detalle,
         df_estructuras=df_estructuras,
         df_estructuras_por_punto=df_estructuras_por_punto,
-
-        # 🔥 AQUÍ ESTÁ LA CLAVE
         df_materiales_por_estructura=materiales_por_estructura,
-
         datos_proyecto=entrada.datos_proyecto,
         debug=debug
     )
