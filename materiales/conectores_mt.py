@@ -69,7 +69,7 @@ def _es_1_0(calibre_mt: str) -> bool:
 
 
 def _es_estructura_mt(estructura: str) -> bool:
-    return _norm(estructura).startswith(("A", "TH", "ER", "TM"))
+    return _norm(estructura).startswith(("A", "TH", "ER", "TM")) or _norm(estructura) == "MT"
 
 
 # -------------------------
