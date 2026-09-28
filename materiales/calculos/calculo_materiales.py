@@ -159,10 +159,8 @@ def calcular_materiales_proyecto(
     tension,
     calibre_mt=None,
     tabla_conectores_mt=None,
-    df_cables=None,  # 🔥 NUEVO
+    df_cables=None,
 ) -> dict:
-
-    from materiales.cables.cables_materiales import materiales_desde_cables
 
     # -----------------------------
     # DEBUG INPUT
@@ -170,6 +168,7 @@ def calcular_materiales_proyecto(
     debug_guardar("CALCULO::input", {
         "filas_estructuras": None if df_estructuras is None else len(df_estructuras),
         "tension": tension,
+        "calibre_mt": calibre_mt,
         "tiene_cables": isinstance(df_cables, pd.DataFrame)
     })
 
@@ -193,7 +192,7 @@ def calcular_materiales_proyecto(
     _validar_match_estructuras(df_estructuras, hojas_base)
 
     # -----------------------------
-    # CÁLCULO DETALLE (ESTRUCTURAS)
+    # CÁLCULO DETALLE
     # -----------------------------
     try:
         df_detalle = calcular_materiales_por_punto(
@@ -213,7 +212,36 @@ def calcular_materiales_proyecto(
     _validar_df_salida(df_detalle)
 
     # =====================================================
-    # 🔥 INTEGRACIÓN DE CABLES (AQUÍ ESTÁ LA MAGIA)
+    # AJUSTES SEGÚN CALIBRE MT GLOBAL
+    # =====================================================
+    if calibre_mt:
+
+        materiales = df_detalle["Materiales"].astype(str).tolist()
+
+        # 1. CONECTOR MT
+        materiales = reemplazar_solo_yc25a25_mt(
+            lista_materiales=materiales,
+            estructura="MT",
+            calibre_mt_global=calibre_mt,
+            tabla_conectores=tabla_conectores_mt,
+        )
+
+        # 2. VARILLA DE ARMAR MT
+        materiales = reemplazar_varilla_armar_mt(
+            lista_materiales=materiales,
+            estructura="MT",
+            calibre_mt_global=calibre_mt,
+        )
+
+        df_detalle["Materiales"] = materiales
+
+        debug_guardar("CALCULO::ajustes_mt", {
+            "calibre_mt": calibre_mt,
+            "filas_procesadas": len(df_detalle)
+        })
+
+    # =====================================================
+    # INTEGRACIÓN DE CABLES
     # =====================================================
     df_cables_mat = materiales_desde_cables(df_cables)
 
