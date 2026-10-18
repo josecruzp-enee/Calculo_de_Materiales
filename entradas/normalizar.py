@@ -81,6 +81,7 @@ PATRON = re.compile(
     \b(B-[IVX]+-\d+[A-Z]?)\b|
     \b(G-[IVX]+-\d+[A-Z]?)\b|
     \b(ER-[IVX]+-\d+[A-Z]?)\b|
+    \b(AC-SUB\d+)\b|
     \b(CS-\d+)\b|
     \b(CA-\d+)\b|
     \b(P[CMT][A-Z]?-\d+)\b|
