@@ -147,11 +147,12 @@ PRECIOS_FIJOS_2 = {
 
     # Conductores - referencias específicas
     "CONDUCTOR MT 1/0 AWG RAVEN": 120,
-    "CONDUCTOR MT 477 MCM FLICKER ": 200,
-    "CONDUCTOR BT WP 3/0 AWG FIG": 100,
+    "CONDUCTOR MT 477 MCM FLICKER ": 100,
+    "CONDUCTOR BT WP 3/0 AWG FIG": 50,
     "CONDUCTOR N 2 AWG SPARROW": 40,
     "HILO PILOTO HP WP 2 AWG PEACH": 40,
-
+    "CONDUCTOR N 3/0 AWG Pigeon": 50, 
+    
     # Retenidas
     "R-1": 2100,
     "R-2": 2300,
