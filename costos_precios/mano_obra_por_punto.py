@@ -142,7 +142,7 @@ PRECIOS_FIJOS_2 = {
 
     # Conductores - tarifas globales
     "CONDUCTOR BT GLOBAL": 100,
-    "CONDUCTOR MT GLOBAL": 120,
+    "CONDUCTOR MT GLOBAL": 200,
     "CONDUCTOR N GLOBAL": 120,
 
     # Conductores - referencias específicas
