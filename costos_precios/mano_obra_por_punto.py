@@ -147,6 +147,7 @@ PRECIOS_FIJOS_2 = {
 
     # Conductores - referencias específicas
     "CONDUCTOR MT 1/0 AWG RAVEN": 120,
+    "CONDUCTOR MT 477 MCM FLICKER ": 200,
     "CONDUCTOR BT WP 3/0 AWG FIG": 100,
     "CONDUCTOR N 2 AWG SPARROW": 40,
     "HILO PILOTO HP WP 2 AWG PEACH": 40,
@@ -166,6 +167,7 @@ PRECIOS_FIJOS_2 = {
     "PC-35": 2500,
     "PCA-30": 3500,
     "PCA-40": 4500,
+    "PCA-45": 5000,
 
     # Luminarias
     "LL-1-50W": 1000,
@@ -205,6 +207,7 @@ PRECIOS_FIJOS_2 = {
     "B-I-3": 1500,
     "B-I-4D": 1100,
     "B-I-4": 1100,
+    "B-I-5": 1200,
     "B-I-6": 1300,
     "B-I-4B": 1100,
     "B-I-7A": 500,
@@ -222,6 +225,7 @@ PRECIOS_FIJOS_2 = {
     "CT-N": 1500,
     "CA-32": 2500,
     "CS-2": 1200,
+    "AC-SUB3": 5000,
 
     # Tarifas generales disponibles.
     # NO se agregan automáticamente al proyecto.
